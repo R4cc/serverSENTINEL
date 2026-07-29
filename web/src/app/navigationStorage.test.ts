@@ -34,4 +34,12 @@ describe("active page storage", () => {
     expect(readStoredActivePage(legacy, 1_001)).toBe("overview");
     expect(readStoredActivePage(invalid, 1_001)).toBe("overview");
   });
+
+  it("moves a stored visit to the retired Servers page over to Nodes", () => {
+    const target = storage({
+      "serversentinel-active-page": JSON.stringify({ value: "servers", savedAt: 1_000 })
+    });
+
+    expect(readStoredActivePage(target, 1_001)).toBe("nodes");
+  });
 });

@@ -460,6 +460,11 @@ export function NodesPage({
   onCloseDetails,
   onSelectServer,
   onAddServer,
+  canExportServers,
+  canImportServers,
+  serverCount,
+  onExportServers,
+  onImportServers,
   onClearInstall,
   onCopy,
   serverStateLabel,
@@ -497,6 +502,11 @@ export function NodesPage({
   onCloseDetails: () => void;
   onSelectServer: (serverId: string) => void;
   onAddServer: (nodeId: string) => void;
+  canExportServers: boolean;
+  canImportServers: boolean;
+  serverCount: number;
+  onExportServers: () => void;
+  onImportServers: () => void;
   onClearInstall: () => void;
   onCopy: (text: string) => void;
   serverStateLabel: (serverId: string) => string;
@@ -599,10 +609,22 @@ export function NodesPage({
             primary={addNodeButton}
             meta={`${fleet.nodesOnline} of ${fleet.nodes} ${fleet.nodes === 1 ? "node" : "nodes"} online`}
             secondary={(
-              <Button variant="secondary" onClick={onRefresh} disabled={busy} title="Refresh node status">
-                <AppIcon name="refresh" />
-                {busy ? "Refreshing…" : "Refresh"}
-              </Button>
+              <>
+                {canExportServers && (
+                  <Button variant="secondary" compact onClick={onExportServers} disabled={busy || serverCount === 0}>
+                    <AppIcon name="download" /> Export
+                  </Button>
+                )}
+                {canImportServers && (
+                  <Button variant="secondary" compact onClick={onImportServers} disabled={busy}>
+                    <AppIcon name="fileUp" /> Import
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={onRefresh} disabled={busy} title="Refresh node status">
+                  <AppIcon name="refresh" />
+                  {busy ? "Refreshing…" : "Refresh"}
+                </Button>
+              </>
             )}
           />
         </>

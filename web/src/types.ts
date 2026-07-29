@@ -354,7 +354,7 @@ export type GeneralJob = {
   dismissible: boolean;
 };
 
-export type ActivePage = "servers" | "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
+export type ActivePage = "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
 
 export type ScheduleNavigationTarget =
   | { kind: "schedule"; scheduleId: string }

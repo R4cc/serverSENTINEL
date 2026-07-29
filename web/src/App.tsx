@@ -33,7 +33,6 @@ import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
 import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTab";
 import { loadServerCreatePage, ServerCreateTab } from "./pages/ServerCreateTab";
-import { ServersListPage } from "./pages/ServersListPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
@@ -1778,7 +1777,7 @@ export default function App() {
       });
       notify("success", result.deletedFiles ? `Deleted ${activeServer.displayName} and its files` : `Removed ${activeServer.displayName}`);
       setActiveServerId("");
-      setActivePage("servers");
+      setActivePage("nodes");
       await refreshApp();
     } catch (error) {
       setNotice((error as Error).message);
@@ -1900,8 +1899,7 @@ export default function App() {
             <h2>{currentPageTitle}</h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</Button>}
-            {activePage === "create" && <Button variant="secondary" onClick={() => setActivePage("servers")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</Button>}
+            {activePage === "create" && <Button variant="secondary" onClick={() => setActivePage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</Button>}
           </div>
         </header>
 
@@ -1916,25 +1914,6 @@ export default function App() {
           appRefreshing={appRefreshing}
           onRetryAppLoad={() => void refreshApp()}
         />
-
-        {activePage === "servers" && applicationReady && (
-          <ServersListPage
-            servers={effectiveAppState.servers}
-            activeServerId={activeServer?.id}
-            demoMode={demoMode}
-            isProvisioning={isProvisioning}
-            canExport={canExportServers}
-            canImport={canCreateServers}
-            onSelectServer={(serverId) => {
-              setActiveServerId(serverId);
-              setActivePage("overview");
-            }}
-            onLockedServer={() => notify("info", "Demo mode is enabled. Exit demo mode to access this server.")}
-            onExport={() => exportWorkspace.openExport()}
-            onImport={() => exportWorkspace.openImport(contextNodes.find((node) => node.isInternal)?.id ?? contextNodes[0]?.id ?? "")}
-            emptyState={renderNoManagedServersEmptyState("No managed servers yet")}
-          />
-        )}
 
         {activePage === "create" && (
           <ServerCreateTab
@@ -2022,6 +2001,11 @@ export default function App() {
               nodeUpdateGraceMs={nodeUpdateGraceMs}
               onSelectServer={openServerFromNode}
               onAddServer={openCreateServerForNode}
+              canExportServers={canExportServers}
+              canImportServers={canCreateServers}
+              serverCount={effectiveAppState.servers.length}
+              onExportServers={() => exportWorkspace.openExport()}
+              onImportServers={() => exportWorkspace.openImport(contextNodes.find((node) => node.isInternal)?.id ?? contextNodes[0]?.id ?? "")}
               onCopy={(text) => void copyText(text)}
               serverStateLabel={nodeServerStateLabel}
               playerSnapshots={playerSnapshots}
@@ -2037,8 +2021,8 @@ export default function App() {
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
           <EmptyState
             title="No server selected"
-            message="A server exists, but none is open right now. Choose one from the Servers page to view its console, files, managed content, and settings."
-            action={<Button onClick={() => setActivePage("servers")}>Open servers</Button>}
+            message="A server exists, but none is open right now. Choose one from the sidebar or Nodes page to view its console, files, managed content, and settings."
+            action={<Button onClick={() => setActivePage("nodes")}>Open nodes</Button>}
           />
         )}
 

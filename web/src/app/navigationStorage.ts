@@ -4,10 +4,11 @@ import { readExpiringStoredValue, writeExpiringStoredValue } from "../utils/expi
 export const navigationStorageDurationMs = 30 * 60 * 1000;
 
 const activePageStorageKey = "serversentinel-active-page";
-const activePages = new Set<ActivePage>(["servers", "settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
+const activePages = new Set<ActivePage>(["settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
 
 export function readStoredActivePage(storage: Storage = window.localStorage, now = Date.now()): ActivePage {
   const stored = readExpiringStoredValue(storage, activePageStorageKey, navigationStorageDurationMs, now);
+  if (stored === "servers") return "nodes";
   return activePages.has(stored as ActivePage) ? stored as ActivePage : "overview";
 }
 
