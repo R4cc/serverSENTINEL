@@ -11,13 +11,18 @@ import { compactRecentEvents, parseLogEvent } from "./logEvents.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { validateExistingInsideServer } from "../core.js";
+import { consoleClientMaxQueuedBytes, createConsoleSender, type BackpressuredClient } from "./consoleBackpressure.js";
 import type { ManagedServer, ServerActivity, ServerEvent } from "../types.js";
 export const consoleHeartbeatIntervalMs = 5_000;
 
-export type Client = {
-  send: (payload: string) => void;
-  readyState: number;
-};
+export type Client = BackpressuredClient;
+
+/**
+ * Growth between two polls is bounded so a workload that writes faster than the poll interval cannot
+ * turn one `readFileRange` into an arbitrarily large allocation. Skipping ahead loses the middle of a
+ * burst, which the viewer is told about, rather than allocating all of it.
+ */
+export const consoleLogPollMaxBytes = 1024 * 1024;
 
 export function startConsoleHeartbeat(client: Client, intervalMs = consoleHeartbeatIntervalMs) {
   const timer = setInterval(() => {
@@ -86,10 +91,11 @@ export function streamLatestServerLog(server: ManagedServer, client: Client) {
   let announcedEmpty = false;
   let lastLoggedError = "";
   let inFlight = false;
+  const sender = createConsoleSender(client);
 
   const send = (text: string) => {
-    if (text && client.readyState === 1) {
-      client.send(JSON.stringify({ type: "log", source: "latest.log", text, at: new Date().toISOString() }));
+    if (text) {
+      sender.send({ type: "log", source: "latest.log", text, at: new Date().toISOString() });
     }
   };
 
@@ -109,9 +115,19 @@ export function streamLatestServerLog(server: ManagedServer, client: Client) {
       }
 
       if (logStat.size > offset) {
-        const start = offset === 0 ? Math.max(0, logStat.size - 128 * 1024) : offset;
+        const initialStart = offset === 0 ? Math.max(0, logStat.size - 128 * 1024) : offset;
+        const skipped = Math.max(0, logStat.size - initialStart - consoleLogPollMaxBytes);
+        const start = initialStart + skipped;
         const chunk = await readFileRange(logPath, start, logStat.size - 1);
         offset = logStat.size;
+        if (skipped > 0) {
+          sender.send({
+            type: "truncated",
+            source: "latest.log",
+            message: `Skipped ${skipped} bytes of logs/latest.log written faster than this console could stream them.`,
+            at: new Date().toISOString()
+          });
+        }
         send(chunk.toString("utf8"));
       } else if (offset === 0 && !announcedEmpty) {
         offset = logStat.size;
@@ -165,10 +181,26 @@ export function streamDockerLogs(server: ManagedServer, client: Client) {
         return;
       }
       const decoder = new DockerLogDecoder();
+      const sender = createConsoleSender(client);
       response.on("data", (chunk: Buffer) => {
         const text = decoder.write(chunk).toString("utf8");
-        if (text && client.readyState === 1) {
-          client.send(JSON.stringify({ type: "log", source: "docker", text, at: new Date().toISOString() }));
+        if (!text) return;
+        sender.send({ type: "log", source: "docker", text, at: new Date().toISOString() });
+        // Pause the Docker socket while the browser drains rather than only dropping frames: without it
+        // the kernel keeps handing us log data for a viewer that is already behind.
+        if ((client.bufferedAmount ?? 0) > consoleClientMaxQueuedBytes && !response.isPaused()) {
+          response.pause();
+          const resume = setInterval(() => {
+            if (client.readyState !== 1) {
+              clearInterval(resume);
+              response.destroy();
+              return;
+            }
+            if ((client.bufferedAmount ?? 0) <= consoleClientMaxQueuedBytes) {
+              clearInterval(resume);
+              response.resume();
+            }
+          }, 250);
         }
       });
     }

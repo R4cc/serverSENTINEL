@@ -43,6 +43,15 @@ export const archiveDownloadTokens = new Map<string, ArchiveDownloadToken>();
 
 export const filePreviewSizeLimit = 96 * 1024;
 export const fileDownloadMaxBytes = config.fileDownloadMaxBytes;
+/**
+ * The byte limit alone does not bound a download plan: a tree of empty files costs nothing in bytes but
+ * retains one entry object per descendant, and the plan then lives in a global token map for minutes.
+ * The depth bound additionally stops a compromised node from recursing forever by listing itself as its
+ * own child.
+ */
+export const fileDownloadMaxEntries = config.fileDownloadMaxEntries;
+export const fileDownloadMaxDepth = 64;
+export const archiveDownloadTokenMaxCount = 64;
 export const fileZipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
 export const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;
 export const fileDownloadZipThresholdCount = config.fileDownloadZipThresholdCount;
@@ -248,8 +257,15 @@ export async function collectArchiveEntries(
   selection: DownloadSelection,
   archivePath: string,
   entries: FileArchiveEntry[],
-  total: { size: number }
+  total: { size: number },
+  depth = 0
 ) {
+  if (depth > fileDownloadMaxDepth) {
+    throw new Error(`Download selection is nested deeper than ${fileDownloadMaxDepth} directories`);
+  }
+  if (entries.length >= fileDownloadMaxEntries) {
+    throw new Error(`Download selection contains more than ${fileDownloadMaxEntries} files and folders`);
+  }
   if (server.nodeId === localNodeId) {
     const targetStat = await lstat(selection.target);
     if (targetStat.isSymbolicLink()) throw new Error("Symlinked files and folders cannot be downloaded");
@@ -288,7 +304,8 @@ export async function collectArchiveEntries(
       childSelection,
       `${archivePath}/${archiveSegment(entry.name)}`,
       entries,
-      total
+      total,
+      depth + 1
     );
   }
 }
@@ -321,6 +338,12 @@ export function cleanupArchiveDownloadTokens(now = Date.now()) {
 
 export function createArchiveDownloadToken(serverId: string, prepared: PreparedDownload) {
   cleanupArchiveDownloadTokens();
+  // Tokens live for five minutes, so expiry alone lets a caller hold many plans at once. Retire the
+  // oldest once the map is full rather than letting concurrent preparations accumulate without bound.
+  while (archiveDownloadTokens.size >= archiveDownloadTokenMaxCount) {
+    const oldest = [...archiveDownloadTokens.entries()].reduce((least, entry) => entry[1].expiresAt < least[1].expiresAt ? entry : least);
+    archiveDownloadTokens.delete(oldest[0]);
+  }
   const token = randomUUID();
   archiveDownloadTokens.set(token, {
     serverId,

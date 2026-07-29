@@ -14,6 +14,7 @@ import {
   writeExportArtifact,
   type ExportArtifact
 } from "./importExport.js";
+import { config } from "./config.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import { NodesRepository } from "./storage/nodesRepository.js";
@@ -342,6 +343,21 @@ describe("export/import artifacts", () => {
     const badFilename = structuredClone(artifact());
     badFilename.servers[0].modPreferences["../fabric-api.jar"] = badFilename.servers[0].modPreferences["fabric-api.jar"];
     expect(() => assertExportArtifact(badFilename)).toThrow("local .jar filename");
+  });
+
+  // Per-file and per-artifact byte limits still let an artifact describe an unbounded *number* of
+  // servers and files, each of which becomes a directory, file, or database row when applied.
+  it("rejects an artifact describing more servers than the aggregate limit allows", () => {
+    const many = structuredClone(artifact());
+    many.servers = Array.from({ length: config.importMaxServers + 1 }, () => structuredClone(many.servers[0]));
+    expect(() => assertExportArtifact(many)).toThrow(`more than ${config.importMaxServers} servers`);
+  });
+
+  it("rejects an artifact describing more files than the aggregate limit allows", () => {
+    const many = structuredClone(artifact());
+    const file = many.servers[0].files[0];
+    many.servers[0].files = Array.from({ length: config.importMaxFiles + 1 }, () => structuredClone(file));
+    expect(() => assertExportArtifact(many)).toThrow(`more than ${config.importMaxFiles} files`);
   });
 
   it("reports missing node targets, container conflicts, and port conflicts without writing", async () => {

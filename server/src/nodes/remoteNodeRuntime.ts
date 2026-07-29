@@ -13,11 +13,9 @@ import { compactRecentEvents, parseLogEvent } from "../servers/logEvents.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { config } from "../config.js";
+import { createConsoleSender, type BackpressuredClient } from "../servers/consoleBackpressure.js";
 
-type ConsoleClient = {
-  send: (payload: string) => void;
-  readyState: number;
-};
+type ConsoleClient = BackpressuredClient;
 
 type NodeLookup = (nodeId: string) => Promise<ManagedNode | undefined>;
 type PublicServerFn = (server: ManagedServer, nodes?: ManagedNode[]) => Promise<PublicServer>;
@@ -169,11 +167,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   async streamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void) {
     const consoleClient = client as ConsoleClient;
-    const send = (event: unknown) => {
-      if (consoleClient.readyState === 1) {
-        consoleClient.send(JSON.stringify(event));
-      }
-    };
+    // The node hop forwards workload output the panel does not pace, so it needs the same queue ceiling
+    // as the local streams rather than sending every forwarded frame unconditionally.
+    const sender = createConsoleSender(consoleClient);
+    const send = (event: unknown) => { sender.send(event); };
 
     const node = await this.lookupNode(server.nodeId);
     if (!node) {

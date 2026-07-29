@@ -89,7 +89,12 @@ function openZip(path: string, options: yauzl.Options = { lazyEntries: true, aut
   });
 }
 
-function readZipEntries(zip: ZipFile) {
+/**
+ * The entry cap is enforced while walking the central directory rather than after it. Collecting every
+ * entry first means an archive claiming millions of entries is retained in full before the count is
+ * ever compared, which defeats the limit it is checked against.
+ */
+function readZipEntries(zip: ZipFile, maxEntries: number) {
   return new Promise<Entry[]>((resolvePromise, reject) => {
     const entries: Entry[] = [];
     const fail = (error: Error) => {
@@ -98,6 +103,10 @@ function readZipEntries(zip: ZipFile) {
     };
     zip.on("error", fail);
     zip.on("entry", (entry) => {
+      if (entries.length >= maxEntries) {
+        fail(zipError(`ZIP archive contains more than ${maxEntries} entries`, "zip_entry_limit"));
+        return;
+      }
       entries.push(entry);
       zip.readEntry();
     });
@@ -110,8 +119,7 @@ function readZipEntries(zip: ZipFile) {
 }
 
 export async function indexZipArchive(archivePath: string, limits: ZipArchiveLimits): Promise<ZipIndex> {
-  const rawEntries = await readZipEntries(await openZip(archivePath));
-  if (rawEntries.length > limits.maxEntries) throw zipError(`ZIP archive contains more than ${limits.maxEntries} entries`, "zip_entry_limit");
+  const rawEntries = await readZipEntries(await openZip(archivePath), limits.maxEntries);
   const entries: IndexedEntry[] = [];
   const explicit = new Set<string>();
   const implicitDirectories = new Map<string, IndexedEntry>();

@@ -15,7 +15,7 @@ import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfi
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
-import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
@@ -987,7 +987,7 @@ async function verifyUpdatedNodeContainer(currentName: string) {
 
 async function verifyUpdatedNodeSession(currentName: string) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const logs = await dockerBufferRequest("GET", `/containers/${encodeURIComponent(currentName)}/logs?stdout=1&stderr=1&tail=100`, 200, 10_000);
+    const logs = await dockerBufferRequest("GET", `/containers/${encodeURIComponent(currentName)}/logs?stdout=1&stderr=1&tail=100`, 200, 10_000, undefined, dockerLogTailMaxBytes);
     const text = logs.toString("utf8");
     if (/Node (?:session|registration) accepted/i.test(text)) return;
     const inspect = await inspectNodeContainer(currentName);
@@ -1075,7 +1075,7 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
   } catch {
     const name = encodeURIComponent(containerName(server));
     const tail = lineLimit === undefined ? 300 : consoleLogLineLimit(lineLimit);
-    const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=${tail}`)).toString("utf8");
+    const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=${tail}`, 200, 15000, undefined, dockerLogTailMaxBytes)).toString("utf8");
     return { text, source: "docker" as const };
   }
 }

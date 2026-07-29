@@ -94,6 +94,7 @@ async function loadHooks() {
     dockerBufferRequest: mockDockerBufferRequest,
     dockerErrorMessage: (body: string, statusCode?: number) => body || `Docker API returned ${statusCode ?? "an error"}`,
     dockerJsonRequest: mockDockerJsonRequest,
+    dockerLogTailMaxBytes: 16 * 1024 * 1024,
     dockerRequest: mockDockerRequest,
     isMissingDockerNetworkError: (error: unknown) => /\bnetwork\s+[a-f0-9]{12,64}\s+not found\b/i.test(error instanceof Error ? error.message : typeof error === "string" ? error : ""),
     sendDockerContainerStdinLine: mockSendDockerContainerStdinLine
@@ -240,7 +241,11 @@ describe("remote node recent server logs", () => {
     expect(result.text).toContain("Alex joined the game");
     expect(mockDockerBufferRequest).toHaveBeenCalledWith(
       "GET",
-      "/containers/serversentinel-00000000-0000-4000-8000-000000000001/logs?stdout=1&stderr=1&tail=300"
+      "/containers/serversentinel-00000000-0000-4000-8000-000000000001/logs?stdout=1&stderr=1&tail=300",
+      200,
+      15000,
+      undefined,
+      16 * 1024 * 1024
     );
   });
 });
@@ -810,7 +815,7 @@ describe("node self-update container cleanup", () => {
       201
     );
     expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-node/start", 204);
-    expect(mockDockerBufferRequest).toHaveBeenCalledWith("GET", "/containers/serversentinel-node/logs?stdout=1&stderr=1&tail=100", 200, 10_000);
+    expect(mockDockerBufferRequest).toHaveBeenCalledWith("GET", "/containers/serversentinel-node/logs?stdout=1&stderr=1&tail=100", 200, 10_000, undefined, 16 * 1024 * 1024);
     expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", expect.stringMatching(/^\/containers\/serversentinel-node-previous-\d+\?force=1&v=1$/), [204, 404]);
     expect(mockDockerRequest).not.toHaveBeenCalledWith("POST", expect.stringContaining("/stop?t=10"), expect.anything());
   });

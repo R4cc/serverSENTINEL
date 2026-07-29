@@ -837,9 +837,17 @@ export default function App() {
         setConsoleConnectionState("error");
         return;
       }
-      if (message.type === "log") {
+      // The panel drops console frames when this viewer falls behind and reports the gap as a
+      // "truncated" frame. Render it inline: a silent hole in the console reads as a bug in the
+      // Minecraft server rather than as output this browser was too slow to receive.
+      const streamText = message.type === "log"
+        ? message.text ?? ""
+        : message.type === "truncated"
+          ? `[serverSENTINEL] ${message.message ?? "Console output was dropped because this viewer fell behind."}\n`
+          : undefined;
+      if (streamText !== undefined) {
         markConsoleLive();
-        const lines = consoleLineAssemblerRef.current.push(message.text ?? "");
+        const lines = consoleLineAssemblerRef.current.push(streamText);
         if (snapshotReady) {
           queueConsoleLines(replayGuard?.push(lines) ?? lines);
         } else {
@@ -847,7 +855,7 @@ export default function App() {
           const overflow = initialStreamLines.length - consoleScrollbackRef.current;
           if (overflow > 0) initialStreamLines.splice(0, overflow);
         }
-        if (message.text && hasPotentialEvent(message.text) && activeServerIdRef.current) {
+        if (message.type === "log" && message.text && hasPotentialEvent(message.text) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
       }

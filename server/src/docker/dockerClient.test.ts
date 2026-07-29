@@ -81,4 +81,50 @@ describe("Docker client helpers", () => {
     await expect(sendDockerContainerStdinLine("mc-server", "say one\nsay two")).rejects.toThrow("Only one console command");
     expect(requestMock).not.toHaveBeenCalled();
   });
+
+  // `tail=` bounds the number of log lines, not their length, so the response itself needs a ceiling.
+  it("stops buffering a Docker response that exceeds its byte limit", async () => {
+    const destroyed: string[] = [];
+    const fakeRequest = { on: vi.fn(), end: vi.fn(), write: vi.fn(), destroy: vi.fn(() => destroyed.push("request")) } as any;
+    const handlers = new Map<string, (chunk?: Buffer) => void>();
+    const response = {
+      statusCode: 200,
+      on: (event: string, handler: (chunk?: Buffer) => void) => { handlers.set(event, handler); return response; },
+      destroy: vi.fn(() => destroyed.push("response"))
+    };
+    requestMock.mockImplementation((_options: http.RequestOptions, onResponse: (value: unknown) => void) => {
+      queueMicrotask(() => {
+        onResponse(response);
+        handlers.get("data")?.(Buffer.alloc(64, 0x41));
+        handlers.get("data")?.(Buffer.alloc(64, 0x41));
+      });
+      return fakeRequest;
+    });
+
+    const { dockerBufferRequest } = await import("./dockerClient.js");
+    await expect(dockerBufferRequest("GET", "/containers/mc/logs", 200, 15000, undefined, 100))
+      .rejects.toThrow("Docker response exceeded the 100 byte limit");
+    expect(destroyed).toContain("response");
+  });
+
+  it("returns a Docker response that stays under its byte limit", async () => {
+    const fakeRequest = { on: vi.fn(), end: vi.fn(), write: vi.fn(), destroy: vi.fn() } as any;
+    const handlers = new Map<string, (chunk?: Buffer) => void>();
+    const response = {
+      statusCode: 200,
+      on: (event: string, handler: (chunk?: Buffer) => void) => { handlers.set(event, handler); return response; },
+      destroy: vi.fn()
+    };
+    requestMock.mockImplementation((_options: http.RequestOptions, onResponse: (value: unknown) => void) => {
+      queueMicrotask(() => {
+        onResponse(response);
+        handlers.get("data")?.(Buffer.from("log line", "utf8"));
+        handlers.get("end")?.();
+      });
+      return fakeRequest;
+    });
+
+    const { dockerBufferRequest } = await import("./dockerClient.js");
+    expect((await dockerBufferRequest("GET", "/containers/mc/logs", 200, 15000, undefined, 100)).toString("utf8")).toBe("log line");
+  });
 });

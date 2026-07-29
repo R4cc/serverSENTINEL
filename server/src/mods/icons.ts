@@ -3,7 +3,7 @@ import { badRequest } from "../http/validation.js";
 import { notFound } from "../http/errors.js";
 import { createHash } from "node:crypto";
 import { extname, join } from "node:path";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { fetch } from "undici";
 import { config } from "../config.js";
 import { appUserAgentFor } from "../buildInfo.js";
@@ -143,6 +143,35 @@ export async function readCachedModrinthIcon(url: string, options: { allowStale?
   return { bytes: await readFile(entry.path), contentType: iconContentType(entry.filename) };
 }
 
+/**
+ * Each distinct proxied URL hashes to its own cache file and nothing ever removes them, so an
+ * authenticated mods.view caller can grow the data directory indefinitely by varying the URL. Evict the
+ * least recently modified entries once the cache is full; a re-fetch is cheap, unbounded disk is not.
+ */
+async function evictExcessCachedIcons(cacheDir: string) {
+  let filenames: string[];
+  try {
+    filenames = await readdir(cacheDir);
+  } catch (error) {
+    if (isMissingPathError(error)) return;
+    throw error;
+  }
+  const cached = filenames.filter((name) => !name.endsWith(".tmp"));
+  if (cached.length <= config.modrinthIconCacheMaxEntries) return;
+  const stats = await Promise.all(cached.map(async (name) => {
+    const path = join(cacheDir, name);
+    try {
+      return { path, mtimeMs: (await stat(path)).mtimeMs };
+    } catch {
+      return undefined;
+    }
+  }));
+  const present = stats.filter((entry): entry is { path: string; mtimeMs: number } => entry !== undefined);
+  present.sort((left, right) => left.mtimeMs - right.mtimeMs);
+  const excess = present.slice(0, Math.max(0, present.length - config.modrinthIconCacheMaxEntries));
+  await Promise.all(excess.map((entry) => rm(entry.path, { force: true })));
+}
+
 export async function writeCachedModrinthIcon(url: string, bytes: Buffer, iconUrl: string, contentType: string) {
   const cacheDir = join(config.dataDir, "modrinth-icon-cache");
   await mkdir(cacheDir, { recursive: true });
@@ -153,6 +182,7 @@ export async function writeCachedModrinthIcon(url: string, bytes: Buffer, iconUr
   const temporary = `${destination}.${randomUUID()}.tmp`;
   await writeFile(temporary, bytes);
   await rename(temporary, destination);
+  await evictExcessCachedIcons(cacheDir);
 }
 
 export async function loadModrinthIcon(normalizedUrl: string) {

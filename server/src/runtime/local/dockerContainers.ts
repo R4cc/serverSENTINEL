@@ -12,7 +12,7 @@ import { containerConfigHash, isManagedContainer, isManagedContainerFor, managed
 import { computeContainerResourceSample } from "../containerStats.js";
 import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../profile.js";
 export { defaultDockerImageForMinecraftVersion } from "../profile.js";
-import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerLogTailMaxBytes, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
 import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
 import { shellQuote } from "../../docker/shell.js";
 import { durationSince, errorLogFields, logError, logInfo, logWarn, type LogFields } from "../../logging.js";
@@ -535,7 +535,10 @@ export async function dockerRecentLogs(server: ManagedServer, lineLimit = 200) {
   const response = await dockerBufferRequest(
     "GET",
     `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=${tail}`,
-    200
+    200,
+    15000,
+    undefined,
+    dockerLogTailMaxBytes
   );
   return stripDockerLogHeaders(response).toString("utf8");
 }
