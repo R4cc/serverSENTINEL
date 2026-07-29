@@ -19,7 +19,7 @@ import { modrinthFetch } from "../modrinth/modrinthClient.js";
 
 import { assessRequiredModDependencies } from "../modrinth/dependencyHealth.js";
 import { createModUpdatePlan, type ModUpdatePlan } from "../modrinth/updatePlan.js";
-import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
+import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertModrinthJarHashes, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modIconUrl, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
 import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
@@ -741,14 +741,7 @@ export async function downloadModrinthJar(file: NonNullable<ReturnType<typeof mo
     throw new Error(`Modrinth JAR must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
   }
   assertJarBuffer(content);
-  const expectedSha1 = file.hashes?.sha1;
-  if (expectedSha1 && createHash("sha1").update(content).digest("hex") !== expectedSha1) {
-    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
-  }
-  const expectedSha512 = file.hashes?.sha512;
-  if (expectedSha512 && createHash("sha512").update(content).digest("hex") !== expectedSha512) {
-    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
-  }
+  assertModrinthJarHashes(content, file);
   return content;
 }
 

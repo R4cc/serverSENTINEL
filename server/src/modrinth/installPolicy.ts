@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import type { ModCompatibility, ModrinthProject, ModrinthVersion, ReleaseChannel, ServerRuntimeType } from "../types.js";
 import { allowedForChannel, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, versionChannel, type ModrinthJarFile } from "./compatibility.js";
@@ -140,5 +141,21 @@ export function assertModrinthDownloadSize(
 ) {
   if (size && size > options.maximumBytes) {
     throw new Error(`${capitalized(options.singular)} download is larger than ${Math.floor(options.maximumBytes / 1024 / 1024)} MiB`);
+  }
+}
+
+/**
+ * Compares downloaded bytes against the hashes Modrinth published for the file before they become
+ * managed executable content. Both installers carry these hashes in metadata they already fetched, so
+ * skipping the comparison would let anything that can answer the download URL substitute a JAR.
+ */
+export function assertModrinthJarHashes(content: Buffer, file: Pick<ModrinthJarFile, "hashes">) {
+  const expectedSha1 = file.hashes?.sha1;
+  if (expectedSha1 && createHash("sha1").update(content).digest("hex") !== expectedSha1) {
+    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
+  }
+  const expectedSha512 = file.hashes?.sha512;
+  if (expectedSha512 && createHash("sha512").update(content).digest("hex") !== expectedSha512) {
+    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
   }
 }

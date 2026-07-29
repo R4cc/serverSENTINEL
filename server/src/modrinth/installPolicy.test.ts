@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   assertDownloadableModrinthFile,
   assertModrinthDownloadSize,
+  assertModrinthJarHashes,
   assertVersionInstallable,
   compatibilityFromSelectedVersion,
   managedContentNaming
@@ -194,5 +196,41 @@ describe("download guards", () => {
   it("allows a download with no advertised size", () => {
     expect(() => assertDownloadableModrinthFile({ url: "https://cdn.example.test/a.jar" }, { singular: "mod", maximumBytes: 1 })).not.toThrow();
     expect(() => assertModrinthDownloadSize(0, { singular: "mod", maximumBytes: 1 })).not.toThrow();
+  });
+});
+
+/**
+ * Both installers hold the hashes Modrinth published for the file, so bytes that do not match them
+ * must never become managed executable content. The node agent used to skip this comparison entirely.
+ */
+describe("Modrinth JAR integrity", () => {
+  const content = Buffer.from("PK pretend jar", "utf8");
+  const sha1 = createHash("sha1").update(content).digest("hex");
+  const sha512 = createHash("sha512").update(content).digest("hex");
+
+  it("accepts bytes matching both published hashes", () => {
+    expect(() => assertModrinthJarHashes(content, { hashes: { sha1, sha512 } })).not.toThrow();
+  });
+
+  it("rejects substituted bytes when sha1 does not match", () => {
+    expect(() => assertModrinthJarHashes(Buffer.from("PK malicious", "utf8"), { hashes: { sha1 } }))
+      .toThrow("Downloaded JAR hash did not match Modrinth metadata");
+  });
+
+  it("rejects substituted bytes when sha512 does not match", () => {
+    expect(() => assertModrinthJarHashes(Buffer.from("PK malicious", "utf8"), { hashes: { sha512 } }))
+      .toThrow("Downloaded JAR hash did not match Modrinth metadata");
+  });
+
+  it("rejects bytes that match sha1 but not sha512", () => {
+    expect(() => assertModrinthJarHashes(content, { hashes: { sha1, sha512: "0".repeat(128) } }))
+      .toThrow("Downloaded JAR hash did not match Modrinth metadata");
+  });
+
+  // Modrinth always publishes hashes in practice; a missing one is not treated as a failure so the
+  // check cannot break installs for metadata that omits it.
+  it("passes through when the metadata carries no hashes", () => {
+    expect(() => assertModrinthJarHashes(content, {})).not.toThrow();
+    expect(() => assertModrinthJarHashes(content, { hashes: {} })).not.toThrow();
   });
 });

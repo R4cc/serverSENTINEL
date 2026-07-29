@@ -21,6 +21,7 @@ import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, vali
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import {
   assertDownloadableModrinthFile,
+  assertModrinthJarHashes,
   assertVersionInstallable,
   compatibilityFromSelectedVersion,
   managedContentNaming
@@ -1352,6 +1353,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     const response = await modrinthFetch(file.url, { signal });
     if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
+    assertModrinthJarHashes(content, file);
     const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
     return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
   }
@@ -1385,6 +1387,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const response = await modrinthFetch(file.url, { signal });
   if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
+  assertModrinthJarHashes(content, file);
   const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
   return {
     ...written,
