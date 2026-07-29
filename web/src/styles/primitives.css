@@ -14,6 +14,19 @@
   box-shadow: none;
 }
 
+/* The button box, restated for elements that are not `<button>`. A download needs a real
+   anchor, and the element rules in tokens.css would leave it an underlined inline link. */
+.uiButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-strong) solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background var(--control-transition), color var(--control-transition), border-color var(--control-transition), box-shadow var(--control-transition), transform var(--control-transition);
+}
+
 .uiButton--primary { border-color: var(--text); background: var(--text); color: var(--surface); }
 .uiButton--primary:hover:not(:disabled) { transform: none; }
 .uiButton--secondary { border-color: var(--border-muted); background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted)); color: var(--text); }
