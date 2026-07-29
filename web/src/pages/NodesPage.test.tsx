@@ -1,6 +1,8 @@
+import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { AddNodeModal, validateAddNodeInput } from "./NodesPage";
+import type { ContextNode, ManagedServer } from "../types";
+import { AddNodeModal, NodesPage, validateAddNodeInput } from "./NodesPage";
 
 const validInput = {
   name: "Games host",
@@ -57,5 +59,103 @@ describe("new node panel address", () => {
 
     expect(html).toContain("Use this address");
     expect(html).toContain('name="panelUrl" value=""');
+  });
+});
+
+function denseServer(nodeId: string, nodeIndex: number, serverIndex: number): ManagedServer {
+  const timestamp = "2026-07-29T12:00:00.000Z";
+  return {
+    id: `20000000-0000-4000-8000-${String(nodeIndex * 100 + serverIndex).padStart(12, "0")}`,
+    nodeId,
+    displayName: `Server ${nodeIndex}-${serverIndex}`,
+    directoryLabel: `/servers/${nodeIndex}-${serverIndex}`,
+    runtimeProfile: {
+      minecraftVersion: "1.21.4",
+      runtimeType: "paper",
+      runtimeVersion: "1.21.4",
+      javaMajorVersion: 21,
+      jarProvider: "papermc",
+      jarArtifact: { filename: "paper.jar" },
+      compatibilityStatus: "compatible",
+      resolvedAt: timestamp
+    },
+    hasDockerContainer: true,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function denseNode(nodeIndex: number, serverCount = 12): ContextNode {
+  const id = `10000000-0000-4000-8000-${String(nodeIndex).padStart(12, "0")}`;
+  return {
+    id,
+    name: `Compute node ${nodeIndex}`,
+    type: "remote",
+    status: nodeIndex % 3 === 0 ? "offline" : "online",
+    isInternal: false,
+    agentVersion: "1.7.0",
+    dockerStatus: nodeIndex % 3 === 0 ? "unavailable" : "available",
+    dataPathStatus: nodeIndex % 3 === 0 ? "unavailable" : "ready",
+    servers: Array.from({ length: serverCount }, (_, serverIndex) => denseServer(id, nodeIndex, serverIndex + 1))
+  };
+}
+
+function renderDenseNodesPage(nodes: ContextNode[]) {
+  const props: ComponentProps<typeof NodesPage> = {
+    nodes,
+    panelVersion: "1.7.0",
+    panelBuildId: "test-build",
+    canManageNodes: true,
+    busy: false,
+    busyNodeId: "",
+    browserPanelUrl: "https://panel.example.com",
+    selectedNode: null,
+    nodeOperations: {},
+    nodeOperationNow: Date.now(),
+    nodeUpdateGraceMs: 30_000,
+    nodeManualRecoveryById: {},
+    installResult: null,
+    addNodeOpen: false,
+    addNodeResult: null,
+    installMethod: "run",
+    onInstallMethodChange: vi.fn(),
+    onOpenAddNode: vi.fn(),
+    onCloseAddNode: vi.fn(),
+    onDoneAddNode: vi.fn(),
+    onCreateNode: vi.fn(),
+    onRefresh: vi.fn(),
+    onViewDetails: vi.fn(),
+    onShowInstall: vi.fn(),
+    onRotateToken: vi.fn(),
+    onUpdateNode: vi.fn(),
+    onRestartNode: vi.fn(),
+    onRemoveNode: vi.fn(),
+    onCloseDetails: vi.fn(),
+    onSelectServer: vi.fn(),
+    onAddServer: vi.fn(),
+    canExportServers: true,
+    canImportServers: true,
+    serverCount: nodes.reduce((total, node) => total + node.servers.length, 0),
+    onExportServers: vi.fn(),
+    onImportServers: vi.fn(),
+    onClearInstall: vi.fn(),
+    onCopy: vi.fn(),
+    serverStateLabel: (serverId) => serverId.endsWith("1") ? "RUNNING" : "STOPPED",
+    playerSnapshots: {},
+    formatDate: (value) => String(value)
+  };
+  return renderToStaticMarkup(<NodesPage {...props} />);
+}
+
+describe("dense node fleets", () => {
+  it("keeps nodes as list rows and limits each initial server list", () => {
+    const html = renderDenseNodesPage(Array.from({ length: 8 }, (_, index) => denseNode(index + 1)));
+
+    expect(html.match(/class="nodeListItem"/g)).toHaveLength(8);
+    expect(html.match(/class="nodeServerRow"/g)).toHaveLength(8 * 6);
+    expect(html.match(/Show all 12 servers/g)).toHaveLength(8);
+    expect(html).toContain('role="list"');
+    expect(html).not.toContain('class="nodeTile"');
+    expect(html).not.toContain("nodeServerTile");
   });
 });

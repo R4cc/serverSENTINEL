@@ -14,9 +14,9 @@ export type AddNodeInput = {
   dataMount: string;
 };
 
-/* Servers tile into a grid now rather than stacking as rows, so a node can show
-   several of them before the list needs a disclosure. */
-const collapsedServerLimit = 8;
+/* Keep dense fleets scannable without hiding the servers that matter most. The
+   list uses two columns on wide screens, so six servers fill three compact rows. */
+const collapsedServerLimit = 6;
 
 function countLabel(count: number, singular: string) {
   return `${count} ${count === 1 ? singular : `${singular}s`}`;
@@ -647,102 +647,124 @@ export function NodesPage({
             action={addNodeButton}
           />
         )}
-        {sortedNodes.map((node) => {
-          const operation = nodeOperations[node.id];
-          const operationLabel = operation?.phase === "waiting"
-            ? operation.kind === "update" ? "Updating" : "Restarting"
-            : operation?.phase === "timed-out" ? "Attention" : "";
-          const expanded = Boolean(expandedNodeIds[node.id]);
-          const visibleServers = expanded ? node.servers : node.servers.slice(0, collapsedServerLimit);
-          const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
-          const canAddServer = isNodeRuntimeUsable(node);
-          const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";
-          const nodePlayers = node.servers.reduce((total, server) => total + onlinePlayers(playerSnapshots[server.id]), 0);
-          const meta = [
-            node.isInternal ? "Runs on the panel host" : "Remote host",
-            countLabel(node.servers.length, "server"),
-            nodePlayers > 0 ? countLabel(nodePlayers, "player") : "",
-            node.isInternal ? "" : node.agentVersion ? `agent ${node.agentVersion}` : ""
-          ].filter(Boolean);
-          return (
-            <article key={node.id} className="nodeTile">
-              <header className="nodeTileHead">
-                <span className={`nodeTileMark ${statusTone(node.status)}`} aria-hidden="true"><AppIcon name="server" /></span>
-                <h3 className="nodeTileName" title={node.name}>{node.name}</h3>
-                <p className="nodeTileMeta">{meta.join(" · ")}</p>
-                <div className="nodeTileBadges">
-                  <StatusBadge
-                    tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
-                    className={`nodeTileStatus ${operation ? operation.phase : statusTone(node.status)}`}
-                  >
-                    {operation?.phase === "waiting" && <Spinner size="xs" />}
-                    {operationLabel || node.status}
-                  </StatusBadge>
-                  {nodePanelUpdateRequired(node) && (
-                    <StatusBadge tone="warning" className="nodeTileStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</StatusBadge>
-                  )}
-                  {nodeVersionMismatch(node) && (
-                    <StatusBadge tone="warning" className="nodeTileStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</StatusBadge>
-                  )}
-                </div>
-                <div className="nodeTileActions">
-                  {nodeUpdateAvailable(node) && (
-                    <Button
-                      variant="secondary"
-                      compact
-                      className="nodeUpgradeButton"
-                      onClick={() => onUpdateNode(node)}
-                      disabled={busyNodeId === node.id || Boolean(operation) || !canManageNodes || !nodeCanPanelUpdate(node)}
-                      title={nodeUpdateTitle(node)}
+        <div className="nodeList" role="list">
+          {sortedNodes.map((node) => {
+            const operation = nodeOperations[node.id];
+            const operationLabel = operation?.phase === "waiting"
+              ? operation.kind === "update" ? "Updating" : "Restarting"
+              : operation?.phase === "timed-out" ? "Attention" : "";
+            const expanded = Boolean(expandedNodeIds[node.id]);
+            const visibleServers = expanded ? node.servers : node.servers.slice(0, collapsedServerLimit);
+            const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
+            const canAddServer = isNodeRuntimeUsable(node);
+            const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";
+            const nodePlayers = node.servers.reduce((total, server) => total + onlinePlayers(playerSnapshots[server.id]), 0);
+            const nodeMeta = [
+              node.isInternal ? "Panel host" : "Remote host",
+              node.isInternal ? "" : node.agentVersion ? `Agent ${node.agentVersion}` : "Agent version unknown"
+            ].filter(Boolean);
+            return (
+              <article key={node.id} className="nodeListItem" role="listitem">
+                <header className="nodeListRow">
+                  <div className="nodeListIdentity">
+                    <span className={`nodeListMark ${statusTone(node.status)}`} aria-hidden="true"><AppIcon name="server" /></span>
+                    <div className="nodeListCopy">
+                      <h3 className="nodeListName" title={node.name}>{node.name}</h3>
+                      <p className="nodeListMeta">{nodeMeta.join(" · ")}</p>
+                    </div>
+                  </div>
+                  <div className="nodeListStat nodeListStatServers">
+                    <span>Servers</span>
+                    <strong>{node.servers.length}</strong>
+                  </div>
+                  <div className="nodeListStat nodeListStatPlayers">
+                    <span>Players</span>
+                    <strong>{nodePlayers}</strong>
+                  </div>
+                  <div className="nodeListBadges">
+                    <StatusBadge
+                      tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
+                      className={`nodeListStatus ${operation ? operation.phase : statusTone(node.status)}`}
                     >
-                      {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
+                      {operation?.phase === "waiting" && <Spinner size="xs" />}
+                      {operationLabel || node.status}
+                    </StatusBadge>
+                    {nodePanelUpdateRequired(node) && (
+                      <StatusBadge tone="warning" className="nodeListStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</StatusBadge>
+                    )}
+                    {nodeVersionMismatch(node) && (
+                      <StatusBadge tone="warning" className="nodeListStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</StatusBadge>
+                    )}
+                  </div>
+                  <div className="nodeListActions">
+                    {nodeUpdateAvailable(node) && (
+                      <Button
+                        variant="secondary"
+                        compact
+                        className="nodeUpgradeButton"
+                        onClick={() => onUpdateNode(node)}
+                        disabled={busyNodeId === node.id || Boolean(operation) || !canManageNodes || !nodeCanPanelUpdate(node)}
+                        title={nodeUpdateTitle(node)}
+                      >
+                        {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
+                      </Button>
+                    )}
+                    <Button variant="secondary" compact onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
+                  </div>
+                </header>
+
+                <section className="nodeServers" aria-label={`${node.name} servers`}>
+                  <header className="nodeServersHeader">
+                    <div>
+                      <strong>Servers</strong>
+                      <span>{countLabel(node.servers.length, "server")} on this node</span>
+                    </div>
+                    <Button variant="ghost" compact onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
+                      <AppIcon name="plus" /> Add server
+                    </Button>
+                  </header>
+                  {visibleServers.length > 0 ? (
+                    <div className="nodeServerList">
+                      {visibleServers.map((server) => {
+                        const state = serverStateLabel(server.id);
+                        const snapshot = playerSnapshots[server.id];
+                        const playerLabel = playerCountLabel(snapshot);
+                        return (
+                          <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
+                            <span className="nodeServerRowIcon" aria-hidden="true"><ServerRowIcon /></span>
+                            <span className="nodeServerRowName">{server.displayName}</span>
+                            <span className={`nodeServerRowState ${state.toLowerCase()}`}>
+                              <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
+                              {state}
+                            </span>
+                            <span className={`nodeServerRowPlayers${snapshot?.state === "stale" ? " unknown" : ""}`} title={playerLabel === "-" ? "Player count unavailable" : `${playerLabel} players online${snapshot?.state === "stale" ? " (last verified snapshot)" : ""}`}>
+                              {playerLabel !== "-" && <span className="nodePlayerIcon"><PlayerIcon /></span>}
+                              {playerLabel === "-" ? "—" : playerLabel}
+                            </span>
+                            <span className="nodeServerRowArrow" aria-hidden="true"><AppIcon name="chevronRight" /></span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="nodeServersEmpty">No servers on this node yet.</p>
+                  )}
+                  {node.servers.length > collapsedServerLimit && (
+                    <Button
+                      variant="ghost"
+                      compact
+                      className="nodeListMore"
+                      onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: !expanded }))}
+                    >
+                      {hiddenServerCount > 0 ? `Show all ${node.servers.length} servers` : "Show fewer servers"}
+                      <AppIcon name={hiddenServerCount > 0 ? "chevronDown" : "chevronUp"} />
                     </Button>
                   )}
-                  <Button variant="secondary" compact onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
-                </div>
-              </header>
-
-              <div className="nodeTileServers">
-                {visibleServers.map((server) => {
-                  const state = serverStateLabel(server.id);
-                  const snapshot = playerSnapshots[server.id];
-                  const playerLabel = playerCountLabel(snapshot);
-                  return (
-                    <button key={server.id} type="button" className="nodeServerTile" onClick={() => onSelectServer(server.id)}>
-                      <span className="nodeServerTileIcon"><ServerRowIcon /></span>
-                      <span className="nodeServerTileName">{server.displayName}</span>
-                      <span className={`nodeServerTileState ${state.toLowerCase()}`}>
-                        <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
-                        {state}
-                      </span>
-                      {playerLabel !== "-" && (
-                        <span className={`nodeServerTilePlayers${snapshot?.state === "stale" ? " unknown" : ""}`} title={`${playerLabel} players online${snapshot?.state === "stale" ? " (last verified snapshot)" : ""}`}>
-                          <span className="nodePlayerIcon"><PlayerIcon /></span>
-                          {playerLabel}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-                <button type="button" className="nodeServerTile nodeServerTileAdd" onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
-                  <span className="nodeServerTileIcon"><AppIcon name="plus" /></span>
-                  <span className="nodeServerTileName">Add server</span>
-                  <span className="nodeServerTileHint">{canAddServer ? "Create on this node" : "Node unavailable"}</span>
-                </button>
-              </div>
-
-              {node.servers.length > collapsedServerLimit && (
-                <button
-                  type="button"
-                  className="nodeTileMore"
-                  onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: !expanded }))}
-                >
-                  {hiddenServerCount > 0 ? `Show all ${node.servers.length} servers` : "Show fewer servers"}
-                </button>
-              )}
-            </article>
-          );
-        })}
+                </section>
+              </article>
+            );
+          })}
+        </div>
       </section>
 
       {selectedDetailsNode && (
