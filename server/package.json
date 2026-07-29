@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "prebuild": "npm --prefix ../shared run build",
     "build": "tsc -p tsconfig.json",
+    "pretest": "npm --prefix ../shared run build",
     "test": "vitest run",
+    "pretypecheck": "npm --prefix ../shared run build",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "demo:reset": "tsx src/demo/resetDemo.ts",
     "start": "node dist/index.js"
