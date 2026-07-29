@@ -10,6 +10,12 @@ const heartbeatTimeoutMs = 35_000;
 const heartbeatCheckMs = 5_000;
 
 type ConnectedNode = {
+  /**
+   * The node exactly as it handshook, which is the authority on negotiated transport features.
+   * Features are per session and are deliberately not persisted, so a record resolved through the
+   * repository has none: every `nodeAdvertisesFeature` check here must read this object rather than
+   * a caller-supplied record, or the feature silently reads as unsupported.
+   */
   node: ManagedNode;
   socket: WebSocket;
   pending: Map<string, {
@@ -118,7 +124,7 @@ export class PanelNodeConnections {
       id,
       command,
       payload,
-      deadlineMs: nodeAdvertisesFeature(node, "request-cancel") ? timeoutMs : undefined
+      deadlineMs: nodeAdvertisesFeature(connected.node, "request-cancel") ? timeoutMs : undefined
     };
     const serialized = JSON.stringify(message);
     if (node.protocolVersion === nodeProtocolVersion && Buffer.byteLength(serialized) > nodeProtocolControlMessageMaxBytes) {
@@ -127,7 +133,7 @@ export class PanelNodeConnections {
     return new Promise<unknown>((resolve, reject) => {
       const timeout = setTimeout(() => {
         connected.pending.delete(id);
-        if (nodeAdvertisesFeature(node, "request-cancel") && connected.socket.readyState === connected.socket.OPEN) {
+        if (nodeAdvertisesFeature(connected.node, "request-cancel") && connected.socket.readyState === connected.socket.OPEN) {
           const cancel: NodeCancelMessage = { type: "cancel", id, reason: `Command ${command} timed out` };
           connected.socket.send(JSON.stringify(cancel));
         }
@@ -358,7 +364,7 @@ export class PanelNodeConnections {
     const connected = this.connected.get(node.id);
     if (!connected || connected.socket.readyState !== connected.socket.OPEN) throw structuredNodeProtocolError("node_offline", `Node ${node.name} is offline`);
     assertNodeSupports(node, requireNodeCapability(command));
-    if (!nodeAdvertisesFeature(node, "binary-transfer")) throw structuredNodeProtocolError("missing_feature", `Node ${node.name} does not support streamed binary transfers`);
+    if (!nodeAdvertisesFeature(connected.node, "binary-transfer")) throw structuredNodeProtocolError("missing_feature", `Node ${node.name} does not support streamed binary transfers`);
     if (connected.transfers.size >= nodeProtocolMaxActiveTransfers) throw structuredNodeProtocolError("node_overloaded", `Node ${node.name} already has ${nodeProtocolMaxActiveTransfers} active transfers`);
     return connected;
   }

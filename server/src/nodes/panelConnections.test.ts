@@ -65,6 +65,24 @@ describe("PanelNodeConnections", () => {
     connections.close();
   });
 
+  it("negotiates cancellation from the live session when the stored record has no features", async () => {
+    // Features are negotiated per session and never persisted, so a node resolved through the
+    // repository has none. Cancellation must still be negotiated from the connected session.
+    const stored = { ...node(), features: undefined };
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    connections.connect(node(), socket as unknown as WebSocket);
+
+    const pending = connections.request(stored, "server.inspect", {}, 5);
+    await expect(pending).rejects.toMatchObject({ code: "command_timeout" });
+
+    const frames = socket.sent.map(String).map((value) => JSON.parse(value));
+    const request = frames.find((value) => value.type === "request");
+    expect(request.deadlineMs).toBe(5);
+    expect(frames).toContainEqual(expect.objectContaining({ type: "cancel", id: request.id }));
+    connections.close();
+  });
+
   it("closes a superseded socket and rejects its pending work", async () => {
     const connections = new PanelNodeConnections();
     const first = new FakeSocket();
