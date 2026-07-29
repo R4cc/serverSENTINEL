@@ -623,8 +623,10 @@ async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeCont
   const serverJarAvailable = Boolean(serverJar && existsSync(await inside(server, serverJar, false)));
   const recreatable = !details && configured && available && serverJarAvailable;
   const controllable = details ? managed : recreatable;
+  // The server record is deliberately not echoed back: the panel builds its status projection from
+  // its own stored record (see publicServerStatus), so echoing it duplicated the spec the panel had
+  // just sent, once per item in every batched observation.
   return {
-    server,
     docker: {
       configured,
       available,

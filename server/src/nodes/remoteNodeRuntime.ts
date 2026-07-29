@@ -4,7 +4,7 @@ import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchiv
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PlayerObservation } from "../playerSnapshots.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
-import { assertNodeSupports, nodeAdvertisesCapability, nodeAdvertisesFeature, type ServerObservationSection } from "./protocol.js";
+import { assertNodeSupports, compactNodeServerSpec, nodeAdvertisesCapability, nodeAdvertisesFeature, type ServerObservationSection } from "./protocol.js";
 import type { RemoteObservationCoordinator } from "./observationCoordinator.js";
 import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter, RuntimeUploadSource } from "./types.js";
 import type { ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
@@ -95,7 +95,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   ) {
     const node = await this.lookupNode(server.nodeId);
     if (!node) throw new Error(`Node ${server.nodeId} not found`);
-    return this.connections.request(node, command, { server, ...(payload as Record<string, unknown> | undefined) }, timeoutMs);
+    return this.connections.request(node, command, { server: compactNodeServerSpec(server), ...(payload as Record<string, unknown> | undefined) }, timeoutMs);
   }
 
   private async supportsObservations(server: ManagedServer) {
@@ -209,7 +209,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
       const cleanup = await this.connections.stream(
         node,
         "server.console.stream",
-        { server },
+        { server: compactNodeServerSpec(server) },
         (event) => send(event),
         (error) => {
           if (error) {
@@ -356,7 +356,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   async downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult> {
     const binaryNode = await this.binaryTransferNode(server);
-    return this.connections.download(binaryNode, "files.download", { server, path: normalizeRemotePath(target) }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
+    return this.connections.download(binaryNode, "files.download", { server: compactNodeServerSpec(server), path: normalizeRemotePath(target) }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
   }
 
   async downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult> {
@@ -383,7 +383,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
       void this.connections.stream(
         node,
         "files.archive.extract",
-        { server, path: normalizeRemotePath(archivePath), destinationPath: normalizeRemotePath(destinationPath), conflictPolicy },
+        { server: compactNodeServerSpec(server), path: normalizeRemotePath(archivePath), destinationPath: normalizeRemotePath(destinationPath), conflictPolicy },
         (event) => {
           if (event.type === "progress") report?.(event.progress, event.task);
           if (event.type === "result") result = event.result as ZipExtractionResult;
@@ -408,7 +408,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   async uploadFile(server: ManagedServer, parent: string, filename: unknown, content: RuntimeUploadSource) {
     const binaryNode = await this.binaryTransferNode(server);
     if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
-    const result = await this.connections.upload(binaryNode, "files.upload", { server, parent: normalizeRemotePath(parent), filename }, content.stream, content.size, transferCommandTimeoutMs);
+    const result = await this.connections.upload(binaryNode, "files.upload", { server: compactNodeServerSpec(server), parent: normalizeRemotePath(parent), filename }, content.stream, content.size, transferCommandTimeoutMs);
     this.invalidateObservations(server, ["overviewFiles", "logs"]);
     return result;
   }
@@ -452,7 +452,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
     const prefix = runtimeTarget(server).runtimeType === "fabric" ? "mods" : "content";
     const binaryNode = await this.binaryTransferNode(server);
     if (content.size === undefined) throw new Error("Streamed uploads require a declared size");
-    return this.mutation(server, ["logs"], this.connections.upload(binaryNode, `${prefix}.upload`, { server, filename }, content.stream, content.size, transferCommandTimeoutMs));
+    return this.mutation(server, ["logs"], this.connections.upload(binaryNode, `${prefix}.upload`, { server: compactNodeServerSpec(server), filename }, content.stream, content.size, transferCommandTimeoutMs));
   }
 
   installMod(server: ManagedServer, input: unknown) {

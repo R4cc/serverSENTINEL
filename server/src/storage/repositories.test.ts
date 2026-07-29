@@ -123,6 +123,29 @@ describe("SQLite repositories", () => {
     expect(nodes.list()).toEqual([{ ...node, status: "offline", agentVersion: "0.8.0", buildId: "next-commit-sha" }]);
   });
 
+  it("serves repeated node reads from cache and refreshes them after every mutation", async () => {
+    const storage = await createStorage();
+    const nodes = new NodesRepository(storage);
+    const node: ManagedNode = {
+      id: "node-id", name: "Remote Node", type: "remote", status: "online", isInternal: false,
+      createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z"
+    };
+    nodes.create(node);
+
+    const first = nodes.list();
+    expect(nodes.list()).toBe(first);
+
+    nodes.updateById(node.id, (current) => ({ ...current, status: "offline" }));
+    expect(nodes.list()).not.toBe(first);
+    expect(nodes.list()[0].status).toBe("offline");
+
+    nodes.update((stored) => { stored[0] = { ...stored[0], name: "Renamed" }; });
+    expect(nodes.list()[0].name).toBe("Renamed");
+
+    nodes.deleteWithServers(node.id, false);
+    expect(nodes.list()).toEqual([]);
+  });
+
   it("stores panel settings without creating JSON state", async () => {
     const storage = await createStorage();
     const settings = new SettingsRepository(storage);

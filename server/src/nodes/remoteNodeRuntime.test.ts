@@ -103,6 +103,92 @@ async function drain(stream: Readable) {
   }
 }
 
+describe("RemoteNodeRuntime payload projection", () => {
+  function bookkeepingServer(): ManagedServer {
+    return {
+      ...testServer(),
+      schedules: [{
+        id: "schedule-1", name: "Nightly restart", cron: "0 4 * * *",
+        steps: [{ type: "action", procedure: "restart", delaySeconds: 0 }],
+        onlyWhenNoPlayers: true, enabled: true,
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+        recentRuns: [{ id: "run-1", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "succeeded", ranAt: "2026-01-02T04:00:00.000Z" }]
+      }],
+      restartRequiredModBaseline: Array.from({ length: 40 }, (_, index) => ({
+        identity: `mod-${index}`, displayName: `Mod ${index}`, filename: `mod-${index}.jar`, enabled: true, sha1: "a".repeat(40)
+      })),
+      crashAttemptTimestamps: ["2026-01-02T00:00:00.000Z", "2026-01-02T00:05:00.000Z"]
+    } as ManagedServer;
+  }
+
+  function payloadRecorder() {
+    const payloads: Array<Record<string, unknown>> = [];
+    const node = testNode();
+    const connections = {
+      isConnected: () => true,
+      connectedNode: () => ({ ...node, features: [...nodeFeatures] }),
+      request: async (_node: ManagedNode, _command: string, payload: Record<string, unknown>) => {
+        payloads.push(payload);
+        return { ok: true };
+      },
+      stream: async (_node: ManagedNode, _command: string, payload: Record<string, unknown>) => {
+        payloads.push(payload);
+        return () => undefined;
+      },
+      upload: async (_node: ManagedNode, _command: string, payload: Record<string, unknown>, stream: Readable) => {
+        payloads.push(payload);
+        await drain(stream);
+        return { ok: true };
+      },
+      download: async (_node: ManagedNode, _command: string, payload: Record<string, unknown>) => {
+        payloads.push(payload);
+        return { filename: "world.zip", size: 0, stream: Readable.from([]) };
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+    return { runtime, payloads };
+  }
+
+  it("sends only the fields a node reads, never panel bookkeeping", async () => {
+    const { runtime, payloads } = payloadRecorder();
+
+    await runtime.listFiles(bookkeepingServer(), "config");
+
+    expect(payloads).toHaveLength(1);
+    const sent = payloads[0].server as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual([
+      "displayName", "dockerContainer", "dockerImage", "dockerMountSource", "dockerPorts", "dockerWorkingDir",
+      "id", "javaArgs", "managedPorts", "nodeId", "runtimeProfile", "serverDir", "storageName"
+    ]);
+    expect(sent).not.toHaveProperty("schedules");
+    expect(sent).not.toHaveProperty("restartRequiredModBaseline");
+    expect(sent).not.toHaveProperty("crashAttemptTimestamps");
+  });
+
+  it("projects the server for streams and binary transfers too", async () => {
+    const server = bookkeepingServer();
+    const { runtime, payloads } = payloadRecorder();
+
+    await runtime.streamConsole(server, { readyState: 1, send: () => undefined }, () => undefined);
+    await runtime.downloadFile(server, "world.zip");
+    await runtime.uploadFile(server, "config", "ops.json", { stream: Readable.from([Buffer.from("[]")]), size: 2 });
+
+    expect(payloads.length).toBeGreaterThanOrEqual(3);
+    for (const payload of payloads) {
+      expect(payload.server).not.toHaveProperty("schedules");
+      expect(payload.server).not.toHaveProperty("restartRequiredModBaseline");
+    }
+  });
+});
+
 describe("RemoteNodeRuntime command timeouts", () => {
   it("uses the live node's negotiated features for 17 MiB streamed mod uploads", async () => {
     const storedNode = testNode();

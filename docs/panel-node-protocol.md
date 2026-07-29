@@ -10,11 +10,17 @@ Protocol 3.1 JSON control frames are limited to 8 MiB. Each connection permits 6
 
 Requests include relative deadlines when cancellation is negotiated. The panel sends `cancel` after a deadline or caller cancellation. Cooperative work aborts where possible, and responses produced after cancellation are ignored. Filesystem mutations that have crossed their commit point may complete, but their response is discarded.
 
+## Server payloads
+
+Every panel-to-node payload that carries a server sends the compact specification, never the panel's stored record. The compact form is the complete set of fields a node reads; the stored record additionally carries schedules with their runs, the restart-required mod baseline, and crash history, all of which are panel bookkeeping. Node responses do not echo the specification back — the panel projects status from the record it already holds.
+
 ## Batched observations
 
-`server.observe` accepts up to 32 compact server specifications and any combination of `status`, `stats`, `players`, `logs`, and `overviewFiles`. A node observes at most four servers concurrently, reuses one container inspection for a server's requested sections, and returns section-specific errors without failing the rest of the batch.
+`server.observe` accepts up to 32 compact server specifications and any combination of `status`, `stats`, `players`, `logs`, and `overviewFiles`, chosen per item rather than per batch. A node observes at most four servers concurrently, reuses one container inspection for a server's requested sections, and returns section-specific errors without failing the rest of the batch.
 
-The panel coordinator polls status and resource stats every five seconds and adds player and log sections every second poll. It groups servers by node, chunks fleets above 32, and supplies the existing status, runtime-state, resource-stat, player, timeline, and overview consumers from the shared cache. Ten servers on one protocol 3.1 node therefore produce about 12 background observation RPCs per minute for that node rather than one independent RPC per consumer and server.
+The panel coordinator polls status and resource stats every five seconds and adds player and log sections every second poll. It groups servers by node, resolves each node once per poll, chunks fleets above 32, and supplies the existing status, runtime-state, resource-stat, player, timeline, and overview consumers from the shared cache. Ten servers on one protocol 3.1 node therefore produce about 12 background observation RPCs per minute for that node rather than one independent RPC per consumer and server.
+
+`overviewFiles` is demand-driven because the overview endpoint is event-driven rather than polled. A server joins the slow tick's `overviewFiles` set when an overview consumer asks for the section and ages out two minutes after the last request, so the first overview read pays for its own fetch and later refreshes come from the shared cache.
 
 File logs use a cursor containing source, file identity, and byte offset. Append-only reads return deltas. Rotation, truncation, identity changes, or deltas larger than 128 KiB reset the cursor to the bounded 128 KiB tail. If `logs/latest.log` is unavailable, the existing bounded Docker log tail remains the fallback.
 

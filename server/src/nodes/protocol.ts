@@ -168,6 +168,13 @@ export type ServerObservationResultItem = {
 };
 export type ServerObservationResponse = { observedAt: string; items: ServerObservationResultItem[] };
 
+/**
+ * The only server fields a node ever reads. Every panel-to-node payload that carries a server must
+ * go through this projection: the stored `ManagedServer` also carries schedules (with their recent
+ * and active runs), the restart-required mod baseline, and crash history, none of which the node
+ * looks at. Sending the whole record put tens of kilobytes of panel bookkeeping on the wire for
+ * requests as small as `files.list`.
+ */
 export function compactNodeServerSpec(server: ManagedServer): NodeServerSpec {
   return {
     id: server.id, nodeId: server.nodeId, displayName: server.displayName, serverDir: server.serverDir, storageName: server.storageName,
