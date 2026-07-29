@@ -8,7 +8,7 @@ import WebSocket from "ws";
 import { fetch } from "undici";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
-import { containerConfigHash, isManagedContainer, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
+import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
 import { planServerUpdate } from "../servers/serverUpdatePlan.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
@@ -261,7 +261,7 @@ function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: f
 }
 
 async function reconcileRestartPolicy(server: ManagedServer, details: NodeContainerInspect) {
-  if (!isManagedContainer(details.Config?.Labels)) return;
+  if (!isManagedContainerFor(details.Config?.Labels, server.id)) return;
   const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
   if (!restartPolicy || restartPolicy === "no") return;
   await dockerJsonRequest(
@@ -614,7 +614,7 @@ async function inspect(server: ManagedServer) {
 async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeContainerInspect | null) {
   const details = prefetchedDetails === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : prefetchedDetails;
   const running = Boolean(details?.State?.Running);
-  const managed = isManagedContainer(details?.Config?.Labels);
+  const managed = isManagedContainerFor(details?.Config?.Labels, server.id);
   if (details && managed) await reconcileRestartPolicy(server, details);
   const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
   const configured = Boolean(server.dockerContainer);
