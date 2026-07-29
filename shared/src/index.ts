@@ -464,6 +464,14 @@ export type NodeType = "local" | "remote";
 
 export type NodeStatus = "online" | "offline" | "unknown";
 
+/**
+ * The panel-to-node wire protocol version. The panel refuses commands from a node
+ * reporting anything else, and the web treats a mismatch as "node update required",
+ * so both sides have to read the same constant or a version bump silently marks
+ * every healthy node as unusable in the UI.
+ */
+export const NODE_PROTOCOL_VERSION = "3.1";
+
 export type RestartPhase = "stopping" | "starting";
 
 export type RestartRequiredModSnapshot = {

@@ -1,7 +1,8 @@
+import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
 import { httpError } from "../http/errors.js";
 import type { ManagedNode, ManagedServer } from "../types.js";
 
-export const nodeProtocolVersion = "3.1";
+export const nodeProtocolVersion = NODE_PROTOCOL_VERSION;
 export const nodeProtocolControlMessageMaxBytes = 8 * 1024 * 1024;
 export const nodeProtocolMaxActiveRequests = 64;
 export const nodeProtocolMaxActiveStreams = 32;
