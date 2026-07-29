@@ -70,7 +70,14 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
 
   const estimateRequestRef = useRef(0);
 
-  const refreshEstimate = useCallback(async (nextCategories: ExportCategory[], serverId: string) => {
+  // Every input is passed in rather than read from state: the callers below refresh in the same tick
+  // as the setState that changed the selection, so a value read here would still be the previous one
+  // and the estimate would trail one click behind.
+  const refreshEstimate = useCallback(async (
+    nextCategories: ExportCategory[],
+    serverId: string,
+    nextContentStrategy: ExportContentStrategy
+  ) => {
     if (!nextCategories.length || !serverId) {
       setEstimate(null);
       return;
@@ -83,7 +90,7 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
         method: "POST",
         body: JSON.stringify({
           serverIds: [serverId],
-          selection: { categories: nextCategories, contentStrategy }
+          selection: { categories: nextCategories, contentStrategy: nextContentStrategy }
         })
       });
       // A slower earlier request must not overwrite a newer answer.
@@ -96,7 +103,7 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     } finally {
       if (estimateRequestRef.current === requestId) setEstimating(false);
     }
-  }, [contentStrategy]);
+  }, []);
 
   const openExport = useCallback((serverId: string) => {
     setExportServerId(serverId);
@@ -106,8 +113,8 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     setExportProgress(0);
     setExportTask("");
     setExportOpen(true);
-    void refreshEstimate(categories, serverId);
-  }, [categories, refreshEstimate]);
+    void refreshEstimate(categories, serverId, contentStrategy);
+  }, [categories, contentStrategy, refreshEstimate]);
 
   const closeExport = useCallback(() => {
     if (exportBusy) return;
@@ -259,14 +266,14 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     setImportTargetNodeId,
     setContentStrategy: (strategy: ExportContentStrategy) => {
       setContentStrategy(strategy);
-      void refreshEstimate(categories, exportServerId);
+      void refreshEstimate(categories, exportServerId, strategy);
     },
     toggleCategory: (category: ExportCategory) => {
       const next = categories.includes(category)
         ? categories.filter((entry) => entry !== category)
         : [...categories, category];
       setCategories(next);
-      void refreshEstimate(next, exportServerId);
+      void refreshEstimate(next, exportServerId, contentStrategy);
     }
   };
 }
