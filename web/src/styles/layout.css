@@ -511,14 +511,6 @@ button .buttonIcon {
   cursor: pointer;
 }
 
-.runtimeControlButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.runtimeControlButton:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
 .runtimeControlButton.start {
   min-width: 100px;
   color: var(--sentinel-success);

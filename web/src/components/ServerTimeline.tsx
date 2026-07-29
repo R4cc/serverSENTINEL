@@ -176,6 +176,47 @@ const seriesOptions: Array<{ key: SeriesKey; label: string }> = [
   { key: "playersOnline", label: "Players" }
 ];
 
+const timelineMetricLayersStorageKey = "serversentinel-timeline-metric-layers";
+const defaultTimelineMetricLayers: Record<SeriesKey, boolean> = {
+  cpuUtilizationPercent: true,
+  memoryUsageBytes: true,
+  networkRxBytesPerSecond: false,
+  networkTxBytesPerSecond: false,
+  playersOnline: false
+};
+
+type TimelineMetricLayersStorage = Pick<Storage, "getItem" | "setItem">;
+
+export function readTimelineMetricLayers(storage?: Pick<TimelineMetricLayersStorage, "getItem">): Record<SeriesKey, boolean> {
+  try {
+    const source = storage ?? (typeof window === "undefined" ? undefined : window.localStorage);
+    const saved = source?.getItem(timelineMetricLayersStorageKey);
+    if (!saved) return { ...defaultTimelineMetricLayers };
+    const parsed: unknown = JSON.parse(saved);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { ...defaultTimelineMetricLayers };
+    return Object.fromEntries(seriesOptions.map(({ key }) => [
+      key,
+      typeof (parsed as Record<string, unknown>)[key] === "boolean"
+        ? (parsed as Record<string, boolean>)[key]
+        : defaultTimelineMetricLayers[key]
+    ])) as Record<SeriesKey, boolean>;
+  } catch {
+    return { ...defaultTimelineMetricLayers };
+  }
+}
+
+export function writeTimelineMetricLayers(
+  enabled: Record<SeriesKey, boolean>,
+  storage?: Pick<TimelineMetricLayersStorage, "setItem">
+) {
+  try {
+    const target = storage ?? (typeof window === "undefined" ? undefined : window.localStorage);
+    target?.setItem(timelineMetricLayersStorageKey, JSON.stringify(enabled));
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
 const annotationOptions: Array<{ key: AnnotationKey; label: string }> = [
   { key: "player", label: "Player activity" },
   { key: "server", label: "Server events" },
@@ -740,13 +781,7 @@ export function ServerTimeline({
   const [visualizationWidth, setVisualizationWidth] = useState(1_400);
   const [hoverTooltip, setHoverTooltip] = useState<TimelineHoverTooltip | null>(null);
   const [chartInteracting, setChartInteracting] = useState(false);
-  const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>({
-    cpuUtilizationPercent: true,
-    memoryUsageBytes: true,
-    networkRxBytesPerSecond: false,
-    networkTxBytesPerSecond: false,
-    playersOnline: false
-  });
+  const [enabled, setEnabled] = useState<Record<SeriesKey, boolean>>(() => readTimelineMetricLayers());
   const [annotationEnabled, setAnnotationEnabled] = useState<Record<AnnotationKey, boolean>>({
     player: true,
     server: true,
@@ -770,6 +805,14 @@ export function ServerTimeline({
     (player: string) => playerHeadSource(serverId, player, headVersion),
     [headVersion, serverId]
   );
+
+  const toggleMetricLayer = useCallback((key: SeriesKey) => {
+    setEnabled((current) => {
+      const next = { ...current, [key]: !current[key] };
+      writeTimelineMetricLayers(next);
+      return next;
+    });
+  }, []);
 
   const setViewport = useCallback((next: TimelineWindow) => {
     const bounded = clampTimelineWindow(next);
@@ -1155,7 +1198,7 @@ export function ServerTimeline({
                   key={series.key}
                   className={`timelineSeriesToggle series-${series.key}${enabled[series.key] ? " active" : ""}`}
                   aria-pressed={enabled[series.key]}
-                  onClick={() => setEnabled((current) => ({ ...current, [series.key]: !current[series.key] }))}
+                  onClick={() => toggleMetricLayer(series.key)}
                 >
                   <span aria-hidden="true" />{series.label}
                 </button>
