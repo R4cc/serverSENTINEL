@@ -5,7 +5,7 @@ import { config } from "../config.js";
 import { destructiveRateLimit } from "../http/rateLimits.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
 import { selectedExportServerIds, startExportOperation, startImportOperation, targetNodeIdFromBody } from "../operations/importExportService.js";
-import { assertExportServerAccess, assertInstanceExportAllowed, scopedExportServerIds } from "../exportAuthorization.js";
+import { assertInstanceExportAllowed, selectedExportServerIdsOrAll } from "../exportAuthorization.js";
 import { exportArtifactExpiresAt, exportOperationResult } from "../exportArtifactMaintenance.js";
 import { exportArtifactFilename, exportDownloadStream, parseExportArtifactBase64, validateImportArtifact } from "../importExport.js";
 import { optionalStrictBoolean, validateOperationId } from "../http/validation.js";
@@ -21,12 +21,7 @@ app.post<{ Body: { serverIds?: unknown; includeInstance?: unknown } }>("/api/exp
   const user = await requireRequestPermission(request, "servers.export");
   const includeInstance = optionalStrictBoolean(request.body?.includeInstance, "includeInstance", false);
   if (includeInstance) assertInstanceExportAllowed(user);
-  const servers = await listManagedServers();
-  const serverIds = scopedExportServerIds(
-    user,
-    selectedExportServerIds(request.body?.serverIds),
-    servers.map((server) => server.id)
-  );
+  const serverIds = selectedExportServerIdsOrAll(selectedExportServerIds(request.body?.serverIds));
   return startExportOperation({
     serverIds,
     includeInstance
@@ -56,7 +51,6 @@ app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download
   if (!Array.isArray(result.serverIds) || typeof result.includeInstance !== "boolean") {
     return reply.code(410).send(apiErrorResponse("EXPORT_REGENERATION_REQUIRED", "This export predates current authorization metadata and must be regenerated"));
   }
-  assertExportServerAccess(user, result.serverIds);
   if (result.includeInstance) assertInstanceExportAllowed(user);
   const artifactPath = result?.artifactPath;
   if (!artifactPath || !isInsideServersDirectory(config.exportsDir, artifactPath)) {

@@ -38,7 +38,9 @@ function testNode(): ManagedNode {
 
 function testServer(): ManagedServer {
   return {
-    id: "server-1",
+    // Server ids are UUIDs in practice (newServerId is randomUUID) and the panel validates that shape
+    // on anything a node returns, so the fixture uses a realistic one.
+    id: "33333333-3333-4333-8333-333333333333",
     nodeId: "node-1",
     displayName: "Survival",
     serverDir: "/srv/servers/server-1",

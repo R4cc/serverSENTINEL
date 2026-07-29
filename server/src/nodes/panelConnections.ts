@@ -277,7 +277,15 @@ export class PanelNodeConnections {
         transfer.received = (transfer.received ?? 0) + payload.byteLength;
         if (transfer.received > (transfer.maxBytes ?? 0)) throw new Error("Remote transfer exceeded its limit");
         transfer.hash.update(payload);
-        transfer.stream.write(payload);
+        // A node can push chunks faster than the HTTP client drains them. `write` returning false means
+        // the PassThrough is over its high-water mark, so stop reading the node socket until it drains
+        // instead of letting the difference accumulate in panel memory.
+        if (!transfer.stream.write(payload) && !connected.socket.isPaused) {
+          connected.socket.pause();
+          transfer.stream.once("drain", () => {
+            if (connected.socket.readyState === 1) connected.socket.resume();
+          });
+        }
       } catch (error) {
         connected.socket.close(1002, "Invalid binary transfer frame");
       }

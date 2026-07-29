@@ -8,19 +8,20 @@ import WebSocket from "ws";
 import { fetch } from "undici";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
-import { containerConfigHash, isManagedContainer, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
+import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
 import { planServerUpdate } from "../servers/serverUpdatePlan.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
-import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import {
   assertDownloadableModrinthFile,
+  assertModrinthJarHashes,
   assertVersionInstallable,
   compatibilityFromSelectedVersion,
   managedContentNaming
@@ -261,7 +262,7 @@ function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: f
 }
 
 async function reconcileRestartPolicy(server: ManagedServer, details: NodeContainerInspect) {
-  if (!isManagedContainer(details.Config?.Labels)) return;
+  if (!isManagedContainerFor(details.Config?.Labels, server.id)) return;
   const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
   if (!restartPolicy || restartPolicy === "no") return;
   await dockerJsonRequest(
@@ -614,7 +615,7 @@ async function inspect(server: ManagedServer) {
 async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeContainerInspect | null) {
   const details = prefetchedDetails === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : prefetchedDetails;
   const running = Boolean(details?.State?.Running);
-  const managed = isManagedContainer(details?.Config?.Labels);
+  const managed = isManagedContainerFor(details?.Config?.Labels, server.id);
   if (details && managed) await reconcileRestartPolicy(server, details);
   const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
   const configured = Boolean(server.dockerContainer);
@@ -987,7 +988,7 @@ async function verifyUpdatedNodeContainer(currentName: string) {
 
 async function verifyUpdatedNodeSession(currentName: string) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    const logs = await dockerBufferRequest("GET", `/containers/${encodeURIComponent(currentName)}/logs?stdout=1&stderr=1&tail=100`, 200, 10_000);
+    const logs = await dockerBufferRequest("GET", `/containers/${encodeURIComponent(currentName)}/logs?stdout=1&stderr=1&tail=100`, 200, 10_000, undefined, dockerLogTailMaxBytes);
     const text = logs.toString("utf8");
     if (/Node (?:session|registration) accepted/i.test(text)) return;
     const inspect = await inspectNodeContainer(currentName);
@@ -1075,7 +1076,7 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
   } catch {
     const name = encodeURIComponent(containerName(server));
     const tail = lineLimit === undefined ? 300 : consoleLogLineLimit(lineLimit);
-    const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=${tail}`)).toString("utf8");
+    const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=${tail}`, 200, 15000, undefined, dockerLogTailMaxBytes)).toString("utf8");
     return { text, source: "docker" as const };
   }
 }
@@ -1352,6 +1353,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     const response = await modrinthFetch(file.url, { signal });
     if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
+    assertModrinthJarHashes(content, file);
     const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
     return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
   }
@@ -1385,6 +1387,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const response = await modrinthFetch(file.url, { signal });
   if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
+  assertModrinthJarHashes(content, file);
   const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
   return {
     ...written,

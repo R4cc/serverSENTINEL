@@ -1,14 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type { ManagedNode, ManagedServer, ModPreference } from "./types.js";
 import { currentSchemaVersion, type StorageDatabase } from "./storage/database.js";
 import { defaultServerContainerName, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
 import type { ServersRepository } from "./storage/serversRepository.js";
 import type { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
-import { parseDockerPorts } from "./core.js";
+import { openContainedFile, parseDockerPorts } from "./core.js";
 import { assertRuntimeProvider } from "./runtime/profile.js";
+import { config } from "./config.js";
 
 export const exportArtifactType = "serversentinel.export";
 export const exportArtifactSchemaVersion = 3;
@@ -243,6 +244,12 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
   if (!isPlainObject(value.instance.settings)) throw new Error("Import instance.settings section is required");
   rejectUnsupportedKeys(value.instance.settings, [], "instance.settings");
   if (!Array.isArray(value.servers)) throw new Error("Import servers section must be an array");
+  // Per-file and per-artifact size limits still allow an artifact to describe an arbitrary *number* of
+  // servers and files, each of which becomes a directory, file, or database row during application.
+  if (value.servers.length > config.importMaxServers) {
+    throw new Error(`Import artifact contains more than ${config.importMaxServers} servers`);
+  }
+  let importedFileCount = 0;
   for (const [serverIndex, entry] of value.servers.entries()) {
     if (!isPlainObject(entry)) throw new Error(`Import servers[${serverIndex}] must be an object`);
     rejectUnsupportedKeys(entry, ["server", "modPreferences", "files"], `servers[${serverIndex}]`);
@@ -251,6 +258,10 @@ export function assertExportArtifact(value: unknown): ExportArtifact {
     assertImportServer(entry.server, `servers[${serverIndex}].server`);
     assertImportModPreferences(entry.modPreferences, `servers[${serverIndex}].modPreferences`);
     if (!Array.isArray(entry.files)) throw new Error(`Import servers[${serverIndex}].files must be an array`);
+    importedFileCount += entry.files.length;
+    if (importedFileCount > config.importMaxFiles) {
+      throw new Error(`Import artifact contains more than ${config.importMaxFiles} files`);
+    }
     for (const [fileIndex, file] of entry.files.entries()) {
       if (!isPlainObject(file)) throw new Error(`Import servers[${serverIndex}].files[${fileIndex}] must be an object`);
       rejectUnsupportedKeys(file, ["path", "size", "sha256", "contentBase64"], `servers[${serverIndex}].files[${fileIndex}]`);
@@ -681,9 +692,22 @@ async function walk(root: string, relativePath: string, files: ExportedServerFil
     }
     if (!entry.isFile()) continue;
     const absolute = join(root, childRelativePath);
-    const fileStat = await stat(absolute);
-    if (!shouldIncludeRelativePath(childRelativePath, fileStat.size)) continue;
-    const buffer = await readFile(absolute);
+    // The Dirent snapshot said this was a regular file; a workload can replace it before it is read.
+    // Opening once and reading through the handle keeps the size check and the bytes on one inode.
+    let handle;
+    try {
+      handle = await openContainedFile(absolute);
+    } catch {
+      continue;
+    }
+    let buffer: Buffer;
+    try {
+      const fileStat = await handle.stat();
+      if (!fileStat.isFile() || !shouldIncludeRelativePath(childRelativePath, fileStat.size)) continue;
+      buffer = await handle.readFile();
+    } finally {
+      await handle.close();
+    }
     files.push({
       path: childRelativePath,
       size: buffer.length,

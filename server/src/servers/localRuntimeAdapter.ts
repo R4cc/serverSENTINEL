@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { services } from "../appServices.js";
-import { AsyncQueue, validateExistingInsideServer } from "../core.js";
+import { AsyncQueue, openContainedReadStream, validateExistingInsideServer } from "../core.js";
 import { durationSince, logInfo, logOperationFailure, logWarn } from "../logging.js";
 import { optionalStrictBoolean } from "../http/validation.js";
 import { ensureManagedServerDirectory, readServers } from "./store.js";
@@ -13,8 +13,6 @@ import { dockerAvailable } from "../docker/dockerClient.js";
 import { publicServerStatus } from "./publicViews.js";
 import { streamDockerLogs, streamLatestServerLog, type Client } from "./overview.js";
 import { basename, dirname } from "node:path";
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
 import { copyServerFile, createServerFolder, deleteServerEntry, fileUploadSizeLimit, listServerDirectory, moveServerEntry, previewServerFile, publicZipExtractionPlan, readServerTextFile, renameServerEntry, resolveUploadTarget, writeRuntimeUpload, writeServerTextFile } from "../runtime/local/fileService.js";
 import { assertDownloadSize, filePreviewSizeLimit, fileZipLimits, toPublicPath } from "../files/fileService.js";
 import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchive.js";
@@ -208,16 +206,16 @@ export async function localPreviewFile(server: ManagedServer, target: string) {
 }
 
 export async function localDownloadFile(_server: ManagedServer, target: string) {
-  const targetStat = await stat(target);
-  if (!targetStat.isFile()) {
-    throw new Error("Only files can be downloaded");
+  // Size check and stream come from the same open handle, so the bytes sent are the bytes measured and
+  // a symlink swapped in after validation cannot redirect the read outside the server root.
+  const { stream, size } = await openContainedReadStream(target);
+  try {
+    assertDownloadSize(size);
+  } catch (error) {
+    stream.destroy();
+    throw error;
   }
-  assertDownloadSize(targetStat.size);
-  return {
-    filename: basename(target),
-    size: targetStat.size,
-    stream: createReadStream(target)
-  };
+  return { filename: basename(target), size, stream };
 }
 
 export async function localDownloadArchive(_server: ManagedServer, entries: FileArchiveEntry[], filename: string) {

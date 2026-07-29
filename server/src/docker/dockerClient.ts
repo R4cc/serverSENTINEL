@@ -42,11 +42,17 @@ function okStatuses(expectedStatus: number | number[]) {
   return Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
 }
 
+/**
+ * Docker responses are fully buffered before they are parsed, and a managed workload controls how much
+ * a log or stats read returns: `tail=` bounds the line count, not the length of a line. Without a byte
+ * ceiling one container emitting a single enormous log record allocates it all in the panel, and the
+ * automatic observation collector repeats the allocation on a timer.
+ */
 async function dockerSocketRequest(
   method: DockerMethod,
   path: string,
   expectedStatus: number | number[],
-  options: { payload?: string; timeoutMs?: number; signal?: AbortSignal } = {}
+  options: { payload?: string; timeoutMs?: number; signal?: AbortSignal; maxBytes?: number } = {}
 ) {
   if (!dockerAvailable()) {
     throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
@@ -54,6 +60,7 @@ async function dockerSocketRequest(
 
   const payload = options.payload;
   const statuses = okStatuses(expectedStatus);
+  const maxBytes = options.maxBytes ?? config.dockerResponseMaxBytes;
   return new Promise<Buffer>((resolveRequest, rejectRequest) => {
     const request = http.request(
       {
@@ -69,7 +76,17 @@ async function dockerSocketRequest(
       },
       (response) => {
         const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        let received = 0;
+        response.on("data", (chunk: Buffer) => {
+          received += chunk.byteLength;
+          if (received > maxBytes) {
+            response.destroy();
+            request.destroy();
+            rejectRequest(new Error(`Docker response exceeded the ${maxBytes} byte limit`));
+            return;
+          }
+          chunks.push(chunk);
+        });
         response.on("end", () => {
           const body = Buffer.concat(chunks);
           if (!statuses.includes(response.statusCode ?? 0)) {
@@ -98,9 +115,15 @@ export async function dockerRequest<T>(
   return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { signal })).toString("utf8"));
 }
 
-export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000, signal?: AbortSignal) {
-  return dockerSocketRequest(method, path, expectedStatus, { timeoutMs, signal });
+export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000, signal?: AbortSignal, maxBytes?: number) {
+  return dockerSocketRequest(method, path, expectedStatus, { timeoutMs, signal, maxBytes });
 }
+
+/**
+ * Log tails are read on behalf of a console viewer and on the observation timer, so they get a tighter
+ * ceiling than the general Docker response limit: `tail=` caps lines, and a workload chooses line length.
+ */
+export const dockerLogTailMaxBytes = 16 * 1024 * 1024;
 
 export async function dockerJsonRequest<T>(
   method: "GET" | "POST",

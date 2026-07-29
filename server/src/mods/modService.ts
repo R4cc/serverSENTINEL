@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { Readable } from "node:stream";
@@ -9,7 +9,7 @@ import { runtimeForServer, services } from "../appServices.js";
 import { durationSince, errorLogFields, logError, logInfo, logOperationFailure, logWarn } from "../logging.js";
 import { operationInProgress } from "../http/errors.js";
 import { optionalReleaseChannel, optionalStrictBoolean, requireStrictBoolean, validateModrinthProjectId, validateModrinthVersionId } from "../http/validation.js";
-import { ensureInsideServer, ensureWritableInsideServer, safeInstalledModFilename, safeModFilename, validateExistingInsideServer, validateExistingResolvedInsideServer } from "../core.js";
+import { ensureInsideServer, ensureWritableInsideServer, openContainedReadStream, safeInstalledModFilename, safeModFilename, validateExistingInsideServer, validateExistingResolvedInsideServer } from "../core.js";
 import { asObject, optionalString, requiredString } from "../storage/valueValidation.js";
 import { ModHashCache } from "../modHashCache.js";
 import { normalizeInstalledModMetadata } from "../installedModMetadata.js";
@@ -19,7 +19,7 @@ import { modrinthFetch } from "../modrinth/modrinthClient.js";
 
 import { assessRequiredModDependencies } from "../modrinth/dependencyHealth.js";
 import { createModUpdatePlan, type ModUpdatePlan } from "../modrinth/updatePlan.js";
-import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
+import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertModrinthJarHashes, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modIconUrl, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
 import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
@@ -627,7 +627,10 @@ export async function localModIcon(server: ManagedServer, filenameInput: unknown
   const icon = existsSync(iconsDir) ? await findCachedIconFile(iconsDir, modIconKey(filename)) : null;
   if (!icon) return null;
   const iconPath = await validateExistingResolvedInsideServer(server, icon.path);
-  return { contentType: iconContentType(icon.filename), stream: createReadStream(iconPath) };
+  // Opened without following a final-component symlink: the cache entry lives inside the server root,
+  // which the workload can write, so the pathname may point somewhere else by the time it is opened.
+  const { stream } = await openContainedReadStream(iconPath);
+  return { contentType: iconContentType(icon.filename), stream };
 }
 
 export async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
@@ -738,14 +741,7 @@ export async function downloadModrinthJar(file: NonNullable<ReturnType<typeof mo
     throw new Error(`Modrinth JAR must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
   }
   assertJarBuffer(content);
-  const expectedSha1 = file.hashes?.sha1;
-  if (expectedSha1 && createHash("sha1").update(content).digest("hex") !== expectedSha1) {
-    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
-  }
-  const expectedSha512 = file.hashes?.sha512;
-  if (expectedSha512 && createHash("sha512").update(content).digest("hex") !== expectedSha512) {
-    throw new Error("Downloaded JAR hash did not match Modrinth metadata");
-  }
+  assertModrinthJarHashes(content, file);
   return content;
 }
 

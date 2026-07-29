@@ -2,7 +2,7 @@ import type { FastifyInstance, RouteShorthandOptions } from "fastify";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
 import { apiErrorResponse } from "../http/errors.js";
 import { validateOperationId, validateServerId } from "../http/validation.js";
-import type { OperationRecord, OperationStatus, Permission } from "../types.js";
+import type { OperationRecord, OperationStatus, Permission, StoredUser } from "../types.js";
 
 type OperationListFilters = {
   serverId?: string;
@@ -12,8 +12,9 @@ type OperationListFilters = {
 
 export type OperationsRoutesContext = {
   destructiveRateLimit: RouteShorthandOptions;
-  requireRequestPermission(request: AuthenticatedRequest, permission: Permission): Promise<unknown>;
+  requireRequestPermission(request: AuthenticatedRequest, permission: Permission): Promise<StoredUser>;
   assertServerExists(serverId: string): Promise<unknown>;
+  mayCancelOperation(user: StoredUser, operation: OperationRecord): boolean;
   operations: {
     list(filters: OperationListFilters): OperationRecord[];
     find(id: string): OperationRecord | undefined;
@@ -55,9 +56,27 @@ export function registerOperationsRoutes(app: FastifyInstance, context: Operatio
     return operation;
   });
 
+  /**
+   * Cancelling is destructive to work someone else started -- an in-flight provision, import, or
+   * export belongs to the user who requested it. The permission alone said nothing about ownership, so
+   * any account that could edit settings could abort another user's operation. The export download
+   * route already treats createdBy as an ownership boundary; this applies the same rule to the one
+   * operation endpoint that mutates state.
+   *
+   * Full-access administrators keep the ability to clear anyone's stuck operation, and operations with
+   * no recorded creator are system-initiated and stay administrator-only.
+   */
   app.post<{ Params: { id: string } }>("/api/operations/:id/cancel", context.destructiveRateLimit, async (request, reply) => {
-    await context.requireRequestPermission(request, "servers.editSettings");
-    const operation = context.operations.cancel(validateOperationId(request.params.id), "Operation cancelled by user");
+    const user = await context.requireRequestPermission(request, "servers.editSettings");
+    const operationId = validateOperationId(request.params.id);
+    const existing = context.operations.find(operationId);
+    if (!existing) {
+      return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
+    }
+    if (!context.mayCancelOperation(user, existing)) {
+      return reply.code(403).send(apiErrorResponse("PERMISSION_DENIED", "Only the user who started this operation can cancel it"));
+    }
+    const operation = context.operations.cancel(operationId, "Operation cancelled by user");
     if (!operation) {
       return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
     }

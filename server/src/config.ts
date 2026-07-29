@@ -146,6 +146,11 @@ export const config = {
   fileDownloadZipThresholdCount: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT", 10),
   fileZipMaxEntries: parseCountLimitEnv("SERVERSENTINEL_FILE_ZIP_MAX_ENTRIES", 10_000),
   fileZipMaxExpandedBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_ZIP_MAX_EXPANDED_BYTES", 512 * 1024 * 1024),
+  fileDownloadMaxEntries: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_MAX_ENTRIES", 50_000),
+  dockerResponseMaxBytes: parseByteLimitEnv("SERVERSENTINEL_DOCKER_RESPONSE_MAX_BYTES", 64 * 1024 * 1024),
+  importMaxServers: parseCountLimitEnv("SERVERSENTINEL_IMPORT_MAX_SERVERS", 200),
+  importMaxFiles: parseCountLimitEnv("SERVERSENTINEL_IMPORT_MAX_FILES", 20_000),
+  modrinthIconCacheMaxEntries: parseCountLimitEnv("SERVERSENTINEL_MODRINTH_ICON_CACHE_MAX_ENTRIES", 2_000),
   mcjarsBaseUrl: process.env.MCJARS_BASE_URL?.trim() || "https://mcjars.app",
   mcjarsApiKey: process.env.MCJARS_API_KEY?.trim()
 };

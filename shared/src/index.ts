@@ -171,17 +171,11 @@ export type OperationRecord = {
   logSummary?: string;
 };
 
-export type ServerAccess = {
-  mode: "all" | "selected";
-  serverIds: string[];
-};
-
 export type PublicUser = {
   id: string;
   username: string;
   rolePreset: RolePreset;
   permissions: Permission[];
-  serverAccess?: ServerAccess;
   createdAt: string;
 };
 

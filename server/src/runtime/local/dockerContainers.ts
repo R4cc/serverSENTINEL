@@ -8,11 +8,11 @@ import { consoleLogLineLimit, readConsoleLogTail } from "../../consoleLogs.js";
 import { validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../../http/validation.js";
 import { defaultServerContainerName } from "../../storage/serverIdentity.js";
 import { summarizeRuntimeExit } from "../../runtimeErrors.js";
-import { containerConfigHash, isManagedContainer, managedContainerLabels } from "../containerLabels.js";
+import { containerConfigHash, isManagedContainer, isManagedContainerFor, managedContainerLabels, type ContainerLabels } from "../containerLabels.js";
 import { computeContainerResourceSample } from "../containerStats.js";
 import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../profile.js";
 export { defaultDockerImageForMinecraftVersion } from "../profile.js";
-import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
+import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerLogTailMaxBytes, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
 import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
 import { shellQuote } from "../../docker/shell.js";
 import { durationSince, errorLogFields, logError, logInfo, logWarn, type LogFields } from "../../logging.js";
@@ -120,6 +120,20 @@ export function dockerContainerMountValid(server: ManagedServer, details: Docker
   }));
 }
 
+/**
+ * Managed containers carry the id of the server that owns them, and `dockerContainer` is an editable
+ * per-server setting. Checking only the managed marker would let a server configured with a sibling's
+ * container name drive that sibling's runtime, so every local Docker path checks ownership instead.
+ * Returns the refusal message, or undefined when the container really belongs to this server.
+ */
+function containerOwnershipRefusal(server: ManagedServer, labels: ContainerLabels, verb: "control" | "delete") {
+  if (isManagedContainerFor(labels, server.id)) return undefined;
+  const cause = isManagedContainer(labels)
+    ? "belongs to a different managed server"
+    : "exists but is not managed by serverSENTINEL";
+  return `Container ${dockerContainerName(server)} ${cause}; refusing to ${verb} it`;
+}
+
 export async function removeDockerContainer(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), action: "remove_container" }, "Removing Minecraft runtime container");
   await dockerRequest("DELETE", `/containers/${encodeURIComponent(dockerContainerName(server))}?force=1`, 204);
@@ -130,8 +144,9 @@ export async function removeManagedDockerContainer(server: ManagedServer) {
   if (!existing) {
     return false;
   }
-  if (!isManagedContainer(existing.Config?.Labels)) {
-    throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to delete it`);
+  const refusal = containerOwnershipRefusal(server, existing.Config?.Labels, "delete");
+  if (refusal) {
+    throw new Error(refusal);
   }
   await removeDockerContainer(server);
   return true;
@@ -196,7 +211,7 @@ export function dockerRuntimeConfigHash(server: ManagedServer, options: { includ
 }
 
 export async function reconcileDockerRestartPolicy(server: ManagedServer, details: DockerContainerInspect) {
-  if (!isManagedContainer(details.Config?.Labels)) return;
+  if (!isManagedContainerFor(details.Config?.Labels, server.id)) return;
   const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
   if (!restartPolicy || restartPolicy === "no") return;
   await dockerJsonRequest(
@@ -262,9 +277,10 @@ export async function ensureDockerContainer(server: ManagedServer, preferredNetw
   const existing = await inspectDockerContainer(server);
   let networkingConfig = preferredNetworkingConfig;
   if (existing) {
-    if (!isManagedContainer(existing.Config?.Labels)) {
-      logWarn(serverLogFields(server), "Refusing to control unmanaged Docker container");
-      throw new Error(`Container ${dockerContainerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
+    const refusal = containerOwnershipRefusal(server, existing.Config?.Labels, "control");
+    if (refusal) {
+      logWarn(serverLogFields(server), "Refusing to control Docker container owned by another server or unmanaged");
+      throw new Error(refusal);
     }
     await reconcileDockerRestartPolicy(server, existing);
     const existingConfigHash = containerConfigHash(existing.Config?.Labels);
@@ -366,19 +382,21 @@ export async function dockerStatus(server: ManagedServer) {
         : "Configured container does not exist"
     };
   }
-  const managed = isManagedContainer(details.Config?.Labels);
-  if (managed) await reconcileDockerRestartPolicy(server, details);
+  const owned = isManagedContainerFor(details.Config?.Labels, server.id);
+  if (owned) await reconcileDockerRestartPolicy(server, details);
   const mountValid = dockerContainerMountValid(server, details);
   return {
     configured: true,
     available: true,
-    controllable: managed && mountValid,
+    controllable: owned && mountValid,
     state: details.State?.Status ?? "unknown",
     running: Boolean(details.State?.Running),
     container: dockerContainerName(server),
     name: details.Name?.replace(/^\//, ""),
-    message: !managed
-      ? "A same-named Docker container exists but is not managed by serverSENTINEL"
+    message: !owned
+      ? isManagedContainer(details.Config?.Labels)
+        ? "A same-named Docker container belongs to a different managed server"
+        : "A same-named Docker container exists but is not managed by serverSENTINEL"
       : !mountValid
         ? "Managed container has an incompatible server volume mount"
         : undefined
@@ -397,8 +415,9 @@ export async function dockerAction(server: ManagedServer, action: "start" | "sto
       await ensureDockerContainer(server);
     } else {
       const existing = await inspectDockerContainer(server);
-      if (!isManagedContainer(existing?.Config?.Labels)) {
-        throw new Error(`Container ${dockerContainerName(server)} is not managed by serverSENTINEL; refusing to control it`);
+      const refusal = containerOwnershipRefusal(server, existing?.Config?.Labels, "control");
+      if (refusal) {
+        throw new Error(refusal);
       }
     }
     const requestAction = () => dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
@@ -457,10 +476,12 @@ export async function dockerCommandInputCapability(server: ManagedServer, curren
     };
   }
 
-  if (!isManagedContainer(details.Config?.Labels)) {
+  if (!isManagedContainerFor(details.Config?.Labels, server.id)) {
     return {
       available: false,
-      message: "Console command input is best-effort only for non-managed containers and is disabled"
+      message: isManagedContainer(details.Config?.Labels)
+        ? "This container belongs to a different managed server and console command input is disabled"
+        : "Console command input is best-effort only for non-managed containers and is disabled"
     };
   }
 
@@ -514,7 +535,10 @@ export async function dockerRecentLogs(server: ManagedServer, lineLimit = 200) {
   const response = await dockerBufferRequest(
     "GET",
     `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=${tail}`,
-    200
+    200,
+    15000,
+    undefined,
+    dockerLogTailMaxBytes
   );
   return stripDockerLogHeaders(response).toString("utf8");
 }

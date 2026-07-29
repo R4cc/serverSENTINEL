@@ -62,6 +62,8 @@ function createCurrentSchema(database: Database.Database) {
       salt TEXT NOT NULL,
       role_preset TEXT NOT NULL,
       permissions_json TEXT NOT NULL,
+      -- Retired: per-user server scoping was removed. The column stays so the users table remains
+      -- unchanged across releases and existing databases need no migration.
       server_access_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL

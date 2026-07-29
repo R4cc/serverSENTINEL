@@ -87,4 +87,24 @@ describe("ZIP extraction", () => {
     expect(replaced.replacedFiles).toBe(2);
     expect(await readFile(join(destination, "config", "server.yml"), "utf8")).toBe("new\n");
   });
+
+  // The count is enforced while walking the central directory, so an over-limit archive is rejected
+  // without every entry being retained first.
+  it("rejects an archive with more entries than the limit allows", async () => {
+    const root = await temporaryRoot();
+    const archive = join(root, "many.zip");
+    await writeZip(archive, Array.from({ length: 12 }, (_, index) => ({ name: `file-${index}.txt`, content: "x" })));
+
+    await expect(indexZipArchive(archive, { maxEntries: 10, maxExpandedBytes: 1024 * 1024 }))
+      .rejects.toMatchObject({ code: "zip_entry_limit" });
+  });
+
+  it("accepts an archive exactly at the entry limit", async () => {
+    const root = await temporaryRoot();
+    const archive = join(root, "exact.zip");
+    await writeZip(archive, Array.from({ length: 10 }, (_, index) => ({ name: `file-${index}.txt`, content: "x" })));
+
+    const index = await indexZipArchive(archive, { maxEntries: 10, maxExpandedBytes: 1024 * 1024 });
+    expect(index.entries.filter((entry) => entry.type === "file")).toHaveLength(10);
+  });
 });

@@ -1,7 +1,7 @@
-import { createReadStream } from "node:fs";
 import { basename } from "node:path";
 import { Readable } from "node:stream";
 import { ZipFile } from "yazl";
+import { openContainedReadStream } from "./core.js";
 
 export type FileArchiveEntry = {
   sourcePath: string;
@@ -28,9 +28,13 @@ export function safeArchivePath(path: string) {
   return segments.join("/");
 }
 
+/**
+ * Archive members are opened lazily, long after the plan was validated, so each one is opened without
+ * following a final-component symlink rather than reopened by name with whatever it now points at.
+ */
 export function createZipArchiveStream(
   entries: FileArchiveEntry[],
-  openStream: (entry: FileArchiveEntry) => Promise<Readable> = async (entry) => createReadStream(entry.sourcePath)
+  openStream: (entry: FileArchiveEntry) => Promise<Readable> = async (entry) => (await openContainedReadStream(entry.sourcePath)).stream
 ) {
   const zip = new ZipFile();
   for (const entry of entries) {

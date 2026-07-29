@@ -52,6 +52,13 @@ export async function writeVersionMetadataFile(server: ManagedServer) {
   await writeFile(target, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
 }
 
+/**
+ * A managed workload can rewrite its own launcher JAR, and `/api/app` reads it synchronously on a
+ * servers.view request. The 16 MiB file cap does not bound the *expanded* size, so a DEFLATE bomb would
+ * allocate gigabytes on the event loop. install.properties is a few hundred bytes of text in practice.
+ */
+export const launcherJarEntryMaxBytes = 1024 * 1024;
+
 export function readZipEntry(buffer: Buffer, entryName: string) {
   let offset = 0;
   while (offset + 30 <= buffer.length) {
@@ -71,8 +78,8 @@ export function readZipEntry(buffer: Buffer, entryName: string) {
     const name = buffer.subarray(nameStart, nameStart + fileNameLength).toString("utf8");
     if (name === entryName) {
       const data = buffer.subarray(dataStart, dataEnd);
-      if (compressionMethod === 0) return data;
-      if (compressionMethod === 8) return inflateRawSync(data);
+      if (compressionMethod === 0) return data.byteLength > launcherJarEntryMaxBytes ? undefined : data;
+      if (compressionMethod === 8) return inflateRawSync(data, { maxOutputLength: launcherJarEntryMaxBytes });
       return undefined;
     }
     offset = dataEnd;
