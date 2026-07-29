@@ -547,11 +547,6 @@ button:disabled,
   transform: none;
 }
 
-.serverListItem {
-  min-width: 0;
-}
-
-.serverListItem strong,
 .accountName,
 .settingsNavLabel {
   overflow: hidden;
@@ -1099,13 +1094,11 @@ button:disabled,
   color: var(--sidebar-foreground);
 }
 
-.sidebar .sideNav button,
-.sidebar .serverListItem {
+.sidebar .sideNav button {
   color: var(--sidebar-foreground-muted);
 }
 
-.sidebar .sideNav button:hover:not(:disabled),
-.sidebar .serverListItem:hover:not(.active) {
+.sidebar .sideNav button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
   color: var(--sidebar-foreground);
 }
@@ -1207,7 +1200,6 @@ button:disabled,
   .fileBreadcrumbs button,
   .runtimeControlButton,
   .overflowButton,
-  .serverListItem,
   .installTabs button,
   .modalHeader button,
   .userModalHeader button,
@@ -1889,24 +1881,21 @@ button:disabled,
   gap: 3px;
 }
 
-.sideNav button,
-.serverListItem {
+.sideNav button {
   border-color: transparent;
   background: transparent;
   color: var(--text-muted);
   border-radius: var(--radius-sm);
 }
 
-.sideNav button:hover:not(:disabled),
-.serverListItem:hover:not(.active) {
+.sideNav button:hover:not(:disabled) {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 64%, transparent);
   color: var(--text);
   transform: none;
 }
 
-.sideNav button.active,
-.serverListItem.active {
+.sideNav button.active {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
@@ -1917,8 +1906,7 @@ button:disabled,
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.sideNav button.active:hover,
-.serverListItem.active:hover {
+.sideNav button.active:hover {
   background: color-mix(in srgb, var(--sentinel-accent-soft) 78%, var(--surface-raised));
   color: var(--sentinel-accent-strong);
 }
@@ -2366,8 +2354,7 @@ textarea:hover:not(:disabled),
 }
 
 /* Keep sidebar selections and account controls independent of page-theme surfaces. */
-.sidebar .sideNav button.active,
-.sidebar .serverListItem.active {
+.sidebar .sideNav button.active {
   border-color: color-mix(in srgb, var(--sidebar-foreground) 58%, var(--accent));
   border-radius: 10px;
   background:
@@ -2379,8 +2366,7 @@ textarea:hover:not(:disabled),
     0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
-.sidebar .sideNav button.active:hover,
-.sidebar .serverListItem.active:hover {
+.sidebar .sideNav button.active:hover {
   background:
     linear-gradient(135deg, rgb(255 255 255 / 8%) 0 25%, transparent 25% 50%, rgb(255 255 255 / 4%) 50% 75%, transparent 75%) 0 0 / 8px 8px,
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 84%, white), color-mix(in srgb, var(--accent) 88%, black));

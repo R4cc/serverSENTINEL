@@ -216,11 +216,11 @@ Delete or disable the schedule after the check.
 If the release candidate exposes Export/Import in the UI:
 
 1. Stop the server.
-2. Export the instance or the smoke server.
+2. Export the smoke server from its Properties page.
 3. Download the export artifact.
 4. Start a second fresh panel on port `8081` with a different empty data root.
 5. Create its first admin.
-6. Import the artifact into the second panel and select its local node.
+6. Import the artifact from the Nodes page of the second panel and select its local node.
 7. Confirm the imported server appears and can be opened.
 
 Expected:

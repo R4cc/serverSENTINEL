@@ -18,7 +18,7 @@ export type ExportOperationResult = {
   artifact?: ExportArtifactMetadata;
   artifactPath?: string;
   serverIds?: string[];
-  includeInstance?: boolean;
+  selection?: { categories?: string[]; contentStrategy?: string };
   [key: string]: unknown;
 };
 

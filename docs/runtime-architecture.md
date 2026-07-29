@@ -50,8 +50,26 @@ Runtime download URLs are allowlisted per provider. Paper downloads must use `pa
 
 Version and build responses use a short success cache and a shorter stale-on-error window. Network, HTTP, malformed-response, missing-stable-build, invalid-build, unsafe-URL, size, and checksum failures remain distinct actionable errors. Provisioning cleanup retains the existing operation lifecycle, so failed creates do not leave a managed server record behind.
 
+## Export and import
+
+An export artifact is a ZIP holding `manifest.json` beside the real files, laid out as `servers/<key>/<path>`. The manifest carries the server records, mod preferences, the content lockfile, and a file index; the bytes are ordinary archive members, streamed in and out rather than held in memory. Files are read through the runtime abstraction, so a server on a remote node streams over the node protocol instead of being read from the panel's own disk.
+
+Operators choose categories rather than receiving a fixed subset: server configuration, access control, mod and plugin configs, mods and plugins, world, panel settings, and logs. `backups`, `cache`, `libraries`, and `versions` are never exported because they regenerate. Ports, image, and runtime profile always travel because a record cannot be created or conflict-checked without them; schedules, Java arguments, and update channels ride on `panelSettings`.
+
+The world category resolves `level-name` from the server's own properties, because a renamed level keeps none of its data in `world/`. It takes that folder, its Paper-style `_nether` and `_the_end` siblings, the conventional defaults as a fallback for an unreadable properties file, and `worlds/`. Datapacks live inside the level folder and travel with it. Fabric and vanilla nest the other dimensions inside the level folder, where the level entry already covers them.
+
+The server jar is not exported: the runtime profile already names an immutable, checksummed artifact, so import downloads it the same way provisioning does. A failed download is reported per server rather than rolled back, since the rest of the restore is still worth keeping — but the server cannot start until it succeeds.
+
+Mods and plugins default to a lockfile: content installed through the panel already records its Modrinth version, and manually uploaded jars are matched by the SHA-1 the mods list already computes. Only jars Modrinth cannot identify are carried whole. If the installed content cannot be enumerated at all, the export ships every jar instead, because that is the one case where the panel cannot know what a lockfile would leave out. Import re-downloads each lockfile entry and reports failures per file, because a Modrinth version can be withdrawn between export and import.
+
+A path that is absent is not an export failure; any other filesystem or node error is, and it fails the export rather than producing an archive with files silently missing. Uploaded import archives are released when their operation settles, and maintenance reclaims abandoned uploads on the same tick that expires export artifacts.
+
+Export is started from a single server's properties page and the API is given that one server id, though the endpoints still accept a list. The selected server must be stopped: a world copied from a running server can contain half-written chunks, so this is a refusal rather than a warning, checked both when the request arrives and again inside the operation. Import stays on the Nodes page because an archive can carry several servers and needs a node to restore onto; imports always create new servers and are restored onto the panel's own node, since the panel writes the files to its own servers directory.
+
 ## Upgrade floor
 
-The direct upgrade floor is application version 1.6.2, SQLite schema 20, export schema 3, and panel-node protocol 3.1. Older databases must first be opened by version 1.6.2 so its migrations can complete.
+The direct upgrade floor is application version 1.6.2, SQLite schema 20, export schema 4, and panel-node protocol 3.1. Older databases must first be opened by version 1.6.2 so its migrations can complete.
 
-Runtime profiles use `runtimeType` and `runtimeVersion` throughout the API, web app, panel, and node. The database reader still normalizes `loader` and `loaderVersion` when reading persisted profile JSON because an installation upgraded through 1.6.2 can retain those fields. Schema-3 imports created by 1.6.2 may include the same redundant aliases, but imports must also contain the canonical fields and normalized output does not re-emit the aliases.
+Export schema 4 replaced the schema-3 base64-in-JSON artifact, which could only describe a handful of small configuration files. There is no conversion path: a schema-3 artifact is rejected and has to be recreated by an installation running this version.
+
+Runtime profiles use `runtimeType` and `runtimeVersion` throughout the API, web app, panel, and node. The database reader still normalizes `loader` and `loaderVersion` when reading persisted profile JSON because an installation upgraded through 1.6.2 can retain those fields. Schema-4 manifests reject those aliases outright.

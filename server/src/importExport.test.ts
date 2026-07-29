@@ -1,20 +1,22 @@
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ManagedNode, ManagedServer } from "./types.js";
+import type { ExportSelection } from "@serversentinel/contracts";
+import type { ManagedServer } from "./types.js";
 import {
-  applyImportArtifact,
-  assertExportArtifact,
-  createExportArtifact,
+  applyImportArchive,
+  assertExportManifest,
+  createExportPlan,
   exportArtifactSchemaVersion,
-  parseExportArtifactBase64,
-  validateImportArtifact,
-  writeExportArtifact,
-  type ExportArtifact
+  readExportManifest,
+  serverArchiveKey,
+  validateImportArchive,
+  writeExportArchive,
+  type ExportManifest
 } from "./importExport.js";
-import { config } from "./config.js";
+import type { NodeRuntime } from "./nodes/types.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import { NodesRepository } from "./storage/nodesRepository.js";
@@ -28,6 +30,11 @@ const sourceScheduleId = "00000000-0000-4000-8000-000000000201";
 const sourceRunId = "00000000-0000-4000-8000-000000000301";
 const nodeId = "local";
 
+const everything: ExportSelection = {
+  categories: ["serverConfig", "accessControl", "modConfig", "content", "world", "panelSettings", "logs"],
+  contentStrategy: "jars"
+};
+
 afterEach(async () => {
   for (const database of openDatabases.splice(0)) database.close();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
@@ -37,19 +44,6 @@ async function tempRoot(prefix: string) {
   const root = await mkdtemp(join(tmpdir(), prefix));
   temporaryDirectories.push(root);
   return root;
-}
-
-function node(overrides: Partial<ManagedNode> = {}): ManagedNode {
-  return {
-    id: nodeId,
-    name: "Local node",
-    type: "local",
-    status: "online",
-    isInternal: true,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-    ...overrides
-  };
 }
 
 function managedServer(overrides: Partial<ManagedServer> = {}): ManagedServer {
@@ -113,318 +107,411 @@ function managedServer(overrides: Partial<ManagedServer> = {}): ManagedServer {
   };
 }
 
-function fileEntry(path: string, content: string) {
-  const bytes = Buffer.from(content);
-  return {
-    path,
-    size: bytes.length,
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-    contentBase64: bytes.toString("base64")
+/**
+ * Export reads exclusively through the runtime abstraction, so a directory-backed fake exercises the
+ * same path a remote node would take without needing a node agent.
+ */
+function directoryRuntime(): NodeRuntime {
+  const publicToAbsolute = (server: ManagedServer, path: string) => {
+    const trimmed = path.replace(/^\/+/, "");
+    const absolute = trimmed ? resolve(server.serverDir, trimmed) : resolve(server.serverDir);
+    const contained = relative(resolve(server.serverDir), absolute);
+    if (contained.startsWith("..") || contained.split(sep).includes("..")) {
+      throw new Error("path escapes the server directory");
+    }
+    return absolute;
   };
+  return {
+    nodeId,
+    async resolveExistingPath(server: ManagedServer, path: string) {
+      const absolute = publicToAbsolute(server, path);
+      await stat(absolute);
+      return absolute;
+    },
+    async listFiles(server: ManagedServer, target: string) {
+      const entries = await readdir(target as string, { withFileTypes: true });
+      const root = resolve(server.serverDir);
+      const publicPath = (absolute: string) => `/${relative(root, absolute).split(sep).join("/")}`;
+      return {
+        path: publicPath(target as string),
+        entries: await Promise.all(entries.map(async (entry) => {
+          const absolute = join(target as string, entry.name);
+          const info = await stat(absolute);
+          return {
+            name: entry.name,
+            path: publicPath(absolute),
+            type: entry.isDirectory() ? "directory" : "file",
+            size: entry.isDirectory() ? 0 : info.size,
+            modifiedAt: info.mtime.toISOString()
+          };
+        }))
+      };
+    },
+    async readFile(_server: ManagedServer, target: string) {
+      return { content: await readFile(target as string, "utf8") };
+    },
+    async downloadFile(_server: ManagedServer, target: string) {
+      const info = await stat(target);
+      return { filename: basename(target), size: info.size, stream: createReadStream(target) };
+    }
+  } as unknown as NodeRuntime;
 }
 
-function artifact(overrides: Partial<ExportArtifact> = {}): ExportArtifact {
-  const base: ExportArtifact = {
-    artifactType: "serversentinel.export",
-    schemaVersion: exportArtifactSchemaVersion,
-    manifest: {
-      exportedAt: "2026-01-01T00:00:00.000Z",
-      appVersion: "1.5.0",
-      sqliteSchemaVersion: 17,
-      content: {
-        instance: true,
-        servers: 1,
-        serverFiles: 1
-      }
-    },
-    instance: {
-      settings: {},
-      nodes: [node()]
-    },
-    servers: [{
-      server: managedServer({ dockerContainer: undefined }),
-      modPreferences: {
-        "fabric-api.jar": {
-          channel: "release",
-          modrinth: {
-            projectId: "fabric-api",
-            versionId: "version",
-            filename: "fabric-api.jar",
-            versionNumber: "1.0.0",
-            gameVersions: ["1.21.1"],
-            loaders: ["fabric"],
-            installedAt: "2026-01-01T00:00:00.000Z",
-            installedWithForceIncompatible: false
-          }
-        }
-      },
-      files: [fileEntry("config/fabric-api.properties", "enabled=true\n")]
-    }]
-  };
-  return { ...base, ...overrides };
+async function buildArchive(
+  root: string,
+  servers: ManagedServer[],
+  selection: ExportSelection = everything,
+  runtimeOverride?: NodeRuntime
+) {
+  const runtime = runtimeOverride ?? directoryRuntime();
+  const plan = await createExportPlan({
+    appVersion: "1.7.0",
+    servers,
+    selection,
+    runtimeForServer: () => runtime,
+    modPreferencesForServer: () => ({ "fabric-api.jar": { channel: "release" } })
+  });
+  const written = await writeExportArchive(join(root, "exports", "artifact.zip"), plan);
+  return { plan, written };
+}
+
+async function seedServerDirectory(root: string) {
+  await Promise.all([
+    mkdir(join(root, "config"), { recursive: true }),
+    mkdir(join(root, "mods"), { recursive: true }),
+    mkdir(join(root, "world", "region"), { recursive: true }),
+    mkdir(join(root, "logs"), { recursive: true }),
+    mkdir(join(root, "backups"), { recursive: true }),
+    mkdir(join(root, "cache"), { recursive: true })
+  ]);
+  await Promise.all([
+    writeFile(join(root, "server.properties"), "server-port=25565\n", "utf8"),
+    writeFile(join(root, "whitelist.json"), "[]\n", "utf8"),
+    writeFile(join(root, "config", "fabric-api.properties"), "enabled=true\n", "utf8"),
+    writeFile(join(root, "mods", "fabric-api.jar"), "PKjar", "utf8"),
+    writeFile(join(root, "world", "level.dat"), "leveldata", "utf8"),
+    writeFile(join(root, "world", "region", "r.0.0.mca"), "region", "utf8"),
+    writeFile(join(root, "logs", "latest.log"), "log line\n", "utf8"),
+    writeFile(join(root, "backups", "backup.zip"), "backup", "utf8"),
+    writeFile(join(root, "cache", "cached.bin"), "cache", "utf8")
+  ]);
 }
 
 async function createRepositories(root: string) {
   const storage = openStorageDatabase(join(root, "state.sqlite"));
   openDatabases.push(storage);
   const nodesRepository = new NodesRepository(storage);
-  nodesRepository.create(node());
+  nodesRepository.create({
+    id: nodeId,
+    name: "Local node",
+    type: "local",
+    status: "online",
+    isInternal: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  });
   return {
     storage,
     nodesRepository,
+    // The stored-record normalizer pins serverDir inside the configured data root, which a temporary
+    // fixture directory is not; the repository contract under test here is persistence, not shape.
     serversRepository: new ServersRepository(storage, (value) => value as ManagedServer),
     modPreferencesRepository: new ModPreferencesRepository(storage),
     settingsRepository: new SettingsRepository(storage)
   };
 }
 
-describe("export/import artifacts", () => {
-  it("writes generated artifacts atomically with restrictive permissions", async () => {
+function manifestFixture(overrides: Partial<ExportManifest["servers"][number]> = {}): ExportManifest {
+  const server = managedServer();
+  return {
+    artifactType: "serversentinel.export",
+    schemaVersion: exportArtifactSchemaVersion,
+    manifest: {
+      exportedAt: "2026-07-29T00:00:00.000Z",
+      appVersion: "1.7.0",
+      sqliteSchemaVersion: 20,
+      selection: { categories: ["serverConfig"], contentStrategy: "lockfile" },
+      content: { servers: 1, files: 1, totalBytes: 10 }
+    },
+    warnings: [],
+    servers: [{
+      key: "001-survival",
+      server,
+      modPreferences: {},
+      lockfile: [],
+      files: [{ path: "server.properties", size: 10 }],
+      ...overrides
+    }]
+  };
+}
+
+describe("export archives", () => {
+  it("writes the archive atomically with restrictive permissions", async () => {
     const root = await tempRoot("serversentinel-export-write-");
-    const path = join(root, "exports", "artifact.json");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
 
-    const written = await writeExportArtifact(path, artifact());
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
 
-    expect(written.path).toBe(path);
     expect(written.size).toBeGreaterThan(0);
+    expect(written.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect((await readdir(join(root, "exports"))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
     if (process.platform !== "win32") {
-      expect((await stat(path)).mode & 0o077).toBe(0);
+      expect((await stat(written.path)).mode & 0o077).toBe(0);
       expect((await stat(join(root, "exports"))).mode & 0o077).toBe(0);
     }
   });
 
-  it.each([1, 2])("rejects legacy schema-%s exports", (schemaVersion) => {
-    const legacy = artifact();
+  it("carries the manifest inside the archive alongside the real files", async () => {
+    const root = await tempRoot("serversentinel-export-manifest-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+
+    expect(manifest.schemaVersion).toBe(exportArtifactSchemaVersion);
+    expect(manifest.servers).toHaveLength(1);
+    expect(manifest.servers[0].key).toBe(serverArchiveKey(0, managedServer()));
+    expect(manifest.servers[0].server.runtimeProfile.minecraftVersion).toBe("1.21.1");
+    expect(manifest.servers[0].modPreferences).toEqual({ "fabric-api.jar": { channel: "release" } });
+    const paths = manifest.servers[0].files.map((file) => file.path);
+    expect(paths).toContain("world/region/r.0.0.mca");
+    expect(paths).toContain("mods/fabric-api.jar");
+    expect(paths).toContain("config/fabric-api.properties");
+  });
+
+  it("takes only the selected categories", async () => {
+    const root = await tempRoot("serversentinel-export-selection-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+
+    const { plan } = await buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["serverConfig", "accessControl"],
+      contentStrategy: "lockfile"
+    });
+
+    expect(plan.manifest.servers[0].files.map((file) => file.path).sort())
+      .toEqual(["server.properties", "whitelist.json"]);
+  });
+
+  it("never takes regenerable directories even when the world is selected", async () => {
+    const root = await tempRoot("serversentinel-export-excluded-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+
+    const { plan } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const paths = plan.manifest.servers[0].files.map((file) => file.path);
+
+    expect(paths.some((path) => path.startsWith("backups/"))).toBe(false);
+    expect(paths.some((path) => path.startsWith("cache/"))).toBe(false);
+  });
+
+  it("drops per-instance runtime state from the exported record", async () => {
+    const root = await tempRoot("serversentinel-export-state-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+
+    const { plan } = await buildArchive(root, [managedServer({
+      serverDir: source,
+      runtimeIntent: "running",
+      restartPhase: "starting",
+      crashAttemptTimestamps: ["2026-01-01T00:00:00.000Z"],
+      restartRequiredSince: "2026-01-01T00:00:00.000Z"
+    })]);
+    const exported = plan.manifest.servers[0].server as Record<string, unknown>;
+
+    expect(exported).not.toHaveProperty("runtimeIntent");
+    expect(exported).not.toHaveProperty("restartPhase");
+    expect(exported).not.toHaveProperty("crashAttemptTimestamps");
+    expect(exported).not.toHaveProperty("restartRequiredSince");
+  });
+
+  it("follows level-name to a renamed world folder", async () => {
+    const root = await tempRoot("serversentinel-export-level-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+    await mkdir(join(source, "survival", "region"), { recursive: true });
+    await writeFile(join(source, "survival", "region", "r.1.1.mca"), "renamed", "utf8");
+    await writeFile(join(source, "server.properties"), "server-port=25565\nlevel-name=survival\n", "utf8");
+
+    const { plan } = await buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["serverConfig", "world"],
+      contentStrategy: "lockfile"
+    });
+    const paths = plan.manifest.servers[0].files.map((file) => file.path);
+
+    expect(paths).toContain("survival/region/r.1.1.mca");
+    // The conventional folder still travels when it exists, so a mixed layout is not truncated.
+    expect(paths).toContain("world/level.dat");
+  });
+
+  it("ships every jar when the installed content cannot be listed", async () => {
+    const root = await tempRoot("serversentinel-export-fallback-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+    // planServerContent falls back when the mods list is unavailable. Excluding jars on that path
+    // would produce an archive with neither a lockfile nor the files.
+    const { plan } = await buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["content"],
+      contentStrategy: "lockfile"
+    });
+
+    expect(plan.manifest.servers[0].lockfile).toEqual([]);
+    expect(plan.manifest.servers[0].files.map((file) => file.path)).toContain("mods/fabric-api.jar");
+    expect(plan.manifest.warnings.join(" ")).toMatch(/included in full/);
+  });
+
+  it("fails the export when a directory cannot be read", async () => {
+    const root = await tempRoot("serversentinel-export-error-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+    const runtime = directoryRuntime();
+    const failing = {
+      ...runtime,
+      listFiles: async (server: ManagedServer, target: string) => {
+        if (String(target).includes("world")) throw new Error("EACCES: permission denied");
+        return runtime.listFiles(server, target);
+      }
+    } as unknown as NodeRuntime;
+
+    // A permissions or node-connectivity failure must not read as "that folder was simply empty".
+    await expect(buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["world"],
+      contentStrategy: "lockfile"
+    }, failing)).rejects.toThrow(/EACCES/);
+  });
+
+  it("omits schedules and java arguments when panel settings are not selected", async () => {
+    const root = await tempRoot("serversentinel-export-nopanel-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+
+    const { plan } = await buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["serverConfig"],
+      contentStrategy: "lockfile"
+    });
+    const exported = plan.manifest.servers[0].server as Record<string, unknown>;
+
+    expect(exported).not.toHaveProperty("schedules");
+    expect(exported).not.toHaveProperty("javaArgs");
+    expect(plan.manifest.servers[0].modPreferences).toEqual({});
+    // Ports and image always travel: the record cannot be created or conflict-checked without them.
+    expect(exported.dockerPorts).toBe("25565:25565/tcp");
+  });
+});
+
+describe("import manifest validation", () => {
+  it.each([1, 2, 3])("rejects legacy schema-%s exports", (schemaVersion) => {
+    const legacy = manifestFixture();
     (legacy as { schemaVersion: number }).schemaVersion = schemaVersion;
-    expect(() => assertExportArtifact(legacy)).toThrow(/requires export schema 3/);
+    expect(() => assertExportManifest(legacy)).toThrow(/requires export schema 4/);
   });
 
-  it("creates a manifest with canonical server models, mod metadata, and selected config files", async () => {
-    const root = await tempRoot("serversentinel-export-");
-    await mkdir(join(root, "config"), { recursive: true });
-    await writeFile(join(root, "server.properties"), "server-port=25565\n", "utf8");
-    await writeFile(join(root, "config", "fabric-api.properties"), "enabled=true\n", "utf8");
-    const server = managedServer({ serverDir: root, runtimeIntent: "running" });
-    const result = await createExportArtifact({
-      appVersion: "1.5.0",
-      nodes: [node({ secretHash: "not-exported", joinTokenHash: "not-exported" })],
-      servers: [server],
-      includeInstance: true,
-      modPreferencesForServer: () => ({ "fabric-api.jar": { channel: "release" } })
+  it("rejects traversal and absolute paths", () => {
+    for (const path of ["../escape.txt", "/etc/passwd", "world\\region\\r.mca", "world/../../escape"]) {
+      const manifest = manifestFixture({ files: [{ path, size: 1 }] });
+      expect(() => assertExportManifest(manifest)).toThrow(/Import file path/);
+    }
+  });
+
+  it("rejects an archive key that is not a single path segment", () => {
+    expect(() => assertExportManifest(manifestFixture({ key: "../evil" }))).toThrow(/single safe path segment/);
+    expect(() => assertExportManifest(manifestFixture({ key: "nested/key" }))).toThrow(/single safe path segment/);
+  });
+
+  it("rejects the redundant runtime aliases that schema 3 tolerated", () => {
+    const manifest = manifestFixture();
+    (manifest.servers[0].server.runtimeProfile as unknown as Record<string, unknown>).loader = "fabric";
+    expect(() => assertExportManifest(manifest)).toThrow(/Unsupported .*runtimeProfile content: loader/);
+  });
+
+  it("rejects malformed lockfile entries", () => {
+    const base = { filename: "fabric-api.jar", enabled: true, projectId: "p", versionId: "v", versionNumber: "1", channel: "release" };
+    expect(() => assertExportManifest(manifestFixture({ lockfile: [{ ...base, channel: "nightly" } as never] })))
+      .toThrow(/must be release, beta, or alpha/);
+    expect(() => assertExportManifest(manifestFixture({ lockfile: [{ ...base, filename: "../evil.jar" } as never] })))
+      .toThrow(/must be a local .jar filename/);
+    expect(() => assertExportManifest(manifestFixture({ lockfile: [{ ...base, sha1: "nothex" } as never] })))
+      .toThrow(/40-character hexadecimal/);
+  });
+
+  it("rejects an artifact describing more servers than the limit allows", () => {
+    const manifest = manifestFixture();
+    manifest.servers = Array.from({ length: 201 }, (_value, index) => ({
+      ...manifestFixture().servers[0],
+      key: `s-${index}`
+    }));
+    expect(() => assertExportManifest(manifest)).toThrow(/more than 200 servers/);
+  });
+
+  it("reports missing and non-local node targets without writing", () => {
+    const manifest = manifestFixture();
+
+    expect(validateImportArchive(manifest, {
+      targetNodeId: "",
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: "servers",
+      tmpDir: "tmp"
+    }).issues.map((issue) => issue.code)).toContain("missing_node_target");
+
+    const remote = validateImportArchive(manifest, {
+      targetNodeId: "remote-node",
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: "servers",
+      tmpDir: "tmp"
     });
-
-    expect(result.schemaVersion).toBe(exportArtifactSchemaVersion);
-    expect(result.manifest.content.instance).toBe(true);
-    expect(result.manifest.content.servers).toBe(1);
-    expect(result.servers[0].server.runtimeProfile.minecraftVersion).toBe("1.21.1");
-    expect(result.servers[0].server.runtimeIntent).toBe("running");
-    expect(result.servers[0].server.managedPorts?.[0]).toMatchObject({ externalPort: 25565, protocol: "tcp" });
-    expect(result.servers[0].modPreferences).toEqual({ "fabric-api.jar": { channel: "release" } });
-    expect(result.instance.settings).toEqual({});
-    expect(JSON.stringify(result)).not.toContain("modrinthApiKey");
-    expect(result.instance.nodes[0]).not.toHaveProperty("secretHash");
-    expect(result.instance.nodes[0]).not.toHaveProperty("joinTokenHash");
-    expect(result.servers[0].files.map((file) => file.path).sort()).toEqual(["config/fabric-api.properties", "server.properties"]);
+    expect(remote.valid).toBe(false);
+    expect(remote.issues[0].message).toMatch(/only be restored onto the local node/);
   });
 
-  it("omits instance data and every server from an explicitly empty scoped export", async () => {
-    const result = await createExportArtifact({
-      appVersion: "1.5.0",
-      nodes: [node()],
-      servers: [managedServer()],
-      selectedServerIds: [],
-      modPreferencesForServer: () => ({})
-    });
-
-    expect(result.manifest.content).toMatchObject({ instance: false, servers: 0, serverFiles: 0 });
-    expect(result.instance).toEqual({ settings: {}, nodes: [] });
-    expect(result.servers).toEqual([]);
-  });
-
-  it("excludes worlds, backups, logs, jars, and oversized config files by default", async () => {
-    const root = await tempRoot("serversentinel-export-exclude-");
-    await Promise.all([
-      mkdir(join(root, "world"), { recursive: true }),
-      mkdir(join(root, "backups"), { recursive: true }),
-      mkdir(join(root, "logs"), { recursive: true }),
-      mkdir(join(root, "config"), { recursive: true })
-    ]);
-    await Promise.all([
-      writeFile(join(root, "server.properties"), "server-port=25565\n", "utf8"),
-      writeFile(join(root, "fabric-server-launch.jar"), "jar", "utf8"),
-      writeFile(join(root, "world", "level.dat"), "world", "utf8"),
-      writeFile(join(root, "backups", "backup.zip"), "backup", "utf8"),
-      writeFile(join(root, "logs", "latest.log"), "log", "utf8"),
-      writeFile(join(root, "config", "huge.json"), "x".repeat(2 * 1024 * 1024 + 1), "utf8")
-    ]);
-
-    const result = await createExportArtifact({
-      appVersion: "0.8.0",
-      nodes: [node()],
-      servers: [managedServer({ serverDir: root })],
-      modPreferencesForServer: () => ({})
-    });
-
-    expect(result.servers[0].files.map((file) => file.path)).toEqual(["server.properties"]);
-  });
-
-  it("rejects traversal paths and unsupported archive contents before validation can apply", () => {
-    const valid = artifact();
-    const encoded = Buffer.from(JSON.stringify(valid), "utf8").toString("base64");
-    expect(parseExportArtifactBase64(encoded).servers[0].files[0].path).toBe("config/fabric-api.properties");
-    expect(() => parseExportArtifactBase64("!!!!")).toThrow("valid base64");
-
-    const traversal = structuredClone(valid);
-    traversal.servers[0].files[0].path = "../server.properties";
-    expect(() => assertExportArtifact(traversal)).toThrow(/stay inside|normalized/);
-
-    const unsupported = structuredClone(valid) as ExportArtifact & { unexpected?: boolean };
-    unsupported.unexpected = true;
-    expect(() => assertExportArtifact(unsupported)).toThrow(/Unsupported artifact content/);
-
-    const world = structuredClone(valid);
-    world.servers[0].files[0] = fileEntry("world/level.dat", "world");
-    expect(() => assertExportArtifact(world)).toThrow(/excluded|supported configuration file/);
-  });
-
-  it("rejects integration credentials in import artifacts", () => {
-    const unsafeArtifact = artifact() as unknown as { instance: { settings: Record<string, unknown> } };
-    unsafeArtifact.instance.settings.modrinthApiKey = "must-not-import";
-    expect(() => assertExportArtifact(unsafeArtifact)).toThrow(/unsupported instance\.settings content/i);
-  });
-
-  it("accepts canonical profiles and redundant aliases written by 1.6.2 exports", () => {
-    const paper = structuredClone(artifact());
-    paper.servers[0].server.runtimeProfile = {
-      minecraftVersion: "1.21.4",
-      runtimeType: "paper",
-      runtimeVersion: "1.21.4-232",
-      javaMajorVersion: 21,
-      jarProvider: "papermc",
-      jarArtifact: { filename: "paper.jar" },
-      compatibilityStatus: "compatible",
-      resolvedAt: "2026-07-18T00:00:00.000Z"
-    };
-    expect(() => assertExportArtifact(paper)).not.toThrow();
-
-    const mismatchedProvider = structuredClone(paper);
-    mismatchedProvider.servers[0].server.runtimeProfile.jarProvider = "mcjars";
-    expect(() => assertExportArtifact(mismatchedProvider)).toThrow("must be papermc for paper");
-
-    const previous = structuredClone(artifact());
-    const previousProfile = previous.servers[0].server.runtimeProfile as unknown as Record<string, unknown>;
-    previousProfile.loader = "fabric";
-    previousProfile.loaderVersion = previousProfile.runtimeVersion;
-    expect(() => assertExportArtifact(previous)).not.toThrow();
-
-    previousProfile.loaderVersion = "different";
-    expect(() => assertExportArtifact(previous)).toThrow(/loaderVersion must match runtimeVersion/);
-    previousProfile.loaderVersion = previousProfile.runtimeVersion;
-
-    delete previousProfile.runtimeType;
-    delete previousProfile.runtimeVersion;
-    expect(() => assertExportArtifact(previous)).toThrow(/runtimeType/);
-  });
-
-  it("rejects malformed server and mod preference payloads before planning", () => {
-    const badServer = structuredClone(artifact());
-    (badServer.servers[0].server as unknown as { displayName: unknown }).displayName = 42;
-    expect(() => assertExportArtifact(badServer)).toThrow("displayName");
-
-    const badPorts = structuredClone(artifact());
-    badPorts.servers[0].server.dockerPorts = "25565:25565/tcp:ignored";
-    expect(() => assertExportArtifact(badPorts)).toThrow("Invalid Docker port binding");
-
-    const badPreference = structuredClone(artifact());
-    badPreference.servers[0].modPreferences["fabric-api.jar"].channel = "nightly" as "release";
-    expect(() => assertExportArtifact(badPreference)).toThrow("channel");
-
-    const badFilename = structuredClone(artifact());
-    badFilename.servers[0].modPreferences["../fabric-api.jar"] = badFilename.servers[0].modPreferences["fabric-api.jar"];
-    expect(() => assertExportArtifact(badFilename)).toThrow("local .jar filename");
-  });
-
-  // Per-file and per-artifact byte limits still let an artifact describe an unbounded *number* of
-  // servers and files, each of which becomes a directory, file, or database row when applied.
-  it("rejects an artifact describing more servers than the aggregate limit allows", () => {
-    const many = structuredClone(artifact());
-    many.servers = Array.from({ length: config.importMaxServers + 1 }, () => structuredClone(many.servers[0]));
-    expect(() => assertExportArtifact(many)).toThrow(`more than ${config.importMaxServers} servers`);
-  });
-
-  it("rejects an artifact describing more files than the aggregate limit allows", () => {
-    const many = structuredClone(artifact());
-    const file = many.servers[0].files[0];
-    many.servers[0].files = Array.from({ length: config.importMaxFiles + 1 }, () => structuredClone(file));
-    expect(() => assertExportArtifact(many)).toThrow(`more than ${config.importMaxFiles} files`);
-  });
-
-  it("reports missing node targets, container conflicts, and port conflicts without writing", async () => {
-    const root = await tempRoot("serversentinel-import-conflict-");
-    const existing = managedServer({
-      id: "00000000-0000-4000-8000-000000000909",
-      displayName: "Survival",
-      dockerContainer: "survival",
-      serverDir: join(root, "existing")
-    });
-    const missingTarget = validateImportArtifact(artifact({ servers: [{ ...artifact().servers[0], server: managedServer() }] }), {
-      nodes: [node()],
-      existingServers: [existing],
-      serversDir: join(root, "servers"),
-      tmpDir: join(root, "tmp")
-    });
-
-    expect(missingTarget.valid).toBe(false);
-    expect(missingTarget.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(["missing_node_target", "conflicting_container_name"]));
-    expect(missingTarget.plan.instanceSettings).toEqual({
-      requested: false,
-      importable: [],
-      excludedSecrets: ["modrinthApiKey"]
-    });
-
-    const withTarget = validateImportArtifact(artifact({ servers: [{ ...artifact().servers[0], server: managedServer() }] }), {
+  it("reports port conflicts on the target node and renames colliding display names", () => {
+    const existing = managedServer({ id: "00000000-0000-4000-8000-000000000808" });
+    const result = validateImportArchive(manifestFixture(), {
       targetNodeId: nodeId,
-      nodes: [node()],
+      localNodeId: nodeId,
       existingServers: [existing],
-      serversDir: join(root, "servers"),
-      tmpDir: join(root, "tmp")
+      serversDir: "servers",
+      tmpDir: "tmp"
     });
 
-    expect(withTarget.valid).toBe(false);
-    expect(withTarget.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(["conflicting_container_name", "conflicting_port"]));
-    await expect(stat(join(root, "servers"))).rejects.toThrow();
+    expect(result.valid).toBe(false);
+    expect(result.issues.map((issue) => issue.code)).toContain("conflicting_port");
+    expect(result.warnings.map((warning) => warning.code)).toContain("display_name_renamed");
+    expect(result.plan.servers[0].displayName).toBe("Survival (2)");
   });
 
-  it("applies imports with new server, schedule, and run ids without overwriting existing servers", async () => {
+  it("warns that lockfile content will be re-downloaded", () => {
+    const result = validateImportArchive(manifestFixture({
+      lockfile: [{ filename: "fabric-api.jar", enabled: true, projectId: "p", versionId: "v", versionNumber: "1", channel: "release" }]
+    }), {
+      targetNodeId: nodeId,
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: "servers",
+      tmpDir: "tmp"
+    });
+
+    expect(result.warnings.map((warning) => warning.code)).toContain("lockfile_download_required");
+    expect(result.plan.servers[0].lockfileCount).toBe(1);
+  });
+});
+
+describe("import application", () => {
+  it("restores files and registers a server with fresh identifiers", async () => {
     const root = await tempRoot("serversentinel-import-apply-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
     const repositories = await createRepositories(root);
-    const existing = managedServer({
-      id: "00000000-0000-4000-8000-000000000808",
-      displayName: "Survival",
-      dockerContainer: "existing-survival",
-      dockerPorts: "25566:25565/tcp",
-      managedPorts: [{
-        id: "minecraft-server",
-        name: "Minecraft Server",
-        type: "minecraft",
-        protocol: "tcp",
-        internalPort: 25565,
-        externalPort: 25566,
-        required: true,
-        removable: false,
-        advanced: false
-      }]
-    });
-    repositories.serversRepository.create(existing);
-    const importedArtifact = artifact();
-    importedArtifact.servers[0].server.managedPorts![0].externalPort = 25567;
-    importedArtifact.servers[0].server.dockerPorts = "25567:25565/tcp";
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
 
-    const result = await applyImportArtifact(importedArtifact, {
+    const result = await applyImportArchive(written.path, manifest, {
       targetNodeId: nodeId,
-      nodes: [node()],
-      existingServers: repositories.serversRepository.list(),
+      localNodeId: nodeId,
+      existingServers: [],
       serversDir: join(root, "servers"),
       tmpDir: join(root, "tmp"),
       storage: repositories.storage,
@@ -434,50 +521,118 @@ describe("export/import artifacts", () => {
 
     const importedId = result.imported[0].serverId;
     expect(importedId).not.toBe(sourceServerId);
-    const servers = repositories.serversRepository.list();
-    expect(servers).toHaveLength(2);
-    expect(servers.find((server) => server.id === existing.id)).toBeDefined();
-    const imported = servers.find((server) => server.id === importedId)!;
-    expect(imported.displayName).toBe("Survival (2)");
+    const imported = repositories.serversRepository.list().find((server) => server.id === importedId)!;
+    expect(imported.displayName).toBe("Survival");
+    expect(imported.dockerContainer).not.toBe("survival");
+    expect(imported.runtimeIntent).toBe("stopped");
     expect(imported.schedules?.[0].id).not.toBe(sourceScheduleId);
     expect(imported.schedules?.[0].steps.map((step) => step.delaySeconds)).toEqual([0, 300]);
-    expect(imported.schedules?.[0].recentRuns?.[0].id).not.toBe(sourceRunId);
-    expect(imported.schedules?.[0].recentRuns?.[0].scheduleId).toBe(imported.schedules?.[0].id);
+    expect(imported.schedules?.[0].recentRuns).toEqual([]);
     expect(repositories.modPreferencesRepository.list(importedId)).toHaveProperty("fabric-api.jar");
-    await expect(stat(join(imported.serverDir, "config", "fabric-api.properties"))).resolves.toMatchObject({ size: 13 });
+    await expect(stat(join(imported.serverDir, "world", "region", "r.0.0.mca"))).resolves.toMatchObject({ size: 6 });
+    await expect(stat(join(imported.serverDir, "server.properties"))).resolves.toBeTruthy();
   });
 
-  it("never restores the Modrinth credential from server migration data", async () => {
-    const root = await tempRoot("serversentinel-import-secret-exclusion-");
+  it("downloads the runtime jar the archive deliberately left out", async () => {
+    const root = await tempRoot("serversentinel-import-jar-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
     const repositories = await createRepositories(root);
-    repositories.settingsRepository.setModrinthApiKey("destination-key");
-    const sanitizedArtifact = assertExportArtifact(artifact());
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+    // The jar is never an archive member, so without this call an imported server has nothing to run.
+    expect(manifest.servers[0].files.map((file) => file.path)).not.toContain("fabric-server-launch.jar");
+    const downloaded: string[] = [];
 
-    const result = await applyImportArtifact(sanitizedArtifact, {
+    const result = await applyImportArchive(written.path, manifest, {
       targetNodeId: nodeId,
-      importInstanceSettings: true,
-      nodes: [node()],
+      localNodeId: nodeId,
       existingServers: [],
       serversDir: join(root, "servers"),
       tmpDir: join(root, "tmp"),
       storage: repositories.storage,
       serversRepository: repositories.serversRepository,
-      modPreferencesRepository: repositories.modPreferencesRepository
+      modPreferencesRepository: repositories.modPreferencesRepository,
+      restoreRuntimeJar: async (server) => { downloaded.push(server.displayName); }
     });
 
-    expect(result.warnings.map((warning) => warning.code)).toContain("instance_secrets_excluded");
-    expect(repositories.settingsRepository.get().modrinthApiKey).toBe("destination-key");
+    expect(downloaded).toEqual(["Survival"]);
+    expect(result.runtimeJarFailures).toEqual([]);
   });
 
-  it("rolls back SQLite rows and staged files when import registration fails", async () => {
-    const root = await tempRoot("serversentinel-import-rollback-");
+  it("reports a failed runtime download without discarding the restored files", async () => {
+    const root = await tempRoot("serversentinel-import-jar-fail-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
     const repositories = await createRepositories(root);
-    const importedArtifact = artifact();
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
 
-    await expect(applyImportArtifact(importedArtifact, {
+    const result = await applyImportArchive(written.path, manifest, {
       targetNodeId: nodeId,
-      nodes: [node()],
-      existingServers: repositories.serversRepository.list(),
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: repositories.modPreferencesRepository,
+      restoreRuntimeJar: async () => { throw new Error("MCJars is unreachable"); }
+    });
+
+    // Rolling back a restored world over a failed download would be the worse outcome.
+    expect(result.imported).toHaveLength(1);
+    expect(result.runtimeJarFailures).toEqual([{ serverName: "Survival", reason: "MCJars is unreachable" }]);
+    const imported = repositories.serversRepository.list()[0];
+    await expect(stat(join(imported.serverDir, "world", "level.dat"))).resolves.toBeTruthy();
+  });
+
+  it("reports content that Modrinth can no longer supply without failing the import", async () => {
+    const root = await tempRoot("serversentinel-import-content-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
+    const repositories = await createRepositories(root);
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+    manifest.servers[0].lockfile = [{
+      filename: "gone.jar",
+      enabled: true,
+      projectId: "p",
+      versionId: "v",
+      versionNumber: "9.9.9",
+      channel: "release"
+    }];
+
+    const result = await applyImportArchive(written.path, manifest, {
+      targetNodeId: nodeId,
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: repositories.modPreferencesRepository,
+      restoreContent: async () => ({ restored: 0, failures: [{ filename: "gone.jar", reason: "no longer available" }] })
+    });
+
+    expect(result.imported).toHaveLength(1);
+    expect(result.contentFailures).toEqual([
+      { serverName: "Survival", filename: "gone.jar", reason: "no longer available" }
+    ]);
+  });
+
+  it("rolls back SQLite rows and staged files when registration fails", async () => {
+    const root = await tempRoot("serversentinel-import-rollback-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
+    const repositories = await createRepositories(root);
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+
+    await expect(applyImportArchive(written.path, manifest, {
+      targetNodeId: nodeId,
+      localNodeId: nodeId,
+      existingServers: [],
       serversDir: join(root, "servers"),
       tmpDir: join(root, "tmp"),
       storage: repositories.storage,
@@ -486,7 +641,7 @@ describe("export/import artifacts", () => {
         replaceAll() {
           throw new Error("preference write failed");
         }
-      } as unknown as ModPreferencesRepository,
+      } as unknown as ModPreferencesRepository
     })).rejects.toThrow("preference write failed");
 
     expect(repositories.serversRepository.list()).toEqual([]);

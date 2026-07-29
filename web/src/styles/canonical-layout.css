@@ -46,7 +46,6 @@
 }
 
 .sideNav button,
-.serverListItem,
 .accountChip {
   min-height: 40px;
   border-radius: 8px;
@@ -253,16 +252,6 @@
 .notice,
 .inlineState {
   padding: var(--space-3) var(--space-4);
-}
-
-.serverList {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-3);
-}
-
-.serverListItem {
-  padding: var(--space-3);
-  gap: 4px;
 }
 
 .overviewPage {

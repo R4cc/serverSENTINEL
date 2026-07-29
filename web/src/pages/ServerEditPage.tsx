@@ -171,6 +171,7 @@ export function ServerEditForm({
   server,
   totalMemory,
   onSubmit,
+  exportPanel,
   dangerZone,
   disabledReason = "",
   disabled = false
@@ -178,6 +179,7 @@ export function ServerEditForm({
   server: ManagedServer;
   totalMemory: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  exportPanel?: ReactNode;
   dangerZone?: ReactNode;
   disabledReason?: string;
   disabled?: boolean;
@@ -500,8 +502,33 @@ export function ServerEditForm({
         </fieldset>
       </form>
 
+      {/* Both live outside the settings form so their own buttons cannot submit it. */}
+      {exportPanel && <div className="propertiesExportZone">{exportPanel}</div>}
       {dangerZone && <div className="propertiesDangerZone">{dangerZone}</div>}
     </div>
+  );
+}
+
+export function ExportServerPanel({
+  server,
+  onExport,
+  disabled = false
+}: {
+  server: ManagedServer;
+  onExport: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <section className="propertiesSideCard exportPanel">
+      <PanelHeader
+        headingLevel={3}
+        title="Export"
+        description={`Download ${server.displayName} as a ZIP archive you can import back into this panel or another one.`}
+      />
+      <Button variant="secondary" onClick={onExport} disabled={disabled}>
+        <AppIcon name="download" /> Export server
+      </Button>
+    </section>
   );
 }
 

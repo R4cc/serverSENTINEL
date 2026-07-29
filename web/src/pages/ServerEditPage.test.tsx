@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { ManagedServer } from "../types";
-import { ServerEditForm } from "./ServerEditPage";
+import { ExportServerPanel, ServerEditForm } from "./ServerEditPage";
 
 const server: ManagedServer = {
   id: "server-1",
@@ -36,6 +36,7 @@ function renderForm(disabled = false, disabledReason = "") {
       onSubmit={vi.fn()}
       disabled={disabled}
       disabledReason={disabledReason}
+      exportPanel={<ExportServerPanel server={server} onExport={vi.fn()} />}
       dangerZone={<section data-testid="danger-zone">Danger zone</section>}
     />
   );
@@ -80,6 +81,17 @@ describe("ServerEditForm", () => {
     expect(html).toContain("Start when node starts");
     expect(html).toMatch(/name="startOnNodeStart"[^>]*checked=""/);
     expect(html).toContain('data-testid="danger-zone"');
+  });
+
+  it("offers the per-server export outside the settings form so its button cannot submit it", () => {
+    const html = renderForm();
+    const formEnd = html.indexOf("</form>");
+
+    expect(html).toContain("propertiesExportZone");
+    expect(html).toContain("Export server");
+    expect(html).toContain(`Download ${server.displayName} as a ZIP archive`);
+    expect(formEnd).toBeGreaterThan(-1);
+    expect(html.indexOf("propertiesExportZone")).toBeGreaterThan(formEnd);
   });
 
   it("keeps configuration inspectable while disabling mutations", () => {

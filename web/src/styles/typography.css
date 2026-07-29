@@ -138,21 +138,11 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
-.sideNav button.active .navLabel,
-.serverListItem.active strong {
+.sideNav button.active .navLabel {
   font-weight: var(--weight-strong);
 }
 
-.serverListItem strong {
-  font-size: var(--type-row-title-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.sideNav small,
-.serverListItem small,
-.serverListItem span {
+.sideNav small {
   color: currentColor;
   font-size: var(--type-meta-size);
   font-weight: var(--weight-body);

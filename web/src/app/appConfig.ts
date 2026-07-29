@@ -84,7 +84,6 @@ export function writeStoredDemoMode(value: boolean, storage: Storage = window.lo
  */
 export function pageTitle(page: ActivePage, contentPluralTitle: string, applicationReady: boolean) {
   const titles: Record<ActivePage, string> = {
-    servers: "Servers",
     create: "Create new managed server",
     overview: "Overview",
     console: "Console",

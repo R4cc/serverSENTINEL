@@ -33,7 +33,6 @@ import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
 import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTab";
 import { loadServerCreatePage, ServerCreateTab } from "./pages/ServerCreateTab";
-import { ServersListPage } from "./pages/ServersListPage";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
@@ -44,6 +43,9 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
+import { useExportWorkspace } from "./features/exports/useExportWorkspace";
+import { ExportModal } from "./features/exports/ExportModal";
+import { ImportModal } from "./features/exports/ImportModal";
 
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
@@ -56,6 +58,7 @@ const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: 
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
 const ServerEditForm = lazy(() => loadServerEditPage().then((module) => ({ default: module.ServerEditForm })));
 const DeleteServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.DeleteServerPanel })));
+const ExportServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.ExportServerPanel })));
 const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
 const FilesPage = lazy(() => loadFilesPage().then((module) => ({ default: module.FilesPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })));
@@ -301,6 +304,7 @@ export default function App() {
   const canViewSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.view");
   const canManageSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.manage");
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
+  const canExportServers = !demoMode && hasPermission(permissionUser, "servers.export");
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
   const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
@@ -416,6 +420,8 @@ export default function App() {
     requestConfirmation,
     refreshApp
   });
+  const exportWorkspace = useExportWorkspace(notify);
+  const exportServer = effectiveAppState.servers.find((server) => server.id === exportWorkspace.exportServerId);
   const {
     modsLocked,
     modReviewAcknowledgementLocked,
@@ -1773,7 +1779,7 @@ export default function App() {
       });
       notify("success", result.deletedFiles ? `Deleted ${activeServer.displayName} and its files` : `Removed ${activeServer.displayName}`);
       setActiveServerId("");
-      setActivePage("servers");
+      setActivePage("nodes");
       await refreshApp();
     } catch (error) {
       setNotice((error as Error).message);
@@ -1895,8 +1901,7 @@ export default function App() {
             <h2>{currentPageTitle}</h2>
           </div>
           <div className="workspaceActions">
-            {activePage === "servers" && <Button onClick={() => openCreateServerForNode()} disabled={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers} title={demoMode || isProvisioning || serverCreationBlocked || !canCreateServers ? createServerDisabledReason : "Create a managed server"}>New managed server</Button>}
-            {activePage === "create" && <Button variant="secondary" onClick={() => setActivePage("servers")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</Button>}
+            {activePage === "create" && <Button variant="secondary" onClick={() => setActivePage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</Button>}
           </div>
         </header>
 
@@ -1911,21 +1916,6 @@ export default function App() {
           appRefreshing={appRefreshing}
           onRetryAppLoad={() => void refreshApp()}
         />
-
-        {activePage === "servers" && applicationReady && (
-          <ServersListPage
-            servers={effectiveAppState.servers}
-            activeServerId={activeServer?.id}
-            demoMode={demoMode}
-            isProvisioning={isProvisioning}
-            onSelectServer={(serverId) => {
-              setActiveServerId(serverId);
-              setActivePage("overview");
-            }}
-            onLockedServer={() => notify("info", "Demo mode is enabled. Exit demo mode to access this server.")}
-            emptyState={renderNoManagedServersEmptyState("No managed servers yet")}
-          />
-        )}
 
         {activePage === "create" && (
           <ServerCreateTab
@@ -2013,6 +2003,8 @@ export default function App() {
               nodeUpdateGraceMs={nodeUpdateGraceMs}
               onSelectServer={openServerFromNode}
               onAddServer={openCreateServerForNode}
+              canImportServers={canCreateServers}
+              onImportServers={() => exportWorkspace.openImport(contextNodes.find((node) => node.isInternal)?.id ?? contextNodes[0]?.id ?? "")}
               onCopy={(text) => void copyText(text)}
               serverStateLabel={nodeServerStateLabel}
               playerSnapshots={playerSnapshots}
@@ -2028,8 +2020,8 @@ export default function App() {
         {applicationReady && isServerWorkspacePage(activePage) && !activeServer && effectiveAppState.servers.length > 0 && (
           <EmptyState
             title="No server selected"
-            message="A server exists, but none is open right now. Choose one from the Servers page to view its console, files, managed content, and settings."
-            action={<Button onClick={() => setActivePage("servers")}>Open servers</Button>}
+            message="A server exists, but none is open right now. Choose one from the sidebar or Nodes page to view its console, files, managed content, and settings."
+            action={<Button onClick={() => setActivePage("nodes")}>Open nodes</Button>}
           />
         )}
 
@@ -2185,6 +2177,13 @@ export default function App() {
                     onSubmit={updateServer}
                     disabled={serverSettingsLocked || serverSettingsSaving}
                     disabledReason={serverSettingsLockedReason}
+                    exportPanel={canExportServers ? (
+                      <ExportServerPanel
+                        server={activeServer}
+                        onExport={() => exportWorkspace.openExport(activeServer.id)}
+                        disabled={serverSettingsSaving}
+                      />
+                    ) : undefined}
                     dangerZone={
                       <DeleteServerPanel
                         server={activeServer}
@@ -2213,6 +2212,16 @@ export default function App() {
           busy={playerHeadsBusy}
           error={playerHeadsOnboardingError}
           onChoose={(enabled) => void updatePlayerHeads(enabled, true)}
+        />
+      ) : null}
+      {exportWorkspace.exportOpen && exportServer ? (
+        <ExportModal workspace={exportWorkspace} server={exportServer} />
+      ) : null}
+      {exportWorkspace.importOpen ? (
+        <ImportModal
+          workspace={exportWorkspace}
+          nodes={contextNodes}
+          onImported={refreshApp}
         />
       ) : null}
     </>
