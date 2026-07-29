@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { api } from "../api";
+import { dockerContainerNameInputPattern, runtimeJarFilenameInputPattern } from "../utils/inputPatterns";
 import type { ManagedServer, RuntimeVersion } from "../types";
 import {
   defaultDockerImageForMinecraftVersion,
@@ -466,7 +467,7 @@ export function ServerEditForm({
                   </label>
                   <label>
                     Server jar filename
-                    <input name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern="^[^\\/]+\.jar$" title="Use a local .jar filename, not a path." />
+                    <input name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern={runtimeJarFilenameInputPattern} title="Use a local .jar filename, not a path." />
                   </label>
                   <label className="propertiesFieldWide">
                     Docker container name
@@ -474,7 +475,7 @@ export function ServerEditForm({
                       name="dockerContainer"
                       value={dockerContainer}
                       onChange={(event) => setDockerContainer(event.target.value)}
-                      pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                      pattern={dockerContainerNameInputPattern}
                       title="Use letters, numbers, dots, dashes, and underscores."
                     />
                   </label>

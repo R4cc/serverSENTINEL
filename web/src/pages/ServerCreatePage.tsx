@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { serverRuntimeDefinitions, serverRuntimeTypes, type ServerRuntimeDefinition, type ServerRuntimeType } from "@serversentinel/contracts";
 import { api } from "../api";
+import { dockerContainerNameInputPattern } from "../utils/inputPatterns";
 import type { ContextNode, RuntimeVersion } from "../types";
 import {
   defaultDockerImageForMinecraftVersion,
@@ -1110,7 +1111,7 @@ function ResourcesNetworkWizardStep({
                   placeholder="Auto-generated"
                   value={dockerContainer}
                   onChange={(event) => onDockerContainerChange(event.target.value)}
-                  pattern="^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+                  pattern={dockerContainerNameInputPattern}
                   maxLength={128}
                   aria-invalid={Boolean(dockerContainerError)}
                 />
