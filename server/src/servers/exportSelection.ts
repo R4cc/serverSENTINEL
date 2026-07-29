@@ -1,19 +1,38 @@
 import { EXPORT_CATEGORIES, serverRuntimeDefinition, type ExportCategory, type ExportContentStrategy, type ExportSelection } from "@serversentinel/contracts";
 import { config } from "../config.js";
 import { runtimeTarget } from "../runtime/profile.js";
+import { parseServerProperties } from "../runtime/serverProperties.js";
 import { parseFileListing } from "../files/fileService.js";
 import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer } from "../types.js";
 
+export const defaultLevelName = "world";
+
 /**
- * Every category except `content` and `panelSettings` is a plain set of paths under the server root.
- * `content` resolves against the runtime catalog because Fabric keeps mods in `mods/` and Paper keeps
- * plugins in `plugins/`; `panelSettings` is database rows and never touches the filesystem.
+ * A path that is simply absent is not an export failure -- a server that never had a `config/` or
+ * `crash-reports/` folder has nothing to contribute. Every other error is real and must surface,
+ * because swallowing it turns a disconnected node or an unreadable directory into a green export
+ * with files silently missing.
+ *
+ * A remote node flattens filesystem errors into `command_failed` with the original message, so the
+ * message is the only signal available for a node-side ENOENT.
+ */
+export function isMissingPathError(error: unknown) {
+  if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return true;
+  const message = error instanceof Error ? error.message : "";
+  return /ENOENT|no such file or directory/i.test(message);
+}
+
+/**
+ * Most categories are a fixed set of paths under the server root. Three are resolved per server:
+ * `content` against the runtime catalog, because Fabric keeps mods in `mods/` and Paper keeps plugins
+ * in `plugins/`; `world` against `level-name`; and `panelSettings`, which is database rows and never
+ * touches the filesystem.
  */
 type CategoryTargets = { files: readonly string[]; directories: readonly string[] };
 
-const staticCategoryTargets: Record<Exclude<ExportCategory, "content" | "panelSettings">, CategoryTargets> = {
+const staticCategoryTargets: Record<Exclude<ExportCategory, "content" | "panelSettings" | "world">, CategoryTargets> = {
   serverConfig: {
     files: ["server.properties", "eula.txt", ".serversentinel-version.json", "bukkit.yml", "spigot.yml", "paper.yml"],
     directories: []
@@ -23,10 +42,23 @@ const staticCategoryTargets: Record<Exclude<ExportCategory, "content" | "panelSe
     directories: []
   },
   modConfig: { files: [], directories: ["config", "defaultconfigs"] },
-  // Datapacks live in world/datapacks, so they travel with the world rather than as their own toggle.
-  world: { files: [], directories: ["world", "world_nether", "world_the_end", "worlds"] },
   logs: { files: [], directories: ["logs", "crash-reports"] }
 };
+
+/**
+ * Which folders hold this server's world.
+ *
+ * `level-name` renames the level folder, so a server configured with `level-name=survival` keeps
+ * none of its data in `world/`. Paper and Spigot put the other dimensions in sibling `_nether` and
+ * `_the_end` folders; Fabric and vanilla nest them inside the level folder, where the level entry
+ * already covers them. The defaults stay in the list so a server whose properties cannot be read
+ * still exports a conventional layout, and `worlds/` covers the Paper multi-world plugin convention.
+ */
+export function worldDirectories(levelName: string | undefined) {
+  const level = levelName?.trim() || defaultLevelName;
+  const directories = [level, `${level}_nether`, `${level}_the_end`, defaultLevelName, `${defaultLevelName}_nether`, `${defaultLevelName}_the_end`, "worlds"];
+  return [...new Set(directories)];
+}
 
 /**
  * Regenerable or re-downloadable, and large enough that including them would dominate an artifact
@@ -38,11 +70,12 @@ const neverExported = new Set(["backups", "cache", "libraries", "versions"]);
 export const exportMaxEntries = config.fileDownloadMaxEntries;
 export const exportMaxDepth = 64;
 
-export function categoryTargets(server: ManagedServer, category: ExportCategory): CategoryTargets {
+export function categoryTargets(server: ManagedServer, category: ExportCategory, levelName?: string): CategoryTargets {
   if (category === "panelSettings") return { files: [], directories: [] };
   if (category === "content") {
     return { files: [], directories: [serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory] };
   }
+  if (category === "world") return { files: [], directories: worldDirectories(levelName) };
   return staticCategoryTargets[category];
 }
 
@@ -107,15 +140,16 @@ async function collectDirectory(
   let resolved: string;
   try {
     resolved = await runtime.resolveExistingPath(server, publicPath);
-  } catch {
-    // A server that never had a config/ or crash-reports/ folder is not an error; nothing to take.
-    return;
+  } catch (error) {
+    if (isMissingPathError(error)) return;
+    throw error;
   }
   let listing;
   try {
     listing = parseFileListing(await runtime.listFiles(server, resolved));
-  } catch {
-    return;
+  } catch (error) {
+    if (isMissingPathError(error)) return;
+    throw error;
   }
   for (const entry of listing.entries) {
     const childRelative = `${relativePath}/${entry.name}`;
@@ -126,8 +160,10 @@ async function collectDirectory(
     let childResolved: string;
     try {
       childResolved = await runtime.resolveExistingPath(server, entry.path);
-    } catch {
-      continue;
+    } catch (error) {
+      // The listing is a snapshot; a file deleted between listing and resolution is genuinely gone.
+      if (isMissingPathError(error)) continue;
+      throw error;
     }
     collected.push({ relativePath: childRelative, sourcePath: childResolved, size: entry.size, modifiedAt: entry.modifiedAt });
     assertWithinEntryBudget(collected.length);
@@ -147,8 +183,10 @@ async function readRootEntries(runtime: NodeRuntime, server: ManagedServer) {
     for (const entry of listing.entries) {
       if (entry.type === "file") entries.set(entry.name, { size: entry.size, modifiedAt: entry.modifiedAt });
     }
-  } catch {
-    // An unreachable root listing yields an empty selection rather than failing the whole export.
+  } catch (error) {
+    // A server directory that does not exist yet has nothing to export; anything else -- an offline
+    // node, an unreadable root -- would silently drop every root-level file, so it must surface.
+    if (!isMissingPathError(error)) throw error;
   }
   return entries;
 }
@@ -165,11 +203,29 @@ async function collectFile(
   let resolved: string;
   try {
     resolved = await runtime.resolveExistingPath(server, name);
-  } catch {
-    return;
+  } catch (error) {
+    if (isMissingPathError(error)) return;
+    throw error;
   }
   collected.push({ relativePath: name, sourcePath: resolved, size: match.size, modifiedAt: match.modifiedAt });
   assertWithinEntryBudget(collected.length);
+}
+
+/**
+ * Reads `level-name` so the world category can find a renamed level folder. A server without a
+ * readable server.properties falls back to the conventional layout rather than failing the export --
+ * the same file is also exported by the serverConfig category, so the name travels with the archive.
+ */
+async function readLevelName(runtime: NodeRuntime, server: ManagedServer) {
+  try {
+    const target = await runtime.resolveExistingPath(server, "server.properties");
+    const file = await runtime.readFile(server, target) as { content?: unknown };
+    if (typeof file?.content !== "string") return undefined;
+    return parseServerProperties(file.content)["level-name"];
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined;
+    throw error;
+  }
 }
 
 /**
@@ -185,9 +241,10 @@ export async function collectServerCategories(
   const results: CollectedCategory[] = [];
   const needsRootEntries = categories.some((category) => categoryTargets(server, category).files.length > 0);
   const rootEntries = needsRootEntries ? await readRootEntries(runtime, server) : new Map<string, RootEntry>();
+  const levelName = categories.includes("world") ? await readLevelName(runtime, server) : undefined;
   for (const category of categories) {
     if (category === "panelSettings") continue;
-    const targets = categoryTargets(server, category);
+    const targets = categoryTargets(server, category, levelName);
     const files: CollectedFile[] = [];
     for (const name of targets.files) {
       await collectFile(runtime, server, name, rootEntries, files);

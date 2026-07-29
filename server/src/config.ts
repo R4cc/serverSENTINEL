@@ -141,6 +141,8 @@ export const config = {
   trustProxy: parseBooleanEnv("SERVERSENTINEL_TRUST_PROXY"),
   setupToken: optionalSecretEnv("SERVERSENTINEL_SETUP_TOKEN"),
   exportRetentionMs: parseHourDurationEnv("SERVERSENTINEL_EXPORT_RETENTION_HOURS", 24),
+  /** How long an uploaded import archive may sit unconsumed before maintenance reclaims its space. */
+  importRetentionMs: parseHourDurationEnv("SERVERSENTINEL_IMPORT_RETENTION_HOURS", 6),
   fileDownloadMaxBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_MAX_BYTES", 512 * 1024 * 1024),
   fileDownloadZipThresholdBytes: parseByteLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_BYTES", 128 * 1024 * 1024),
   fileDownloadZipThresholdCount: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_ZIP_THRESHOLD_COUNT", 10),

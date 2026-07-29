@@ -110,6 +110,12 @@ type ApplyImportContext = ImportContext & {
   modPreferencesRepository: ModPreferencesRepository;
   /** Restores lockfile content after the files land; failures are reported, never fatal. */
   restoreContent?: (server: ManagedServer, lockfile: ExportLockfileEntry[]) => Promise<ContentRestoreReport>;
+  /**
+   * Fetches the runtime jar, which is never carried in the archive because the runtime profile
+   * already names an immutable, checksummed artifact. Without it an imported server has nothing to
+   * launch, so a failure here is reported prominently rather than discarded.
+   */
+  restoreRuntimeJar?: (server: ManagedServer) => Promise<void>;
   report?: (progress: number, task: string) => void;
 };
 
@@ -184,7 +190,9 @@ export async function createExportPlan(input: ExportInput): Promise<ExportPlan> 
     if (includeContent && input.selection.contentStrategy === "lockfile") {
       const plan = await planServerContent(server, "lockfile");
       lockfile = plan.lockfile;
-      shipped = new Set(plan.shippedFilenames);
+      // `undefined` keeps every jar. Only a plan that actually enumerated the content may narrow the
+      // set, so a failed enumeration ships everything instead of quietly excluding all of it.
+      shipped = plan.shipAll ? undefined : new Set(plan.shippedFilenames);
       for (const warning of plan.warnings) warnings.push(`${server.displayName}: ${warning}`);
     }
 
@@ -719,6 +727,7 @@ export async function applyImportArchive(archivePath: string, manifest: ExportMa
   const stagingDir = join(context.tmpDir, `import-${randomUUID()}`);
   const imported: Array<{ sourceId: string; serverId: string; displayName: string; fileCount: number }> = [];
   const contentFailures: Array<{ serverName: string; filename: string; reason: string }> = [];
+  const runtimeJarFailures: Array<{ serverName: string; reason: string }> = [];
   const writtenDirs: string[] = [];
 
   try {
@@ -770,13 +779,21 @@ export async function applyImportArchive(archivePath: string, manifest: ExportMa
       }
     });
 
-    if (context.restoreContent) {
-      for (const [index, item] of prepared.entries()) {
-        if (!item.entry.lockfile.length) continue;
-        context.report?.(
-          75 + Math.floor((index / Math.max(prepared.length, 1)) * 20),
-          `Restoring content for ${item.remapped.displayName}`
-        );
+    for (const [index, item] of prepared.entries()) {
+      const base = 70 + Math.floor((index / Math.max(prepared.length, 1)) * 25);
+      if (context.restoreRuntimeJar) {
+        context.report?.(base, `Downloading the runtime for ${item.remapped.displayName}`);
+        try {
+          await context.restoreRuntimeJar(item.remapped);
+        } catch (error) {
+          runtimeJarFailures.push({
+            serverName: item.remapped.displayName,
+            reason: error instanceof Error ? error.message : "The runtime jar could not be downloaded"
+          });
+        }
+      }
+      if (context.restoreContent && item.entry.lockfile.length) {
+        context.report?.(base + 3, `Restoring content for ${item.remapped.displayName}`);
         const report = await context.restoreContent(item.remapped, item.entry.lockfile);
         for (const failure of report.failures) {
           contentFailures.push({ serverName: item.remapped.displayName, ...failure });
@@ -795,6 +812,7 @@ export async function applyImportArchive(archivePath: string, manifest: ExportMa
     imported,
     warnings: validation.warnings,
     contentFailures,
+    runtimeJarFailures,
     idMap: Object.fromEntries(imported.map((server) => [server.sourceId, server.serverId]))
   };
 }

@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -147,6 +147,9 @@ function directoryRuntime(): NodeRuntime {
         }))
       };
     },
+    async readFile(_server: ManagedServer, target: string) {
+      return { content: await readFile(target as string, "utf8") };
+    },
     async downloadFile(_server: ManagedServer, target: string) {
       const info = await stat(target);
       return { filename: basename(target), size: info.size, stream: createReadStream(target) };
@@ -154,8 +157,13 @@ function directoryRuntime(): NodeRuntime {
   } as unknown as NodeRuntime;
 }
 
-async function buildArchive(root: string, servers: ManagedServer[], selection: ExportSelection = everything) {
-  const runtime = directoryRuntime();
+async function buildArchive(
+  root: string,
+  servers: ManagedServer[],
+  selection: ExportSelection = everything,
+  runtimeOverride?: NodeRuntime
+) {
+  const runtime = runtimeOverride ?? directoryRuntime();
   const plan = await createExportPlan({
     appVersion: "1.7.0",
     servers,
@@ -319,6 +327,61 @@ describe("export archives", () => {
     expect(exported).not.toHaveProperty("restartRequiredSince");
   });
 
+  it("follows level-name to a renamed world folder", async () => {
+    const root = await tempRoot("serversentinel-export-level-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+    await mkdir(join(source, "survival", "region"), { recursive: true });
+    await writeFile(join(source, "survival", "region", "r.1.1.mca"), "renamed", "utf8");
+    await writeFile(join(source, "server.properties"), "server-port=25565\nlevel-name=survival\n", "utf8");
+
+    const { plan } = await buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["serverConfig", "world"],
+      contentStrategy: "lockfile"
+    });
+    const paths = plan.manifest.servers[0].files.map((file) => file.path);
+
+    expect(paths).toContain("survival/region/r.1.1.mca");
+    // The conventional folder still travels when it exists, so a mixed layout is not truncated.
+    expect(paths).toContain("world/level.dat");
+  });
+
+  it("ships every jar when the installed content cannot be listed", async () => {
+    const root = await tempRoot("serversentinel-export-fallback-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+    // planServerContent falls back when the mods list is unavailable. Excluding jars on that path
+    // would produce an archive with neither a lockfile nor the files.
+    const { plan } = await buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["content"],
+      contentStrategy: "lockfile"
+    });
+
+    expect(plan.manifest.servers[0].lockfile).toEqual([]);
+    expect(plan.manifest.servers[0].files.map((file) => file.path)).toContain("mods/fabric-api.jar");
+    expect(plan.manifest.warnings.join(" ")).toMatch(/included in full/);
+  });
+
+  it("fails the export when a directory cannot be read", async () => {
+    const root = await tempRoot("serversentinel-export-error-");
+    const source = await tempRoot("serversentinel-export-source-");
+    await seedServerDirectory(source);
+    const runtime = directoryRuntime();
+    const failing = {
+      ...runtime,
+      listFiles: async (server: ManagedServer, target: string) => {
+        if (String(target).includes("world")) throw new Error("EACCES: permission denied");
+        return runtime.listFiles(server, target);
+      }
+    } as unknown as NodeRuntime;
+
+    // A permissions or node-connectivity failure must not read as "that folder was simply empty".
+    await expect(buildArchive(root, [managedServer({ serverDir: source })], {
+      categories: ["world"],
+      contentStrategy: "lockfile"
+    }, failing)).rejects.toThrow(/EACCES/);
+  });
+
   it("omits schedules and java arguments when panel settings are not selected", async () => {
     const root = await tempRoot("serversentinel-export-nopanel-");
     const source = await tempRoot("serversentinel-export-source-");
@@ -468,6 +531,60 @@ describe("import application", () => {
     expect(repositories.modPreferencesRepository.list(importedId)).toHaveProperty("fabric-api.jar");
     await expect(stat(join(imported.serverDir, "world", "region", "r.0.0.mca"))).resolves.toMatchObject({ size: 6 });
     await expect(stat(join(imported.serverDir, "server.properties"))).resolves.toBeTruthy();
+  });
+
+  it("downloads the runtime jar the archive deliberately left out", async () => {
+    const root = await tempRoot("serversentinel-import-jar-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
+    const repositories = await createRepositories(root);
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+    // The jar is never an archive member, so without this call an imported server has nothing to run.
+    expect(manifest.servers[0].files.map((file) => file.path)).not.toContain("fabric-server-launch.jar");
+    const downloaded: string[] = [];
+
+    const result = await applyImportArchive(written.path, manifest, {
+      targetNodeId: nodeId,
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: repositories.modPreferencesRepository,
+      restoreRuntimeJar: async (server) => { downloaded.push(server.displayName); }
+    });
+
+    expect(downloaded).toEqual(["Survival"]);
+    expect(result.runtimeJarFailures).toEqual([]);
+  });
+
+  it("reports a failed runtime download without discarding the restored files", async () => {
+    const root = await tempRoot("serversentinel-import-jar-fail-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
+    const repositories = await createRepositories(root);
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+
+    const result = await applyImportArchive(written.path, manifest, {
+      targetNodeId: nodeId,
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: repositories.modPreferencesRepository,
+      restoreRuntimeJar: async () => { throw new Error("MCJars is unreachable"); }
+    });
+
+    // Rolling back a restored world over a failed download would be the worse outcome.
+    expect(result.imported).toHaveLength(1);
+    expect(result.runtimeJarFailures).toEqual([{ serverName: "Survival", reason: "MCJars is unreachable" }]);
+    const imported = repositories.serversRepository.list()[0];
+    await expect(stat(join(imported.serverDir, "world", "level.dat"))).resolves.toBeTruthy();
   });
 
   it("reports content that Modrinth can no longer supply without failing the import", async () => {

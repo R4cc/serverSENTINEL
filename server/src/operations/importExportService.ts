@@ -1,15 +1,17 @@
-import { statfs } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, rm, stat, statfs } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
 import type { ExportSelection, ExportSizeEstimate, ExportSizeServerEstimate } from "@serversentinel/contracts";
 import { services, runtimeForServer } from "../appServices.js";
 import { appVersion } from "../buildInfo.js";
 import { config } from "../config.js";
-import { errorLogFields, logError, logWarn } from "../logging.js";
+import { detailedErrorMessage, errorLogFields, logError, logWarn } from "../logging.js";
 import { validateServerId } from "../http/validation.js";
 import { asArray } from "../storage/valueValidation.js";
 import { listManagedServers } from "../servers/store.js";
 import { collectServerCategories } from "../servers/exportSelection.js";
+import { lockfileOmittedFilenames } from "../servers/exportContent.js";
 import { restoreLockfileContent } from "../servers/importContent.js";
+import { downloadServerJar } from "../servers/provisioning.js";
 import { runtimeRunning } from "../mods/modService.js";
 import { localNodeId } from "../nodes/nodeService.js";
 import {
@@ -83,14 +85,26 @@ async function availableBytes(path: string) {
 export async function estimateExport(serverIds: string[] | undefined, selection: ExportSelection): Promise<ExportSizeEstimate> {
   const servers = await resolveExportServers(serverIds);
   const estimates: ExportSizeServerEstimate[] = [];
+  const lockfileMode = selection.contentStrategy === "lockfile" && selection.categories.includes("content");
   let totalBytes = 0;
   for (const server of servers) {
     const collected = await collectServerCategories(runtimeForServer(server), server, selection.categories);
-    const categories = collected.map((entry) => ({
-      category: entry.category,
-      bytes: entry.totalBytes,
-      fileCount: entry.files.length
-    }));
+    // A lockfile export leaves out the jars it can name, so counting the whole content directory
+    // would inflate the figure the modal shows and could trip the disk precheck on a selection that
+    // actually fits.
+    const omitted = lockfileMode
+      ? lockfileOmittedFilenames(services.modPreferencesRepository.list(server.id))
+      : new Set<string>();
+    const categories = collected.map((entry) => {
+      const files = entry.category === "content"
+        ? entry.files.filter((file) => !omitted.has(basename(file.relativePath)))
+        : entry.files;
+      return {
+        category: entry.category,
+        bytes: files.reduce((total, file) => total + file.size, 0),
+        fileCount: files.length
+      };
+    });
     const serverTotal = categories.reduce((total, entry) => total + entry.bytes, 0);
     totalBytes += serverTotal;
     estimates.push({
@@ -201,6 +215,13 @@ export function startImportOperation(input: { archivePath: string; targetNodeId:
     failureFallback: "Import failed",
     onError: (error, operation) => {
       logError({ operationId: operation.id, action: "import", status: "failed", ...errorLogFields(error) }, "Import operation failed");
+    },
+    // The upload has served its purpose either way, and it is the size of a whole server. Releasing
+    // it here rather than trusting the browser keeps a closed tab from stranding gigabytes on disk.
+    onSettled: async () => {
+      await rm(input.archivePath, { force: true }).catch((error) => {
+        logWarn({ action: "import", errorDetails: detailedErrorMessage(error) }, "Could not remove an uploaded import archive; periodic maintenance will retry");
+      });
     }
   }, async (_operation, report) => {
     const manifest = await readExportManifest(input.archivePath);
@@ -214,7 +235,36 @@ export function startImportOperation(input: { archivePath: string; targetNodeId:
       serversRepository: services.serversRepository,
       modPreferencesRepository: services.modPreferencesRepository,
       restoreContent: (server, lockfile) => restoreLockfileContent(runtimeForServer(server), server, lockfile),
+      restoreRuntimeJar: (server) => downloadServerJar(server),
       report
     });
   });
+}
+
+/**
+ * Removes uploaded archives that no import ever consumed -- a closed tab, a failed validation, or a
+ * replaced file selection all leave one behind. Runs on the same tick as export artifact maintenance.
+ */
+export async function sweepAbandonedImports(now = Date.now(), maxAgeMs = config.importRetentionMs) {
+  let entries;
+  try {
+    entries = await readdir(config.importsDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { removed: 0 };
+    throw error;
+  }
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.startsWith("import-") || !entry.name.endsWith(".zip")) continue;
+    const path = resolve(config.importsDir, entry.name);
+    try {
+      const info = await stat(path);
+      if (now - info.mtimeMs < maxAgeMs) continue;
+      await rm(path, { force: true });
+      removed += 1;
+    } catch (error) {
+      logWarn({ action: "import_sweep", path, errorDetails: detailedErrorMessage(error) }, "Could not remove an abandoned import archive");
+    }
+  }
+  return { removed };
 }

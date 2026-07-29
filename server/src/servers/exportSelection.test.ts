@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryTargets, normalizeExportSelection } from "./exportSelection.js";
+import { categoryTargets, isMissingPathError, normalizeExportSelection, worldDirectories } from "./exportSelection.js";
 import type { ManagedServer } from "../types.js";
 
 function server(runtimeType: "fabric" | "paper"): ManagedServer {
@@ -33,9 +33,28 @@ describe("export selection", () => {
     expect(categoryTargets(server("fabric"), "panelSettings")).toEqual({ files: [], directories: [] });
   });
 
-  it("covers every world folder variant under one category", () => {
+  it("covers the conventional world layout when level-name is unset", () => {
     expect(categoryTargets(server("fabric"), "world").directories)
       .toEqual(["world", "world_nether", "world_the_end", "worlds"]);
+  });
+
+  it("follows a renamed level without losing the conventional fallback", () => {
+    // A server with level-name=survival keeps none of its data in world/, but an unreadable
+    // properties file must still produce a usable default layout.
+    expect(categoryTargets(server("fabric"), "world", "survival").directories)
+      .toEqual(["survival", "survival_nether", "survival_the_end", "world", "world_nether", "world_the_end", "worlds"]);
+    expect(worldDirectories("  spaced  ")).toContain("spaced");
+    expect(worldDirectories("world")).toEqual(["world", "world_nether", "world_the_end", "worlds"]);
+    expect(worldDirectories(undefined)).toEqual(["world", "world_nether", "world_the_end", "worlds"]);
+  });
+
+  it("treats only a missing path as a non-failure", () => {
+    expect(isMissingPathError(Object.assign(new Error("nope"), { code: "ENOENT" }))).toBe(true);
+    // A remote node flattens filesystem errors into command_failed, keeping only the message.
+    expect(isMissingPathError(new Error("ENOENT: no such file or directory, scandir '/data/world'"))).toBe(true);
+    expect(isMissingPathError(Object.assign(new Error("denied"), { code: "EACCES" }))).toBe(false);
+    expect(isMissingPathError(new Error("Node node-1 is offline"))).toBe(false);
+    expect(isMissingPathError(undefined)).toBe(false);
   });
 
   it("normalizes a selection into canonical order and rejects unknown input", () => {

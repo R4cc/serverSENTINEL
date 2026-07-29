@@ -25,6 +25,7 @@ type ExportOperationResult = {
 type ImportOperationResult = {
   imported?: Array<{ serverId: string; displayName: string }>;
   contentFailures?: Array<{ serverName: string; filename: string; reason: string }>;
+  runtimeJarFailures?: Array<{ serverName: string; reason: string }>;
 };
 
 const pollIntervalMs = 1000;
@@ -156,7 +157,8 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
   const closeImport = useCallback(() => {
     if (importBusy) return;
     setImportOpen(false);
-    // Best effort: the panel also sweeps abandoned uploads, so a failed delete is not worth surfacing.
+    // Releases the upload promptly. Maintenance also reclaims abandoned archives on its own tick, so
+    // a failed delete only costs disk until then and is not worth interrupting the operator over.
     if (importId) void api(`/api/imports/${importId}`, { method: "DELETE" }).catch(() => undefined);
     setImportId("");
   }, [importBusy, importId]);
@@ -201,13 +203,19 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
         setImportTask(current.task ?? "");
       });
       const result = (finished.result ?? {}) as ImportOperationResult;
-      const failures = result.contentFailures ?? [];
-      if (failures.length) {
-        notify("info", `Imported with ${failures.length} mod/plugin file(s) that could not be re-downloaded.`);
+      const contentFailures = result.contentFailures ?? [];
+      const jarFailures = result.runtimeJarFailures ?? [];
+      // A missing runtime jar leaves a server that cannot start at all, so it outranks content that
+      // merely failed to come back.
+      if (jarFailures.length) {
+        notify("error", `Imported, but the runtime could not be downloaded for ${jarFailures.map((failure) => failure.serverName).join(", ")}. Re-save the server's runtime settings to retry.`);
+      } else if (contentFailures.length) {
+        notify("info", `Imported with ${contentFailures.length} mod/plugin file(s) that could not be re-downloaded.`);
       } else {
         notify("success", `Imported ${result.imported?.length ?? 0} server(s).`);
       }
       setImportOpen(false);
+      // The panel releases the archive when the operation settles, so there is nothing left to delete.
       setImportId("");
       await onImported();
     } catch (error) {

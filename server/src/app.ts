@@ -36,6 +36,7 @@ import { registerAppInfoRoutes } from "./routes/appInfoRoutes.js";
 import { registerNodeRoutes } from "./routes/nodeRoutes.js";
 import { registerVersionCatalogRoutes } from "./routes/versionCatalogRoutes.js";
 import { registerImportExportRoutes } from "./routes/importExportRoutes.js";
+import { sweepAbandonedImports } from "./operations/importExportService.js";
 import { registerServerRoutes } from "./routes/serverRoutes.js";
 import { registerFileRoutes } from "./routes/fileRoutes.js";
 import { buildModUpdatePlan, localInstallMod, localListMods, localModIcon, localRemoveMod, localToggleMod, localUploadMod, modrinthApiKey } from "./mods/modService.js";
@@ -199,8 +200,9 @@ const runExportMaintenance = async () => {
   exportMaintenanceRunning = true;
   try {
     const result = await services.exportArtifactMaintenance.maintain();
-    if (result.expiredArtifacts || result.abandonedArtifacts || result.orphanedArtifacts || result.prunedOperations) {
-      logInfo({ ...result, failures: undefined }, "Completed export artifact and operation maintenance");
+    const abandonedImports = (await sweepAbandonedImports()).removed;
+    if (result.expiredArtifacts || result.abandonedArtifacts || result.orphanedArtifacts || result.prunedOperations || abandonedImports) {
+      logInfo({ ...result, abandonedImports, failures: undefined }, "Completed export artifact and operation maintenance");
     }
     for (const failure of result.failures) {
       logWarn(failure, "Export artifact maintenance could not remove an artifact");

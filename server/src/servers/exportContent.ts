@@ -3,13 +3,19 @@ import { errorLogFields, logWarn } from "../logging.js";
 import { batchVersionsFromSha1, listModsWithPanelMetadata, modsFromListResult, remoteModMetadata } from "../mods/modService.js";
 import { normalizeReleaseChannel, versionChannel } from "../modrinth/compatibility.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
-import type { ManagedServer, ModrinthVersion } from "../types.js";
+import type { ManagedServer, ModPreference, ModrinthVersion } from "../types.js";
 
 export type ContentPlan = {
   /** Restorable from Modrinth on import; the jar bytes stay out of the archive. */
   lockfile: ExportLockfileEntry[];
   /** Filenames Modrinth could not identify, which must travel as real files. */
   shippedFilenames: string[];
+  /**
+   * Ship every jar and ignore `shippedFilenames` entirely. Set when the installed content could not
+   * be enumerated, which is the one case where the panel does not know what a lockfile would contain
+   * and so cannot safely leave anything out.
+   */
+  shipAll: boolean;
   warnings: string[];
 };
 
@@ -40,7 +46,7 @@ function lockfileEntry(filename: string, enabled: boolean, metadata: {
  */
 export async function planServerContent(server: ManagedServer, strategy: "lockfile" | "jars"): Promise<ContentPlan> {
   if (strategy === "jars") {
-    return { lockfile: [], shippedFilenames: [], warnings: [] };
+    return { lockfile: [], shippedFilenames: [], shipAll: true, warnings: [] };
   }
   let mods: Array<Record<string, unknown>>;
   try {
@@ -50,6 +56,7 @@ export async function planServerContent(server: ManagedServer, strategy: "lockfi
     return {
       lockfile: [],
       shippedFilenames: [],
+      shipAll: true,
       warnings: ["Installed content could not be listed, so mod and plugin jars were included in full"]
     };
   }
@@ -104,5 +111,19 @@ export async function planServerContent(server: ManagedServer, strategy: "lockfi
   }
   lockfile.sort((left, right) => left.filename.localeCompare(right.filename));
   shippedFilenames.sort();
-  return { lockfile, shippedFilenames, warnings };
+  return { lockfile, shippedFilenames, shipAll: false, warnings };
+}
+
+/**
+ * The filenames a lockfile export would leave out, judged from stored preferences alone.
+ *
+ * Used by the size estimate, which runs on every checkbox toggle and so must not spend a Modrinth
+ * hash lookup. Content the panel installed already has its version recorded, so this covers the
+ * common case; a jar that only a hash lookup could identify is still counted as shipping, which
+ * keeps the estimate on the pessimistic side of the real archive.
+ */
+export function lockfileOmittedFilenames(preferences: Record<string, ModPreference>) {
+  return new Set(Object.entries(preferences)
+    .filter(([, preference]) => Boolean(preference.modrinth?.versionId))
+    .map(([filename]) => filename));
 }
