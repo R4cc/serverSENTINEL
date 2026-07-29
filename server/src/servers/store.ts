@@ -101,14 +101,40 @@ export function normalizeScheduledActiveRun(value: unknown): ScheduledActiveRun 
   };
 }
 
+/**
+ * A run as it appears in a list: everything except the captured console output.
+ *
+ * Each command step may hold up to 24 KiB of log text and a schedule retains 25 runs, so a
+ * server with a few multi-step schedules carried well over a megabyte of logs in every
+ * `/api/app` reply -- a payload the Schedules page polls, and which the panel refetches after
+ * most mutations. The logs are only ever rendered inside the run details dialog, one run at a
+ * time, so that dialog fetches them from the per-run endpoint instead. `logCaptureStatus`
+ * stays, because the list needs it to tell "nothing was captured" from "logs are available".
+ */
+export function scheduledRunSummary(run: ScheduledRun): ScheduledRun {
+  if (!run.details?.steps?.length) return run;
+  return {
+    ...run,
+    details: {
+      ...run.details,
+      steps: run.details.steps.map(({ logs: _logs, ...step }) => step)
+    }
+  };
+}
+
 export function publicSchedule(serverId: string, schedule: ScheduledExecution): ScheduledExecution {
   const nextRun = schedule.enabled ? safeNextCronRun(schedule.cron) : null;
   return {
     ...schedule,
     nextRunAt: nextRun?.toISOString(),
-    recentRuns: (schedule.recentRuns ?? []).slice(0, 25),
+    recentRuns: (schedule.recentRuns ?? []).slice(0, 25).map(scheduledRunSummary),
     activeRuns: activeScheduledRunsFor(serverId, schedule.id)
   };
+}
+
+export function findScheduledRun(server: ManagedServer, scheduleId: string, runId: string) {
+  const schedule = server.schedules?.find((candidate) => candidate.id === scheduleId);
+  return schedule?.recentRuns?.find((run) => run.id === runId);
 }
 
 export function safeNextCronRun(cron: string) {

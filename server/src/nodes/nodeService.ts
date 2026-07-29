@@ -93,9 +93,17 @@ export function ensureDefaultInternalNode(nodes: ManagedNode[]) {
     lastSeenAt: current.lastSeenAt ?? now,
     totalMemory: totalmem()
   };
-  const changed = JSON.stringify(current) !== JSON.stringify(normalized);
+  // Compare what the nodes table would actually store. `features` is negotiated per session and
+  // dropped by normalizeNode, so comparing the in-memory records reported a change on every call
+  // and made readNodes write the whole table — on a poll path that runs per server every few
+  // seconds, and which also drops the NodesRepository read cache each time.
+  const changed = persistedNodeSnapshot(current) !== persistedNodeSnapshot(normalized);
   nodes[localIndex] = normalized;
   return changed;
+}
+
+function persistedNodeSnapshot(node: ManagedNode) {
+  return JSON.stringify(normalizeNode(node));
 }
 
 export function publicNode(node: ManagedNode): PublicNode {

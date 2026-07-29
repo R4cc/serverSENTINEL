@@ -1,3 +1,20 @@
+/* Shared shell breakpoints.
+ *
+ * Scope: the application shell — sidebar, server strip, workspace chrome, and
+ * the phone scroll model. Feature responsive rules belong in that feature's
+ * stylesheet, next to the base rule they override; putting them here separates
+ * a rule from its base across a file this size and is why several sections
+ * below need `!important`.
+ *
+ * Cascade: this loads after every feature stylesheet except `nodes.css`, so
+ * rules here win ties. Sections are ordered by intent, not by breakpoint, and
+ * some later blocks deliberately re-open an earlier breakpoint to land after
+ * the feature rules they adjust. Moving a block changes which rule wins.
+ *
+ * Breakpoints: 1320/1100px desktop reflow, 980/900px tablet, 720px phone,
+ * 640/360px small phone, 2560px ultrawide.
+ */
+
 @media (max-width: 1320px) {
   .overviewPage {
     grid-template-columns: 1fr;
@@ -546,16 +563,6 @@ button:disabled,
   position: relative;
   margin: 0;
   min-width: 0;
-}
-
-.inlineStateSpinner {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  border: 3px solid color-mix(in srgb, var(--accent) 22%, var(--surface));
-  border-top-color: var(--accent);
-  border-radius: 999px;
-  animation: spin 0.85s linear infinite;
 }
 
 .inlineState-empty,

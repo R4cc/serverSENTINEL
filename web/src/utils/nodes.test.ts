@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
 import type { NodeView, NodeOperation } from "../types";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeBlockReason, nodeRestartImpactMessage, nodeWarnings } from "./nodes";
 
@@ -119,10 +120,16 @@ describe("nodeRestartImpactMessage", () => {
 });
 
 describe("node protocol requirement", () => {
-  it("blocks non-3.1 nodes from server management", () => {
+  it("blocks nodes on an older protocol from server management", () => {
     const outdated = node({ protocolVersion: "3.0", dockerStatus: "available" });
     expect(isNodeRuntimeUsable(outdated)).toBe(false);
     expect(nodeBlockReason(outdated)).toBe("Node update required");
     expect(nodeWarnings(outdated)).toContain("Update this node before managing its servers.");
+  });
+
+  // Reads the shared constant rather than a literal: the panel accepts exactly this version, so a
+  // web copy that drifts would mark every healthy node as needing an update.
+  it("accepts a node on the shared protocol version", () => {
+    expect(isNodeRuntimeUsable(node({ protocolVersion: NODE_PROTOCOL_VERSION, dockerStatus: "available" }))).toBe(true);
   });
 });

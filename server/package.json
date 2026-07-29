@@ -5,13 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "prebuild": "npm --prefix ../shared run build",
     "build": "tsc -p tsconfig.json",
+    "pretest": "npm --prefix ../shared run build",
     "test": "vitest run",
+    "pretypecheck": "npm --prefix ../shared run build",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "demo:reset": "tsx src/demo/resetDemo.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@fastify/compress": "^9.1.0",
     "@fastify/helmet": "^13.1.0",
     "@fastify/multipart": "^10.1.0",
     "@fastify/rate-limit": "^11.1.0",
@@ -26,12 +30,12 @@
     "yazl": "^3.3.1"
   },
   "devDependencies": {
-    "@typescript/native": "npm:typescript@^7.0.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.1",
     "@types/ws": "^8.18.1",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "tsx": "^4.23.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^4.1.10"

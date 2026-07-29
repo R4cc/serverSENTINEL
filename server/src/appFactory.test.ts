@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -525,6 +526,87 @@ describe("Fastify application factory", () => {
         const response = await app.inject({ method: "GET", url, headers: { ...csrf } });
         expect(response.statusCode, `${url} -> ${response.body}`).toBe(401);
       }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("compresses JSON replies but leaves the export artifact download intact", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-compression-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18086",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+
+    try {
+      const register = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(register.statusCode, register.body).toBe(200);
+      const cookie = sessionCookieFrom(register);
+
+      // Each user carries the full permission list, so a handful of them puts the reply
+      // comfortably past the compression threshold without depending on a built frontend.
+      for (const username of ["operator", "maintainer", "viewer"]) {
+        const created = await app.inject({
+          method: "POST",
+          url: "/api/users",
+          headers: { ...csrf, cookie },
+          payload: { username, password: "password123", rolePreset: "maintainer" }
+        });
+        expect(created.statusCode, created.body).toBe(200);
+      }
+
+      const identity = await app.inject({ method: "GET", url: "/api/users", headers: { ...csrf, cookie } });
+      expect(identity.statusCode, identity.body).toBe(200);
+      expect(identity.rawPayload.length).toBeGreaterThan(1024);
+      expect(identity.headers["content-encoding"]).toBeUndefined();
+
+      const compressed = await app.inject({
+        method: "GET",
+        url: "/api/users",
+        headers: { ...csrf, cookie, "accept-encoding": "gzip" }
+      });
+      expect(compressed.statusCode).toBe(200);
+      expect(compressed.headers["content-encoding"]).toBe("gzip");
+      expect(compressed.headers.vary).toContain("accept-encoding");
+      expect(compressed.rawPayload.length).toBeLessThan(identity.rawPayload.length);
+      expect(gunzipSync(compressed.rawPayload).toString("utf8")).toBe(identity.body);
+
+      const started = await app.inject({ method: "POST", url: "/api/exports", headers: { ...csrf, cookie }, payload: {} });
+      expect(started.statusCode, started.body).toBe(200);
+      const operationId = started.json().id as string;
+      await vi.waitFor(async () => {
+        const operation = await app.inject({ method: "GET", url: `/api/operations/${operationId}`, headers: { ...csrf, cookie } });
+        expect(operation.json().status, operation.body).toBe("succeeded");
+      });
+
+      // The artifact is JSON, so only the route-level opt-out keeps its Content-Length -- and
+      // with it the size the browser's download UI reports for a file that can reach hundreds
+      // of megabytes.
+      const download = await app.inject({
+        method: "GET",
+        url: `/api/exports/${operationId}/download`,
+        headers: { ...csrf, cookie, "accept-encoding": "gzip" }
+      });
+      expect(download.statusCode).toBe(200);
+      expect(download.headers["content-encoding"]).toBeUndefined();
+      expect(download.headers["content-length"]).toBeDefined();
     } finally {
       await app.close();
     }

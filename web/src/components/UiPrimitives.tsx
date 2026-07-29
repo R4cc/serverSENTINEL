@@ -8,6 +8,8 @@ type SurfaceTone = "default" | "subtle";
 type BannerTone = "info" | "success" | "warning" | "error";
 type MetricTone = "neutral" | "info" | "accent" | "success" | "warning" | "danger";
 type MetricVariant = "default" | "summary";
+type SpinnerSize = "xs" | "sm" | "md" | "lg";
+type SpinnerTone = "accent" | "current";
 
 function classes(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -105,6 +107,29 @@ export function EmptyState({
       {message && <span>{message}</span>}
       {action}
     </div>
+  );
+}
+
+/**
+ * The one busy indicator. Always decorative — the surrounding `role="status"`
+ * region or button label is what announces progress, so this stays hidden from
+ * assistive technology and reduces to a static ring under reduced motion.
+ */
+export function Spinner({
+  size = "md",
+  tone = "accent",
+  className,
+  ...props
+}: HTMLAttributes<HTMLSpanElement> & {
+  size?: SpinnerSize;
+  tone?: SpinnerTone;
+}) {
+  return (
+    <span
+      {...props}
+      className={classes("uiSpinner", `uiSpinner--${size}`, tone !== "accent" && `uiSpinner--${tone}`, className)}
+      aria-hidden="true"
+    />
   );
 }
 

@@ -1,7 +1,8 @@
+import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
 import { httpError } from "../http/errors.js";
 import type { ManagedNode, ManagedServer } from "../types.js";
 
-export const nodeProtocolVersion = "3.1";
+export const nodeProtocolVersion = NODE_PROTOCOL_VERSION;
 export const nodeProtocolControlMessageMaxBytes = 8 * 1024 * 1024;
 export const nodeProtocolMaxActiveRequests = 64;
 export const nodeProtocolMaxActiveStreams = 32;
@@ -168,6 +169,13 @@ export type ServerObservationResultItem = {
 };
 export type ServerObservationResponse = { observedAt: string; items: ServerObservationResultItem[] };
 
+/**
+ * The only server fields a node ever reads. Every panel-to-node payload that carries a server must
+ * go through this projection: the stored `ManagedServer` also carries schedules (with their recent
+ * and active runs), the restart-required mod baseline, and crash history, none of which the node
+ * looks at. Sending the whole record put tens of kilobytes of panel bookkeeping on the wire for
+ * requests as small as `files.list`.
+ */
 export function compactNodeServerSpec(server: ManagedServer): NodeServerSpec {
   return {
     id: server.id, nodeId: server.nodeId, displayName: server.displayName, serverDir: server.serverDir, storageName: server.storageName,

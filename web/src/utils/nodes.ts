@@ -1,3 +1,4 @@
+import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
 import type { NodeView, NodeOperation } from "../types";
 
 export type NodeOperationAdvanceResult = {
@@ -59,7 +60,7 @@ function isNodeDockerUsable(node: NodeView) {
 export function isNodeRuntimeUsable(node: NodeView) {
   return node.status === "online"
     && isNodeDockerUsable(node)
-    && (node.isInternal || node.protocolVersion === "3.1");
+    && (node.isInternal || node.protocolVersion === NODE_PROTOCOL_VERSION);
 }
 
 export function nodeRestartImpactMessage(node: NodeView) {

@@ -314,6 +314,16 @@ export function useSchedulesWorkspace({
     }
   }
 
+  /**
+   * Fetches the console output the run lists deliberately omit. Demo runs already carry their
+   * fixture logs inline, so they resolve without a request.
+   */
+  async function loadScheduleRunLogs(run: ScheduledRun) {
+    if (!activeServer || activeServerIsDemo) return run;
+    const result = await api<{ run: ScheduledRun }>(`/api/servers/${activeServer.id}/schedules/${run.scheduleId}/runs/${run.id}`);
+    return result.run;
+  }
+
   return {
     schedules: activeServer?.schedules ?? [],
     loading,
@@ -333,7 +343,8 @@ export function useSchedulesWorkspace({
       update: updateSchedule,
       delete: deleteSchedule,
       runNow: runScheduleNow,
-      cancelRun: cancelScheduleRun
+      cancelRun: cancelScheduleRun,
+      loadRunLogs: loadScheduleRunLogs
     }
   };
 }

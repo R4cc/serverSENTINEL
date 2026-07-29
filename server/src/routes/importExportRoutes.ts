@@ -33,7 +33,10 @@ app.post<{ Body: { serverIds?: unknown; includeInstance?: unknown } }>("/api/exp
   }, user.id);
 });
 
-app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download", async (request, reply) => {
+// The artifact is JSON, so global compression would otherwise encode it and drop the
+// Content-Length this route sets -- leaving the browser's download UI without a size for a
+// file that can run to hundreds of megabytes.
+app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download", { compress: false }, async (request, reply) => {
   const user = await requireRequestPermission(request, "servers.export");
   const operation = services.operationsRepository.find(validateOperationId(request.params.operationId));
   if (!operation || operation.type !== "export.run" || operation.createdBy !== user.id) {

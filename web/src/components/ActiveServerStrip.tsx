@@ -3,7 +3,7 @@ import { ActionMenu } from "./ActionMenu";
 import { RestartRequiredBadge } from "./RestartRequiredBadge";
 import { RuntimeControls } from "./RuntimeControls";
 import { ServerRuntimeAlert } from "./ServerRuntimeAlert";
-import { Button, StatusBadge } from "./UiPrimitives";
+import { Button, Spinner, StatusBadge } from "./UiPrimitives";
 
 export type ServerStripHealth = { tone: string; message: string } | null;
 export type ServerStripAlert = { title: string; message: string } | null;
@@ -80,7 +80,7 @@ export function ActiveServerStrip({
             <div className="serverStripMetaRow">
               {health ? (
                 <small className={`serverStripHealth ${health.tone}`} role={health.tone === "error" ? "alert" : "status"} title={healthDetail || health.message}>
-                  {health.tone === "loading" && <span className="serverStripHealthSpinner" aria-hidden="true" />}
+                  {health.tone === "loading" && <Spinner size="xs" />}
                   {health.message}
                 </small>
               ) : (

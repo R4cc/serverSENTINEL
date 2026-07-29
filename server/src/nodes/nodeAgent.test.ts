@@ -290,6 +290,8 @@ describe("remote node Docker container recreation", () => {
     expect(status.docker.controllable).toBe(true);
     expect(status.controlAvailable).toBe(true);
     expect(status.docker.message).toContain("will be recreated");
+    // The panel projects status from its own record, so the response must not echo the spec back.
+    expect(status).not.toHaveProperty("server");
   });
 
   it("recreates and starts a deleted container with the existing server directory mounted", async () => {

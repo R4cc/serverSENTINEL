@@ -50,6 +50,10 @@
   --editor-heading: #111827;
   --editor-link: #3858e9;
   --overlay: rgb(0 0 0 / 0.48);
+  /* Elevation scale. `xs` lifts a control off its own track, `md` floats a
+     tooltip or popover, `elevated` carries a drawer or modal. */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.08);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.1);
   --shadow-elevated: 0 18px 46px rgb(0 0 0 / 0.12);
   --shadow-lg: var(--shadow-elevated);
   --focus-ring: var(--accent);

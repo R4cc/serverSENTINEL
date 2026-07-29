@@ -1,4 +1,4 @@
-import { Button } from "./UiPrimitives";
+import { Button, Spinner } from "./UiPrimitives";
 
 export function InlineState({
   tone = "info",
@@ -17,7 +17,7 @@ export function InlineState({
 }) {
   return (
     <div className={`inlineState inlineState-${tone}`} role={tone === "error" ? "alert" : "status"}>
-      {tone === "loading" && <span className="inlineStateSpinner" aria-hidden="true" />}
+      {tone === "loading" && <Spinner size="md" className="inlineStateSpinner" />}
       <div>
         <strong>{title}</strong>
         <span>{message}</span>

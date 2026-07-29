@@ -55,6 +55,66 @@ describe("RemoteObservationCoordinator", () => {
     coordinator.stop();
   });
 
+  it("carries overviewFiles on the background tick only for servers an overview consumer asked about", async () => {
+    const servers = [server(0), server(1)];
+    const calls: Array<Array<{ serverId: string; sections: string[] }>> = [];
+    const connections = {
+      isConnected: () => true,
+      request: async (_node: ManagedNode, _command: string, payload: { items: Array<{ server: ManagedServer; sections: string[] }> }) => {
+        calls.push(payload.items.map((item) => ({ serverId: item.server.id, sections: item.sections })));
+        return {
+          observedAt: new Date().toISOString(),
+          items: payload.items.map(({ server: observed, sections }) => ({
+            serverId: observed.id,
+            status: { docker: { running: true } },
+            ...(sections.includes("overviewFiles") ? { overviewFiles: { properties: "level-name=world", eula: "eula=true" } } : {})
+          }))
+        };
+      }
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => servers, lookupNode: async () => node(), connections, pollMs: 60_000 });
+    coordinator.start();
+    for (let attempt = 0; attempt < 20 && calls.length === 0; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(calls[0].every((item) => !item.sections.includes("overviewFiles"))).toBe(true);
+
+    // The first overview read misses and fetches on its own; that registers the interest.
+    await coordinator.readMany(servers[0], ["status", "overviewFiles"], 11_000);
+
+    // `overviewFiles` rides the slow tick alongside players and logs, so drive ticks until one lands.
+    const collectAll = (coordinator as unknown as { collectAll: () => Promise<void> }).collectAll.bind(coordinator);
+    calls.length = 0;
+    await collectAll();
+    await collectAll();
+    const tick = calls.find((items) => items.some((item) => item.sections.includes("players")));
+
+    expect(tick?.find((item) => item.serverId === "server-0")?.sections).toContain("overviewFiles");
+    expect(tick?.find((item) => item.serverId === "server-1")?.sections).not.toContain("overviewFiles");
+    coordinator.stop();
+  });
+
+  it("resolves each node once per tick instead of once per server", async () => {
+    const servers = Array.from({ length: 12 }, (_, index) => server(index));
+    let lookups = 0;
+    const connections = {
+      isConnected: () => true,
+      request: async (_node: ManagedNode, _command: string, payload: { items: Array<{ server: ManagedServer }> }) => ({
+        observedAt: new Date().toISOString(),
+        items: payload.items.map(({ server: observed }) => ({ serverId: observed.id, status: {} }))
+      })
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({
+      readServers: async () => servers,
+      lookupNode: async () => { lookups += 1; return node(); },
+      connections,
+      pollMs: 60_000
+    });
+    coordinator.start();
+    for (let attempt = 0; attempt < 20 && lookups === 0; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 1));
+    // One lookup to group the fleet, one inside observeNode to address the batch.
+    expect(lookups).toBeLessThanOrEqual(2);
+    coordinator.stop();
+  });
+
   it("chunks fleets above the 32-server protocol bound", async () => {
     const servers = Array.from({ length: 33 }, (_, index) => server(index));
     const sizes: number[] = [];

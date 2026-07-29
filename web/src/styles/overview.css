@@ -339,7 +339,7 @@ button.overviewCardRow:focus-visible {
   align-items: center;
   gap: 6px;
   padding: 0 8px;
-  border: 1px solid var(--border-subtle);
+  border: var(--border-subtle) solid var(--border-muted);
   border-radius: 999px;
   background: var(--surface-muted);
   color: var(--text-muted);
@@ -359,7 +359,7 @@ button.overviewCardRow:focus-visible {
 .serverTimelineRangeControls {
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--border-subtle);
+  border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
 }
@@ -390,7 +390,7 @@ button.overviewCardRow:focus-visible {
   justify-content: space-between;
   gap: var(--space-3);
   padding-block: var(--space-2);
-  border-block: 1px solid var(--border-subtle);
+  border-block: var(--border-subtle) solid var(--border-row);
 }
 
 .serverTimelineLayerGroups {
@@ -431,7 +431,7 @@ button.overviewCardRow:focus-visible {
   align-items: center;
   gap: 7px;
   padding: 4px 8px;
-  border: 1px solid var(--border-subtle);
+  border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--text-muted);
@@ -442,7 +442,7 @@ button.overviewCardRow:focus-visible {
 
 .timelineSeriesToggle:hover:not(:disabled) {
   transform: none;
-  border-color: color-mix(in srgb, var(--timeline-toggle-color) 55%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--timeline-toggle-color) 55%, var(--border-muted));
   background: color-mix(in srgb, var(--timeline-toggle-color) 6%, var(--surface-raised));
   color: var(--text);
 }
@@ -462,7 +462,7 @@ button.overviewCardRow:focus-visible {
 }
 
 .timelineSeriesToggle > span::after { content: "✓"; opacity: 0; }
-.timelineSeriesToggle.active { border-color: color-mix(in srgb, var(--timeline-toggle-color) 48%, var(--border-subtle)); background: color-mix(in srgb, var(--timeline-toggle-color) 8%, var(--surface-raised)); color: var(--text); }
+.timelineSeriesToggle.active { border-color: color-mix(in srgb, var(--timeline-toggle-color) 48%, var(--border-muted)); background: color-mix(in srgb, var(--timeline-toggle-color) 8%, var(--surface-raised)); color: var(--text); }
 .timelineSeriesToggle.active > span { background: var(--timeline-toggle-color); }
 .timelineSeriesToggle.active > span::after { opacity: 1; }
 .timelineSeriesToggle.series-cpuUtilizationPercent { --timeline-toggle-color: var(--timeline-cpu); }
@@ -666,7 +666,7 @@ button.overviewCardRow:focus-visible {
 .serverTimelinePlayerStatusNotice {
   margin-top: calc(var(--space-3) * -1);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-subtle));
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-muted));
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-muted));
   color: var(--status-warning-foreground);
@@ -771,7 +771,7 @@ button.overviewCardRow:focus-visible {
 
 .timelineAnnotationCluster.is-multiple {
   min-width: max-content;
-  border: 1px solid var(--border-subtle);
+  border: var(--border-subtle) solid var(--border-muted);
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   padding: 1px 8px 1px 2px;
   box-shadow: var(--shadow-xs);
@@ -894,7 +894,7 @@ button.overviewCardRow:focus-visible {
 }
 
 .timelineAnnotationCluster.is-multiple:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--annotation-color) 30%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--annotation-color) 30%, var(--border-muted));
   background: color-mix(in srgb, var(--annotation-color) 6%, var(--surface-raised));
   box-shadow: var(--shadow-xs);
 }
@@ -972,7 +972,7 @@ button.overviewCardRow:focus-visible {
 
 .serverTimelineAnnotationPopoverItem.is-interactive:hover:not(:disabled) {
   transform: none;
-  border-color: color-mix(in srgb, var(--annotation-color) 48%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--annotation-color) 48%, var(--border-muted));
   background: color-mix(in srgb, var(--annotation-color) 6%, var(--surface-raised));
   color: var(--text);
 }
@@ -1032,7 +1032,7 @@ button.overviewCardRow:focus-visible {
   display: grid;
   gap: 5px;
   padding: 10px 12px;
-  border: 1px solid var(--border-strong);
+  border: var(--border-subtle) solid var(--border-panel);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   color: var(--text);
@@ -1054,7 +1054,7 @@ button.overviewCardRow:focus-visible {
 
 .serverTimelineTooltip .timelineTooltipEvent {
   padding-top: 4px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: var(--border-subtle) solid var(--border-row);
   color: var(--text-muted);
 }
 

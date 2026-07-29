@@ -200,7 +200,15 @@ export async function executeMatchedSchedule(server: ManagedServer, schedule: Sc
     controller: new AbortController()
   };
   activeScheduleExecutions.set(runId, active);
-  const result = await runScheduledExecution(server, schedule, active);
+  let result: Awaited<ReturnType<typeof runScheduledExecution>>;
+  try {
+    result = await runScheduledExecution(server, schedule, active);
+  } finally {
+    // Nothing after this point may leave the run in the active list: a stranded entry keeps the
+    // schedule reported as running forever and leaves its cancel control armed against a run
+    // that has already finished.
+    activeScheduleExecutions.delete(runId);
+  }
   // Run history represents the invocation instant, not the completion instant.
   // Keeping this aligned with the matched cron minute also makes the durable
   // duplicate guard correct for long-running actions and DST overlaps.
@@ -214,8 +222,13 @@ export async function executeMatchedSchedule(server: ManagedServer, schedule: Sc
     ranAt,
     details: result.details
   };
-  services.serversRepository.recordScheduledRun(server.id, schedule.id, run);
-  activeScheduleExecutions.delete(runId);
+  try {
+    services.serversRepository.recordScheduledRun(server.id, schedule.id, run);
+  } catch (error) {
+    // History is best effort; the operation record below is what the console and the run list
+    // fall back on, so a persistence failure must not also abandon it in the running state.
+    logError({ ...serverLogFields(server), scheduleId: schedule.id, runId, ...errorLogFields(error) }, "Schedule run history could not be recorded");
+  }
   if (result.status === "failed") {
     services.operationsRepository.fail(operation.id, result.message, {
       progress: 100,

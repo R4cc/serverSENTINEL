@@ -1,5 +1,5 @@
 import type { ServerStatus } from '../types';
-import { Button } from './UiPrimitives';
+import { Button, Spinner } from './UiPrimitives';
 
 export function RuntimeControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
   if (action === "start") {
@@ -74,7 +74,7 @@ export function RuntimeControls({
             title={actionDisabled ? actionReason : `${actionLabel(action)} server`}
             aria-label={actionDisabled && actionReason ? `${actionLabel(action)} unavailable: ${actionReason}` : actionLabel(action)}
           >
-            {busyAction === action ? <span className="buttonSpinner" aria-hidden="true" /> : <RuntimeControlIcon action={action} />}
+            {busyAction === action ? <Spinner size="sm" tone="current" /> : <RuntimeControlIcon action={action} />}
             <span>{actionLabel(action)}</span>
           </Button>
         );

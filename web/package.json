@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "prebuild": "npm --prefix ../shared run build",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "pretest": "npm --prefix ../shared run build",
     "test": "vitest run",
+    "pretypecheck": "npm --prefix ../shared run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview --host 0.0.0.0"
   },

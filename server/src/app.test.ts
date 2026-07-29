@@ -12,12 +12,14 @@ import {
 import {
   cleanupNodeServerContainers,
   defaultInternalNode,
+  ensureDefaultInternalNode,
   nodeInstallInstructions,
   nodeUpdateAlreadyCurrent,
   nodeUpdateImageForBuild,
   nodeWithLiveConnectionStatus,
   validateJoinTokenTtlMinutes
 } from "./nodes/nodeService.js";
+import { normalizeNode } from "./storage/nodesRepository.js";
 import { parseCookies, sessionExpired, sessionMaxAgeSeconds } from "./auth/sessionService.js";
 import { dockerHostPortBindings } from "./core.js";
 import { allocateQueryPort, findExistingServerPortConflict, normalizeCreateServerPorts } from "./servers/ports.js";
@@ -38,7 +40,7 @@ import { sanitizeScheduleSteps, waitForCommandDelay } from "./schedules/steps.js
 import { dockerNetworkingConfigFromInspect, minecraftContainerNetworkingConfig } from "./runtime/local/dockerContainers.js";
 import { startConsoleHeartbeat } from "./servers/overview.js";
 import { detectVersionsFromLogText } from "./servers/versions.js";
-import { nodeCapabilities, nodeProtocolVersion } from "./nodes/protocol.js";
+import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./nodes/protocol.js";
 import type { RuntimeUploadSource } from "./nodes/types.js";
 import { createZipArchiveStream, safeArchivePath } from "./downloadArchive.js";
 import { optionalCompatibilityFilter, optionalNodeDataMount, optionalNodePanelUrl, optionalReleaseChannel } from "./http/validation.js";
@@ -72,6 +74,24 @@ describe("local runtime metadata", () => {
       protocolVersion: nodeProtocolVersion,
       capabilities: [...nodeCapabilities]
     });
+  });
+
+  it("reports no change once the internal node has been persisted", () => {
+    const nodes: ManagedNode[] = [];
+    expect(ensureDefaultInternalNode(nodes)).toBe(true);
+
+    // What readNodes sees on the next call: the stored rows, which never carry the
+    // per-session `features` list. Reporting a change here rewrites the whole nodes
+    // table on every poll and drops the repository read cache with it.
+    const persisted = nodes.map(normalizeNode);
+    expect(ensureDefaultInternalNode(persisted)).toBe(false);
+    expect(persisted[0].features).toEqual([...nodeFeatures]);
+  });
+
+  it("still reports a change when the stored internal node drifts from this build", () => {
+    const nodes = [normalizeNode(defaultInternalNode("2026-07-18T00:00:00.000Z"))];
+    nodes[0] = { ...nodes[0], agentVersion: "0.0.1-old" };
+    expect(ensureDefaultInternalNode(nodes)).toBe(true);
   });
 });
 

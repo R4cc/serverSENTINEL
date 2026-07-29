@@ -78,33 +78,43 @@ function nodeFromRow(row: NodeRow) {
 }
 
 export class NodesRepository {
+  /**
+   * The node table is read on every hot polling path: the observation coordinator resolves a node
+   * per server per tick, and each background collector resolves one again per server per poll. That
+   * turned a handful of rows into dozens of full table scans and normalization passes per second.
+   * Every write funnels through this class, so the read-through cache is invalidated on mutation
+   * rather than expiring on a timer.
+   */
+  private cached: ManagedNode[] | undefined;
+
   constructor(private readonly storage: StorageDatabase) {}
 
   list(): ManagedNode[] {
-    return this.storage.connection.prepare<[], NodeRow>("SELECT * FROM nodes ORDER BY created_at, id").all().map(nodeFromRow);
+    this.cached ??= this.readAll();
+    return this.cached;
   }
 
   create(node: ManagedNode) {
-    this.storage.transaction((database) => {
+    this.mutate(() => this.storage.transaction((database) => {
       const normalized = normalizeNode(node);
       if (this.findById(normalized.id)) throw new Error(`Node ${normalized.id} already exists`);
       this.save(database, normalized);
-    });
+    }));
   }
 
   updateById(id: string, updater: (node: ManagedNode) => ManagedNode): ManagedNode {
-    return this.storage.transaction((database) => {
+    return this.mutate(() => this.storage.transaction((database) => {
       const current = this.findById(id);
       if (!current) this.notFound(id);
       const updated = normalizeNode(updater(current));
       if (updated.id !== id) throw new Error("Node id cannot be changed");
       this.save(database, updated);
       return updated;
-    });
+    }));
   }
 
   deleteWithServers(id: string, deleteServers: boolean) {
-    return this.storage.transaction((database) => {
+    return this.mutate(() => this.storage.transaction((database) => {
       const node = this.findById(id);
       if (!node) this.notFound(id);
       if (node.isInternal) throw new Error("Internal node cannot be deleted");
@@ -115,12 +125,14 @@ export class NodesRepository {
       if (deleteServers) database.prepare("DELETE FROM servers WHERE node_id = ?").run(id);
       database.prepare("DELETE FROM nodes WHERE id = ?").run(id);
       return { node, deletedServers: deleteServers ? serverCount : 0 };
-    });
+    }));
   }
 
   update(updater: (nodes: ManagedNode[]) => void) {
-    this.storage.transaction((database) => {
-      const nodes = this.list();
+    this.mutate(() => this.storage.transaction((database) => {
+      // Deliberately uncached: the updater mutates the array it is handed and the result is written
+      // straight back, so it must start from the stored rows.
+      const nodes = this.readAll();
       updater(nodes);
       const normalized = nodes.map(normalizeNode);
       const existingIds = new Set(database.prepare<[], { id: string }>("SELECT id FROM nodes").all().map((row) => row.id));
@@ -130,7 +142,20 @@ export class NodesRepository {
       }
       const remove = database.prepare("DELETE FROM nodes WHERE id = ?");
       for (const id of existingIds) remove.run(id);
-    });
+    }));
+  }
+
+  private readAll(): ManagedNode[] {
+    return this.storage.connection.prepare<[], NodeRow>("SELECT * FROM nodes ORDER BY created_at, id").all().map(nodeFromRow);
+  }
+
+  /** Drops the cached read even when the transaction throws, so a rollback cannot leave it stale. */
+  private mutate<T>(run: () => T): T {
+    try {
+      return run();
+    } finally {
+      this.cached = undefined;
+    }
   }
 
   private findById(id: string) {

@@ -1,7 +1,7 @@
 import { ActionMenu, type ActionMenuItem } from "../components/ActionMenu";
 import { DialogSurface } from "../components/DialogSurface";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Button, StatusBadge } from "../components/UiPrimitives";
+import { Button, Spinner, StatusBadge } from "../components/UiPrimitives";
 import type { ContextNode, NodeView, NodeManualRecovery, NodeOperation } from "../types";
 import { formatBytes } from "../utils/format";
 import { nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
@@ -248,7 +248,7 @@ export function NodeDetailsDrawer({
             <div className="nodeDrawerTitleLine">
               <h2 id="node-details-title">{node.name}</h2>
               <StatusBadge tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : node.status === "online" ? "success" : node.status === "offline" ? "danger" : "neutral"}>
-                {operation?.phase === "waiting" && <span className="nodeOperationBadgeSpinner" aria-hidden="true" />}
+                {operation?.phase === "waiting" && <Spinner size="xs" />}
                 {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating" : "Restarting" : operation?.phase === "timed-out" ? "Attention" : node.status}
               </StatusBadge>
             </div>
@@ -261,7 +261,7 @@ export function NodeDetailsDrawer({
       <div className="nodeDrawerBody">
         <section className={`nodeOperationStatus ${statusTone}`} aria-live="polite" aria-atomic="true">
           <span className="nodeOperationStatusIcon" aria-hidden="true">
-            {operation?.phase === "waiting" ? <span className="nodeOperationSpinner" /> : <span className={`nodeStatusDot ${node.status}`} />}
+            {operation?.phase === "waiting" ? <Spinner size="md" /> : <span className={`nodeStatusDot ${node.status}`} />}
           </span>
           <div>
             <strong>{statusTitle}</strong>
@@ -326,7 +326,7 @@ export function NodeDetailsDrawer({
           align="start"
         />
         <div className="nodeDrawerPrimaryAction">
-          {primaryAction === "operation" && <Button disabled><span className="buttonSpinner" aria-hidden="true" />{operation?.kind === "update" ? "Updating…" : "Restarting…"}</Button>}
+          {primaryAction === "operation" && <Button disabled><Spinner size="sm" tone="current" />{operation?.kind === "update" ? "Updating…" : "Restarting…"}</Button>}
           {primaryAction === "check" && <Button onClick={onRefresh} disabled={busy}><AppIcon name="refresh" />Check again</Button>}
           {primaryAction === "rotate-token" && <Button onClick={() => onRotateToken(node)} disabled={nodeBusy}><AppIcon name="refresh" />Rotate token</Button>}
           {primaryAction === "install" && <Button onClick={() => onShowInstall(node)} disabled={nodeBusy}><AppIcon name="download" />Install instructions</Button>}

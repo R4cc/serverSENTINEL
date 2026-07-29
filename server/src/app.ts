@@ -8,7 +8,7 @@ import { config } from "./config.js";
 import { panelNodeConnections, runtimeForServer, services } from "./appServices.js";
 import { dockerAction, dockerResourceStats, serverLogFields } from "./runtime/local/dockerContainers.js";
 import { parseLogEvent } from "./servers/logEvents.js";
-import { getServer, listManagedServers, normalizeManagedServer, publicSchedule, readServers } from "./servers/store.js";
+import { findScheduledRun, getServer, listManagedServers, normalizeManagedServer, publicSchedule, readServers } from "./servers/store.js";
 import { publicServer } from "./servers/publicViews.js";
 import { supportsManagedMods } from "./servers/versions.js";
 import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExistingPath, localResolveWritablePath, toPublicPath } from "./files/fileService.js";
@@ -64,6 +64,7 @@ import { OperationService } from "./operations/operationService.js";
 import { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
 import { errorStatusCode, publicApiError, throwHttp } from "./http/errors.js";
 import { authRateLimit, destructiveRateLimit } from "./http/rateLimits.js";
+import { registerResponseCompression } from "./http/responseCompression.js";
 import { ensureWritableResolvedInsideServer } from "./core.js";
 import { activeLifecycleActions, blockingRuntimeOperations, recordOperation, restartServerGracefully, runtimeResultRunning, setRuntimeLifecycle, stopServerWithIntent, withLifecycleLock } from "./servers/lifecycle.js";
 import { activeModMutations } from "./mods/managedContent.js";
@@ -245,6 +246,7 @@ await app.register(rateLimit, {
 });
 await app.register(multipart, { limits: { files: 1, fields: 4 } });
 await app.register(websocket, { options: { perMessageDeflate: false, maxPayload: nodeProtocolControlMessageMaxBytes } });
+await registerResponseCompression(app);
 
 app.addHook("onRequest", async (request, reply) => {
   if (request.url.startsWith("/ws/")) {
@@ -347,6 +349,7 @@ registerScheduleRoutes(app, {
   getServer,
   parseSchedule: scheduleFromBody,
   publicSchedule,
+  findScheduledRun,
   createSchedule: (serverId, schedule, updatedAt) => { services.serversRepository.createSchedule(serverId, schedule, updatedAt); },
   updateSchedule: (serverId, schedule, updatedAt) => { services.serversRepository.updateSchedule(serverId, schedule, updatedAt); },
   deleteSchedule: (serverId, scheduleId, updatedAt) => { services.serversRepository.deleteSchedule(serverId, scheduleId, updatedAt); },

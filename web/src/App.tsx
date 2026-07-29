@@ -2161,6 +2161,7 @@ export default function App() {
                   onDelete={schedulesWorkspace.actions.delete}
                   onRunNow={schedulesWorkspace.actions.runNow}
                   onCancelRun={schedulesWorkspace.actions.cancelRun}
+                  onLoadRunLogs={schedulesWorkspace.actions.loadRunLogs}
                   disabled={schedulesWorkspace.disabled}
                   disabledReason={schedulesWorkspace.disabledReason}
                 />

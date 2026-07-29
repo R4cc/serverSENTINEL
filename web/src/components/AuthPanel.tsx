@@ -16,6 +16,7 @@ import {
   rolePresetLabel,
   userPermissions
 } from '../utils/permissions';
+import { usernameInputPattern } from '../utils/inputPatterns';
 
 export function AuthPanel({
   setupRequired,
@@ -80,7 +81,7 @@ export function AuthPanel({
                 required
                 minLength={3}
                 maxLength={32}
-                pattern="[a-zA-Z0-9_.-]+"
+                pattern={usernameInputPattern}
                 placeholder={setupRequired ? "admin" : "Username"}
                 autoCapitalize="none"
                 spellCheck={false}
@@ -334,7 +335,7 @@ function UserPermissionModal({
           <div className="userModalFields">
             <label>
               Username
-              <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern="[a-zA-Z0-9_.-]+" defaultValue={user?.username ?? ""} />
+              <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern={usernameInputPattern} defaultValue={user?.username ?? ""} />
             </label>
             {!user && (
               <label>
