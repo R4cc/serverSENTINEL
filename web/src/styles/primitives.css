@@ -227,6 +227,46 @@
   .uiBannerAction .uiButton { width: 100%; }
   .uiPanelHeader { align-items: flex-start; }
 }
+/* Busy indicator. Every spinner in the app is this rule at a different size, so
+   the ring geometry, timing and reduced-motion fallback are defined once. */
+.uiSpinner {
+  --spinner-size: 20px;
+  --spinner-thickness: 2px;
+  --spinner-track: color-mix(in srgb, var(--accent) 22%, transparent);
+  --spinner-indicator: var(--accent);
+  flex: 0 0 var(--spinner-size);
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  border: var(--spinner-thickness) solid var(--spinner-track);
+  border-top-color: var(--spinner-indicator);
+  border-radius: 999px;
+  animation: spin 800ms linear infinite;
+}
+
+.uiSpinner--xs { --spinner-size: 11px; }
+.uiSpinner--sm { --spinner-size: 14px; }
+.uiSpinner--md { --spinner-size: 20px; }
+.uiSpinner--lg { --spinner-size: 44px; --spinner-thickness: 4px; }
+
+/* Inside a button or badge the ring inherits the text color it sits next to,
+   so it stays legible against every button variant. */
+.uiSpinner--current {
+  --spinner-track: color-mix(in srgb, currentColor 28%, transparent);
+  --spinner-indicator: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uiSpinner {
+    animation: none;
+    border-color: var(--spinner-indicator);
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .uiSkeleton {
   --skeleton-highlight: rgb(255 255 255 / 0.52);
   position: relative;

@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Button, EmptyState, MetricTile, PanelHeader, StatusBadge, Toolbar } from "../components/UiPrimitives";
+import { Button, EmptyState, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
@@ -268,7 +268,7 @@ function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowStat
 
   return (
     <div className="addNodeStatusCard waiting" role="status" aria-live="polite">
-      <span className="addNodeSpinner" aria-hidden="true" />
+      <Spinner size="lg" className="addNodeSpinner" />
       <div>
         <h3>Waiting for node connection</h3>
         <p>Run the install command on the host, then wait for the node to connect to this panel.</p>
@@ -653,7 +653,7 @@ export function NodesPage({
                     tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
                     className={`nodeTileStatus ${operation ? operation.phase : statusTone(node.status)}`}
                   >
-                    {operation?.phase === "waiting" && <span className="nodeOperationBadgeSpinner" aria-hidden="true" />}
+                    {operation?.phase === "waiting" && <Spinner size="xs" />}
                     {operationLabel || node.status}
                   </StatusBadge>
                   {nodePanelUpdateRequired(node) && (

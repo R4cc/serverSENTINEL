@@ -565,16 +565,6 @@ button:disabled,
   min-width: 0;
 }
 
-.inlineStateSpinner {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  border: 3px solid color-mix(in srgb, var(--accent) 22%, var(--surface));
-  border-top-color: var(--accent);
-  border-radius: 999px;
-  animation: spin 0.85s linear infinite;
-}
-
 .inlineState-empty,
 .emptyInline,
 .eventEmpty,

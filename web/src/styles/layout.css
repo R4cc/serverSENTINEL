@@ -563,21 +563,6 @@ button .buttonIcon {
   border-color: var(--border-muted);
 }
 
-.buttonSpinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 999px;
-  animation: spin 700ms linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .sidebarCollapsed {
   grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
 }
@@ -1865,16 +1850,6 @@ button .buttonIcon {
 
 .activeServerStrip .serverStripHealth.error {
   color: color-mix(in srgb, var(--sentinel-danger) 86%, var(--text));
-}
-
-.serverStripHealthSpinner {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 10px;
-  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
 }
 
 .activeServerStrip .serverStripMeta,

@@ -28,6 +28,15 @@ const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "
 const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta.url), "utf8");
 const authStyles = readFileSync(new URL("./styles/auth.css", import.meta.url), "utf8");
 const nodesStyles = readFileSync(new URL("./styles/nodes.css", import.meta.url), "utf8");
+// Every stylesheet the entry point imports, keyed by name so a failure names the
+// file rather than reporting an anonymous index.
+const featureStyles: Record<string, string> = Object.fromEntries(
+  [...stylesheet.matchAll(/@import "\.\/styles\/([\w-]+\.css)";/g)].map((match) => [
+    match[1],
+    readFileSync(new URL(`./styles/${match[1]}`, import.meta.url), "utf8") as string
+  ])
+);
+
 const serverTimeline = readFileSync(new URL("./components/ServerTimeline.tsx", import.meta.url), "utf8");
 const modsSummary = readFileSync(new URL("./features/mods/ModsSummary.tsx", import.meta.url), "utf8");
 const nodesPage = readFileSync(new URL("./pages/NodesPage.tsx", import.meta.url), "utf8");
@@ -98,6 +107,51 @@ describe("stylesheet ownership", () => {
     expect(widthTokens).toContain("--border-subtle");
     for (const token of widthTokens) expect(serverTimeline).not.toContain(`read("${token}"`);
     expect(serverTimeline).toContain('read("--border-muted"');
+  });
+
+  // The same width-vs-color mix-up the timeline test guards in TSX is silent in
+  // CSS: `1px solid var(--border-subtle)` resolves to `1px solid 1px`, which the
+  // parser drops, so the border simply never paints. Nothing in the browser
+  // reports it, so it is asserted here instead.
+  it("never passes a border-width token where a color belongs", () => {
+    const widthTokens = [...tokenStyles.matchAll(/(--[\w-]+):\s*\d+(?:\.\d+)?px;/g)].map((match) => match[1]);
+    const asColor = new RegExp(
+      `(?:solid|dashed|dotted)\\s+var\\((?:${widthTokens.join("|")})\\)`
+      + `|border(?:-[a-z]+)?-color:\\s*var\\((?:${widthTokens.join("|")})\\)`
+      + `|%,\\s*var\\((?:${widthTokens.join("|")})\\)\\s*\\)`,
+      "g"
+    );
+
+    for (const [name, sheet] of Object.entries(featureStyles)) {
+      expect(`${name}: ${sheet.match(asColor)?.join(", ") ?? "none"}`).toBe(`${name}: none`);
+    }
+  });
+
+  // A `var()` that resolves to nothing takes its whole declaration with it, so a
+  // token that was never defined reads as "this rule silently does less than it
+  // says". Custom properties set from TSX are the only legitimate exception.
+  it("defines every token the stylesheets consume", () => {
+    const runtimeTokens = ["--visual-viewport-height", "--xms-percent", "--xmx-percent", "--timeline-annotation-extra"];
+    const allStyles = Object.values(featureStyles).join("\n");
+    const defined = new Set([...allStyles.matchAll(/(--[\w-]+)\s*:/g)].map((match) => match[1]));
+    const referenced = [...allStyles.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1]);
+
+    const undefinedTokens = [...new Set(referenced)]
+      .filter((token) => !defined.has(token) && !runtimeTokens.includes(token))
+      .sort();
+
+    expect(undefinedTokens).toEqual([]);
+  });
+
+  it("keeps one spinner rather than a per-feature lookalike in each stylesheet", () => {
+    expect(primitiveStyles).toContain(".uiSpinner");
+    // Every busy ring reduces to a static state for reduced-motion users; that
+    // only holds while there is a single rule to apply it to.
+    expect(primitiveStyles).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.uiSpinner \{/);
+    for (const [name, sheet] of Object.entries(featureStyles)) {
+      if (name === "primitives.css") continue;
+      expect(`${name}: ${/^\s*\.[\w-]*[sS]pinner\s*\{[^}]*animation:/m.test(sheet)}`).toBe(`${name}: false`);
+    }
   });
 });
 

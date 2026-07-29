@@ -614,8 +614,9 @@
   overflow: auto;
   margin: var(--space-2) 0 0;
   padding: var(--space-3);
+  border: var(--border-subtle) solid var(--border-row);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--surface-strong) 76%, #000);
+  background: var(--surface-inset);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -804,7 +805,7 @@
 
 .scheduleStepDragHandle.uiButton:hover:not(:disabled),
 .scheduleStepDragHandle.uiButton:focus-visible {
-  border-color: var(--border-strong);
+  border-color: var(--border-muted);
   background: var(--surface-raised);
   color: var(--text);
 }
