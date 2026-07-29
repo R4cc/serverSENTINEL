@@ -38,5 +38,7 @@ export function initializeRuntimeDataRoot(paths: RuntimeDataPaths) {
   for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
     mkdirSync(directory, { recursive: true });
   }
+  // Both hold whole-server payloads -- exports on the way out, uploaded archives on the way in.
   chmodSync(paths.exportsDir, 0o700);
+  chmodSync(paths.importsDir, 0o700);
 }

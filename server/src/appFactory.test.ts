@@ -91,7 +91,7 @@ describe("Fastify application factory", () => {
         method: "POST",
         url: "/api/exports",
         headers: { cookie, "x-requested-with": "XMLHttpRequest" },
-        payload: {}
+        payload: { selection: { categories: ["serverConfig"], contentStrategy: "lockfile" } }
       });
       expect(started.statusCode, started.body).toBe(200);
       const operationId = started.json().id as string;
@@ -122,13 +122,13 @@ describe("Fastify application factory", () => {
       expect(expired.json()).toEqual({
         error: { code: "EXPORT_EXPIRED", message: "Export artifact has expired", details: {} }
       });
-      expect(existsSync(join(dataDir, "exports", `serversentinel-export-${operationId}.json`))).toBe(false);
+      expect(existsSync(join(dataDir, "exports", `serversentinel-export-${operationId}.zip`))).toBe(false);
     } finally {
       await app.close();
     }
   });
 
-  it("requires integrations.manage before a server creator can request instance settings", async () => {
+  it("requires integrations.manage before a server creator can change instance settings", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-import-permissions-"));
     temporaryDirectories.push(dataDir);
     process.env = {
@@ -184,29 +184,6 @@ describe("Fastify application factory", () => {
       expect(managerLogin.statusCode, managerLogin.body).toBe(200);
       const managerCookie = sessionCookieFrom(managerLogin);
       expect(managerCookie).toBeTruthy();
-      const payload = {
-        artifactBase64: Buffer.from("{}", "utf8").toString("base64"),
-        targetNodeId: "local",
-        importInstanceSettings: true
-      };
-
-      for (const url of ["/api/imports/validate", "/api/imports/apply"]) {
-        const response = await app.inject({
-          method: "POST",
-          url,
-          headers: { cookie: managerCookie, "x-requested-with": "XMLHttpRequest" },
-          payload
-        });
-        expect(response.statusCode, response.body).toBe(403);
-        expect(response.json()).toEqual({
-          error: {
-            code: "PERMISSION_DENIED",
-            message: "You need permission to manage integrations before performing this action.",
-            details: {}
-          }
-        });
-      }
-
       for (const request of [
         { method: "PUT" as const, url: "/api/settings/player-heads", payload: { enabled: true } },
         { method: "DELETE" as const, url: "/api/settings/player-heads/cache", payload: undefined }
@@ -363,27 +340,21 @@ describe("Fastify application factory", () => {
       const viewerCookie = await login("viewer");
       const managerCookie = await login("manager");
 
+      const selection = { categories: ["serverConfig"], contentStrategy: "lockfile" };
+
       const viewerExport = await app.inject({
         method: "POST",
         url: "/api/exports",
         headers: { ...csrf, cookie: viewerCookie },
-        payload: {}
+        payload: { selection }
       });
       expect(viewerExport.statusCode).toBe(403);
-
-      const managerInstanceExport = await app.inject({
-        method: "POST",
-        url: "/api/exports",
-        headers: { ...csrf, cookie: managerCookie },
-        payload: { includeInstance: true }
-      });
-      expect(managerInstanceExport.statusCode).toBe(403);
 
       const managerExport = await app.inject({
         method: "POST",
         url: "/api/exports",
         headers: { ...csrf, cookie: managerCookie },
-        payload: {}
+        payload: { selection }
       });
       expect(managerExport.statusCode, managerExport.body).toBe(200);
       const managerOperationId = managerExport.json().id as string;
@@ -402,10 +373,8 @@ describe("Fastify application factory", () => {
         headers: { ...csrf, cookie: managerCookie }
       });
       expect(managerDownload.statusCode, managerDownload.body).toBe(200);
-      expect(managerDownload.json()).toMatchObject({
-        manifest: { content: { instance: false } },
-        instance: { settings: {}, nodes: [] }
-      });
+      expect(managerDownload.headers["content-type"]).toBe("application/zip");
+      expect(managerDownload.rawPayload.subarray(0, 2).toString("latin1")).toBe("PK");
 
       const configured = await app.inject({
         method: "PUT",
@@ -426,7 +395,7 @@ describe("Fastify application factory", () => {
         method: "POST",
         url: "/api/exports",
         headers: { ...csrf, cookie: adminCookie },
-        payload: { includeInstance: true }
+        payload: { selection: { categories: ["serverConfig", "panelSettings"], contentStrategy: "lockfile" } }
       });
       expect(adminExport.statusCode, adminExport.body).toBe(200);
       const adminOperationId = adminExport.json().id as string;
@@ -445,11 +414,10 @@ describe("Fastify application factory", () => {
         headers: { ...csrf, cookie: adminCookie }
       });
       expect(adminDownload.statusCode, adminDownload.body).toBe(200);
-      expect(adminDownload.json().manifest.content.instance).toBe(true);
-      expect(adminDownload.json().instance.settings).toEqual({});
-      expect(adminDownload.body).not.toContain("must-not-be-exported");
-      expect(adminDownload.body).not.toContain("playerHeadsEnabled");
-      expect(adminDownload.body).not.toContain("player_heads_enabled");
+      expect(adminDownload.rawPayload.subarray(0, 2).toString("latin1")).toBe("PK");
+      // Instance settings never enter the artifact, so no credential can reach it in any category.
+      expect(adminDownload.rawPayload.toString("latin1")).not.toContain("must-not-be-exported");
+      expect(adminDownload.rawPayload.toString("latin1")).not.toContain("player_heads_enabled");
 
       const crossUserDownload = await app.inject({
         method: "GET",
@@ -588,7 +556,12 @@ describe("Fastify application factory", () => {
       expect(compressed.rawPayload.length).toBeLessThan(identity.rawPayload.length);
       expect(gunzipSync(compressed.rawPayload).toString("utf8")).toBe(identity.body);
 
-      const started = await app.inject({ method: "POST", url: "/api/exports", headers: { ...csrf, cookie }, payload: {} });
+      const started = await app.inject({
+        method: "POST",
+        url: "/api/exports",
+        headers: { ...csrf, cookie },
+        payload: { selection: { categories: ["serverConfig"], contentStrategy: "lockfile" } }
+      });
       expect(started.statusCode, started.body).toBe(200);
       const operationId = started.json().id as string;
       await vi.waitFor(async () => {
@@ -596,9 +569,9 @@ describe("Fastify application factory", () => {
         expect(operation.json().status, operation.body).toBe("succeeded");
       });
 
-      // The artifact is JSON, so only the route-level opt-out keeps its Content-Length -- and
-      // with it the size the browser's download UI reports for a file that can reach hundreds
-      // of megabytes.
+      // Only the route-level opt-out keeps the artifact's Content-Length -- and with it the size the
+      // browser's download UI reports for a file that can reach many gigabytes. Re-compressing an
+      // already-deflated ZIP would cost CPU for nothing and drop that header.
       const download = await app.inject({
         method: "GET",
         url: `/api/exports/${operationId}/download`,

@@ -149,7 +149,13 @@ export const config = {
   fileDownloadMaxEntries: parseCountLimitEnv("SERVERSENTINEL_FILE_DOWNLOAD_MAX_ENTRIES", 50_000),
   dockerResponseMaxBytes: parseByteLimitEnv("SERVERSENTINEL_DOCKER_RESPONSE_MAX_BYTES", 64 * 1024 * 1024),
   importMaxServers: parseCountLimitEnv("SERVERSENTINEL_IMPORT_MAX_SERVERS", 200),
-  importMaxFiles: parseCountLimitEnv("SERVERSENTINEL_IMPORT_MAX_FILES", 20_000),
+  // A single Minecraft world is tens of thousands of region and entity files on its own, so the
+  // schema-3 ceilings (20k files, 2 MiB each) had to move once worlds became exportable.
+  importMaxFiles: parseCountLimitEnv("SERVERSENTINEL_IMPORT_MAX_FILES", 200_000),
+  importMaxExpandedBytes: parseByteLimitEnv("SERVERSENTINEL_IMPORT_MAX_EXPANDED_BYTES", 64 * 1024 * 1024 * 1024),
+  exportMaxBytes: parseByteLimitEnv("SERVERSENTINEL_EXPORT_MAX_BYTES", 64 * 1024 * 1024 * 1024),
+  /** Refuse to start an export that would leave the artifact volume under this much headroom. */
+  exportMinFreeBytes: parseByteLimitEnv("SERVERSENTINEL_EXPORT_MIN_FREE_BYTES", 1024 * 1024 * 1024),
   modrinthIconCacheMaxEntries: parseCountLimitEnv("SERVERSENTINEL_MODRINTH_ICON_CACHE_MAX_ENTRIES", 2_000),
   mcjarsBaseUrl: process.env.MCJARS_BASE_URL?.trim() || "https://mcjars.app",
   mcjarsApiKey: process.env.MCJARS_API_KEY?.trim()

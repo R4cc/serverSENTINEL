@@ -736,3 +736,179 @@ export type PlayerSnapshot =
       code: PlayerSnapshotErrorCode;
       message: string;
     };
+
+/**
+ * Export/import contract.
+ *
+ * Schema 4 replaced the base64-in-JSON artifact with a ZIP that carries `manifest.json` beside the
+ * real files. Schema 3 could only ever describe a handful of small configuration files, so there is
+ * no upgrade path worth writing: a schema-3 artifact is rejected and has to be recreated.
+ */
+export const EXPORT_SCHEMA_VERSION = 4;
+export const EXPORT_MANIFEST_ENTRY = "manifest.json";
+export const EXPORT_ARTIFACT_TYPE = "serversentinel.export";
+
+/**
+ * What an operator can choose to take with them. `content` and `panelSettings` are not directories:
+ * content resolves to the runtime's own mods/plugins folder, and panel settings are database rows.
+ */
+export const EXPORT_CATEGORIES = [
+  "serverConfig",
+  "accessControl",
+  "modConfig",
+  "content",
+  "world",
+  "panelSettings",
+  "logs"
+] as const;
+
+export type ExportCategory = typeof EXPORT_CATEGORIES[number];
+
+/**
+ * Mods are the one category with a real size/robustness tradeoff, so it gets a strategy rather than
+ * a plain checkbox. `lockfile` records the Modrinth version and re-downloads on import; `jars` ships
+ * the bytes. Lockfile exports still fall back to shipping any jar that Modrinth cannot identify.
+ */
+export type ExportContentStrategy = "lockfile" | "jars";
+
+export type ExportSelection = {
+  categories: ExportCategory[];
+  contentStrategy: ExportContentStrategy;
+};
+
+export const EXPORT_DEFAULT_CATEGORIES: readonly ExportCategory[] = [
+  "serverConfig",
+  "accessControl",
+  "modConfig",
+  "content",
+  "panelSettings"
+];
+
+export type ExportCategoryDescriptor = {
+  key: ExportCategory;
+  label: string;
+  description: string;
+  /** Content and world are the two that can dominate an artifact's size. */
+  sizable: boolean;
+};
+
+export const EXPORT_CATEGORY_DESCRIPTORS: readonly ExportCategoryDescriptor[] = [
+  {
+    key: "serverConfig",
+    label: "Server configuration",
+    description: "server.properties and the recorded runtime version",
+    sizable: false
+  },
+  {
+    key: "accessControl",
+    label: "Access control",
+    description: "Whitelist, operators, banned players and IPs",
+    sizable: false
+  },
+  {
+    key: "modConfig",
+    label: "Mod and plugin configs",
+    description: "The config and defaultconfigs folders",
+    sizable: true
+  },
+  {
+    key: "content",
+    label: "Mods and plugins",
+    description: "Installed content, as a Modrinth lockfile or the jars themselves",
+    sizable: true
+  },
+  {
+    key: "world",
+    label: "World",
+    description: "Every world folder, including datapacks. Usually most of the archive.",
+    sizable: true
+  },
+  {
+    key: "panelSettings",
+    label: "Panel settings",
+    description: "Schedules, ports, Java arguments, and update channels",
+    sizable: false
+  },
+  {
+    key: "logs",
+    label: "Logs and crash reports",
+    description: "Useful for support, never needed to run the server",
+    sizable: true
+  }
+];
+
+export type ExportSizeCategoryEstimate = {
+  category: ExportCategory;
+  bytes: number;
+  fileCount: number;
+};
+
+export type ExportSizeServerEstimate = {
+  serverId: string;
+  displayName: string;
+  running: boolean;
+  categories: ExportSizeCategoryEstimate[];
+  totalBytes: number;
+};
+
+export type ExportSizeEstimate = {
+  servers: ExportSizeServerEstimate[];
+  totalBytes: number;
+  /** Free space on the panel volume that holds export artifacts, when the platform reports it. */
+  availableBytes?: number;
+};
+
+export type ExportLockfileEntry = {
+  filename: string;
+  enabled: boolean;
+  projectId: string;
+  versionId: string;
+  versionNumber: string;
+  channel: string;
+  /** Present when known; import verifies the re-downloaded jar against it. */
+  sha1?: string;
+};
+
+export type ImportIssueCode =
+  | "missing_node_target"
+  | "conflicting_container_name"
+  | "conflicting_port"
+  | "invalid_ports"
+  | "invalid_path"
+  | "unsupported_schema"
+  | "missing_manifest";
+
+export type ImportIssue = {
+  code: string;
+  message: string;
+  serverName?: string;
+  path?: string;
+};
+
+export type ImportPlanServer = {
+  sourceId: string;
+  newId: string;
+  displayName: string;
+  storageName: string;
+  serverDir: string;
+  fileCount: number;
+  totalBytes: number;
+  lockfileCount: number;
+};
+
+export type ImportValidationResult = {
+  valid: boolean;
+  issues: ImportIssue[];
+  warnings: ImportIssue[];
+  plan: {
+    targetNodeId: string;
+    categories: ExportCategory[];
+    servers: ImportPlanServer[];
+  };
+};
+
+export type ImportedContentFailure = {
+  serverName: string;
+  filename: string;
+  reason: string;
+};

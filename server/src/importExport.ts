@@ -1,121 +1,104 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { chmod, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { chmod, mkdir, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import type { ManagedNode, ManagedServer, ModPreference } from "./types.js";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import {
+  EXPORT_ARTIFACT_TYPE,
+  EXPORT_CATEGORIES,
+  EXPORT_MANIFEST_ENTRY,
+  EXPORT_SCHEMA_VERSION,
+  type ExportCategory,
+  type ExportLockfileEntry,
+  type ExportSelection,
+  type ImportIssue,
+  type ImportValidationResult
+} from "@serversentinel/contracts";
+import type { ManagedServer, ModPreference } from "./types.js";
 import { currentSchemaVersion, type StorageDatabase } from "./storage/database.js";
 import { defaultServerContainerName, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
 import type { ServersRepository } from "./storage/serversRepository.js";
 import type { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
-import { openContainedFile, parseDockerPorts } from "./core.js";
-import { assertRuntimeProvider } from "./runtime/profile.js";
+import { serverRuntimeDefinition } from "@serversentinel/contracts";
+import { parseDockerPorts } from "./core.js";
+import { assertRuntimeProvider, runtimeTarget } from "./runtime/profile.js";
+import { createZipArchiveStream, type FileArchiveEntry } from "./downloadArchive.js";
+import { extractZipArchive, readZipEntryBuffer } from "./zipArchive.js";
+import { archiveEntriesForFiles, collectServerCategories, type CollectedCategory } from "./servers/exportSelection.js";
+import { planServerContent } from "./servers/exportContent.js";
 import { config } from "./config.js";
+import type { NodeRuntime } from "./nodes/types.js";
 
-export const exportArtifactType = "serversentinel.export";
-export const exportArtifactSchemaVersion = 3;
-export const excludedInstanceSecretSettings = ["modrinthApiKey"] as const;
-const maxExportedConfigFileBytes = 2 * 1024 * 1024;
-const excludedServerFileRoots = new Set([
-  "backups",
-  "cache",
-  "crash-reports",
-  "libraries",
-  "logs",
-  "versions",
-  "world",
-  "world_nether",
-  "world_the_end",
-  "worlds"
-]);
-const includedRootFiles = new Set([
-  ".serversentinel-version.json",
-  "banned-ips.json",
-  "banned-players.json",
-  "eula.txt",
-  "ops.json",
-  "permissions.json",
-  "server.properties",
-  "usercache.json",
-  "whitelist.json"
-]);
-const includedDirectoryRoots = new Set(["config", "defaultconfigs"]);
+export const exportArtifactType = EXPORT_ARTIFACT_TYPE;
+export const exportArtifactSchemaVersion = EXPORT_SCHEMA_VERSION;
 
-export type ExportServerEntry = {
-  server: ManagedServer;
-  modPreferences: Record<string, ModPreference>;
-  files: ExportedServerFile[];
+const maxManifestBytes = 64 * 1024 * 1024;
+const contentFileSuffixes = [".jar", ".jar.disabled"];
+
+export const importZipLimits = {
+  maxEntries: config.importMaxFiles,
+  maxExpandedBytes: config.importMaxExpandedBytes
 };
 
-export type ExportedServerFile = {
+export type ExportManifestFile = {
+  /** Relative to the server's archive folder; the bytes live at `servers/<key>/<path>`. */
   path: string;
   size: number;
-  sha256: string;
-  contentBase64: string;
 };
 
-export type ExportArtifact = {
-  artifactType: typeof exportArtifactType;
-  schemaVersion: typeof exportArtifactSchemaVersion;
+export type ExportManifestServer = {
+  key: string;
+  server: ManagedServer;
+  modPreferences: Record<string, ModPreference>;
+  lockfile: ExportLockfileEntry[];
+  files: ExportManifestFile[];
+};
+
+export type ExportManifest = {
+  artifactType: typeof EXPORT_ARTIFACT_TYPE;
+  schemaVersion: typeof EXPORT_SCHEMA_VERSION;
   manifest: {
     exportedAt: string;
     appVersion: string;
     sqliteSchemaVersion: number;
+    selection: ExportSelection;
     content: {
-      instance: boolean;
       servers: number;
-      serverFiles: number;
+      files: number;
+      totalBytes: number;
     };
   };
-  instance: {
-    settings: Record<string, never>;
-    nodes: Array<Omit<ManagedNode, "secretHash" | "joinTokenHash">>;
-  };
-  servers: ExportServerEntry[];
+  warnings: string[];
+  servers: ExportManifestServer[];
 };
 
-export type ImportIssue = {
-  code: string;
-  message: string;
-  serverName?: string;
-  path?: string;
-};
-
-export type ImportValidationResult = {
-  valid: boolean;
-  issues: ImportIssue[];
-  warnings: ImportIssue[];
-  plan: {
-    targetNodeId: string;
-    instanceSettings: {
-      requested: boolean;
-      importable: string[];
-      excludedSecrets: string[];
-    };
-    servers: Array<{
-      sourceId: string;
-      newId: string;
-      displayName: string;
-      storageName: string;
-      serverDir: string;
-      fileCount: number;
-    }>;
-  };
+export type ExportPlan = {
+  manifest: ExportManifest;
+  entries: FileArchiveEntry[];
+  /** Archive members generated in memory rather than read from a server directory. */
+  synthetic: Map<string, Buffer>;
+  /**
+   * How to open a member, keyed by its `servers/<key>` prefix. Reads go through the owning server's
+   * runtime rather than the panel's filesystem, so a server on a remote node streams over the node
+   * protocol instead of silently reading whatever happens to sit at that path on the panel.
+   */
+  openers: Map<string, (sourcePath: string) => Promise<Readable>>;
+  totalBytes: number;
 };
 
 type ExportInput = {
   appVersion: string;
-  nodes: ManagedNode[];
   servers: ManagedServer[];
-  selectedServerIds?: string[];
-  includeInstance?: boolean;
+  selection: ExportSelection;
+  runtimeForServer: (server: ManagedServer) => NodeRuntime;
   modPreferencesForServer: (serverId: string) => Record<string, ModPreference>;
   report?: (progress: number, task: string) => void;
 };
 
 type ImportContext = {
   targetNodeId?: string;
-  importInstanceSettings?: boolean;
-  nodes: ManagedNode[];
+  localNodeId: string;
   existingServers: ManagedServer[];
   serversDir: string;
   tmpDir: string;
@@ -125,169 +108,298 @@ type ApplyImportContext = ImportContext & {
   storage: StorageDatabase;
   serversRepository: ServersRepository;
   modPreferencesRepository: ModPreferencesRepository;
+  /** Restores lockfile content after the files land; failures are reported, never fatal. */
+  restoreContent?: (server: ManagedServer, lockfile: ExportLockfileEntry[]) => Promise<ContentRestoreReport>;
   report?: (progress: number, task: string) => void;
 };
 
+export type ContentRestoreReport = {
+  restored: number;
+  failures: Array<{ filename: string; reason: string }>;
+};
+
 export function exportArtifactFilename(operationId: string) {
-  return `serversentinel-export-${operationId}.json`;
+  return `serversentinel-export-${operationId}.zip`;
 }
 
-export async function createExportArtifact(input: ExportInput): Promise<ExportArtifact> {
-  const selectedIds = input.selectedServerIds === undefined ? undefined : new Set(input.selectedServerIds);
-  const selectedServers = input.servers.filter((server) => !selectedIds || selectedIds.has(server.id));
-  if (selectedIds && selectedServers.length !== selectedIds.size) {
-    throw new Error("One or more selected servers could not be found");
-  }
-  input.report?.(10, "Collecting SQLite configuration");
-  const servers: ExportServerEntry[] = [];
-  for (const [index, server] of selectedServers.entries()) {
-    input.report?.(20 + Math.floor((index / Math.max(selectedServers.length, 1)) * 60), `Collecting ${server.displayName}`);
-    const {
-      restartPhase: _restartPhase,
-      crashAttemptTimestamps: _crashAttemptTimestamps,
-      crashNextRetryAt: _crashNextRetryAt,
-      crashLoopSince: _crashLoopSince,
-      crashStableSince: _crashStableSince,
-      ...exportedServer
-    } = server;
-    servers.push({
-      server: exportedServer,
-      modPreferences: input.modPreferencesForServer(server.id),
-      files: await collectServerConfigFiles(server.serverDir)
+function archiveSlug(value: string) {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug.slice(0, 48) || "server";
+}
+
+export function serverArchiveKey(index: number, server: Pick<ManagedServer, "displayName">) {
+  return `${String(index + 1).padStart(3, "0")}-${archiveSlug(server.displayName)}`;
+}
+
+function isContentFile(relativePath: string, contentDirectory: string) {
+  const prefix = `${contentDirectory}/`;
+  if (!relativePath.startsWith(prefix)) return false;
+  const name = relativePath.slice(prefix.length);
+  return !name.includes("/") && contentFileSuffixes.some((suffix) => name.endsWith(suffix));
+}
+
+/**
+ * Panel bookkeeping that describes a running instance rather than its configuration. None of it is
+ * meaningful on a freshly imported server, and carrying it would resurrect stale crash counters.
+ */
+function exportableServerRecord(server: ManagedServer, includePanelSettings: boolean): ManagedServer {
+  const {
+    restartPhase: _restartPhase,
+    crashAttemptTimestamps: _crashAttemptTimestamps,
+    crashNextRetryAt: _crashNextRetryAt,
+    crashLoopSince: _crashLoopSince,
+    crashStableSince: _crashStableSince,
+    restartRequiredSince: _restartRequiredSince,
+    restartRequiredChanges: _restartRequiredChanges,
+    restartRequiredModBaseline: _restartRequiredModBaseline,
+    runtimeIntent: _runtimeIntent,
+    ...retained
+  } = server;
+  if (includePanelSettings) return retained;
+  // Ports, image, and runtime profile always travel: without them the record cannot be created or
+  // conflict-checked. Panel settings are the discretionary extras.
+  const { schedules: _schedules, javaArgs: _javaArgs, startOnNodeStart: _startOnNodeStart, ...core } = retained;
+  return core;
+}
+
+export async function createExportPlan(input: ExportInput): Promise<ExportPlan> {
+  const includePanelSettings = input.selection.categories.includes("panelSettings");
+  const includeContent = input.selection.categories.includes("content");
+  const entries: FileArchiveEntry[] = [];
+  const synthetic = new Map<string, Buffer>();
+  const openers = new Map<string, (sourcePath: string) => Promise<Readable>>();
+  const manifestServers: ExportManifestServer[] = [];
+  const warnings: string[] = [];
+  let totalBytes = 0;
+
+  for (const [index, server] of input.servers.entries()) {
+    const progress = 10 + Math.floor((index / Math.max(input.servers.length, 1)) * 70);
+    input.report?.(progress, `Collecting ${server.displayName}`);
+    const key = serverArchiveKey(index, server);
+    const runtime = input.runtimeForServer(server);
+    const collected = await collectServerCategories(runtime, server, input.selection.categories);
+
+    let lockfile: ExportLockfileEntry[] = [];
+    let shipped: Set<string> | undefined;
+    if (includeContent && input.selection.contentStrategy === "lockfile") {
+      const plan = await planServerContent(server, "lockfile");
+      lockfile = plan.lockfile;
+      shipped = new Set(plan.shippedFilenames);
+      for (const warning of plan.warnings) warnings.push(`${server.displayName}: ${warning}`);
+    }
+
+    const files = filesForServer(server, collected, includeContent, shipped);
+    totalBytes += files.reduce((total, file) => total + file.size, 0);
+    if (totalBytes > config.exportMaxBytes) {
+      throw new Error(`Export exceeds the ${Math.floor(config.exportMaxBytes / 1024 / 1024 / 1024)} GiB limit. Deselect the world or export fewer servers.`);
+    }
+    entries.push(...archiveEntriesForFiles(`servers/${key}`, files));
+    openers.set(`servers/${key}`, async (sourcePath) => (await runtime.downloadFile(server, sourcePath)).stream);
+    manifestServers.push({
+      key,
+      server: exportableServerRecord(server, includePanelSettings),
+      modPreferences: includePanelSettings ? input.modPreferencesForServer(server.id) : {},
+      lockfile,
+      files: files.map((file) => ({ path: file.relativePath, size: file.size }))
     });
   }
-  const serverFiles = servers.reduce((count, entry) => count + entry.files.length, 0);
-  input.report?.(90, "Writing export manifest");
-  return {
-    artifactType: exportArtifactType,
-    schemaVersion: exportArtifactSchemaVersion,
+
+  input.report?.(85, "Writing export manifest");
+  const manifest: ExportManifest = {
+    artifactType: EXPORT_ARTIFACT_TYPE,
+    schemaVersion: EXPORT_SCHEMA_VERSION,
     manifest: {
       exportedAt: new Date().toISOString(),
       appVersion: input.appVersion,
       sqliteSchemaVersion: currentSchemaVersion,
+      selection: input.selection,
       content: {
-        instance: input.includeInstance === true,
-        servers: servers.length,
-        serverFiles
+        servers: manifestServers.length,
+        files: entries.length,
+        totalBytes
       }
     },
-    instance: {
-      settings: {},
-      nodes: input.includeInstance === true ? input.nodes.map((node) => ({
-        id: node.id,
-        name: node.name,
-        type: node.type,
-        status: node.status,
-        isInternal: node.isInternal,
-        createdAt: node.createdAt,
-        updatedAt: node.updatedAt,
-        lastSeenAt: node.lastSeenAt,
-        connectedAt: node.connectedAt,
-        agentVersion: node.agentVersion,
-        protocolVersion: node.protocolVersion,
-        capabilities: node.capabilities,
-        dockerStatus: node.dockerStatus,
-        dataPathStatus: node.dataPathStatus,
-        totalMemory: node.totalMemory,
-        joinTokenExpiresAt: node.joinTokenExpiresAt
-      })) : []
-    },
-    servers
+    warnings,
+    servers: manifestServers
   };
+  const manifestBuffer = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  synthetic.set(EXPORT_MANIFEST_ENTRY, manifestBuffer);
+  entries.unshift({
+    sourcePath: EXPORT_MANIFEST_ENTRY,
+    archivePath: EXPORT_MANIFEST_ENTRY,
+    type: "file",
+    size: manifestBuffer.byteLength
+  });
+  return { manifest, entries, synthetic, openers, totalBytes };
 }
 
-export async function writeExportArtifact(path: string, artifact: ExportArtifact) {
-  const content = `${JSON.stringify(artifact, null, 2)}\n`;
+function filesForServer(
+  server: ManagedServer,
+  collected: CollectedCategory[],
+  includeContent: boolean,
+  shipped: Set<string> | undefined
+) {
+  const contentDirectory = serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory;
+  const files: CollectedCategory["files"] = [];
+  const seen = new Set<string>();
+  for (const category of collected) {
+    for (const file of category.files) {
+      if (seen.has(file.relativePath)) continue;
+      // In lockfile mode only the jars Modrinth could not identify are carried; sibling files such as
+      // a content folder's icon cache still travel so the folder arrives intact.
+      if (
+        includeContent
+        && shipped
+        && isContentFile(file.relativePath, contentDirectory)
+        && !shipped.has(basename(file.relativePath))
+      ) {
+        continue;
+      }
+      seen.add(file.relativePath);
+      files.push(file);
+    }
+  }
+  return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+export async function writeExportArchive(path: string, plan: ExportPlan, report?: (progress: number, task: string) => void) {
   const temporaryPath = `${path}.${randomUUID()}.tmp`;
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await chmod(dirname(path), 0o700);
+  const hash = createHash("sha256");
+  const digest = new Transform({
+    transform(chunk, _encoding, callback) {
+      hash.update(chunk);
+      callback(null, chunk);
+    }
+  });
   try {
-    await writeFile(temporaryPath, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    report?.(88, "Compressing export archive");
+    const archive = createZipArchiveStream(
+      plan.entries,
+      async (entry) => {
+        const generated = plan.synthetic.get(entry.archivePath);
+        if (generated) return Readable.from([generated]);
+        const prefix = entry.archivePath.split("/").slice(0, 2).join("/");
+        const open = plan.openers.get(prefix);
+        if (!open) throw new Error(`No reader is registered for archive member ${entry.archivePath}`);
+        return open(entry.sourcePath);
+      },
+      { compress: true }
+    );
+    await pipeline(archive, digest, createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }));
     await rename(temporaryPath, path);
     await chmod(path, 0o600);
   } catch (error) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
     throw error;
   }
+  const written = await stat(path);
   return {
     path,
     filename: basename(path),
-    size: Buffer.byteLength(content),
-    sha256: createHash("sha256").update(content).digest("hex")
+    size: written.size,
+    sha256: hash.digest("hex")
   };
 }
 
-export function parseExportArtifactBase64(contentBase64: string): ExportArtifact {
-  if (typeof contentBase64 !== "string" || !contentBase64.trim()) {
-    throw new Error("Import artifact contentBase64 is required");
-  }
-  const normalizedContent = contentBase64.trim();
-  assertBase64(normalizedContent, "Import artifact contentBase64");
-  const decoded = Buffer.from(normalizedContent, "base64").toString("utf8");
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(decoded);
-  } catch {
-    throw new Error("Import artifact must be valid JSON");
-  }
-  return assertExportArtifact(parsed);
+export function exportDownloadStream(path: string) {
+  return createReadStream(path);
 }
 
-export function assertExportArtifact(value: unknown): ExportArtifact {
-  if (!isPlainObject(value)) throw new Error("Import artifact must be an object");
-  rejectUnsupportedKeys(value, ["artifactType", "schemaVersion", "manifest", "instance", "servers"], "artifact");
-  if (value.artifactType !== exportArtifactType) throw new Error("Unsupported import artifact type");
-  if (value.schemaVersion !== exportArtifactSchemaVersion) throw new Error(`Unsupported import schema version; this serverSENTINEL release requires export schema ${exportArtifactSchemaVersion}`);
-  if (!isPlainObject(value.manifest)) throw new Error("Import manifest is required");
-  if (!isPlainObject(value.instance)) throw new Error("Import instance section is required");
-  rejectUnsupportedKeys(value.instance, ["settings", "nodes"], "instance");
-  if (!isPlainObject(value.instance.settings)) throw new Error("Import instance.settings section is required");
-  rejectUnsupportedKeys(value.instance.settings, [], "instance.settings");
+export async function readExportManifest(archivePath: string): Promise<ExportManifest> {
+  const buffer = await readZipEntryBuffer(archivePath, EXPORT_MANIFEST_ENTRY, maxManifestBytes, importZipLimits);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(buffer.toString("utf8"));
+  } catch {
+    throw new Error("Export manifest must be valid JSON");
+  }
+  return assertExportManifest(parsed);
+}
+
+export function assertExportManifest(value: unknown): ExportManifest {
+  if (!isPlainObject(value)) throw new Error("Export manifest must be an object");
+  rejectUnsupportedKeys(value, ["artifactType", "schemaVersion", "manifest", "warnings", "servers"], "manifest");
+  if (value.artifactType !== EXPORT_ARTIFACT_TYPE) throw new Error("Unsupported import artifact type");
+  if (value.schemaVersion !== EXPORT_SCHEMA_VERSION) {
+    throw new Error(`Unsupported import schema version; this serverSENTINEL release requires export schema ${EXPORT_SCHEMA_VERSION}. Recreate the export with this version.`);
+  }
+  if (!isPlainObject(value.manifest)) throw new Error("Import manifest section is required");
+  assertManifestHeader(value.manifest);
+  if (value.warnings !== undefined) stringArray(value.warnings, "manifest.warnings");
   if (!Array.isArray(value.servers)) throw new Error("Import servers section must be an array");
-  // Per-file and per-artifact size limits still allow an artifact to describe an arbitrary *number* of
-  // servers and files, each of which becomes a directory, file, or database row during application.
   if (value.servers.length > config.importMaxServers) {
     throw new Error(`Import artifact contains more than ${config.importMaxServers} servers`);
   }
-  let importedFileCount = 0;
+  let fileCount = 0;
+  const keys = new Set<string>();
   for (const [serverIndex, entry] of value.servers.entries()) {
-    if (!isPlainObject(entry)) throw new Error(`Import servers[${serverIndex}] must be an object`);
-    rejectUnsupportedKeys(entry, ["server", "modPreferences", "files"], `servers[${serverIndex}]`);
-    if (!isPlainObject(entry.server)) throw new Error(`Import servers[${serverIndex}].server is required`);
-    if (!isPlainObject(entry.modPreferences)) throw new Error(`Import servers[${serverIndex}].modPreferences is required`);
-    assertImportServer(entry.server, `servers[${serverIndex}].server`);
-    assertImportModPreferences(entry.modPreferences, `servers[${serverIndex}].modPreferences`);
-    if (!Array.isArray(entry.files)) throw new Error(`Import servers[${serverIndex}].files must be an array`);
-    importedFileCount += entry.files.length;
-    if (importedFileCount > config.importMaxFiles) {
-      throw new Error(`Import artifact contains more than ${config.importMaxFiles} files`);
+    const label = `servers[${serverIndex}]`;
+    if (!isPlainObject(entry)) throw new Error(`Import ${label} must be an object`);
+    rejectUnsupportedKeys(entry, ["key", "server", "modPreferences", "lockfile", "files"], label);
+    const key = stringValue(entry.key, `${label}.key`);
+    assertSafeArchiveSegment(key, `${label}.key`);
+    if (keys.has(key)) throw new Error(`Import ${label}.key is duplicated`);
+    keys.add(key);
+    if (!isPlainObject(entry.server)) throw new Error(`Import ${label}.server is required`);
+    assertImportServer(entry.server, `${label}.server`);
+    if (!isPlainObject(entry.modPreferences)) throw new Error(`Import ${label}.modPreferences is required`);
+    assertImportModPreferences(entry.modPreferences, `${label}.modPreferences`);
+    if (!Array.isArray(entry.lockfile)) throw new Error(`Import ${label}.lockfile must be an array`);
+    for (const [lockIndex, lock] of entry.lockfile.entries()) {
+      assertLockfileEntry(lock, `${label}.lockfile[${lockIndex}]`);
+    }
+    if (!Array.isArray(entry.files)) throw new Error(`Import ${label}.files must be an array`);
+    fileCount += entry.files.length;
+    if (fileCount > config.importMaxFiles) {
+      throw new Error(`Import artifact describes more than ${config.importMaxFiles} files`);
     }
     for (const [fileIndex, file] of entry.files.entries()) {
-      if (!isPlainObject(file)) throw new Error(`Import servers[${serverIndex}].files[${fileIndex}] must be an object`);
-      rejectUnsupportedKeys(file, ["path", "size", "sha256", "contentBase64"], `servers[${serverIndex}].files[${fileIndex}]`);
-      const filePath = assertSafeArtifactPath(stringValue(file.path, "file.path"));
-      const fileSize = file.size;
-      if (typeof fileSize !== "number" || !Number.isInteger(fileSize) || fileSize < 0 || fileSize > maxExportedConfigFileBytes) {
-        throw new Error(`Import file ${filePath} has an invalid size`);
-      }
-      if (typeof file.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(file.sha256)) {
-        throw new Error(`Import file ${filePath} has an invalid sha256`);
-      }
-      if (typeof file.contentBase64 !== "string") {
-        throw new Error(`Import file ${filePath} contentBase64 is required`);
-      }
-      assertBase64(file.contentBase64, `Import file ${filePath} contentBase64`);
-      const buffer = Buffer.from(file.contentBase64, "base64");
-      if (buffer.length !== fileSize) throw new Error(`Import file ${filePath} size does not match content`);
-      if (createHash("sha256").update(buffer).digest("hex") !== file.sha256) {
-        throw new Error(`Import file ${filePath} checksum does not match content`);
-      }
-      if (!shouldIncludeRelativePath(filePath, fileSize)) {
-        throw new Error(`Import file ${filePath} is not a supported configuration file`);
+      const fileLabel = `${label}.files[${fileIndex}]`;
+      if (!isPlainObject(file)) throw new Error(`Import ${fileLabel} must be an object`);
+      rejectUnsupportedKeys(file, ["path", "size"], fileLabel);
+      assertSafeArchiveRelativePath(stringValue(file.path, `${fileLabel}.path`));
+      if (typeof file.size !== "number" || !Number.isInteger(file.size) || file.size < 0) {
+        throw new Error(`Import ${fileLabel}.size must be a non-negative integer`);
       }
     }
   }
-  return value as unknown as ExportArtifact;
+  return value as unknown as ExportManifest;
+}
+
+function assertManifestHeader(header: Record<string, unknown>) {
+  rejectUnsupportedKeys(header, ["exportedAt", "appVersion", "sqliteSchemaVersion", "selection", "content"], "manifest.manifest");
+  stringValue(header.exportedAt, "manifest.exportedAt");
+  stringValue(header.appVersion, "manifest.appVersion");
+  if (typeof header.sqliteSchemaVersion !== "number") throw new Error("manifest.sqliteSchemaVersion must be a number");
+  if (!isPlainObject(header.selection)) throw new Error("manifest.selection is required");
+  rejectUnsupportedKeys(header.selection, ["categories", "contentStrategy"], "manifest.selection");
+  const categories = header.selection.categories;
+  if (!Array.isArray(categories) || !categories.length) throw new Error("manifest.selection.categories must be a non-empty array");
+  for (const category of categories) {
+    if (typeof category !== "string" || !(EXPORT_CATEGORIES as readonly string[]).includes(category)) {
+      throw new Error(`manifest.selection.categories contains unknown category ${String(category)}`);
+    }
+  }
+  if (header.selection.contentStrategy !== "lockfile" && header.selection.contentStrategy !== "jars") {
+    throw new Error("manifest.selection.contentStrategy must be lockfile or jars");
+  }
+  if (!isPlainObject(header.content)) throw new Error("manifest.content is required");
+}
+
+function assertLockfileEntry(value: unknown, label: string) {
+  if (!isPlainObject(value)) throw new Error(`${label} must be a JSON object`);
+  rejectUnsupportedKeys(value, ["filename", "enabled", "projectId", "versionId", "versionNumber", "channel", "sha1"], label);
+  assertSafeModPreferenceFilename(stringValue(value.filename, `${label}.filename`), `${label}.filename`);
+  booleanValue(value.enabled, `${label}.enabled`);
+  stringValue(value.projectId, `${label}.projectId`);
+  stringValue(value.versionId, `${label}.versionId`);
+  stringValue(value.versionNumber, `${label}.versionNumber`);
+  assertReleaseChannel(value.channel, `${label}.channel`);
+  if (value.sha1 !== undefined && (typeof value.sha1 !== "string" || !/^[0-9a-f]{40}$/i.test(value.sha1))) {
+    throw new Error(`${label}.sha1 must be a 40-character hexadecimal hash`);
+  }
 }
 
 function assertImportServer(server: Record<string, unknown>, label: string) {
@@ -305,10 +417,7 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
     "dockerPorts",
     "managedPorts",
     "javaArgs",
-    "runtimeIntent",
-    "restartRequiredSince",
-    "restartRequiredChanges",
-    "restartRequiredModBaseline",
+    "startOnNodeStart",
     "schedules",
     "createdAt",
     "updatedAt"
@@ -325,12 +434,7 @@ function assertImportServer(server: Record<string, unknown>, label: string) {
   optionalStringValue(server.dockerMountSource, `${label}.dockerMountSource`);
   optionalStringValue(server.dockerWorkingDir, `${label}.dockerWorkingDir`);
   optionalStringValue(server.javaArgs, `${label}.javaArgs`);
-  if (server.runtimeIntent !== undefined && server.runtimeIntent !== "running" && server.runtimeIntent !== "stopped" && server.runtimeIntent !== "restarting") {
-    throw new Error(`${label}.runtimeIntent must be running, stopped, or restarting`);
-  }
-  optionalStringValue(server.restartRequiredSince, `${label}.restartRequiredSince`);
-  if (server.restartRequiredChanges !== undefined && !Array.isArray(server.restartRequiredChanges)) throw new Error(`${label}.restartRequiredChanges must be an array`);
-  if (server.restartRequiredModBaseline !== undefined && !Array.isArray(server.restartRequiredModBaseline)) throw new Error(`${label}.restartRequiredModBaseline must be an array`);
+  optionalBooleanValue(server.startOnNodeStart, `${label}.startOnNodeStart`);
   const dockerPorts = optionalStringValue(server.dockerPorts, `${label}.dockerPorts`);
   if (dockerPorts) parseDockerPorts(dockerPorts);
   if (!isPlainObject(server.runtimeProfile)) throw new Error(`${label}.runtimeProfile must be a JSON object`);
@@ -344,9 +448,6 @@ function assertRuntimeProfile(profile: Record<string, unknown>, label: string) {
     "minecraftVersion",
     "runtimeType",
     "runtimeVersion",
-    // 1.6.2 exports include these redundant aliases alongside the canonical fields.
-    "loader",
-    "loaderVersion",
     "javaMajorVersion",
     "jarProvider",
     "jarArtifact",
@@ -355,15 +456,8 @@ function assertRuntimeProfile(profile: Record<string, unknown>, label: string) {
   ], label);
   stringValue(profile.minecraftVersion, `${label}.minecraftVersion`);
   const runtimeType = stringValue(profile.runtimeType, `${label}.runtimeType`);
-  const runtimeVersion = stringValue(profile.runtimeVersion, `${label}.runtimeVersion`);
+  stringValue(profile.runtimeVersion, `${label}.runtimeVersion`);
   if (runtimeType !== "fabric" && runtimeType !== "paper") throw new Error(`${label}.runtimeType must be fabric or paper`);
-  if (profile.loader !== undefined && profile.loader !== runtimeType) {
-    throw new Error(`${label}.loader must match runtimeType`);
-  }
-  if (profile.loaderVersion !== undefined && profile.loaderVersion !== runtimeVersion) {
-    throw new Error(`${label}.loaderVersion must match runtimeVersion`);
-  }
-  void runtimeVersion;
   if (typeof profile.javaMajorVersion !== "number" || !Number.isInteger(profile.javaMajorVersion)) {
     throw new Error(`${label}.javaMajorVersion must be an integer`);
   }
@@ -476,7 +570,10 @@ function assertInstalledModMetadata(value: unknown, label: string) {
     "overrideReason",
     "clientSide",
     "serverSide",
-    "forceIncompatible"
+    "iconUrl",
+    "forceIncompatible",
+    "reviewAcknowledgedVersionId",
+    "reviewAcknowledgedAt"
   ], label);
   stringValue(value.projectId, `${label}.projectId`);
   stringValue(value.versionId, `${label}.versionId`);
@@ -497,35 +594,39 @@ function assertInstalledModMetadata(value: unknown, label: string) {
   optionalStringValue(value.overrideReason, `${label}.overrideReason`);
   optionalStringValue(value.clientSide, `${label}.clientSide`);
   optionalStringValue(value.serverSide, `${label}.serverSide`);
+  optionalStringValue(value.iconUrl, `${label}.iconUrl`);
   optionalBooleanValue(value.forceIncompatible, `${label}.forceIncompatible`);
+  optionalStringValue(value.reviewAcknowledgedVersionId, `${label}.reviewAcknowledgedVersionId`);
+  optionalStringValue(value.reviewAcknowledgedAt, `${label}.reviewAcknowledgedAt`);
 }
 
-export function validateImportArtifact(artifact: ExportArtifact, context: ImportContext): ImportValidationResult {
+export function validateImportArchive(manifest: ExportManifest, context: ImportContext): ImportValidationResult {
   const targetNodeId = context.targetNodeId?.trim() || "";
   const issues: ImportIssue[] = [];
   const warnings: ImportIssue[] = [];
-  const importInstanceSettings = context.importInstanceSettings === true;
-  if (importInstanceSettings) {
-    warnings.push({
-      code: "instance_secrets_excluded",
-      message: "Integration credentials are excluded from server migration data and must be configured manually on the destination"
+
+  if (!targetNodeId) {
+    issues.push({ code: "missing_node_target", message: "A valid target node is required before importing servers" });
+  } else if (targetNodeId !== context.localNodeId) {
+    // Imported files are written to the panel's own servers directory. Registering them against a
+    // remote node would produce a record pointing at a directory that node cannot see.
+    issues.push({
+      code: "missing_node_target",
+      message: "Imports can only be restored onto the local node. Import here, then move the server to another node."
     });
   }
-  const targetNode = context.nodes.find((node) => node.id === targetNodeId);
-  if (!targetNode) {
-    issues.push({ code: "missing_node_target", message: "A valid target node is required before importing servers" });
-  }
+
   const existingNames = new Set(context.existingServers.map((server) => server.displayName.toLowerCase()));
   const plannedNames = new Set<string>();
   const existingContainerNames = new Set(context.existingServers.map((server) => server.dockerContainer?.toLowerCase()).filter(Boolean));
-  const plannedContainerNames = new Set<string>();
   const existingPortKeys = new Set<string>();
   for (const server of context.existingServers) {
     if (server.nodeId !== targetNodeId) continue;
     for (const port of portKeysForServer(server)) existingPortKeys.add(port);
   }
+
   const plan: ImportValidationResult["plan"]["servers"] = [];
-  for (const entry of artifact.servers) {
+  for (const entry of manifest.servers) {
     const source = entry.server;
     const newId = randomUUID();
     const displayName = uniqueDisplayName(source.displayName, existingNames, plannedNames);
@@ -536,15 +637,15 @@ export function validateImportArtifact(artifact: ExportArtifact, context: Import
         message: `Server "${source.displayName}" will be imported as "${displayName}"`
       });
     }
+    // The container is always renamed for the new id, so a collision is a warning rather than a stop.
     const lowerContainer = source.dockerContainer?.toLowerCase();
-    if (lowerContainer && (existingContainerNames.has(lowerContainer) || plannedContainerNames.has(lowerContainer))) {
-      issues.push({
+    if (lowerContainer && existingContainerNames.has(lowerContainer)) {
+      warnings.push({
         code: "conflicting_container_name",
         serverName: source.displayName,
-        message: `Container name "${source.dockerContainer}" already exists`
+        message: `Container name "${source.dockerContainer}" is already in use; the imported server gets a fresh one`
       });
     }
-    if (lowerContainer) plannedContainerNames.add(lowerContainer);
     let portKeys: string[] = [];
     try {
       portKeys = portKeysForServer(source);
@@ -561,14 +662,14 @@ export function validateImportArtifact(artifact: ExportArtifact, context: Import
         issues.push({
           code: "conflicting_port",
           serverName: source.displayName,
-          message: `Port ${port}/${protocol} already belongs to another server on ${targetNodeId}`
+          message: `Port ${port}/${protocol} already belongs to another server on this node`
         });
       }
       existingPortKeys.add(key);
     }
     for (const file of entry.files) {
       try {
-        assertSafeArtifactPath(file.path);
+        assertSafeArchiveRelativePath(file.path);
       } catch (error) {
         issues.push({
           code: "invalid_path",
@@ -578,171 +679,139 @@ export function validateImportArtifact(artifact: ExportArtifact, context: Import
         });
       }
     }
+    if (entry.lockfile.length) {
+      warnings.push({
+        code: "lockfile_download_required",
+        serverName: source.displayName,
+        message: `${entry.lockfile.length} mod/plugin file(s) will be re-downloaded from Modrinth`
+      });
+    }
     plan.push({
       sourceId: source.id,
       newId,
       displayName,
       storageName: serverStorageName(newId),
       serverDir: serverDirectory(context.serversDir, newId),
-      fileCount: entry.files.length
+      fileCount: entry.files.length,
+      totalBytes: entry.files.reduce((total, file) => total + file.size, 0),
+      lockfileCount: entry.lockfile.length
     });
   }
+
   return {
     valid: issues.length === 0,
     issues,
     warnings,
     plan: {
       targetNodeId,
-      instanceSettings: {
-        requested: importInstanceSettings,
-        importable: [],
-        excludedSecrets: [...excludedInstanceSecretSettings]
-      },
+      categories: manifest.manifest.selection.categories as ExportCategory[],
       servers: plan
     }
   };
 }
 
-export async function applyImportArtifact(artifact: ExportArtifact, context: ApplyImportContext) {
-  const validation = validateImportArtifact(artifact, context);
+export async function applyImportArchive(archivePath: string, manifest: ExportManifest, context: ApplyImportContext) {
+  const validation = validateImportArchive(manifest, context);
   if (!validation.valid) {
     throw new Error(`Import validation failed: ${validation.issues.map((issue) => issue.message).join("; ")}`);
   }
-  context.report?.(10, "Preparing imported server files");
+
+  const stagingDir = join(context.tmpDir, `import-${randomUUID()}`);
   const imported: Array<{ sourceId: string; serverId: string; displayName: string; fileCount: number }> = [];
+  const contentFailures: Array<{ serverName: string; filename: string; reason: string }> = [];
   const writtenDirs: string[] = [];
-  const preparedServers: Array<{ entry: ExportServerEntry; remapped: ManagedServer; fileCount: number }> = [];
+
   try {
-    for (const [index, entry] of artifact.servers.entries()) {
+    context.report?.(10, "Extracting archive");
+    await rm(stagingDir, { recursive: true, force: true });
+    await mkdir(stagingDir, { recursive: true });
+    await extractZipArchive({
+      archivePath,
+      destinationPath: stagingDir,
+      conflictPolicy: "replace",
+      limits: importZipLimits,
+      report: (progress, task) => context.report?.(10 + Math.round(progress * 0.5), task)
+    });
+
+    const prepared: Array<{ entry: ExportManifestServer; remapped: ManagedServer }> = [];
+    for (const [index, entry] of manifest.servers.entries()) {
       const plan = validation.plan.servers[index];
-      const tempDir = join(context.tmpDir, `import-${plan.newId}`);
-      await rm(tempDir, { recursive: true, force: true });
-      await mkdir(tempDir, { recursive: true });
-      for (const file of entry.files) {
-        const target = resolve(tempDir, file.path);
-        assertPathInside(tempDir, target, "Import file target escapes the prepared server directory");
-        await mkdir(dirname(target), { recursive: true });
-        await writeFile(target, Buffer.from(file.contentBase64, "base64"));
-      }
+      const staged = join(stagingDir, "servers", entry.key);
+      assertPathInside(stagingDir, staged, "Import staging path escapes the staging directory");
       await mkdir(dirname(plan.serverDir), { recursive: true });
-      await rename(tempDir, plan.serverDir);
+      // A server folder can legitimately be absent when only panel settings were exported.
+      await mkdir(staged, { recursive: true });
+      await rename(staged, plan.serverDir);
       writtenDirs.push(plan.serverDir);
-      const now = new Date().toISOString();
-      const remapped = remapImportedServer(entry.server, {
-        id: plan.newId,
-        targetNodeId: validation.plan.targetNodeId,
-        displayName: plan.displayName,
-        serverDir: plan.serverDir,
-        storageName: plan.storageName,
-        now
+      prepared.push({
+        entry,
+        remapped: remapImportedServer(entry.server, {
+          id: plan.newId,
+          targetNodeId: validation.plan.targetNodeId,
+          displayName: plan.displayName,
+          serverDir: plan.serverDir,
+          storageName: plan.storageName,
+          now: new Date().toISOString()
+        })
       });
-      preparedServers.push({ entry, remapped, fileCount: entry.files.length });
     }
+
+    context.report?.(70, "Registering imported servers");
     context.storage.transaction(() => {
-      for (const [index, prepared] of preparedServers.entries()) {
-        context.report?.(25 + Math.floor((index / Math.max(artifact.servers.length, 1)) * 60), `Registering ${prepared.remapped.displayName}`);
-        context.serversRepository.create(prepared.remapped);
-        context.modPreferencesRepository.replaceAll(prepared.remapped.id, prepared.entry.modPreferences);
+      for (const item of prepared) {
+        context.serversRepository.create(item.remapped);
+        context.modPreferencesRepository.replaceAll(item.remapped.id, item.entry.modPreferences);
         imported.push({
-          sourceId: prepared.entry.server.id,
-          serverId: prepared.remapped.id,
-          displayName: prepared.remapped.displayName,
-          fileCount: prepared.fileCount
+          sourceId: item.entry.server.id,
+          serverId: item.remapped.id,
+          displayName: item.remapped.displayName,
+          fileCount: item.entry.files.length
         });
       }
     });
+
+    if (context.restoreContent) {
+      for (const [index, item] of prepared.entries()) {
+        if (!item.entry.lockfile.length) continue;
+        context.report?.(
+          75 + Math.floor((index / Math.max(prepared.length, 1)) * 20),
+          `Restoring content for ${item.remapped.displayName}`
+        );
+        const report = await context.restoreContent(item.remapped, item.entry.lockfile);
+        for (const failure of report.failures) {
+          contentFailures.push({ serverName: item.remapped.displayName, ...failure });
+        }
+      }
+    }
   } catch (error) {
     await Promise.all(writtenDirs.map((directory) => rm(directory, { recursive: true, force: true })));
     throw error;
+  } finally {
+    await rm(stagingDir, { recursive: true, force: true }).catch(() => undefined);
   }
+
   context.report?.(100, "Import complete");
   return {
     imported,
     warnings: validation.warnings,
+    contentFailures,
     idMap: Object.fromEntries(imported.map((server) => [server.sourceId, server.serverId]))
   };
 }
 
-export function exportDownloadStream(path: string) {
-  return createReadStream(path);
-}
-
-async function collectServerConfigFiles(serverDir: string): Promise<ExportedServerFile[]> {
-  const root = resolve(serverDir);
-  const files: ExportedServerFile[] = [];
-  await walk(root, "", files);
-  files.sort((left, right) => left.path.localeCompare(right.path));
-  return files;
-}
-
-async function walk(root: string, relativePath: string, files: ExportedServerFile[]) {
-  let entries;
-  try {
-    entries = await readdir(join(root, relativePath), { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) continue;
-    const childRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
-    if (!canDescendOrInclude(childRelativePath, entry.isDirectory())) continue;
-    if (entry.isDirectory()) {
-      await walk(root, childRelativePath, files);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    const absolute = join(root, childRelativePath);
-    // The Dirent snapshot said this was a regular file; a workload can replace it before it is read.
-    // Opening once and reading through the handle keeps the size check and the bytes on one inode.
-    let handle;
-    try {
-      handle = await openContainedFile(absolute);
-    } catch {
-      continue;
-    }
-    let buffer: Buffer;
-    try {
-      const fileStat = await handle.stat();
-      if (!fileStat.isFile() || !shouldIncludeRelativePath(childRelativePath, fileStat.size)) continue;
-      buffer = await handle.readFile();
-    } finally {
-      await handle.close();
-    }
-    files.push({
-      path: childRelativePath,
-      size: buffer.length,
-      sha256: createHash("sha256").update(buffer).digest("hex"),
-      contentBase64: buffer.toString("base64")
-    });
+function assertSafeArchiveSegment(value: string, label: string) {
+  if (!value || value.includes("/") || value.includes("\\") || value === "." || value === ".." || value.includes("\0")) {
+    throw new Error(`${label} must be a single safe path segment`);
   }
 }
 
-function canDescendOrInclude(relativePath: string, directory: boolean) {
-  const firstSegment = relativePath.split("/")[0].toLowerCase();
-  if (excludedServerFileRoots.has(firstSegment)) return false;
-  if (directory) return includedDirectoryRoots.has(firstSegment);
-  return shouldIncludeRelativePath(relativePath, 0);
-}
-
-function shouldIncludeRelativePath(path: string, size: number) {
-  if (size > maxExportedConfigFileBytes) return false;
-  const normalized = assertSafeArtifactPath(path);
-  const [firstSegment] = normalized.split("/");
-  if (includedRootFiles.has(normalized)) return true;
-  return includedDirectoryRoots.has(firstSegment.toLowerCase());
-}
-
-function assertSafeArtifactPath(path: string) {
+function assertSafeArchiveRelativePath(path: string) {
   if (typeof path !== "string" || !path || path.includes("\0") || path.includes("\\") || /^[a-zA-Z]:/.test(path) || path.startsWith("/")) {
     throw new Error("Import file path is invalid");
   }
   const segments = path.split("/");
   if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
     throw new Error("Import file path must be normalized and stay inside the server directory");
-  }
-  const firstSegment = segments[0].toLowerCase();
-  if (excludedServerFileRoots.has(firstSegment)) {
-    throw new Error(`Import file path ${path} is excluded by default`);
   }
   return segments.join("/");
 }
@@ -763,9 +832,12 @@ function remapImportedServer(server: ManagedServer, input: {
     displayName: input.displayName,
     serverDir: input.serverDir,
     storageName: input.storageName,
-    dockerContainer: server.dockerContainer ? server.dockerContainer : defaultServerContainerName(input.id),
-    dockerMountSource: input.serverDir,
-    dockerWorkingDir: undefined,
+    // Always fresh: reusing the exported container name would collide with the source instance when
+    // both live on the same host, which is the common case for a restore-onto-the-same-panel.
+    dockerContainer: defaultServerContainerName(input.id),
+    dockerMountSource: config.serversDockerVolume || input.serverDir,
+    dockerWorkingDir: config.serversDockerVolume ? `/data/servers/${input.storageName}` : undefined,
+    runtimeIntent: "stopped",
     schedules: (server.schedules ?? []).map((schedule) => {
       const scheduleId = scheduleIdMap.get(schedule.id) ?? randomUUID();
       return {
@@ -776,12 +848,7 @@ function remapImportedServer(server: ManagedServer, input: {
         lastRunAt: undefined,
         lastStatus: undefined,
         lastMessage: undefined,
-        recentRuns: (schedule.recentRuns ?? []).map((run) => ({
-          ...run,
-          id: randomUUID(),
-          scheduleId,
-          ranAt: input.now
-        }))
+        recentRuns: []
       };
     }),
     createdAt: input.now,
@@ -837,12 +904,6 @@ function rejectUnsupportedKeys(value: Record<string, unknown>, allowed: string[]
   const unsupported = Object.keys(value).filter((key) => !allowedSet.has(key));
   if (unsupported.length) {
     throw new Error(`Unsupported ${label} content: ${unsupported.join(", ")}`);
-  }
-}
-
-function assertBase64(value: string, label: string) {
-  if (!/^[a-zA-Z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) {
-    throw new Error(`${label} must be valid base64`);
   }
 }
 

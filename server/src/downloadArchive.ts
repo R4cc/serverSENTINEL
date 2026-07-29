@@ -28,14 +28,25 @@ export function safeArchivePath(path: string) {
   return segments.join("/");
 }
 
+export type ZipArchiveStreamOptions = {
+  /**
+   * File downloads stay stored so the archive size is predictable enough to announce up front. An
+   * export is spooled to disk and measured afterwards, so it can afford to deflate -- which matters
+   * a great deal for a world folder of region and NBT data.
+   */
+  compress?: boolean;
+};
+
 /**
  * Archive members are opened lazily, long after the plan was validated, so each one is opened without
  * following a final-component symlink rather than reopened by name with whatever it now points at.
  */
 export function createZipArchiveStream(
   entries: FileArchiveEntry[],
-  openStream: (entry: FileArchiveEntry) => Promise<Readable> = async (entry) => (await openContainedReadStream(entry.sourcePath)).stream
+  openStream: (entry: FileArchiveEntry) => Promise<Readable> = async (entry) => (await openContainedReadStream(entry.sourcePath)).stream,
+  options: ZipArchiveStreamOptions = {}
 ) {
+  const compress = options.compress === true;
   const zip = new ZipFile();
   for (const entry of entries) {
     const archivePath = safeArchivePath(entry.archivePath);
@@ -48,7 +59,7 @@ export function createZipArchiveStream(
       archivePath,
       {
         ...(mtime && !Number.isNaN(mtime.getTime()) ? { mtime } : {}),
-        compress: false,
+        compress,
         size: entry.size
       },
       (callback) => {

@@ -199,6 +199,30 @@ async function openIndexedZipEntryStream(archivePath: string, target: IndexedEnt
   });
 }
 
+/**
+ * Reads one named entry out of an archive without expanding anything else. The import flow uses it
+ * to pull `manifest.json` for validation, long before it is willing to write a server's files.
+ */
+export async function readZipEntryBuffer(archivePath: string, entryPath: string, maxBytes: number, limits: ZipArchiveLimits) {
+  const index = await indexZipArchive(archivePath, limits);
+  const target = index.entries.find((entry) => entry.path === entryPath && entry.type === "file");
+  if (!target) throw zipError(`Archive is missing ${entryPath}`, "zip_entry_not_found");
+  if (target.encrypted) throw zipError(`Archive entry ${entryPath} is encrypted`, "zip_encrypted");
+  if (target.unsupported) throw zipError(`Archive entry ${entryPath} uses an unsupported compression method`, "zip_compression_unsupported");
+  if (target.size > maxBytes) throw zipError(`Archive entry ${entryPath} is larger than ${maxBytes} bytes`, "zip_entry_too_large");
+  const stream = await openIndexedZipEntryStream(archivePath, target);
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of stream) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+    total += buffer.byteLength;
+    // The central directory is attacker-controlled metadata; enforce the cap against real bytes too.
+    if (total > maxBytes) throw zipError(`Archive entry ${entryPath} is larger than ${maxBytes} bytes`, "zip_entry_too_large");
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
 async function existingStat(path: string) {
   try {
     return await lstat(path);

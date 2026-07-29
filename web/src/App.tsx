@@ -44,6 +44,9 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
+import { useExportWorkspace } from "./features/exports/useExportWorkspace";
+import { ExportModal } from "./features/exports/ExportModal";
+import { ImportModal } from "./features/exports/ImportModal";
 
 const loadSchedulePage = () => import("./pages/SchedulesPage");
 const loadNodesPage = () => import("./pages/NodesPage");
@@ -301,6 +304,7 @@ export default function App() {
   const canViewSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.view");
   const canManageSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.manage");
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
+  const canExportServers = !demoMode && hasPermission(permissionUser, "servers.export");
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
   const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
@@ -416,6 +420,7 @@ export default function App() {
     requestConfirmation,
     refreshApp
   });
+  const exportWorkspace = useExportWorkspace(notify);
   const {
     modsLocked,
     modReviewAcknowledgementLocked,
@@ -1918,11 +1923,15 @@ export default function App() {
             activeServerId={activeServer?.id}
             demoMode={demoMode}
             isProvisioning={isProvisioning}
+            canExport={canExportServers}
+            canImport={canCreateServers}
             onSelectServer={(serverId) => {
               setActiveServerId(serverId);
               setActivePage("overview");
             }}
             onLockedServer={() => notify("info", "Demo mode is enabled. Exit demo mode to access this server.")}
+            onExport={() => exportWorkspace.openExport()}
+            onImport={() => exportWorkspace.openImport(contextNodes.find((node) => node.isInternal)?.id ?? contextNodes[0]?.id ?? "")}
             emptyState={renderNoManagedServersEmptyState("No managed servers yet")}
           />
         )}
@@ -2213,6 +2222,16 @@ export default function App() {
           busy={playerHeadsBusy}
           error={playerHeadsOnboardingError}
           onChoose={(enabled) => void updatePlayerHeads(enabled, true)}
+        />
+      ) : null}
+      {exportWorkspace.exportOpen ? (
+        <ExportModal workspace={exportWorkspace} servers={effectiveAppState.servers} />
+      ) : null}
+      {exportWorkspace.importOpen ? (
+        <ImportModal
+          workspace={exportWorkspace}
+          nodes={contextNodes}
+          onImported={refreshApp}
         />
       ) : null}
     </>
