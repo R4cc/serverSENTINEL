@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { inferRolePreset, isFullAccessUser, normalizePermissions, rolePresetFromUnknown } from "../permissions.js";
-import type { ServerAccess, Session, StoredUser } from "../types.js";
+import type { Session, StoredUser } from "../types.js";
 import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
 import { badRequest, notFound, throwHttp } from "../http/errors.js";
 import type { StorageDatabase } from "./database.js";
@@ -12,7 +12,6 @@ type UserRow = {
   salt: string;
   role_preset: string;
   permissions_json: string;
-  server_access_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -27,20 +26,6 @@ export function validateUsername(username?: string) {
     badUserRequest("Username must be 3-32 characters and use letters, numbers, dots, dashes, or underscores");
   }
   return value;
-}
-
-function normalizeServerAccess(value: unknown): ServerAccess | undefined {
-  if (value === undefined || value === null) return undefined;
-  const access = asObject(value, "user.serverAccess");
-  if (access.mode === "all") return { mode: "all", serverIds: [] };
-  if (access.mode === "selected") {
-    return {
-      mode: "selected",
-      serverIds: asArray(access.serverIds, "user.serverAccess.serverIds")
-        .map((id) => requiredString(id, "user.serverAccess.serverIds[]"))
-    };
-  }
-  throw new Error("user.serverAccess.mode must be all or selected");
 }
 
 export function normalizeStoredUser(value: unknown): StoredUser {
@@ -63,7 +48,6 @@ export function normalizeStoredUser(value: unknown): StoredUser {
     salt: requiredString(user.salt, "user.salt"),
     rolePreset: effectivePreset,
     permissions,
-    serverAccess: normalizeServerAccess(user.serverAccess),
     createdAt: requiredString(user.createdAt, "user.createdAt"),
     updatedAt: requiredString(user.updatedAt, "user.updatedAt")
   };
@@ -77,7 +61,6 @@ function userFromRow(row: UserRow): StoredUser {
     salt: row.salt,
     rolePreset: row.role_preset,
     permissions: JSON.parse(row.permissions_json) as unknown,
-    serverAccess: row.server_access_json ? JSON.parse(row.server_access_json) as unknown : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   });
@@ -89,7 +72,7 @@ export class UsersRepository {
   list(): StoredUser[] {
     return this.storage.connection.prepare<[], UserRow>(`
       SELECT id, username, password_hash, salt, role_preset, permissions_json,
-             server_access_json, created_at, updated_at
+             created_at, updated_at
       FROM users ORDER BY created_at, id
     `).all().map(userFromRow);
   }
@@ -168,7 +151,7 @@ export class UsersRepository {
   findById(id: string) {
     const row = this.storage.connection.prepare<[string], UserRow>(`
       SELECT id, username, password_hash, salt, role_preset, permissions_json,
-             server_access_json, created_at, updated_at FROM users WHERE id = ?
+             created_at, updated_at FROM users WHERE id = ?
     `).get(id);
     return row ? userFromRow(row) : undefined;
   }
@@ -179,21 +162,24 @@ export class UsersRepository {
       "SELECT id FROM users WHERE username = ? COLLATE NOCASE AND id != ?"
     ).get(user.username, user.id);
     if (duplicate) badUserRequest("A user with that username already exists");
+    // `server_access_json` stays in the schema but is no longer read or written. Dropping the column
+    // would move `users` out of the unchanged-table set in database.ts and require a migration, for a
+    // nullable column that is now inert. An UPDATE leaves any pre-existing value untouched.
     const statement = update
       ? database.prepare(`
         UPDATE users SET username = ?, password_hash = ?, salt = ?, role_preset = ?,
-          permissions_json = ?, server_access_json = ?, created_at = ?, updated_at = ?
+          permissions_json = ?, created_at = ?, updated_at = ?
         WHERE id = ?
       `)
       : database.prepare(`
         INSERT INTO users (
           id, username, password_hash, salt, role_preset, permissions_json,
-          server_access_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
     const fields = [
       user.username, user.passwordHash, user.salt, user.rolePreset, JSON.stringify(user.permissions),
-      user.serverAccess ? JSON.stringify(user.serverAccess) : null, user.createdAt, user.updatedAt
+      user.createdAt, user.updatedAt
     ];
     if (update) statement.run(...fields, user.id);
     else statement.run(user.id, ...fields);

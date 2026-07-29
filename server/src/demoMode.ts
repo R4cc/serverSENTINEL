@@ -23,7 +23,6 @@ export function ensureDemoUser(
     username: DEMO_USERNAME,
     rolePreset: "admin",
     permissions: normalizePermissions(ROLE_PRESETS.admin),
-    serverAccess: { mode: "all", serverIds: [] },
     createdAt: now,
     updatedAt: now,
     ...hashPassword(DEMO_PASSWORD)

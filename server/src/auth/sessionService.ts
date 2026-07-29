@@ -17,7 +17,6 @@ export function publicUser(user: StoredUser): PublicUser {
     username: normalized.username,
     rolePreset: normalized.rolePreset,
     permissions: normalized.permissions,
-    serverAccess: normalized.serverAccess,
     createdAt: normalized.createdAt
   };
 }

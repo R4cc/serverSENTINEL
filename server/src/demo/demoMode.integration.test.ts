@@ -116,12 +116,12 @@ async function login(instance: RunningDemo) {
   const session = await response.json() as {
     authenticated: boolean;
     demo: boolean;
-    user: { id: string; username: string; rolePreset: string; permissions: string[]; serverAccess?: { mode: string } };
+    user: { id: string; username: string; rolePreset: string; permissions: string[] };
   };
   expect(session).toMatchObject({
     authenticated: true,
     demo: true,
-    user: { username: "demo", rolePreset: "admin", serverAccess: { mode: "all" } }
+    user: { username: "demo", rolePreset: "admin" }
   });
   expect(session.user.permissions).toEqual(ALL_PERMISSIONS);
 
@@ -171,7 +171,10 @@ describe.sequential("demo-mode startup and authentication", () => {
     }
   }, 30_000);
 
-  it("repairs stale credentials, role, permissions, and server access in an existing demo database", async () => {
+  // The `server_access_json` value is still written here on purpose. Per-user server scoping was
+  // removed and the column is now inert, so a leftover row value from an older release must not break
+  // startup or sign-in.
+  it("repairs stale credentials, role, and permissions, ignoring a retired server-scope column", async () => {
     const first = await startDemo();
     const originalUser = await login(first);
     await stopDemo(first);

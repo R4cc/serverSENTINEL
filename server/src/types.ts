@@ -4,8 +4,7 @@ import type {
   ManagedServerCore,
   Permission,
   ReleaseChannel,
-  RolePreset,
-  ServerAccess
+  RolePreset
 } from "@serversentinel/contracts";
 
 export type {
@@ -44,7 +43,6 @@ export type {
   ScheduledRun,
   ScheduledRunDetails,
   ScheduledRunStepDetails,
-  ServerAccess,
   ServerActivity,
   ServerEvent,
   ServerTimelineEvent,
@@ -69,7 +67,6 @@ export type StoredUser = {
   salt: string;
   rolePreset: RolePreset;
   permissions: Permission[];
-  serverAccess?: ServerAccess;
   createdAt: string;
   updatedAt: string;
 };
