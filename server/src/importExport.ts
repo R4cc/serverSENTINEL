@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type { ManagedNode, ManagedServer, ModPreference } from "./types.js";
 import { currentSchemaVersion, type StorageDatabase } from "./storage/database.js";
 import { defaultServerContainerName, serverDirectory, serverStorageName } from "./storage/serverIdentity.js";
 import type { ServersRepository } from "./storage/serversRepository.js";
 import type { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
-import { parseDockerPorts } from "./core.js";
+import { openContainedFile, parseDockerPorts } from "./core.js";
 import { assertRuntimeProvider } from "./runtime/profile.js";
 import { config } from "./config.js";
 
@@ -692,9 +692,22 @@ async function walk(root: string, relativePath: string, files: ExportedServerFil
     }
     if (!entry.isFile()) continue;
     const absolute = join(root, childRelativePath);
-    const fileStat = await stat(absolute);
-    if (!shouldIncludeRelativePath(childRelativePath, fileStat.size)) continue;
-    const buffer = await readFile(absolute);
+    // The Dirent snapshot said this was a regular file; a workload can replace it before it is read.
+    // Opening once and reading through the handle keeps the size check and the bytes on one inode.
+    let handle;
+    try {
+      handle = await openContainedFile(absolute);
+    } catch {
+      continue;
+    }
+    let buffer: Buffer;
+    try {
+      const fileStat = await handle.stat();
+      if (!fileStat.isFile() || !shouldIncludeRelativePath(childRelativePath, fileStat.size)) continue;
+      buffer = await handle.readFile();
+    } finally {
+      await handle.close();
+    }
     files.push({
       path: childRelativePath,
       size: buffer.length,

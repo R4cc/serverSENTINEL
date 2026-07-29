@@ -1,10 +1,10 @@
 import { createWriteStream, existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { ensureWritableResolvedInsideServer, type ServerPathScope } from "../../core.js";
+import { ensureWritableResolvedInsideServer, openContainedFile, type ServerPathScope } from "../../core.js";
 import type { ZipExtractionPlan } from "../../zipArchive.js";
 
 /**
@@ -109,23 +109,30 @@ export async function previewServerFile(
   options: { sizeLimit: number; requireTextLike: boolean }
 ) {
   const path = toPublicServerPath(scope, target);
-  const targetStat = await stat(target);
-  if (!targetStat.isFile() || (options.requireTextLike && !isTextLikeServerFile(basename(target)))) {
-    return { path, preview: "unsupported", message: "Preview unavailable" };
+  // One resolution: the size check and the read both refer to the inode this handle opened, so a
+  // workload cannot swap the file for a symlink after the check and have the read follow it.
+  const handle = await openContainedFile(target);
+  try {
+    const targetStat = await handle.stat();
+    if (!targetStat.isFile() || (options.requireTextLike && !isTextLikeServerFile(basename(target)))) {
+      return { path, preview: "unsupported", message: "Preview unavailable" };
+    }
+    if (targetStat.size > options.sizeLimit) {
+      return { path, preview: "too_large", message: "File too large to preview" };
+    }
+    const buffer = await handle.readFile();
+    if (buffer.includes(0)) {
+      return { path, preview: "binary", message: "Preview unavailable" };
+    }
+    return {
+      path,
+      preview: "text",
+      content: buffer.toString("utf8"),
+      modifiedAt: targetStat.mtime.toISOString()
+    };
+  } finally {
+    await handle.close();
   }
-  if (targetStat.size > options.sizeLimit) {
-    return { path, preview: "too_large", message: "File too large to preview" };
-  }
-  const buffer = await readFile(target);
-  if (buffer.includes(0)) {
-    return { path, preview: "binary", message: "Preview unavailable" };
-  }
-  return {
-    path,
-    preview: "text",
-    content: buffer.toString("utf8"),
-    modifiedAt: targetStat.mtime.toISOString()
-  };
 }
 
 export async function readServerTextFile(
@@ -134,24 +141,29 @@ export async function readServerTextFile(
   options: { onRejected?: (reason: "editor_size_limit" | "binary_file", path: string, size: number) => void } = {}
 ) {
   const path = toPublicServerPath(scope, target);
-  const targetStat = await stat(target);
-  if (!targetStat.isFile()) {
-    throw new Error("Path is not a file");
+  const handle = await openContainedFile(target);
+  try {
+    const targetStat = await handle.stat();
+    if (!targetStat.isFile()) {
+      throw new Error("Path is not a file");
+    }
+    if (targetStat.size > editorFileSizeLimit) {
+      options.onRejected?.("editor_size_limit", path, targetStat.size);
+      throw new Error("File is larger than the 2 MiB editor limit");
+    }
+    const buffer = await handle.readFile();
+    if (buffer.includes(0)) {
+      options.onRejected?.("binary_file", path, targetStat.size);
+      throw new Error("Binary files cannot be edited in the browser editor");
+    }
+    return {
+      path,
+      content: buffer.toString("utf8"),
+      modifiedAt: targetStat.mtime.toISOString()
+    };
+  } finally {
+    await handle.close();
   }
-  if (targetStat.size > editorFileSizeLimit) {
-    options.onRejected?.("editor_size_limit", path, targetStat.size);
-    throw new Error("File is larger than the 2 MiB editor limit");
-  }
-  const buffer = await readFile(target);
-  if (buffer.includes(0)) {
-    options.onRejected?.("binary_file", path, targetStat.size);
-    throw new Error("Binary files cannot be edited in the browser editor");
-  }
-  return {
-    path,
-    content: buffer.toString("utf8"),
-    modifiedAt: targetStat.mtime.toISOString()
-  };
 }
 
 export async function writeServerTextFile(scope: ServerPathScope, target: string, content: unknown) {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { Readable } from "node:stream";
@@ -9,7 +9,7 @@ import { runtimeForServer, services } from "../appServices.js";
 import { durationSince, errorLogFields, logError, logInfo, logOperationFailure, logWarn } from "../logging.js";
 import { operationInProgress } from "../http/errors.js";
 import { optionalReleaseChannel, optionalStrictBoolean, requireStrictBoolean, validateModrinthProjectId, validateModrinthVersionId } from "../http/validation.js";
-import { ensureInsideServer, ensureWritableInsideServer, safeInstalledModFilename, safeModFilename, validateExistingInsideServer, validateExistingResolvedInsideServer } from "../core.js";
+import { ensureInsideServer, ensureWritableInsideServer, openContainedReadStream, safeInstalledModFilename, safeModFilename, validateExistingInsideServer, validateExistingResolvedInsideServer } from "../core.js";
 import { asObject, optionalString, requiredString } from "../storage/valueValidation.js";
 import { ModHashCache } from "../modHashCache.js";
 import { normalizeInstalledModMetadata } from "../installedModMetadata.js";
@@ -627,7 +627,10 @@ export async function localModIcon(server: ManagedServer, filenameInput: unknown
   const icon = existsSync(iconsDir) ? await findCachedIconFile(iconsDir, modIconKey(filename)) : null;
   if (!icon) return null;
   const iconPath = await validateExistingResolvedInsideServer(server, icon.path);
-  return { contentType: iconContentType(icon.filename), stream: createReadStream(iconPath) };
+  // Opened without following a final-component symlink: the cache entry lives inside the server root,
+  // which the workload can write, so the pathname may point somewhere else by the time it is opened.
+  const { stream } = await openContainedReadStream(iconPath);
+  return { contentType: iconContentType(icon.filename), stream };
 }
 
 export async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {

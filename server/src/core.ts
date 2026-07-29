@@ -1,5 +1,8 @@
-import { lstat, realpath } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { lstat, open, realpath, type FileHandle } from "node:fs/promises";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
+import type { Readable } from "node:stream";
+import type { Stats } from "node:fs";
 
 export type ServerPathScope = {
   serverDir: string;
@@ -102,6 +105,99 @@ export async function ensureWritableInsideServer(server: ServerPathScope, userPa
 export async function ensureWritableResolvedInsideServer(server: ServerPathScope, targetPath: string) {
   const target = ensureResolvedInsideServer(server, targetPath);
   return ensureWritableTargetInsideServer(server, target);
+}
+
+/**
+ * Containment validation and the filesystem call that follows are two separate resolutions of the same
+ * pathname, and a managed workload has write access inside its own server root. Between the two it can
+ * replace the final component with a symlink, so the panel validates one inode and reads another.
+ *
+ * These helpers close that window by resolving the path exactly once: open the file, then answer every
+ * later question (size, type, contents) from the resulting handle. `O_NOFOLLOW` additionally refuses a
+ * final-component symlink outright; it is POSIX-only, and the panel image is Linux, so on Windows the
+ * single-resolution property still holds while the explicit refusal does not.
+ *
+ * An ancestor *directory* swapped between validation and open is not covered — that needs per-component
+ * `openat`, which Node does not expose. `validateExistingInsideServer` still realpath-checks ancestors,
+ * so this narrows the window to a directory rename racing a single open.
+ */
+const openNoFollowSupported = typeof fsConstants.O_NOFOLLOW === "number";
+
+function noFollowReadFlags() {
+  return openNoFollowSupported ? fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW : fsConstants.O_RDONLY;
+}
+
+function symlinkRefusal(): never {
+  throw pathSafetyError("Refusing to read through a symbolic link inside the managed server directory", "ELOOP");
+}
+
+/**
+ * The opened inode is not a regular file. Either the path was swapped for a directory or device node
+ * after validation, or the caller was handed something it should not read in the first place.
+ */
+function notRegularFileRefusal(): never {
+  throw pathSafetyError("Path inside the managed server directory is not a regular file", "EINVAL");
+}
+
+/** Opens a validated path without following a final-component symlink. Caller must close the handle. */
+export async function openContainedFile(target: string): Promise<FileHandle> {
+  try {
+    return await open(target, noFollowReadFlags());
+  } catch (error) {
+    // Linux reports ELOOP for O_NOFOLLOW on a symlink; some filesystems report EMLINK.
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ELOOP" || code === "EMLINK") symlinkRefusal();
+    throw error;
+  }
+}
+
+/**
+ * Stats a validated path through an open handle so the stat and any later read cannot disagree. Rejects
+ * anything that is not a regular file, which also covers a swap to a directory or device node.
+ */
+export async function statContainedFile(target: string): Promise<Stats> {
+  const handle = await openContainedFile(target);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) notRegularFileRefusal();
+    return stats;
+  } finally {
+    await handle.close();
+  }
+}
+
+/** Reads a validated path in one resolution, enforcing `maxBytes` against the opened inode's own size. */
+export async function readContainedFile(target: string, maxBytes?: number): Promise<Buffer> {
+  const handle = await openContainedFile(target);
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) notRegularFileRefusal();
+    if (maxBytes !== undefined && stats.size > maxBytes) {
+      throw pathSafetyError(`File is larger than the ${maxBytes} byte limit`, "EFBIG");
+    }
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Opens a validated path for streaming and reports the size of the inode actually opened, so callers
+ * enforce download limits against the bytes they are about to send rather than a prior `stat`.
+ */
+export async function openContainedReadStream(target: string): Promise<{ stream: Readable; size: number; mtime: Date }> {
+  const handle = await openContainedFile(target);
+  let stats: Stats;
+  try {
+    stats = await handle.stat();
+    if (!stats.isFile()) notRegularFileRefusal();
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
+  // The stream owns the handle and closes it when it ends or is destroyed, so the descriptor is never
+  // reopened by name and never double-closed.
+  return { stream: handle.createReadStream(), size: stats.size, mtime: stats.mtime };
 }
 
 export function normalizePublicFilePath(path: string) {
