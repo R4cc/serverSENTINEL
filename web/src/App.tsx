@@ -58,6 +58,7 @@ const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: 
 const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
 const ServerEditForm = lazy(() => loadServerEditPage().then((module) => ({ default: module.ServerEditForm })));
 const DeleteServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.DeleteServerPanel })));
+const ExportServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.ExportServerPanel })));
 const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
 const FilesPage = lazy(() => loadFilesPage().then((module) => ({ default: module.FilesPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })));
@@ -420,6 +421,7 @@ export default function App() {
     refreshApp
   });
   const exportWorkspace = useExportWorkspace(notify);
+  const exportServer = effectiveAppState.servers.find((server) => server.id === exportWorkspace.exportServerId);
   const {
     modsLocked,
     modReviewAcknowledgementLocked,
@@ -2001,10 +2003,7 @@ export default function App() {
               nodeUpdateGraceMs={nodeUpdateGraceMs}
               onSelectServer={openServerFromNode}
               onAddServer={openCreateServerForNode}
-              canExportServers={canExportServers}
               canImportServers={canCreateServers}
-              serverCount={effectiveAppState.servers.length}
-              onExportServers={() => exportWorkspace.openExport()}
               onImportServers={() => exportWorkspace.openImport(contextNodes.find((node) => node.isInternal)?.id ?? contextNodes[0]?.id ?? "")}
               onCopy={(text) => void copyText(text)}
               serverStateLabel={nodeServerStateLabel}
@@ -2178,6 +2177,13 @@ export default function App() {
                     onSubmit={updateServer}
                     disabled={serverSettingsLocked || serverSettingsSaving}
                     disabledReason={serverSettingsLockedReason}
+                    exportPanel={canExportServers ? (
+                      <ExportServerPanel
+                        server={activeServer}
+                        onExport={() => exportWorkspace.openExport(activeServer.id)}
+                        disabled={serverSettingsSaving}
+                      />
+                    ) : undefined}
                     dangerZone={
                       <DeleteServerPanel
                         server={activeServer}
@@ -2208,8 +2214,8 @@ export default function App() {
           onChoose={(enabled) => void updatePlayerHeads(enabled, true)}
         />
       ) : null}
-      {exportWorkspace.exportOpen ? (
-        <ExportModal workspace={exportWorkspace} servers={effectiveAppState.servers} />
+      {exportWorkspace.exportOpen && exportServer ? (
+        <ExportModal workspace={exportWorkspace} server={exportServer} />
       ) : null}
       {exportWorkspace.importOpen ? (
         <ImportModal

@@ -48,7 +48,8 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
 
   const [categories, setCategories] = useState<ExportCategory[]>([...EXPORT_DEFAULT_CATEGORIES]);
   const [contentStrategy, setContentStrategy] = useState<ExportContentStrategy>("lockfile");
-  const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
+  // Export is scoped to one server, opened from that server's properties page.
+  const [exportServerId, setExportServerId] = useState("");
   const [estimate, setEstimate] = useState<ExportSizeEstimate | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
@@ -69,8 +70,8 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
 
   const estimateRequestRef = useRef(0);
 
-  const refreshEstimate = useCallback(async (nextCategories: ExportCategory[], nextServerIds: string[]) => {
-    if (!nextCategories.length) {
+  const refreshEstimate = useCallback(async (nextCategories: ExportCategory[], serverId: string) => {
+    if (!nextCategories.length || !serverId) {
       setEstimate(null);
       return;
     }
@@ -81,7 +82,7 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
       const result = await api<ExportSizeEstimate>("/api/exports/estimate", {
         method: "POST",
         body: JSON.stringify({
-          serverIds: nextServerIds.length ? nextServerIds : undefined,
+          serverIds: [serverId],
           selection: { categories: nextCategories, contentStrategy }
         })
       });
@@ -97,15 +98,15 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     }
   }, [contentStrategy]);
 
-  const openExport = useCallback((serverIds: string[] = []) => {
-    setSelectedServerIds(serverIds);
+  const openExport = useCallback((serverId: string) => {
+    setExportServerId(serverId);
     setArtifact(null);
     setExportWarnings([]);
     setExportError("");
     setExportProgress(0);
     setExportTask("");
     setExportOpen(true);
-    void refreshEstimate(categories, serverIds);
+    void refreshEstimate(categories, serverId);
   }, [categories, refreshEstimate]);
 
   const closeExport = useCallback(() => {
@@ -123,7 +124,7 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
       const operation = await api<OperationRecord>("/api/exports", {
         method: "POST",
         body: JSON.stringify({
-          serverIds: selectedServerIds.length ? selectedServerIds : undefined,
+          serverIds: [exportServerId],
           selection: { categories, contentStrategy }
         })
       });
@@ -141,7 +142,7 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     } finally {
       setExportBusy(false);
     }
-  }, [categories, contentStrategy, notify, selectedServerIds]);
+  }, [categories, contentStrategy, exportServerId, notify]);
 
   const openImport = useCallback((defaultNodeId: string) => {
     setImportFile(null);
@@ -230,7 +231,7 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     importOpen,
     categories,
     contentStrategy,
-    selectedServerIds,
+    exportServerId,
     estimate,
     estimating,
     exportBusy,
@@ -258,18 +259,14 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     setImportTargetNodeId,
     setContentStrategy: (strategy: ExportContentStrategy) => {
       setContentStrategy(strategy);
-      void refreshEstimate(categories, selectedServerIds);
+      void refreshEstimate(categories, exportServerId);
     },
     toggleCategory: (category: ExportCategory) => {
       const next = categories.includes(category)
         ? categories.filter((entry) => entry !== category)
         : [...categories, category];
       setCategories(next);
-      void refreshEstimate(next, selectedServerIds);
-    },
-    setSelectedServerIds: (serverIds: string[]) => {
-      setSelectedServerIds(serverIds);
-      void refreshEstimate(categories, serverIds);
+      void refreshEstimate(next, exportServerId);
     }
   };
 }

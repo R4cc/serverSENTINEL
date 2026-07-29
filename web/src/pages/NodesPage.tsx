@@ -460,10 +460,7 @@ export function NodesPage({
   onCloseDetails,
   onSelectServer,
   onAddServer,
-  canExportServers,
   canImportServers,
-  serverCount,
-  onExportServers,
   onImportServers,
   onClearInstall,
   onCopy,
@@ -502,10 +499,7 @@ export function NodesPage({
   onCloseDetails: () => void;
   onSelectServer: (serverId: string) => void;
   onAddServer: (nodeId: string) => void;
-  canExportServers: boolean;
   canImportServers: boolean;
-  serverCount: number;
-  onExportServers: () => void;
   onImportServers: () => void;
   onClearInstall: () => void;
   onCopy: (text: string) => void;
@@ -610,11 +604,6 @@ export function NodesPage({
             meta={`${fleet.nodesOnline} of ${fleet.nodes} ${fleet.nodes === 1 ? "node" : "nodes"} online`}
             secondary={(
               <>
-                {canExportServers && (
-                  <Button variant="secondary" compact onClick={onExportServers} disabled={busy || serverCount === 0}>
-                    <AppIcon name="download" /> Export
-                  </Button>
-                )}
                 {canImportServers && (
                   <Button variant="secondary" compact onClick={onImportServers} disabled={busy}>
                     <AppIcon name="fileUp" /> Import

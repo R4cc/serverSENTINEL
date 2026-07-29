@@ -17,17 +17,17 @@ function categoryBytes(workspace: ExportWorkspace, category: ExportCategory) {
 
 export function ExportModal({
   workspace,
-  servers
+  server
 }: {
   workspace: ExportWorkspace;
-  servers: ManagedServer[];
+  server: ManagedServer;
 }) {
   const titleId = useId();
   const descriptionId = useId();
-  const runningServers = workspace.estimate?.servers.filter((server) => server.running) ?? [];
+  const running = workspace.estimate?.servers.some((entry) => entry.running) ?? false;
   const contentSelected = workspace.categories.includes("content");
   const worldSelected = workspace.categories.includes("world");
-  const canSubmit = workspace.categories.length > 0 && !workspace.exportBusy && runningServers.length === 0;
+  const canSubmit = workspace.categories.length > 0 && !workspace.exportBusy && !running;
 
   return (
     <DialogSurface
@@ -39,7 +39,7 @@ export function ExportModal({
       dismissible={!workspace.exportBusy}
     >
       <header className="modalHeader">
-        <h2 id={titleId}>Export servers</h2>
+        <h2 id={titleId}>Export {server.displayName}</h2>
         <Button
           variant="secondary"
           iconOnly
@@ -55,15 +55,15 @@ export function ExportModal({
 
       <div className="modalBody exportModalBody">
         <p id={descriptionId} className="uiFormFieldDescription">
-          Choose what to include. The download is a single ZIP archive you can import back into this
-          panel or another one.
+          Choose what to include from this server. The download is a single ZIP archive you can import
+          back into this panel or another one.
         </p>
 
-        {runningServers.length > 0 && (
+        {running && (
           <Banner
             tone="warning"
             title="Stop the server before exporting"
-            message={`${runningServers.map((server) => server.displayName).join(", ")} ${runningServers.length === 1 ? "is" : "are"} running. A world copied while the server is running can contain half-written chunks.`}
+            message={`${server.displayName} is running. A world copied while the server is running can contain half-written chunks.`}
           />
         )}
 
@@ -120,36 +120,6 @@ export function ExportModal({
                 <small>Carries every jar. Larger, but restores without Modrinth and keeps custom builds.</small>
               </span>
             </label>
-          </fieldset>
-        )}
-
-        {servers.length > 1 && (
-          <fieldset className="exportServerList">
-            <legend className="uiFormFieldLabel"><span>Servers</span></legend>
-            <label className="exportCategoryOption">
-              <input
-                type="checkbox"
-                checked={workspace.selectedServerIds.length === 0}
-                disabled={workspace.exportBusy}
-                onChange={() => workspace.setSelectedServerIds([])}
-              />
-              <span className="exportCategoryCopy"><strong>All servers</strong></span>
-            </label>
-            {servers.map((server) => (
-              <label key={server.id} className="exportCategoryOption">
-                <input
-                  type="checkbox"
-                  checked={workspace.selectedServerIds.includes(server.id)}
-                  disabled={workspace.exportBusy}
-                  onChange={() => workspace.setSelectedServerIds(
-                    workspace.selectedServerIds.includes(server.id)
-                      ? workspace.selectedServerIds.filter((id) => id !== server.id)
-                      : [...workspace.selectedServerIds, server.id]
-                  )}
-                />
-                <span className="exportCategoryCopy"><strong>{server.displayName}</strong></span>
-              </label>
-            ))}
           </fieldset>
         )}
 

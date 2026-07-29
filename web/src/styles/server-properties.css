@@ -316,6 +316,11 @@
   font-size: 13px;
 }
 
+.exportPanel .uiButton {
+  justify-self: start;
+}
+
+.propertiesExportZone,
 .propertiesDangerZone {
   max-width: 720px;
 }

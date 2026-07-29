@@ -64,7 +64,7 @@ Mods and plugins default to a lockfile: content installed through the panel alre
 
 A path that is absent is not an export failure; any other filesystem or node error is, and it fails the export rather than producing an archive with files silently missing. Uploaded import archives are released when their operation settles, and maintenance reclaims abandoned uploads on the same tick that expires export artifacts.
 
-Exports require every selected server to be stopped. A world copied from a running server can contain half-written chunks, so this is a refusal rather than a warning, checked both when the request arrives and again inside the operation. Imports always create new servers and are restored onto the panel's own node, since the panel writes the files to its own servers directory.
+Export is started from a single server's properties page and the API is given that one server id, though the endpoints still accept a list. The selected server must be stopped: a world copied from a running server can contain half-written chunks, so this is a refusal rather than a warning, checked both when the request arrives and again inside the operation. Import stays on the Nodes page because an archive can carry several servers and needs a node to restore onto; imports always create new servers and are restored onto the panel's own node, since the panel writes the files to its own servers directory.
 
 ## Upgrade floor
 
