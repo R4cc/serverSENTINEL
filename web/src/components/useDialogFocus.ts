@@ -11,7 +11,6 @@ const focusableSelector = [
 
 const dialogStack: symbol[] = [];
 let bodyLockCount = 0;
-let previousBodyOverflow = "";
 let previousDocumentOverflow = "";
 type DialogTrackingWindow = Window & {
   __serverSentinelDialogTriggerTracking?: boolean;
@@ -59,10 +58,13 @@ export function useDialogFocus<T extends HTMLElement>({
     dialogStack.push(dialogId);
 
     const lockDocumentScroll = !(allowDocumentScrollOnPhone && window.matchMedia("(max-width: 720px)").matches);
+    // Only the root element is locked. The root's overflow propagates to the viewport, so this
+    // alone stops wheel, keyboard, and scrollbar scrolling. Locking `body` as well makes it a
+    // scrollport of its own, which leaves viewport-sticky elements -- the sidebar, the settings
+    // category rail -- stuck to the top of the document instead of the top of the screen, so they
+    // jump up by the scroll offset for as long as a dialog is open.
     if (lockDocumentScroll && bodyLockCount === 0) {
-      previousBodyOverflow = document.body.style.overflow;
       previousDocumentOverflow = document.documentElement.style.overflow;
-      document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
     }
     if (lockDocumentScroll) bodyLockCount += 1;
@@ -118,7 +120,6 @@ export function useDialogFocus<T extends HTMLElement>({
       if (stackIndex >= 0) dialogStack.splice(stackIndex, 1);
       if (lockDocumentScroll) bodyLockCount = Math.max(0, bodyLockCount - 1);
       if (lockDocumentScroll && bodyLockCount === 0) {
-        document.body.style.overflow = previousBodyOverflow;
         document.documentElement.style.overflow = previousDocumentOverflow;
       }
       if (trigger?.isConnected) window.setTimeout(() => trigger.focus({ preventScroll: true }), 0);
