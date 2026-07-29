@@ -15,6 +15,7 @@ import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExi
 import { cancelActiveScheduleRun } from "./schedules/activeRuns.js";
 import { localNodeId, readNodes } from "./nodes/nodeService.js";
 import { buildUserPermissions, currentUserFromCookie, isDemoModeRequest, normalizeRolePreset, parseCookies, publicUser, readUsers, requireRequestPermission, sessionCookie, sessionCookieName, sessionMaxAgeSeconds, validatePassword } from "./auth/sessionService.js";
+import { isFullAccessUser } from "./permissions.js";
 import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logError, logInfo, logWarn, routeLogFields, runWithRequestLogContext } from "./logging.js";
 import { hashPassword, verifyPassword } from "./auth/passwords.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
@@ -340,6 +341,7 @@ registerOperationsRoutes(app, {
   destructiveRateLimit,
   requireRequestPermission,
   assertServerExists: getServer,
+  mayCancelOperation: (user, operation) => operation.createdBy === user.id || isFullAccessUser(user),
   operations: services.operationsRepository
 });
 

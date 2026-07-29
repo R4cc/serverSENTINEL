@@ -223,7 +223,14 @@ export class ServersRepository {
   replaceMetadata(value: ManagedServer) {
     this.storage.transaction((database) => {
       const server = this.normalize(value);
-      if (!database.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(server.id)) throw new Error("Server not found");
+      const existing = database.prepare<[string], { node_id: string }>("SELECT node_id FROM servers WHERE id = ?").get(server.id);
+      if (!existing) throw new Error("Server not found");
+      // Which node owns a server is not metadata a metadata replace may change. Every legitimate caller
+      // spreads from the stored record and preserves it; a record that arrives with a different owner
+      // came from somewhere that should not be deciding ownership, such as a node's own response.
+      if (existing.node_id !== server.nodeId) {
+        throw new Error("A managed server cannot be reassigned to a different node");
+      }
       this.upsertServer(database, server, true);
       this.syncPorts(database, server);
     });

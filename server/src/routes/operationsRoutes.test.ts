@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import type { OperationRecord, Permission } from "../types.js";
+import type { OperationRecord, Permission, StoredUser } from "../types.js";
 import { registerOperationsRoutes, type OperationsRoutesContext } from "./operationsRoutes.js";
 
 const operationId = "11111111-1111-1111-1111-111111111111";
@@ -19,7 +19,9 @@ function operation(overrides: Partial<OperationRecord> = {}): OperationRecord {
   };
 }
 
-function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord } = {}) {
+const requestingUser = { id: "user-1", username: "manager" } as StoredUser;
+
+function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord; mayCancel?: boolean } = {}) {
   const app = Fastify();
   const permissions: Permission[] = [];
   let destructiveRateLimitCalls = 0;
@@ -39,8 +41,10 @@ function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord
     },
     requireRequestPermission: async (_request, permission) => {
       permissions.push(permission);
+      return requestingUser;
     },
     assertServerExists,
+    mayCancelOperation: () => options.mayCancel ?? true,
     operations
   });
 
@@ -96,7 +100,7 @@ describe("operations routes", () => {
 
   it("applies the destructive route options and preserves cancellation arguments", async () => {
     const cancelled = operation({ status: "cancelled", errorMessage: "Operation cancelled by user" });
-    const harness = testApp({ cancelled });
+    const harness = testApp({ found: operation(), cancelled });
 
     const response = await harness.app.inject({ method: "POST", url: `/api/operations/${operationId}/cancel` });
 
@@ -105,6 +109,19 @@ describe("operations routes", () => {
     expect(harness.destructiveRateLimitCalls()).toBe(1);
     expect(harness.permissions).toEqual(["servers.editSettings"]);
     expect(harness.operations.cancel).toHaveBeenCalledWith(operationId, "Operation cancelled by user");
+  });
+
+  // Cancelling aborts work another user started, so the permission alone is not enough.
+  it("refuses to cancel an operation the caller does not own", async () => {
+    const harness = testApp({ found: operation({ createdBy: "someone-else" }), mayCancel: false });
+
+    const response = await harness.app.inject({ method: "POST", url: `/api/operations/${operationId}/cancel` });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: { code: "PERMISSION_DENIED", message: "Only the user who started this operation can cancel it", details: {} }
+    });
+    expect(harness.operations.cancel).not.toHaveBeenCalled();
   });
 
   it("returns the same not-found envelope when cancellation cannot find an operation", async () => {

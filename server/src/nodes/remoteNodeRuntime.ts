@@ -13,6 +13,7 @@ import { compactRecentEvents, parseLogEvent } from "../servers/logEvents.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { config } from "../config.js";
+import { validateServerId } from "../http/validation.js";
 import { createConsoleSender, type BackpressuredClient } from "../servers/consoleBackpressure.js";
 
 type ConsoleClient = BackpressuredClient;
@@ -120,17 +121,43 @@ export class RemoteNodeRuntime implements NodeRuntime {
     }
   }
 
+  /**
+   * A node answers server.create and server.update with a whole server record, and the panel persists
+   * it. Ownership therefore cannot come from the response: a compromised node that returns another
+   * node's server id would have the panel rewrite that record -- including its nodeId -- and hand the
+   * sibling's server to the attacker, because replaceMetadata only checks that the id exists.
+   *
+   * Identity is rebound to what the panel already knows: the node the command was sent to, and for an
+   * update the server that was addressed. A mismatched id is rejected rather than rebound, because a
+   * node returning a different server than the one asked about is not a case worth papering over.
+   *
+   * Node-local fields (serverDir, storageName, docker mount and working directories) stay as returned.
+   * Those describe the node's own filesystem, which the threat model leaves under node authority.
+   */
+  private bindServerIdentity(result: ManagedServer, expectedId?: string): ManagedServer {
+    if (!result || typeof result !== "object") {
+      throw new Error(`Node ${this.nodeId} returned a malformed server record`);
+    }
+    const id = validateServerId(result.id);
+    if (expectedId !== undefined && id !== expectedId) {
+      throw new Error(`Node ${this.nodeId} returned server ${id} for a request about server ${expectedId}`);
+    }
+    return { ...result, id, nodeId: this.nodeId };
+  }
+
   async createServer(input: unknown): Promise<ManagedServer> {
     const result = await this.command({ id: "pending", nodeId: this.nodeId } as ManagedServer, "server.create", { input }, provisioningCommandTimeoutMs) as ManagedServer;
-    await this.persistServer(result);
-    return result;
+    const server = this.bindServerIdentity(result);
+    await this.persistServer(server);
+    return server;
   }
 
   async updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer> {
     const result = await this.command(server, "server.update", { input }, provisioningCommandTimeoutMs) as ManagedServer;
     this.invalidateObservations(server);
-    await this.updateServerRecord(result);
-    return result;
+    const updated = this.bindServerIdentity(result, server.id);
+    await this.updateServerRecord(updated);
+    return updated;
   }
 
   async deleteServer(server: ManagedServer, input: unknown) {
