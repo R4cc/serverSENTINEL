@@ -9,8 +9,13 @@ const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({
 /**
  * The console page. The terminal stays behind a skeleton until the log snapshot
  * for this server has landed, so switching servers never shows stale output.
+ *
+ * It stays mounted while the rest of the server workspace is browsed and hides itself when
+ * another page is showing, because rebuilding the terminal costs a full re-parse of the
+ * scrollback before it can paint anything.
  */
 export function ServerConsoleTab({
+  active,
   snapshotReady,
   entries,
   canSendCommands,
@@ -20,6 +25,7 @@ export function ServerConsoleTab({
   scrollback,
   onCommand
 }: {
+  active: boolean;
   snapshotReady: boolean;
   entries: string[];
   canSendCommands: boolean;
@@ -30,7 +36,7 @@ export function ServerConsoleTab({
   onCommand: (command: string) => void;
 }) {
   return (
-    <section className="tabPage layoutWide">
+    <section className="tabPage layoutWide consoleTabPage" hidden={!active}>
       <Surface className="consolePanel">
         <div className="terminal">
           {!snapshotReady ? (

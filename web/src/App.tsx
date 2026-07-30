@@ -153,6 +153,7 @@ export default function App() {
     systemDark
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
+  const consoleTabServerIdRef = useRef("");
   const logsRef = useRef<string[]>([]);
   const pendingLogLinesRef = useRef<string[]>([]);
   const consoleLineAssemblerRef = useRef(new ConsoleLineAssembler());
@@ -539,6 +540,13 @@ export default function App() {
     && !dockerOperationalLock
     && canExpanded
     && Boolean(activeStatus?.commandInputAvailable);
+
+  // Unmounting the console tab throws the terminal away, so coming back has to build a new xterm
+  // instance and re-parse the entire scrollback before it may paint — an empty black console for
+  // as long as that takes. Keep the tab mounted for the rest of the server's workspace visit and
+  // let it hide itself instead; the terminal then still holds the buffer it already drew.
+  if (activePage === "console" && activeServer) consoleTabServerIdRef.current = activeServer.id;
+  const consoleTabMounted = Boolean(activeServer) && consoleTabServerIdRef.current === activeServer?.id;
 
   useEffect(() => {
     void refreshAuth();
@@ -2082,8 +2090,9 @@ export default function App() {
               />
             )}
 
-            {activePage === "console" && (
+            {consoleTabMounted && (
               <ServerConsoleTab
+                active={activePage === "console"}
                 snapshotReady={consoleSnapshotReadyServerId === activeServer.id}
                 entries={logs}
                 canSendCommands={canSendConsoleCommands}
