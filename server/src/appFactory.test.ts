@@ -55,6 +55,75 @@ describe("Fastify application factory", () => {
     await rebuiltApp.close();
   });
 
+  it("serves an export artifact to a browser download, which cannot set a request header", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-export-download-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18089",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const app = await buildApp();
+
+    try {
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(login.statusCode, login.body).toBe(200);
+      const cookie = sessionCookieFrom(login);
+
+      const started = await app.inject({
+        method: "POST",
+        url: "/api/exports",
+        headers: { cookie, "x-requested-with": "XMLHttpRequest" },
+        payload: { selection: { categories: ["serverConfig"], contentStrategy: "lockfile" } }
+      });
+      expect(started.statusCode, started.body).toBe(200);
+      const operationId = started.json().id as string;
+
+      await vi.waitFor(async () => {
+        const operation = await app.inject({
+          method: "GET",
+          url: `/api/operations/${operationId}`,
+          headers: { cookie, "x-requested-with": "XMLHttpRequest" }
+        });
+        expect(operation.json().status, operation.body).toBe("succeeded");
+      });
+
+      // The modal links the artifact with a plain anchor so the browser streams a multi-gigabyte
+      // archive itself, and a navigation cannot carry `x-requested-with`.
+      const download = await app.inject({
+        method: "GET",
+        url: `/api/exports/${operationId}/download`,
+        headers: { cookie }
+      });
+      expect(download.statusCode, download.body).toBe(200);
+      expect(download.headers["content-type"]).toBe("application/zip");
+      expect(download.headers["content-disposition"]).toContain("attachment");
+
+      // The exemption is for this artifact alone; the rest of the API still requires the header.
+      const operations = await app.inject({ method: "GET", url: "/api/operations", headers: { cookie } });
+      expect(operations.statusCode).toBe(400);
+
+      // And it is not an open door: the artifact still needs an authenticated session.
+      const anonymous = await app.inject({ method: "GET", url: `/api/exports/${operationId}/download` });
+      expect(anonymous.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("refuses downloads after an export artifact expires", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-expired-export-"));
     temporaryDirectories.push(dataDir);
