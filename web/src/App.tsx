@@ -157,6 +157,7 @@ export default function App() {
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
   const consoleTabServerIdRef = useRef("");
+  const overviewTabServerIdRef = useRef("");
   const logsRef = useRef<string[]>([]);
   const pendingLogLinesRef = useRef<string[]>([]);
   const consoleLineAssemblerRef = useRef(new ConsoleLineAssembler());
@@ -550,6 +551,11 @@ export default function App() {
   // let it hide itself instead; the terminal then still holds the buffer it already drew.
   if (activePage === "console" && activeServer) consoleTabServerIdRef.current = activeServer.id;
   const consoleTabMounted = Boolean(activeServer) && consoleTabServerIdRef.current === activeServer?.id;
+
+  // Same bargain for the overview: its timeline builds three chart instances, so rebuilding it on
+  // every visit blocks the main thread for longer than the rest of the page costs in total.
+  if (activePage === "overview" && activeServer) overviewTabServerIdRef.current = activeServer.id;
+  const overviewTabMounted = Boolean(activeServer) && overviewTabServerIdRef.current === activeServer?.id;
 
   useEffect(() => {
     void refreshAuth();
@@ -2089,8 +2095,9 @@ export default function App() {
               refreshDisabledReason={provisioningNavigationReason}
             />
 
-            {activePage === "overview" && (
+            {overviewTabMounted && (
               <ServerOverviewTab
+                active={activePage === "overview"}
                 server={activeServer}
                 status={activeStatus}
                 dockerSocketMounted={activeServerDockerSocketMounted}
