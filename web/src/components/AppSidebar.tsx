@@ -14,6 +14,7 @@ export function AppSidebar({
   sidebarToggleRef,
   activePage,
   onNavigate,
+  onPrefetch,
   servers,
   activeServer,
   onSelectServer,
@@ -33,6 +34,7 @@ export function AppSidebar({
   sidebarToggleRef: RefObject<HTMLButtonElement | null>;
   activePage: ActivePage;
   onNavigate: (page: ActivePage) => void;
+  onPrefetch: (page: ActivePage) => void;
   servers: ManagedServer[];
   activeServer: ManagedServer | undefined;
   onSelectServer: (serverId: string) => void;
@@ -47,6 +49,14 @@ export function AppSidebar({
   accountName: string | undefined;
   onLogout: () => void;
 }) {
+  // Pointing at or tabbing to a navigation item is a reliable signal that the page is about to
+  // open, and the chunk behind it takes longer to arrive than the pause before the click. Starting
+  // it here is what turns a first visit into the same instant switch a repeat visit already is.
+  const prefetchOnIntent = (page: ActivePage) => ({
+    onPointerEnter: () => onPrefetch(page),
+    onFocus: () => onPrefetch(page)
+  });
+
   return (
     <aside className="sidebar" id="application-sidebar">
       <div className="brandBlock">
@@ -64,7 +74,7 @@ export function AppSidebar({
         </Button>
       </div>
       <nav className="sideNav" id="primary-navigation" aria-label="Infrastructure navigation">
-        <button className={activePage === "nodes" ? "active" : ""} onClick={() => onNavigate("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
+        <button className={activePage === "nodes" ? "active" : ""} onClick={() => onNavigate("nodes")} {...prefetchOnIntent("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
           <SidebarIcon name="nodes" />
           <span className="navLabel">Nodes</span>
         </button>
@@ -116,29 +126,29 @@ export function AppSidebar({
             />
           </div>
           <div className="serverSubNav">
-            <button className={activePage === "overview" ? "active" : ""} onClick={() => onNavigate("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
+            <button className={activePage === "overview" ? "active" : ""} onClick={() => onNavigate("overview")} {...prefetchOnIntent("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
               <SidebarIcon name="overview" />
               <span className="navLabel">Overview</span>
             </button>
-            <button className={activePage === "console" ? "active" : ""} onClick={() => onNavigate("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
+            <button className={activePage === "console" ? "active" : ""} onClick={() => onNavigate("console")} {...prefetchOnIntent("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
               <SidebarIcon name="console" />
               <span className="navLabel">Console</span>
             </button>
-            <button className={activePage === "files" ? "active" : ""} onClick={() => onNavigate("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
+            <button className={activePage === "files" ? "active" : ""} onClick={() => onNavigate("files")} {...prefetchOnIntent("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
               <SidebarIcon name="files" />
               <span className="navLabel">Files</span>
             </button>
             {supportsManagedMods && (
-              <button className={activePage === "mods" ? "active" : ""} onClick={() => onNavigate("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : `Open ${managedContent.plural}`}>
+              <button className={activePage === "mods" ? "active" : ""} onClick={() => onNavigate("mods")} {...prefetchOnIntent("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : `Open ${managedContent.plural}`}>
                 <SidebarIcon name="mods" />
                 <span className="navLabel">{managedContent.pluralTitle}</span>
               </button>
             )}
-            <button className={activePage === "schedule" ? "active" : ""} onClick={() => onNavigate("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
+            <button className={activePage === "schedule" ? "active" : ""} onClick={() => onNavigate("schedule")} {...prefetchOnIntent("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
               <SidebarIcon name="schedule" />
               <span className="navLabel">Schedules</span>
             </button>
-            <button className={activePage === "properties" ? "active" : ""} onClick={() => onNavigate("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
+            <button className={activePage === "properties" ? "active" : ""} onClick={() => onNavigate("properties")} {...prefetchOnIntent("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
               <SidebarIcon name="properties" />
               <span className="navLabel">Properties</span>
             </button>
@@ -146,7 +156,7 @@ export function AppSidebar({
         </div>
       </nav>
       <nav className="sideNav sideNavBottom" id="account-navigation" aria-label="Account and settings navigation">
-        <button className={activePage === "settings" ? "active" : ""} onClick={() => onNavigate("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
+        <button className={activePage === "settings" ? "active" : ""} onClick={() => onNavigate("settings")} {...prefetchOnIntent("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
           <SidebarIcon name="settings" />
           <span className="navLabel settingsNavLabel">
             <span>Settings</span>

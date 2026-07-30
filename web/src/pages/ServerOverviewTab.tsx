@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { lazyPage } from "../app/lazyPage";
 import type { ManagedServer, PlayerSnapshot, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse } from "../types";
 import type { ModUpdatePlan } from "../types";
 import type { RequestConfirmation } from "../components/ConfirmationModal";
@@ -7,8 +8,11 @@ import { ServerTimelineLoadingSkeleton } from "../components/LoadingSkeletons";
 import type { ManagedContentTerminology } from "../features/mods/contentTerminology";
 import { ActivePlayersPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./OverviewPage";
 
-export const loadServerTimeline = () => import("../components/ServerTimeline");
-const ServerTimeline = lazy(() => loadServerTimeline().then((module) => ({ default: module.ServerTimeline })));
+const { Component: ServerTimeline, preload: loadServerTimeline } = lazyPage(
+  () => import("../components/ServerTimeline"),
+  (module) => module.ServerTimeline
+);
+export { loadServerTimeline };
 
 export function ServerOverviewTab({
   server,

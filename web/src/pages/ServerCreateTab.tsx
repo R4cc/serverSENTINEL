@@ -1,11 +1,15 @@
-import { FormEvent, lazy, Suspense } from "react";
+import { FormEvent, Suspense } from "react";
+import { lazyPage } from "../app/lazyPage";
 import type { ContextNode, GeneralJob } from "../types";
 import { InlineState } from "../components/InlineState";
 import { FeaturePageLoadingSkeleton } from "../components/LoadingSkeletons";
 import { Button } from "../components/UiPrimitives";
 
-export const loadServerCreatePage = () => import("./ServerCreatePage");
-const ManagedServerForm = lazy(() => loadServerCreatePage().then((module) => ({ default: module.ManagedServerForm })));
+const { Component: ManagedServerForm, preload: loadServerCreatePage } = lazyPage(
+  () => import("./ServerCreatePage"),
+  (module) => module.ManagedServerForm
+);
+export { loadServerCreatePage };
 
 /**
  * The create-server page: live provisioning progress, the failure report from a

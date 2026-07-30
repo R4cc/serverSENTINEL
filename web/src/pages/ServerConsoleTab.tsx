@@ -1,10 +1,14 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { lazyPage } from "../app/lazyPage";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { TerminalLoadingSkeleton } from "../components/LoadingSkeletons";
 import { Surface } from "../components/UiPrimitives";
 
-export const loadMinecraftTerminal = () => import("../components/MinecraftTerminal");
-const MinecraftTerminal = lazy(() => loadMinecraftTerminal().then((module) => ({ default: module.MinecraftTerminal })));
+const { Component: MinecraftTerminal, preload: loadMinecraftTerminal } = lazyPage(
+  () => import("../components/MinecraftTerminal"),
+  (module) => module.MinecraftTerminal
+);
+export { loadMinecraftTerminal };
 
 /**
  * The console page. The terminal stays behind a skeleton until the log snapshot
