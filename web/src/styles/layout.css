@@ -129,6 +129,20 @@ button .buttonIcon {
   display: none;
 }
 
+/* The compact shell stacks the sidebar into a top bar at 1100px, so the
+   disclosure opens downwards from there — not only on phones. Keep this
+   breakpoint in step with the compact shell in `responsive.css` and with the
+   initial collapsed state in `App.tsx`. */
+@media (max-width: 1100px) {
+  .sidebarToggleIconDesktop {
+    display: none;
+  }
+
+  .sidebarToggleIconMobile {
+    display: inline-flex;
+  }
+}
+
 .sideNav {
   display: grid;
   gap: var(--space-2);

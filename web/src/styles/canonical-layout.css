@@ -582,14 +582,6 @@
     overflow: visible;
   }
 
-  .sidebarToggleIconDesktop {
-    display: none;
-  }
-
-  .sidebarToggleIconMobile {
-    display: inline-flex;
-  }
-
   .sidebarCollapsed .sidebar {
     gap: 0 !important;
     overflow: hidden;
