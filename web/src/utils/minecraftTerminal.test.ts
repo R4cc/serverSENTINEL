@@ -11,6 +11,7 @@ import {
   previousTerminalWordBoundary,
   recallNextCommand,
   recallPreviousCommand,
+  terminalBlockCursorRow,
   type TerminalHistoryState
 } from "./minecraftTerminal";
 
@@ -47,6 +48,25 @@ describe("Minecraft terminal helpers", () => {
     expect(consumeTerminalTouchScroll(0, 8, 20)).toEqual({ lines: 0, remainder: 8 });
     expect(consumeTerminalTouchScroll(8, 17, 20)).toEqual({ lines: 1, remainder: 5 });
     expect(consumeTerminalTouchScroll(-8, -17, 20)).toEqual({ lines: -1, remainder: -5 });
+  });
+
+  it("locates the cursor row inside a prompt block that wraps", () => {
+    // "> say hi" on a 45 column terminal: one row, cursor on it wherever it sits.
+    expect(terminalBlockCursorRow(8, 8, 45)).toBe(0);
+    expect(terminalBlockCursorRow(2, 8, 45)).toBe(0);
+
+    // 58 cells wrap onto a second row; the end of the block is on that second row.
+    expect(terminalBlockCursorRow(58, 58, 45)).toBe(1);
+    expect(terminalBlockCursorRow(44, 58, 45)).toBe(0);
+    expect(terminalBlockCursorRow(45, 58, 45)).toBe(1);
+
+    // Filling a row exactly leaves the cursor in a pending wrap on that row, not the next one.
+    expect(terminalBlockCursorRow(45, 45, 45)).toBe(0);
+    expect(terminalBlockCursorRow(90, 90, 45)).toBe(1);
+
+    // An unmeasured terminal must not push the redraw upwards into real output.
+    expect(terminalBlockCursorRow(58, 58, 0)).toBe(0);
+    expect(terminalBlockCursorRow(0, 0, 45)).toBe(0);
   });
 
   it("deletes the word before the cursor without changing text after it", () => {

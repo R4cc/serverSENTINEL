@@ -15,6 +15,7 @@ import {
   previousTerminalWordBoundary,
   recallNextCommand,
   recallPreviousCommand,
+  terminalBlockCursorRow,
   type TerminalHistoryState
 } from "../utils/minecraftTerminal";
 
@@ -36,6 +37,8 @@ type InputSnapshot = {
 type TerminalTheme = ReturnType<typeof terminalTheme>;
 
 const prompt = "\x1b[38;2;112;208;255m>\x1b[0m ";
+// Cells the prompt occupies. The colour escape around it draws nothing.
+const promptCells = 2;
 
 export function MinecraftTerminal({
   entries,
@@ -48,7 +51,7 @@ export function MinecraftTerminal({
 }: MinecraftTerminalProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+  const fitRef = useRef<() => void>(() => {});
   const initialRenderCompleteRef = useRef(false);
   const previousEntriesRef = useRef<string[]>([]);
   const entriesRef = useRef(entries);
@@ -62,6 +65,10 @@ export function MinecraftTerminal({
   const historyIndexRef = useRef<number | null>(null);
   const historyDraftRef = useRef("");
   const promptVisibleRef = useRef(false);
+  // The drawn prompt block is tracked in cells rather than rows, because a terminal resize
+  // reflows the wrapped input and only the cell count survives that unchanged.
+  const renderedCellsRef = useRef(0);
+  const renderedCursorCellRef = useRef(0);
   const appliedThemeRef = useRef<TerminalTheme | null>(null);
 
   entriesRef.current = entries;
@@ -103,7 +110,6 @@ export function MinecraftTerminal({
     terminal.loadAddon(webLinksAddon);
     terminal.open(container);
     terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
 
     // The fallback DOM renderer rewrites a row's markup for every cell change, so a scrolling
     // console repaints the whole viewport line by line. The GPU renderer draws it as one frame.
@@ -155,13 +161,31 @@ export function MinecraftTerminal({
     container.addEventListener("touchend", handleTouchEnd, { passive: true });
     container.addEventListener("touchcancel", handleTouchEnd, { passive: true });
 
-    const fit = () => {
+    const resizeTerminal = () => {
       try {
         fitAddon.fit();
       } catch {
         // xterm cannot fit while hidden or zero-sized; the next resize will retry.
       }
     };
+
+    // Resizing reflows the buffer, and a wrapped prompt would land somewhere the redraw no
+    // longer accounts for. Erasing it first takes reflow out of the picture — which matters on
+    // a phone, where opening or closing the keyboard resizes the viewport mid-command.
+    const fit = () => {
+      if (!promptVisibleRef.current) {
+        resizeTerminal();
+        return;
+      }
+      clearPromptBlock();
+      promptVisibleRef.current = false;
+      terminal.write("", () => {
+        if (terminalRef.current !== terminal) return;
+        resizeTerminal();
+        if (canSendCommandsRef.current) writePrompt();
+      });
+    };
+    fitRef.current = fit;
 
     const visualViewport = window.visualViewport;
     const keepFocusedPromptVisible = () => {
@@ -170,12 +194,30 @@ export function MinecraftTerminal({
       if (terminal.element) terminal.element.scrollTop = 0;
     };
     let fitFrame: number | null = null;
+    // An Android keyboard resizes the visual viewport as its suggestion bar comes and goes,
+    // which lands in the middle of a word. Reflowing the buffer under an open composition
+    // moves the textarea the keyboard is tracking, so the fit waits for the word to finish.
+    let composing = false;
+    let fitDeferred = false;
     const scheduleFit = () => {
+      if (composing) {
+        fitDeferred = true;
+        return;
+      }
       if (fitFrame !== null) return;
       fitFrame = window.requestAnimationFrame(() => {
         fitFrame = null;
         fit();
       });
+    };
+    const handleCompositionStart = () => {
+      composing = true;
+    };
+    const handleCompositionEnd = () => {
+      composing = false;
+      if (!fitDeferred) return;
+      fitDeferred = false;
+      scheduleFit();
     };
     const handleViewportResize = () => {
       scheduleFit();
@@ -188,6 +230,8 @@ export function MinecraftTerminal({
     visualViewport?.addEventListener("resize", handleViewportResize);
     window.addEventListener("resize", handleViewportResize);
     terminal.textarea?.addEventListener("focus", handleTerminalFocus);
+    terminal.textarea?.addEventListener("compositionstart", handleCompositionStart);
+    terminal.textarea?.addEventListener("compositionend", handleCompositionEnd);
 
     fitFrame = window.requestAnimationFrame(() => {
       fitFrame = null;
@@ -218,8 +262,10 @@ export function MinecraftTerminal({
       visualViewport?.removeEventListener("resize", handleViewportResize);
       window.removeEventListener("resize", handleViewportResize);
       terminal.textarea?.removeEventListener("focus", handleTerminalFocus);
+      terminal.textarea?.removeEventListener("compositionstart", handleCompositionStart);
+      terminal.textarea?.removeEventListener("compositionend", handleCompositionEnd);
       disposables.forEach((disposable) => disposable.dispose());
-      fitAddonRef.current = null;
+      fitRef.current = () => {};
       terminalRef.current = null;
       appliedThemeRef.current = null;
       initialRenderCompleteRef.current = false;
@@ -249,13 +295,7 @@ export function MinecraftTerminal({
     const terminal = terminalRef.current;
     if (!terminal || !initialRenderCompleteRef.current) return;
     terminal.options.fontSize = fontSize;
-    window.requestAnimationFrame(() => {
-      try {
-        fitAddonRef.current?.fit();
-      } catch {
-        // xterm cannot fit while hidden or zero-sized; the resize observer will retry.
-      }
-    });
+    window.requestAnimationFrame(() => fitRef.current());
   }, [fontSize]);
 
   useEffect(() => {
@@ -279,7 +319,7 @@ export function MinecraftTerminal({
       return;
     }
     if (promptVisibleRef.current) {
-      clearPromptLine();
+      clearPromptBlock();
       promptVisibleRef.current = false;
       inputRef.current = "";
       inputCursorRef.current = 0;
@@ -396,7 +436,7 @@ export function MinecraftTerminal({
 
   function submitInput() {
     const command = inputRef.current;
-    clearPromptLine();
+    clearPromptBlock();
     promptVisibleRef.current = false;
     inputRef.current = "";
     inputCursorRef.current = 0;
@@ -480,8 +520,12 @@ export function MinecraftTerminal({
   }
 
   function cancelInput() {
-    if (!terminalRef.current) return;
-    terminalRef.current.write(`\r\x1b[2K${inputRef.current}^C\r\n`);
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    // Redrawn from the block's first row so a wrapped command leaves one cancelled copy
+    // behind rather than the stale rows above it plus a second, prompt-less one.
+    clearPromptBlock();
+    terminal.write(`${prompt}${inputRef.current}^C\r\n`);
     promptVisibleRef.current = false;
     inputRef.current = "";
     inputCursorRef.current = 0;
@@ -528,7 +572,7 @@ export function MinecraftTerminal({
       logDecoderRef.current.reset();
       promptVisibleRef.current = false;
     } else if (promptVisibleRef.current) {
-      clearPromptLine();
+      clearPromptBlock();
       promptVisibleRef.current = false;
     }
 
@@ -553,29 +597,56 @@ export function MinecraftTerminal({
 
   function writePrompt(followTail = true) {
     if (promptVisibleRef.current || !terminalRef.current) return;
-    terminalRef.current.write(`${prompt}${inputRef.current}`);
-    positionCursorAfterRender();
+    drawPromptBlock();
     if (followTail) terminalRef.current.scrollToBottom();
     promptVisibleRef.current = true;
   }
 
-  function clearPromptLine() {
-    terminalRef.current?.write("\r\x1b[2K");
+  /**
+   * Erases the whole prompt block, not just the row the cursor is on. A phone-width terminal
+   * wraps any ordinary command, and clearing a single row left every earlier row of the input
+   * behind — one stale copy per keystroke past the wrap.
+   */
+  function clearPromptBlock() {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const rowsAbove = terminalBlockCursorRow(renderedCursorCellRef.current, renderedCellsRef.current, terminal.cols);
+    terminal.write(`\r${rowsAbove ? `\x1b[${rowsAbove}A` : ""}\x1b[0J`);
+    renderedCellsRef.current = 0;
+    renderedCursorCellRef.current = 0;
   }
 
   function renderInputLine() {
-    if (!terminalRef.current) return;
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    clearPromptBlock();
     promptVisibleRef.current = true;
-    terminalRef.current.write(`\r\x1b[2K${prompt}${inputRef.current}`);
+    drawPromptBlock();
+    terminal.scrollToBottom();
+  }
+
+  function drawPromptBlock() {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.write(`${prompt}${inputRef.current}`);
+    renderedCellsRef.current = promptCells + inputRef.current.length;
+    renderedCursorCellRef.current = renderedCellsRef.current;
     positionCursorAfterRender();
-    terminalRef.current.scrollToBottom();
   }
 
   function positionCursorAfterRender() {
     const terminal = terminalRef.current;
     if (!terminal) return;
-    const charactersAfterCursor = inputRef.current.length - inputCursorRef.current;
-    if (charactersAfterCursor) terminal.write(`\x1b[${charactersAfterCursor}D`);
+    const columns = terminal.cols;
+    const cells = renderedCellsRef.current;
+    const target = promptCells + inputCursorRef.current;
+    // Writing the block already left the cursor at its end.
+    if (target >= cells || columns <= 0) return;
+    // Moving left cannot cross a wrap, so the cursor is walked up whole rows and then placed
+    // at an absolute column.
+    const rowsUp = terminalBlockCursorRow(cells, cells, columns) - terminalBlockCursorRow(target, cells, columns);
+    terminal.write(`${rowsUp ? `\x1b[${rowsUp}A` : ""}\x1b[${target % columns + 1}G`);
+    renderedCursorCellRef.current = target;
   }
 
   return (

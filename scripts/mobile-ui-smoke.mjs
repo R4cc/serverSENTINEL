@@ -435,9 +435,19 @@ async function runProfile(engine, profile, label) {
     await page.locator(".xterm-helper-textarea").waitFor({ state: "attached" });
     const terminalHelper = await page.locator(".xterm-helper-textarea").evaluate((element) => {
       const rect = element.getBoundingClientRect();
-      return { width: rect.width, height: rect.height, minHeight: getComputedStyle(element).minHeight, fontSize: getComputedStyle(element).fontSize };
+      const style = getComputedStyle(element);
+      return {
+        width: rect.width,
+        height: rect.height,
+        minWidth: style.minWidth,
+        minHeight: style.minHeight,
+        opacity: style.opacity,
+        position: style.position,
+        fontSize: style.fontSize
+      };
     });
-    assert(terminalHelper.height <= 1 && terminalHelper.width <= 1, `${label}: xterm helper inherited visible textarea geometry: ${JSON.stringify(terminalHelper)}`);
+    assert(terminalHelper.opacity === "0" && terminalHelper.position === "absolute", `${label}: xterm helper is visible in the terminal: ${JSON.stringify(terminalHelper)}`);
+    assert(Number.parseFloat(terminalHelper.minWidth) === 0 && Number.parseFloat(terminalHelper.minHeight) === 0, `${label}: xterm helper inherited minimum textarea geometry: ${JSON.stringify(terminalHelper)}`);
     assert(Number.parseFloat(terminalHelper.fontSize) >= 16, `${label}: xterm helper input is below 16px`);
 
     const initialHeight = profile.viewport.height;

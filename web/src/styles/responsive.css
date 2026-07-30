@@ -1182,11 +1182,14 @@ button:disabled,
     font-size: 16px !important;
   }
 
+  /* The 16px above keeps focusing the terminal from zooming the page, and the reset undoes the
+     rest of what that blanket rule implies for a control the user never sees. Width and height
+     are deliberately left alone: xterm sizes this textarea inline to follow the composing word,
+     and pinning it to zero is the case its own source calls out as breaking IMEs — an Android
+     keyboard with predictive text then drops letters as they are typed. */
   .minecraftTerminal .xterm-helper-textarea {
     min-width: 0 !important;
     min-height: 0 !important;
-    width: 0 !important;
-    height: 0 !important;
     padding: 0 !important;
     border: 0 !important;
     font-size: 16px !important;
