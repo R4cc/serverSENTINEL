@@ -5,7 +5,7 @@ import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/s
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
 import { themeOptions } from "../features/settings/themePreferences";
 import { ModrinthKeyForm } from "../components/SettingsPanels";
-import { UserManagement } from "../components/AuthPanel";
+import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
 import { Button, StatusBadge } from "../components/UiPrimitives";
 import { resolveRegionalFormatLocale } from "../utils/format";
