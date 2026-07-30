@@ -371,11 +371,16 @@ export async function dockerStatus(server: ManagedServer) {
 
   const details = await inspectDockerContainer(server);
   if (!details) {
+    // Docker answered, and it has no such container: the server is definitively not running. The two
+    // branches above genuinely cannot tell and leave `running` absent, which callers read as unknown.
+    // A managed container is only created on the first start, so a server that was just imported or
+    // created lands here, and reporting it as unknown blocked mod changes until someone started it.
     return {
       configured: true,
       available: true,
       controllable: Boolean(server.dockerMountSource && runtimeTarget(server).serverJar),
       state: "unknown" as DockerState,
+      running: false,
       container: dockerContainerName(server),
       message: server.dockerMountSource && runtimeTarget(server).serverJar
         ? "Managed container will be created on start"
