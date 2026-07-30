@@ -33,6 +33,19 @@ describe("console pipeline", () => {
       .toEqual(["b", "c", "d", "e", "f"]);
   });
 
+  it("keeps the streamed tail when the snapshot stops short of it", () => {
+    // Revisiting a busy console refetches a snapshot whose file tail lags behind the lines the
+    // websocket already delivered. Adopting the shorter snapshot would rewind the buffer and make
+    // the terminal clear and redraw every row.
+    expect(reconcileConsoleSnapshot(["a", "b", "c", "d"], ["a", "b"], ["a", "b", "c", "d"]))
+      .toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("backfills history the buffer had already trimmed", () => {
+    expect(reconcileConsoleSnapshot(["c", "d"], ["a", "b", "c"], ["c", "d"]))
+      .toEqual(["a", "b", "c", "d"]);
+  });
+
   it("replaces obsolete history after log rotation", () => {
     expect(reconcileConsoleSnapshot(["old-a", "old-b"], ["new-a", "new-b"], ["old-a", "old-b"])).toEqual(["new-a", "new-b"]);
   });

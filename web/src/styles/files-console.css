@@ -1,3 +1,10 @@
+/* The console tab outlives the page that shows it so the terminal keeps its buffer while another
+   workspace page is open. `.tabPage` and its console variant both set `display`, so the hidden
+   state has to beat them rather than rely on the user agent's `[hidden]` rule. */
+.tabPage.consoleTabPage[hidden] {
+  display: none;
+}
+
 .terminal {
   flex: 1 1 auto;
   display: flex;

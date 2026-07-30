@@ -129,7 +129,23 @@ export function reconcileConsoleSnapshot(start: string[], snapshot: string[], cu
   const liveTail = current.slice(carried);
   if (!snapshot.length) return liveTail.length ? appendConsoleEntries([], liveTail, limit) : [];
 
-  const overlap = overlapLength(start, snapshot);
-  const base = overlap > 0 ? [...start, ...snapshot.slice(overlap)] : snapshot;
+  const base = snapshotBase(start, snapshot);
   return appendConsoleEntries(base, liveTail, limit);
+}
+
+/**
+ * Places the snapshot relative to the buffer the console started from. The snapshot usually
+ * continues where that buffer ends, but a chatty server keeps the websocket ahead of the file the
+ * snapshot reads, so it can also stop short of lines the console already shows. Taking the
+ * snapshot as-is there rewinds the buffer, and a buffer that loses its tail leaves the terminal
+ * nothing to append to — it clears and redraws every row, which is the flash this avoids.
+ */
+function snapshotBase(start: string[], snapshot: string[]) {
+  const continues = overlapLength(start, snapshot);
+  if (continues > 0) return [...start, ...snapshot.slice(continues)];
+
+  const precedes = overlapLength(snapshot, start);
+  if (precedes > 0) return [...snapshot.slice(0, snapshot.length - precedes), ...start];
+
+  return snapshot;
 }
