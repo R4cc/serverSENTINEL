@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { lazyPage } from "../app/lazyPage";
 import type { ManagedServer, PlayerSnapshot, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse } from "../types";
 import type { ModUpdatePlan } from "../types";
 import type { RequestConfirmation } from "../components/ConfirmationModal";
@@ -7,10 +8,19 @@ import { ServerTimelineLoadingSkeleton } from "../components/LoadingSkeletons";
 import type { ManagedContentTerminology } from "../features/mods/contentTerminology";
 import { ActivePlayersPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./OverviewPage";
 
-export const loadServerTimeline = () => import("../components/ServerTimeline");
-const ServerTimeline = lazy(() => loadServerTimeline().then((module) => ({ default: module.ServerTimeline })));
+const { Component: ServerTimeline, preload: loadServerTimeline } = lazyPage(
+  () => import("../components/ServerTimeline"),
+  (module) => module.ServerTimeline
+);
+export { loadServerTimeline };
 
+/**
+ * The overview dashboard. It stays mounted while the rest of the server workspace is browsed and
+ * hides itself when another page is showing: the timeline builds three chart instances, and doing
+ * that again on every visit costs more than everything else the page does put together.
+ */
 export function ServerOverviewTab({
+  active,
   server,
   status,
   dockerSocketMounted,
@@ -40,6 +50,7 @@ export function ServerOverviewTab({
   formatTime,
   formatShortTime
 }: {
+  active: boolean;
   server: ManagedServer;
   status: ServerStatus | null;
   dockerSocketMounted: boolean;
@@ -70,7 +81,7 @@ export function ServerOverviewTab({
   formatShortTime: (value: string | number | Date) => string;
 }) {
   return (
-    <section className="tabPage overviewPage layoutDashboard">
+    <section className="tabPage overviewPage layoutDashboard" hidden={!active}>
       {overviewError && (
         <InlineState
           tone="warning"
@@ -103,6 +114,7 @@ export function ServerOverviewTab({
               playerHeadsEnabled={playerHeadsEnabled}
               onLatestSample={onTimelineLatestSample}
               onOpenSchedules={onOpenSchedules}
+              paused={!active}
             />
           </Suspense>
         )}

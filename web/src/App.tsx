@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
@@ -8,11 +8,13 @@ import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
+import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
+import { lazyPage } from "./app/lazyPage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
@@ -47,21 +49,22 @@ import { useExportWorkspace } from "./features/exports/useExportWorkspace";
 import { ExportModal } from "./features/exports/ExportModal";
 import { ImportModal } from "./features/exports/ImportModal";
 
-const loadSchedulePage = () => import("./pages/SchedulesPage");
-const loadNodesPage = () => import("./pages/NodesPage");
-const loadServerEditPage = () => import("./pages/ServerEditPage");
-const loadModsPage = () => import("./pages/ModsPage");
-const loadFilesPage = () => import("./features/files/FilesPage");
-const loadSettingsPage = () => import("./pages/SettingsPage");
+const importServerEditPage = () => import("./pages/ServerEditPage");
 
-const SchedulePage = lazy(() => loadSchedulePage().then((module) => ({ default: module.SchedulePage })));
-const NodesPage = lazy(() => loadNodesPage().then((module) => ({ default: module.NodesPage })));
-const ServerEditForm = lazy(() => loadServerEditPage().then((module) => ({ default: module.ServerEditForm })));
-const DeleteServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.DeleteServerPanel })));
-const ExportServerPanel = lazy(() => loadServerEditPage().then((module) => ({ default: module.ExportServerPanel })));
-const ModsPage = lazy(() => loadModsPage().then((module) => ({ default: module.ModsPage })));
-const FilesPage = lazy(() => loadFilesPage().then((module) => ({ default: module.FilesPage })));
-const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })));
+const { Component: SchedulePage, preload: loadSchedulePage } = lazyPage(() => import("./pages/SchedulesPage"), (module) => module.SchedulePage);
+const { Component: NodesPage, preload: loadNodesPage } = lazyPage(() => import("./pages/NodesPage"), (module) => module.NodesPage);
+const serverEditForm = lazyPage(importServerEditPage, (module) => module.ServerEditForm);
+const deleteServerPanel = lazyPage(importServerEditPage, (module) => module.DeleteServerPanel);
+const exportServerPanel = lazyPage(importServerEditPage, (module) => module.ExportServerPanel);
+const { Component: ServerEditForm } = serverEditForm;
+const { Component: DeleteServerPanel } = deleteServerPanel;
+const { Component: ExportServerPanel } = exportServerPanel;
+// The properties page renders all three inside one boundary, so it only avoids a fallback when
+// every one of them is ready. They share a chunk, so this is one download either way.
+const loadServerEditPage = () => Promise.all([serverEditForm.preload(), deleteServerPanel.preload(), exportServerPanel.preload()]);
+const { Component: ModsPage, preload: loadModsPage } = lazyPage(() => import("./pages/ModsPage"), (module) => module.ModsPage);
+const { Component: FilesPage, preload: loadFilesPage } = lazyPage(() => import("./features/files/FilesPage"), (module) => module.FilesPage);
+const { Component: SettingsPage, preload: loadSettingsPage } = lazyPage(() => import("./pages/SettingsPage"), (module) => module.SettingsPage);
 
 function preloadActivePage(page: ActivePage) {
   if (page === "console") return loadMinecraftTerminal();
@@ -86,6 +89,9 @@ const nodeOfflineNoticeDelayMs = 3_000;
 export default function App() {
   const { options: confirmationOptions, requestConfirmation, settle: settleConfirmation } = useConfirmationController();
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  // Read once, at mount: the hint only decides which surface the first paint reserves,
+  // and it must not change under the pending session or the guess itself shifts layout.
+  const [bootsIntoShell] = useState(() => readStoredSignedIn());
   const [authNotice, setAuthNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [appState, setAppState] = useState<AppState>(emptyApp);
@@ -154,6 +160,7 @@ export default function App() {
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
   const consoleTabServerIdRef = useRef("");
+  const overviewTabServerIdRef = useRef("");
   const logsRef = useRef<string[]>([]);
   const pendingLogLinesRef = useRef<string[]>([]);
   const consoleLineAssemblerRef = useRef(new ConsoleLineAssembler());
@@ -548,6 +555,11 @@ export default function App() {
   if (activePage === "console" && activeServer) consoleTabServerIdRef.current = activeServer.id;
   const consoleTabMounted = Boolean(activeServer) && consoleTabServerIdRef.current === activeServer?.id;
 
+  // Same bargain for the overview: its timeline builds three chart instances, so rebuilding it on
+  // every visit blocks the main thread for longer than the rest of the page costs in total.
+  if (activePage === "overview" && activeServer) overviewTabServerIdRef.current = activeServer.id;
+  const overviewTabMounted = Boolean(activeServer) && overviewTabServerIdRef.current === activeServer?.id;
+
   useEffect(() => {
     void refreshAuth();
   }, []);
@@ -557,6 +569,37 @@ export default function App() {
     if (activePage === "overview" && !overviewTimelineVisible) return;
     void preloadActivePage(activePage);
   }, [activePage, authSession?.authenticated, overviewTimelineVisible]);
+
+  // The effect above only starts a page's chunk once that page is already open, so it arrives no
+  // sooner than React asks for it. Walk the rest of the pages while the browser is idle, once the
+  // shell has what it needs, so opening one is not a download. Imports deduplicate, so a page that
+  // was hovered, opened, or already queued costs nothing here.
+  useEffect(() => {
+    if (!applicationReady || !pagePrefetchAllowed(networkInformation())) return;
+    const queue = [...pagePrefetchOrder];
+    let cancelled = false;
+    let cancelIdle: (() => void) | null = null;
+
+    const step = () => {
+      cancelIdle = null;
+      const page = queue.shift();
+      if (cancelled || !page) return;
+      void preloadActivePage(page)
+        .catch(() => undefined)
+        .then(() => {
+          if (!cancelled) schedule();
+        });
+    };
+    const schedule = () => {
+      cancelIdle = whenIdle(step);
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      cancelIdle?.();
+    };
+  }, [applicationReady]);
 
   useEffect(() => {
     return () => {
@@ -626,6 +669,9 @@ export default function App() {
       setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(demoRunning));
       return;
     }
+    // The default page is the overview, so without this the sign-in screen polls a
+    // protected endpoint every ten seconds and logs a 401 for each attempt.
+    if (!authSession?.authenticated) return;
 
     let cancelled = false;
     let inFlight = false;
@@ -649,7 +695,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activePage, demoMode, demoRunning, demoSessionVersion]);
+  }, [activePage, authSession?.authenticated, demoMode, demoRunning, demoSessionVersion]);
 
   useEffect(() => {
     const compactLayout = window.matchMedia("(max-width: 1100px)");
@@ -939,6 +985,13 @@ export default function App() {
   useEffect(() => {
     writeStoredActivePage(activePage);
   }, [activePage]);
+
+  // Mirrors every resolved session into the boot hint, so the six places that settle
+  // the session do not each have to remember to keep the next first paint honest.
+  useEffect(() => {
+    if (!authSession) return;
+    writeStoredSignedIn(authSession.authenticated || demoMode);
+  }, [authSession?.authenticated, demoMode]);
 
   useEffect(() => {
     if (activePage !== "settings" || demoMode || !authSession?.authenticated) return;
@@ -1790,7 +1843,13 @@ export default function App() {
     }
   }
 
-  if (!authSession) {
+  // A visitor who was signed in last time gets the workspace shell straight away, so the
+  // resolved session fills skeletons that are already the right shape instead of replacing
+  // a sign-in panel with a different layout.
+  const sessionPending = !authSession;
+  const shellVisible = sessionPending || Boolean(authSession?.authenticated) || demoMode;
+
+  if (sessionPending && !bootsIntoShell) {
     return (
       <>
         <AppToaster darkMode={darkMode} />
@@ -1799,7 +1858,7 @@ export default function App() {
     );
   }
 
-  if (!authSession.authenticated && !demoMode) {
+  if (authSession && !authSession.authenticated && !demoMode) {
     return (
       <>
         <AppToaster darkMode={darkMode} />
@@ -1881,6 +1940,7 @@ export default function App() {
           sidebarToggleRef={sidebarToggleRef}
           activePage={activePage}
           onNavigate={openSidebarPage}
+          onPrefetch={(page) => { void preloadActivePage(page).catch(() => undefined); }}
           servers={effectiveAppState.servers}
           activeServer={activeServer}
           onSelectServer={openServerFromNode}
@@ -1892,11 +1952,11 @@ export default function App() {
           managedContent={managedContent}
           demoMode={demoMode}
           panelVersion={panelVersion}
-          accountName={authSession.user?.username}
+          accountName={authSession?.user?.username}
           onLogout={logout}
         />
 
-      <section inert={phoneLayout && !sidebarCollapsed ? true : undefined} className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!appStateLoaded && (authSession.authenticated || demoMode))) ? "workspaceServerPage" : ""}`.trim()}>
+      <section inert={phoneLayout && !sidebarCollapsed ? true : undefined} className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!applicationReady && shellVisible)) ? "workspaceServerPage" : ""}`.trim()}>
         <header className="workspaceHeader">
           <div>
             <h2>{currentPageTitle}</h2>
@@ -1912,7 +1972,7 @@ export default function App() {
           provisioningError={provisioningError}
           provisioningErrorDetails={provisioningErrorDetails}
           notice={notice}
-          showApplicationLoading={!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError}
+          showApplicationLoading={!applicationReady && shellVisible && !appLoadError}
           appLoadError={appLoadError}
           appRefreshing={appRefreshing}
           onRetryAppLoad={() => void refreshApp()}
@@ -2054,8 +2114,9 @@ export default function App() {
               refreshDisabledReason={provisioningNavigationReason}
             />
 
-            {activePage === "overview" && (
+            {overviewTabMounted && (
               <ServerOverviewTab
+                active={activePage === "overview"}
                 server={activeServer}
                 status={activeStatus}
                 dockerSocketMounted={activeServerDockerSocketMounted}

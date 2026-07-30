@@ -1,3 +1,10 @@
+/* The overview outlives the page that shows it so its charts survive a trip to another workspace
+   page. `.tabPage` and the dashboard layout both set `display`, so the hidden state has to beat
+   them rather than rely on the user agent's `[hidden]` rule. */
+.tabPage.overviewPage[hidden] {
+  display: none;
+}
+
 .overviewPage.layoutDashboard {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;

@@ -756,7 +756,8 @@ export function ServerTimeline({
   onLatestSample,
   onOpenSchedules,
   serverId = "",
-  playerHeadsEnabled = false
+  playerHeadsEnabled = false,
+  paused = false
 }: {
   loadTimeline: LoadTimeline;
   formatTime: (value: string | number | Date) => string;
@@ -766,6 +767,8 @@ export function ServerTimeline({
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
   serverId?: string;
   playerHeadsEnabled?: boolean;
+  /** Set while the overview is off screen: the timeline stays mounted but stops following live. */
+  paused?: boolean;
 }) {
   const initialSpan = timelineRanges.find((range) => range.label === defaultTimelineRange)!.milliseconds;
   const [selection, setSelection] = useState<TimelineSelection>(defaultTimelineRange);
@@ -879,8 +882,11 @@ export function ServerTimeline({
     };
   }, [loadWindow, onLatestSample]);
 
+  // `document.hidden` covers a backgrounded tab but not an overview that is merely off screen, and
+  // the timeline now outlives the page that shows it. Following live output nobody can see would
+  // trade the render this saves for a poll and a redraw every five seconds.
   useEffect(() => {
-    if (!live) return;
+    if (!live || paused) return;
     const interval = window.setInterval(() => {
       if (document.hidden || navigationPendingRef.current) return;
       const span = viewportRef.current.to - viewportRef.current.from;
@@ -890,7 +896,20 @@ export function ServerTimeline({
       void loadWindow(next, true, { incremental: true });
     }, 5_000);
     return () => window.clearInterval(interval);
-  }, [live, loadWindow, setViewport]);
+  }, [live, paused, loadWindow, setViewport]);
+
+  // Coming back to a paused timeline should show current data, not the window it froze on.
+  const wasPausedRef = useRef(paused);
+  useEffect(() => {
+    const resumed = wasPausedRef.current && !paused;
+    wasPausedRef.current = paused;
+    if (!resumed || !live) return;
+    const span = viewportRef.current.to - viewportRef.current.from;
+    const next = liveTimelineWindow(span);
+    setClockNow(Date.now());
+    setViewport(next);
+    void loadWindow(next, true, { incremental: true });
+  }, [paused, live, loadWindow, setViewport]);
 
   useEffect(() => {
     if (!selectedCluster && !hoverTooltip?.pinned) return;
@@ -904,10 +923,15 @@ export function ServerTimeline({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [hoverTooltip?.pinned, selectedCluster]);
 
+  // A hidden element measures zero. Keeping the last real width stops the whole chart being laid
+  // out again for a size nobody is looking at, and then a second time on the way back.
   useEffect(() => {
     const rail = annotationRailRef.current;
     if (!rail) return;
-    const updateWidth = () => setAnnotationRailWidth(Math.max(1, rail.getBoundingClientRect().width));
+    const updateWidth = () => {
+      const width = rail.getBoundingClientRect().width;
+      if (width > 0) setAnnotationRailWidth(width);
+    };
     const observer = new ResizeObserver(updateWidth);
     observer.observe(rail);
     updateWidth();
@@ -917,7 +941,10 @@ export function ServerTimeline({
   useEffect(() => {
     const element = visualizationRef.current;
     if (!element) return;
-    const updateWidth = () => setVisualizationWidth(Math.max(1, element.getBoundingClientRect().width));
+    const updateWidth = () => {
+      const width = element.getBoundingClientRect().width;
+      if (width > 0) setVisualizationWidth(width);
+    };
     const observer = new ResizeObserver(updateWidth);
     observer.observe(element);
     updateWidth();

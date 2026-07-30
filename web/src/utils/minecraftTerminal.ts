@@ -33,6 +33,21 @@ export function deletePreviousTerminalWord(value: string) {
   return deletePreviousTerminalWordAtCursor(value, value.length).value;
 }
 
+/**
+ * Which row of a redrawn prompt block the cursor sits on, counted from the block's first row.
+ *
+ * The prompt is rewritten in place on every keystroke, and a phone-width terminal wraps a
+ * command across several rows, so the redraw has to know how far above the cursor the block
+ * starts. Filling a row exactly leaves xterm in a pending wrap on that row rather than at the
+ * start of the next one, which is why the end of the block is measured differently from a
+ * position inside it.
+ */
+export function terminalBlockCursorRow(offset: number, width: number, columns: number) {
+  if (columns <= 0 || width <= 0) return 0;
+  if (offset >= width) return Math.ceil(width / columns) - 1;
+  return Math.floor(Math.max(0, offset) / columns);
+}
+
 export function consumeTerminalTouchScroll(remainder: number, pixelDelta: number, rowHeight: number) {
   const nextRemainder = remainder + pixelDelta;
   if (rowHeight <= 0 || !Number.isFinite(rowHeight)) return { lines: 0, remainder: nextRemainder };

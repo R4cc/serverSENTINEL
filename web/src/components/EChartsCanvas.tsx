@@ -162,7 +162,11 @@ export function EChartsCanvas({
     renderer.on("mousemove", interactionTracker.pointerMove);
     renderer.on("mouseup", interactionTracker.pointerUp);
     renderer.on("globalout", interactionTracker.pointerOut);
-    const resizeObserver = new ResizeObserver(() => chart.resize());
+    // A chart that is hidden rather than unmounted reports a zero-sized box. Resizing to that
+    // throws away the laid-out chart and forces a full rebuild when it comes back into view.
+    const resizeObserver = new ResizeObserver(() => {
+      if (container.clientWidth > 0 && container.clientHeight > 0) chart.resize();
+    });
     resizeObserver.observe(container);
 
     return () => {
