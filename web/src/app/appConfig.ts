@@ -4,6 +4,7 @@ export const appVersion = "1.7.0";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 export const demoLocalStorageKey = "serversentinel-demo-mode";
+export const signedInLocalStorageKey = "serversentinel-signed-in";
 
 export const emptyApp: AppState = {
   servers: [],
@@ -75,6 +76,29 @@ export function writeStoredDemoMode(value: boolean, storage: Storage = window.lo
     storage.setItem(demoLocalStorageKey, String(value));
   } catch {
     // Ignore unavailable browser storage; in-memory state still reflects the toggle.
+  }
+}
+
+/**
+ * Whether the session that resolved last time was signed in. Confirming the session
+ * costs a network round trip, so the first paint has to guess which surface to show.
+ * Guessing the sign-in form for a signed-in visitor means the entire shell replaces a
+ * centred panel a moment later, which is the layout shift that dominates CLS on reload.
+ */
+export function readStoredSignedIn(storage: Storage = window.localStorage) {
+  try {
+    return storage.getItem(signedInLocalStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function writeStoredSignedIn(value: boolean, storage: Storage = window.localStorage) {
+  try {
+    if (value) storage.setItem(signedInLocalStorageKey, "true");
+    else storage.removeItem(signedInLocalStorageKey);
+  } catch {
+    // Ignore unavailable browser storage; the next boot falls back to the sign-in skeleton.
   }
 }
 

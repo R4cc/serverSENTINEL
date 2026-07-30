@@ -8,7 +8,7 @@ import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, shouldShowInitialOverviewLoading, writeStoredDemoMode } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
@@ -89,6 +89,9 @@ const nodeOfflineNoticeDelayMs = 3_000;
 export default function App() {
   const { options: confirmationOptions, requestConfirmation, settle: settleConfirmation } = useConfirmationController();
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  // Read once, at mount: the hint only decides which surface the first paint reserves,
+  // and it must not change under the pending session or the guess itself shifts layout.
+  const [bootsIntoShell] = useState(() => readStoredSignedIn());
   const [authNotice, setAuthNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [appState, setAppState] = useState<AppState>(emptyApp);
@@ -666,6 +669,9 @@ export default function App() {
       setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(demoRunning));
       return;
     }
+    // The default page is the overview, so without this the sign-in screen polls a
+    // protected endpoint every ten seconds and logs a 401 for each attempt.
+    if (!authSession?.authenticated) return;
 
     let cancelled = false;
     let inFlight = false;
@@ -689,7 +695,7 @@ export default function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activePage, demoMode, demoRunning, demoSessionVersion]);
+  }, [activePage, authSession?.authenticated, demoMode, demoRunning, demoSessionVersion]);
 
   useEffect(() => {
     const compactLayout = window.matchMedia("(max-width: 1100px)");
@@ -979,6 +985,13 @@ export default function App() {
   useEffect(() => {
     writeStoredActivePage(activePage);
   }, [activePage]);
+
+  // Mirrors every resolved session into the boot hint, so the six places that settle
+  // the session do not each have to remember to keep the next first paint honest.
+  useEffect(() => {
+    if (!authSession) return;
+    writeStoredSignedIn(authSession.authenticated || demoMode);
+  }, [authSession?.authenticated, demoMode]);
 
   useEffect(() => {
     if (activePage !== "settings" || demoMode || !authSession?.authenticated) return;
@@ -1830,7 +1843,13 @@ export default function App() {
     }
   }
 
-  if (!authSession) {
+  // A visitor who was signed in last time gets the workspace shell straight away, so the
+  // resolved session fills skeletons that are already the right shape instead of replacing
+  // a sign-in panel with a different layout.
+  const sessionPending = !authSession;
+  const shellVisible = sessionPending || Boolean(authSession?.authenticated) || demoMode;
+
+  if (sessionPending && !bootsIntoShell) {
     return (
       <>
         <AppToaster darkMode={darkMode} />
@@ -1839,7 +1858,7 @@ export default function App() {
     );
   }
 
-  if (!authSession.authenticated && !demoMode) {
+  if (authSession && !authSession.authenticated && !demoMode) {
     return (
       <>
         <AppToaster darkMode={darkMode} />
@@ -1933,11 +1952,11 @@ export default function App() {
           managedContent={managedContent}
           demoMode={demoMode}
           panelVersion={panelVersion}
-          accountName={authSession.user?.username}
+          accountName={authSession?.user?.username}
           onLogout={logout}
         />
 
-      <section inert={phoneLayout && !sidebarCollapsed ? true : undefined} className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!appStateLoaded && (authSession.authenticated || demoMode))) ? "workspaceServerPage" : ""}`.trim()}>
+      <section inert={phoneLayout && !sidebarCollapsed ? true : undefined} className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!applicationReady && shellVisible)) ? "workspaceServerPage" : ""}`.trim()}>
         <header className="workspaceHeader">
           <div>
             <h2>{currentPageTitle}</h2>
@@ -1953,7 +1972,7 @@ export default function App() {
           provisioningError={provisioningError}
           provisioningErrorDetails={provisioningErrorDetails}
           notice={notice}
-          showApplicationLoading={!appStateLoaded && (authSession.authenticated || demoMode) && !appLoadError}
+          showApplicationLoading={!applicationReady && shellVisible && !appLoadError}
           appLoadError={appLoadError}
           appRefreshing={appRefreshing}
           onRetryAppLoad={() => void refreshApp()}
