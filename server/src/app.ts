@@ -268,6 +268,14 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "GET" && /^\/api\/servers\/[^/?]+\/player-head\/[^/?]+(?:\?|$)/.test(request.url)) {
     return;
   }
+  // The export modal hands the artifact to the browser as an ordinary link so it streams a
+  // multi-gigabyte archive itself, with a real size in its download UI. A navigation cannot set a
+  // request header, so requiring one here rejected every download. The session cookie is
+  // SameSite=Strict, which is what actually stops a cross-site request; the route still demands
+  // `servers.export` and an operation the caller started, and it only ever reads.
+  if (request.method === "GET" && /^\/api\/exports\/[^/?]+\/download(?:\?|$)/.test(request.url)) {
+    return;
+  }
   if (request.raw.url?.split("?", 1)[0] === "/api/nodes/connect") {
     return;
   }

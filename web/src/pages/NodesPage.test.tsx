@@ -155,4 +155,16 @@ describe("dense node fleets", () => {
     expect(html).not.toContain('class="nodeTile"');
     expect(html).not.toContain("nodeServerTile");
   });
+
+  it("sizes every toolbar action the same", () => {
+    const html = renderDenseNodesPage([denseNode(1)]);
+    const toolbar = html.slice(html.indexOf('class="uiToolbar nodesToolbar"'), html.indexOf("nodesBoard"));
+
+    // `uiButton--compact` is 32px against the 40px the other two stand at, so one compact button in
+    // the row leaves Import shorter than the Refresh button beside it.
+    expect(toolbar).toContain("Import");
+    expect(toolbar).toContain("Refresh");
+    expect(toolbar).toContain("Add node");
+    expect(toolbar).not.toContain("uiButton--compact");
+  });
 });

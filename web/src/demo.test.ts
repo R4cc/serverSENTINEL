@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoSession, demoConsoleMessages, demoPlayerSnapshot, demoStats, demoStatsHistory, demoTimelineData, initialDemoSchedules } from "./demo";
+import { createDemoSession, demoConsoleMessages, demoFleetNodes, demoFleetServers, demoPlayerSnapshot, demoPlayerSnapshots, demoStats, demoStatsHistory, demoTimelineData, initialDemoSchedules } from "./demo";
 import { resourceHistorySampleLimit, resourcePollMs } from "./utils/format";
 
 function seededRandom(seed: number) {
@@ -40,6 +40,19 @@ describe("demo resource statistics", () => {
 });
 
 describe("demo session generation", () => {
+  it("populates a multi-node fleet with hundreds of distributed players", () => {
+    const nodes = demoFleetNodes();
+    const servers = demoFleetServers();
+    const snapshots = demoPlayerSnapshots(true);
+    const players = Object.values(snapshots).reduce((total, snapshot) => total + (snapshot.online ?? 0), 0);
+
+    expect(nodes).toHaveLength(8);
+    expect(servers).toHaveLength(32);
+    expect(new Set(servers.map((server) => server.nodeId))).toEqual(new Set(nodes.map((node) => node.id)));
+    expect(Object.keys(snapshots)).toHaveLength(servers.length);
+    expect(players).toBeGreaterThanOrEqual(320);
+  });
+
   it("creates a fresh randomized roster, resource profile, and event mix", () => {
     const first = createDemoSession(seededRandom(1), 1_000_000);
     const second = createDemoSession(seededRandom(2), 1_000_000);

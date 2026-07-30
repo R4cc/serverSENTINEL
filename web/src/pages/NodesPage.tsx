@@ -605,7 +605,7 @@ export function NodesPage({
             secondary={(
               <>
                 {canImportServers && (
-                  <Button variant="secondary" compact onClick={onImportServers} disabled={busy}>
+                  <Button variant="secondary" onClick={onImportServers} disabled={busy}>
                     <AppIcon name="fileUp" /> Import
                   </Button>
                 )}

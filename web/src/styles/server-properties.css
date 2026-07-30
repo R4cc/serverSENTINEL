@@ -73,6 +73,32 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* The version fields carry a `Current:` description and Display name does not,
+   so each field shares the row's label/description/control tracks instead of
+   stacking its own. Without this the description pushes both selects a line
+   below the name input. Rows are placed explicitly because a field with no
+   description would otherwise auto-place its control into the description row.
+   The field keeps its own row gap so the shared tracks stay on the form rhythm
+   rather than inheriting the wider gap that separates the fields themselves. */
+.propertiesFieldGrid.three > .uiFormField {
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: var(--space-2);
+}
+
+.propertiesFieldGrid.three > .uiFormField > .uiFormFieldLabel {
+  grid-row: 1;
+}
+
+.propertiesFieldGrid.three > .uiFormField > .uiFormFieldDescription {
+  grid-row: 2;
+}
+
+.propertiesFieldGrid.three > .uiFormField > .uiFormFieldControl {
+  grid-row: 3;
+  align-self: start;
+}
+
 .propertiesFieldWide {
   grid-column: 1 / -1;
 }
@@ -336,6 +362,13 @@
   .propertiesFieldGrid.two,
   .propertiesFieldGrid.three {
     grid-template-columns: 1fr;
+  }
+
+  /* Stacked fields have no neighbour to align to, and the shared description
+     track would leave a gap under the labels that do not have one. */
+  .propertiesFieldGrid.three > .uiFormField {
+    grid-row: auto;
+    grid-template-rows: none;
   }
 
   .propertiesSection,

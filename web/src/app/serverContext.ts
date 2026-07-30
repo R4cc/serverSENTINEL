@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
-import { demoFixtures, demoServerId } from "../demoRuntime";
+import { demoFixtures, demoServerId, isDemoServerId } from "../demoRuntime";
 import type { AppState, ContextNode, ManagedServer, ScheduledExecution, ServerStatus } from "../types";
 import { minecraftVersionInfo, runtimeVersionInfo, versionValue } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
@@ -20,8 +20,11 @@ export function useServerContext(input: {
     const runtimeMode = input.appState.runtimeMode ?? "all-in-one";
     return {
       ...input.appState,
-      servers: [demoFixtures().demoServer(input.demoSchedules), ...input.appState.servers.filter((server) => server.id !== demoServerId)],
-      nodes: input.appState.nodes?.length ? input.appState.nodes : (runtimeMode === "panel" ? [] : [defaultContextNode]),
+      servers: [
+        ...demoFixtures().demoFleetServers(input.demoSchedules),
+        ...input.appState.servers.filter((server) => !isDemoServerId(server.id))
+      ],
+      nodes: demoFixtures().demoFleetNodes(),
       runtimeMode,
       modrinthApiConfigured: demoFixtureModrinthConfigured(modsDemoFixture),
       dockerSocketMounted: true,
@@ -53,12 +56,13 @@ export function useServerContext(input: {
 
   const activeServer = useMemo(() => {
     if (input.demoMode) {
-      return effectiveAppState.servers.find((server) => server.id === demoServerId);
+      return effectiveAppState.servers.find((server) => server.id === input.activeServerId)
+        ?? effectiveAppState.servers.find((server) => server.id === demoServerId);
     }
     return effectiveAppState.servers.find((server) => server.id === input.activeServerId) ?? effectiveAppState.servers[0];
   }, [input.activeServerId, input.demoMode, effectiveAppState.servers]);
 
-  const activeServerIsDemo = input.demoMode && activeServer?.id === demoServerId;
+  const activeServerIsDemo = input.demoMode && isDemoServerId(activeServer?.id);
   const activeNode = useMemo(() => {
     const serverNodeId = activeServer?.nodeId || "local";
     return contextNodes.find((node) => node.id === serverNodeId) ?? contextNodes[0] ?? { ...(panelOnlyMode ? emptyPanelContextNode : defaultContextNode), servers: [] };

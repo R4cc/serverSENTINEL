@@ -17,6 +17,11 @@ export type DemoFixtures = typeof import("./demo");
  * comparisons stay synchronous and cost nothing in a production bundle.
  */
 export const demoServerId = "demo-survival";
+export const demoFleetServerPrefix = "demo-fleet-";
+
+export function isDemoServerId(serverId: string | undefined): boolean {
+  return serverId === demoServerId || Boolean(serverId?.startsWith(demoFleetServerPrefix));
+}
 
 let fixtures: DemoFixtures | undefined;
 let pending: Promise<DemoFixtures> | undefined;

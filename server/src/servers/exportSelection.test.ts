@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { categoryTargets, isMissingPathError, normalizeExportSelection, worldDirectories } from "./exportSelection.js";
+import { categoryTargets, collectServerCategories, isMissingPathError, normalizeExportSelection, worldDirectories } from "./exportSelection.js";
+import { inaccessibleServerRootMessage, missingParentMessage, missingPathMessage } from "../core.js";
 import type { ManagedServer } from "../types.js";
 
 function server(runtimeType: "fabric" | "paper"): ManagedServer {
@@ -52,9 +53,53 @@ describe("export selection", () => {
     expect(isMissingPathError(Object.assign(new Error("nope"), { code: "ENOENT" }))).toBe(true);
     // A remote node flattens filesystem errors into command_failed, keeping only the message.
     expect(isMissingPathError(new Error("ENOENT: no such file or directory, scandir '/data/world'"))).toBe(true);
+    // A node raises its path-safety refusal before it touches the filesystem, so the message is the
+    // panel's own wording and the errno is gone by the time the protocol delivers it.
+    expect(isMissingPathError(Object.assign(new Error(missingPathMessage), { code: "command_failed" }))).toBe(true);
+    expect(isMissingPathError(Object.assign(new Error(missingParentMessage), { code: "command_failed" }))).toBe(true);
     expect(isMissingPathError(Object.assign(new Error("denied"), { code: "EACCES" }))).toBe(false);
     expect(isMissingPathError(new Error("Node node-1 is offline"))).toBe(false);
     expect(isMissingPathError(undefined)).toBe(false);
+    // An unreadable server root is not an absent optional folder: every file would go missing from
+    // the archive, so it has to fail the export rather than be skipped.
+    expect(isMissingPathError(new Error(inaccessibleServerRootMessage))).toBe(false);
+  });
+
+  it("skips world folders a remote node reports as missing", async () => {
+    // A node answers `files.list` for an absent dimension folder with the panel's own path-safety
+    // wording, and the protocol replaces the ENOENT code with `command_failed`. Fabric keeps its
+    // dimensions inside the level folder, so `world_nether` is absent on a perfectly healthy server
+    // and must not fail the export.
+    const listed: string[] = [];
+    const runtime = {
+      resolveExistingPath: async (_server: ManagedServer, path: string) => path,
+      listFiles: async (_server: ManagedServer, target: string) => {
+        listed.push(target);
+        if (target !== "/world") {
+          throw Object.assign(new Error("Path does not exist inside the managed server directory"), { code: "command_failed" });
+        }
+        return { path: target, entries: [{ name: "level.dat", path: "/world/level.dat", type: "file", size: 12, modifiedAt: "2026-01-01T00:00:00.000Z" }] };
+      },
+      readFile: async () => ({ content: "level-name=world\n" })
+    } as unknown as Parameters<typeof collectServerCategories>[0];
+
+    const [world] = await collectServerCategories(runtime, server("fabric"), ["world"]);
+
+    expect(listed).toEqual(["/world", "/world_nether", "/world_the_end", "/worlds"]);
+    expect(world.files.map((file) => file.relativePath)).toEqual(["world/level.dat"]);
+    expect(world.totalBytes).toBe(12);
+  });
+
+  it("still fails the export when a node reports a real error", async () => {
+    const runtime = {
+      resolveExistingPath: async (_server: ManagedServer, path: string) => path,
+      listFiles: async () => {
+        throw Object.assign(new Error("Node node-1 is offline"), { code: "command_failed" });
+      },
+      readFile: async () => ({ content: "level-name=world\n" })
+    } as unknown as Parameters<typeof collectServerCategories>[0];
+
+    await expect(collectServerCategories(runtime, server("fabric"), ["world"])).rejects.toThrow(/offline/);
   });
 
   it("normalizes a selection into canonical order and rejects unknown input", () => {

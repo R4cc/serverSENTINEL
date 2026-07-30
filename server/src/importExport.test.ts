@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExportSelection } from "@serversentinel/contracts";
 import type { ManagedServer } from "./types.js";
 import {
@@ -23,6 +23,31 @@ import { NodesRepository } from "./storage/nodesRepository.js";
 import { ServersRepository } from "./storage/serversRepository.js";
 import { SettingsRepository } from "./storage/settingsRepository.js";
 
+/**
+ * Models a deployment where the servers directory is its own mount -- a big disk for worlds, which
+ * is how anyone with a large world sets this up. `rename` cannot cross a device boundary there, so
+ * only a move from one root to the other fails; renames within a directory still work, which is
+ * what archive extraction does while it stages the files.
+ */
+const deviceBoundary = vi.hoisted(() => ({ from: "", to: "" }));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    default: actual,
+    rename: async (source: string, destination: string) => {
+      if (deviceBoundary.from && String(source).startsWith(deviceBoundary.from) && String(destination).startsWith(deviceBoundary.to)) {
+        throw Object.assign(
+          new Error(`EXDEV: cross-device link not permitted, rename '${source}' -> '${destination}'`),
+          { code: "EXDEV" }
+        );
+      }
+      return actual.rename(source, destination);
+    }
+  };
+});
+
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
 const sourceServerId = "00000000-0000-4000-8000-000000000101";
@@ -36,6 +61,8 @@ const everything: ExportSelection = {
 };
 
 afterEach(async () => {
+  deviceBoundary.from = "";
+  deviceBoundary.to = "";
   for (const database of openDatabases.splice(0)) database.close();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
@@ -531,6 +558,34 @@ describe("import application", () => {
     expect(repositories.modPreferencesRepository.list(importedId)).toHaveProperty("fabric-api.jar");
     await expect(stat(join(imported.serverDir, "world", "region", "r.0.0.mca"))).resolves.toMatchObject({ size: 6 });
     await expect(stat(join(imported.serverDir, "server.properties"))).resolves.toBeTruthy();
+  });
+
+  it("restores a server when the staging directory is on another filesystem", async () => {
+    const root = await tempRoot("serversentinel-import-exdev-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
+    const repositories = await createRepositories(root);
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+    deviceBoundary.from = join(root, "tmp");
+    deviceBoundary.to = join(root, "servers");
+
+    const result = await applyImportArchive(written.path, manifest, {
+      targetNodeId: nodeId,
+      localNodeId: nodeId,
+      existingServers: [],
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: repositories.modPreferencesRepository
+    });
+
+    const imported = repositories.serversRepository.list().find((server) => server.id === result.imported[0].serverId)!;
+    await expect(stat(join(imported.serverDir, "world", "region", "r.0.0.mca"))).resolves.toMatchObject({ size: 6 });
+    await expect(stat(join(imported.serverDir, "server.properties"))).resolves.toBeTruthy();
+    // The copy stands in for a move, so it must not leave a second copy of the world behind.
+    await expect(readdir(join(root, "tmp"))).resolves.toEqual([]);
   });
 
   it("downloads the runtime jar the archive deliberately left out", async () => {

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { chmod, mkdir, rename, rm, stat } from "node:fs/promises";
+import { chmod, cp, mkdir, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -718,6 +718,24 @@ export function validateImportArchive(manifest: ExportManifest, context: ImportC
   };
 }
 
+/**
+ * Moves a staged server folder into place. The staging directory lives under the data root while the
+ * servers directory is frequently its own mount -- a large disk for worlds -- and `rename` cannot
+ * cross a device boundary. Copying needs the space twice and takes as long as the world is big, so
+ * it stays a fallback for the one error that means the rename could never have worked.
+ */
+async function moveStagedServer(source: string, destination: string) {
+  try {
+    await rename(source, destination);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+  }
+  // Symlinks are copied as links rather than followed, matching what the rename would have moved.
+  await cp(source, destination, { recursive: true, force: true, preserveTimestamps: true });
+  await rm(source, { recursive: true, force: true });
+}
+
 export async function applyImportArchive(archivePath: string, manifest: ExportManifest, context: ApplyImportContext) {
   const validation = validateImportArchive(manifest, context);
   if (!validation.valid) {
@@ -750,7 +768,7 @@ export async function applyImportArchive(archivePath: string, manifest: ExportMa
       await mkdir(dirname(plan.serverDir), { recursive: true });
       // A server folder can legitimately be absent when only panel settings were exported.
       await mkdir(staged, { recursive: true });
-      await rename(staged, plan.serverDir);
+      await moveStagedServer(staged, plan.serverDir);
       writtenDirs.push(plan.serverDir);
       prepared.push({
         entry,

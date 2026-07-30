@@ -1,5 +1,6 @@
 import { EXPORT_CATEGORIES, serverRuntimeDefinition, type ExportCategory, type ExportContentStrategy, type ExportSelection } from "@serversentinel/contracts";
 import { config } from "../config.js";
+import { missingParentMessage, missingPathMessage } from "../core.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { parseFileListing } from "../files/fileService.js";
@@ -16,11 +17,16 @@ export const defaultLevelName = "world";
  * with files silently missing.
  *
  * A remote node flattens filesystem errors into `command_failed` with the original message, so the
- * message is the only signal available for a node-side ENOENT.
+ * message is the only signal available for a node-side ENOENT. That covers two shapes: a raw errno
+ * from the node's own filesystem, and the path-safety refusal the node raises before it ever calls
+ * the filesystem -- which reports a missing path in the panel's own words and carries no errno once
+ * it crosses the wire. Missing the second one failed the whole export over an absent `world_nether`,
+ * which is simply how Fabric and vanilla lay out their dimensions.
  */
 export function isMissingPathError(error: unknown) {
   if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return true;
   const message = error instanceof Error ? error.message : "";
+  if (message === missingPathMessage || message === missingParentMessage) return true;
   return /ENOENT|no such file or directory/i.test(message);
 }
 
