@@ -25,7 +25,6 @@ export function ActiveServerStrip({
   alert,
   nodeName,
   runtimeDisplayName,
-  runtimeVersion,
   minecraftVersion,
   playerSnapshot,
   nodeOffline,
@@ -50,7 +49,6 @@ export function ActiveServerStrip({
   alert: ServerStripAlert;
   nodeName: string;
   runtimeDisplayName: string;
-  runtimeVersion: string;
   minecraftVersion: string;
   playerSnapshot: PlayerSnapshot | undefined;
   nodeOffline: boolean;
@@ -99,7 +97,7 @@ export function ActiveServerStrip({
                   </small>
                   <span aria-hidden="true" className="serverStripSeparator">·</span>
                   <small className="serverStripMeta">
-                    {runtimeDisplayName} {runtimeVersion || "unknown"}
+                    {runtimeDisplayName}
                   </small>
                   <span aria-hidden="true" className="serverStripSeparator">·</span>
                   <small className="serverStripMeta">

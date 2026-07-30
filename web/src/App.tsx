@@ -2031,7 +2031,6 @@ export default function App() {
               alert={serverStripAlert}
               nodeName={activeNode.name}
               runtimeDisplayName={activeRuntimeDefinition?.displayName ?? "Runtime"}
-              runtimeVersion={activeServer.runtimeProfile.runtimeVersion}
               minecraftVersion={activeMinecraftVersion}
               playerSnapshot={playerSnapshots[activeServer.id]}
               nodeOffline={confirmedNodeOffline}

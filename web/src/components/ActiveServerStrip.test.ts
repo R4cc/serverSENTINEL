@@ -20,7 +20,6 @@ function render(playerSnapshot: PlayerSnapshot | undefined) {
       alert: null,
       nodeName: "Local node",
       runtimeDisplayName: "Fabric",
-      runtimeVersion: "0.16.9",
       minecraftVersion: "1.21.1",
       playerSnapshot,
       nodeOffline: false,
