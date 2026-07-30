@@ -30,6 +30,15 @@ function assertPathInside(root: string, target: string, message: string) {
   }
 }
 
+/**
+ * A node flattens filesystem errors onto the wire as `command_failed` and keeps only the message, so
+ * the panel cannot read `ENOENT` off an error a node raised. Callers that tolerate a missing path
+ * match these instead of the prose, which keeps the two ends from drifting apart.
+ */
+export const missingPathMessage = "Path does not exist inside the managed server directory";
+export const missingParentMessage = "Parent directory does not exist inside the managed server directory";
+export const inaccessibleServerRootMessage = "Managed server root directory is not accessible";
+
 function pathSafetyError(message: string, code?: string) {
   const error = new Error(message) as NodeJS.ErrnoException;
   if (code) error.code = code;
@@ -47,7 +56,7 @@ async function realServerDir(server: ServerPathScope) {
   try {
     return await realpath(server.serverDir);
   } catch {
-    throw pathSafetyError("Managed server root directory is not accessible", "ENOENT");
+    throw pathSafetyError(inaccessibleServerRootMessage, "ENOENT");
   }
 }
 
@@ -58,7 +67,7 @@ async function ensureWritableTargetInsideServer(server: ServerPathScope, target:
     realParent = await realpath(dirname(target));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw pathSafetyError("Parent directory does not exist inside the managed server directory", "ENOENT");
+      throw pathSafetyError(missingParentMessage, "ENOENT");
     }
     throw error;
   }
@@ -89,7 +98,7 @@ export async function validateExistingResolvedInsideServer(server: ServerPathSco
     realTarget = await realpath(target);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw pathSafetyError("Path does not exist inside the managed server directory", "ENOENT");
+      throw pathSafetyError(missingPathMessage, "ENOENT");
     }
     throw error;
   }
