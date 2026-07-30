@@ -1818,6 +1818,20 @@ button .buttonIcon {
   line-height: 1.3;
 }
 
+.activeServerStrip .serverStripPlayers {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.activeServerStrip .serverStripPlayers svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
 .activeServerStrip .serverStripRight {
   display: flex;
   align-items: center;

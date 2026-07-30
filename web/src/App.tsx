@@ -1,7 +1,7 @@
 import { FormEvent, Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
-import { demoFixtures, demoServerId, loadDemoFixtures } from "./demoRuntime";
+import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
 import type { ActivePage, AppState, AuthSession, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
@@ -205,8 +205,8 @@ export default function App() {
   }
 
   const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean } = {}) => {
-    if (demoMode && serverId === demoServerId) {
-      setOverviewData(demoFixtures().demoOverviewData(demoRunning));
+    if (demoMode && isDemoServerId(serverId)) {
+      setOverviewData(demoFixtures().demoOverviewData(demoRunning, serverId));
       setOverviewError("");
       setOverviewLoading(false);
       return;
@@ -314,7 +314,7 @@ export default function App() {
   }, [activePage, activeServer, supportsManagedMods]);
   const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
     if (!activeServer) throw new Error("Select a server to load its timeline");
-    if (demoMode && activeServer.id === demoServerId) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to);
+    if (demoMode && isDemoServerId(activeServer.id)) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to, activeServer.id);
     return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`);
   }, [activeServer?.id, demoMode, demoRunning, demoSchedules, demoSessionVersion]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
@@ -600,16 +600,13 @@ export default function App() {
   function openServerFromNode(serverId: string) {
     const server = effectiveAppState.servers.find((candidate) => candidate.id === serverId);
     if (!server) return;
-    if (demoMode && server.id !== demoServerId) {
-      notify("info", "Demo mode is enabled. Exit demo mode to access this server.");
-      return;
-    }
     setActiveServerId(server.id);
     activeServerIdRef.current = server.id;
     setActivePage("overview");
   }
 
   function nodeServerStateLabel(serverId: string) {
+    if (demoMode && isDemoServerId(serverId)) return demoRunning ? "RUNNING" : "STOPPED";
     if (status?.server.id !== serverId) return "UNKNOWN";
     if (!status.docker.configured) return "UNKNOWN";
     return status.docker.running ? "RUNNING" : "STOPPED";
@@ -618,10 +615,7 @@ export default function App() {
   useEffect(() => {
     if (activePage !== "nodes" && activePage !== "overview") return;
     if (demoMode) {
-      setPlayerSnapshots((current) => ({
-        ...current,
-        [demoServerId]: demoFixtures().demoPlayerSnapshot(demoRunning)
-      }));
+      setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(demoRunning));
       return;
     }
 
@@ -678,7 +672,7 @@ export default function App() {
       setNotice("");
       setActiveServerId(demoServerId);
       setActivePage("overview");
-    } else if (activeServerId === demoServerId) {
+    } else if (isDemoServerId(activeServerId)) {
       setActiveServerId("");
       setStatus(null);
       setLogs([]);
@@ -711,9 +705,9 @@ export default function App() {
       setOverviewData({ events: [], activity: {} });
       setTimelineLatestSample(undefined);
     }
-    if (demoMode && activeServer.id === demoServerId) {
+    if (demoMode && isDemoServerId(activeServer.id)) {
       setStatus(demoFixtures().demoStatus(activeServer, demoRunning));
-      const demoLogs = demoFixtures().demoConsoleMessages().map(consoleLine);
+      const demoLogs = demoFixtures().demoConsoleMessages(activeServer.id).map(consoleLine);
       logsRef.current = demoLogs;
       setLogs(demoLogs);
       setConsoleSnapshotReadyServerId(activeServer.id);
@@ -912,7 +906,7 @@ export default function App() {
     if (fileWorkspaceServerIdRef.current === activeServer.id) return;
     fileWorkspaceServerIdRef.current = activeServer.id;
     filesWorkspace.actions.resetEditorState();
-    if (demoMode && activeServer.id === demoServerId) {
+    if (demoMode && isDemoServerId(activeServer.id)) {
       filesWorkspace.actions.initializeDemoRoot(readStoredFileLocation(activeServer.id));
       return;
     }
@@ -985,8 +979,8 @@ export default function App() {
 
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "overview") return;
-    if (demoMode && activeServer.id === demoServerId) {
-      setOverviewData(demoFixtures().demoOverviewData(demoRunning));
+    if (demoMode && isDemoServerId(activeServer.id)) {
+      setOverviewData(demoFixtures().demoOverviewData(demoRunning, activeServer.id));
       setOverviewError("");
       setOverviewLoading(false);
       return;
@@ -1298,7 +1292,7 @@ export default function App() {
       setAppState(next);
       setAppStateLoaded(true);
       setAppLoadError("");
-      if (demoMode) {
+      if (demoMode && !isDemoServerId(activeServerIdRef.current)) {
         setActiveServerId(demoServerId);
       } else if (activeServerId && !next.servers.some((server) => server.id === activeServerId)) {
         setActiveServerId(next.servers[0]?.id ?? "");
@@ -1349,9 +1343,11 @@ export default function App() {
   async function refreshStatus(serverId = activeServer?.id) {
     if (isProvisioning) return;
     if (!serverId) return;
-    if (demoMode && serverId === demoServerId) {
+    if (demoMode && isDemoServerId(serverId)) {
       if (activeServerIdRef.current === serverId) {
-        setStatus(demoFixtures().demoStatus(demoFixtures().demoServer(demoSchedules), demoRunning));
+        const server = effectiveAppState.servers.find((candidate) => candidate.id === serverId)
+          ?? demoFixtures().demoServer(demoSchedules);
+        setStatus(demoFixtures().demoStatus(server, demoRunning));
       }
       return;
     }
@@ -1412,7 +1408,7 @@ export default function App() {
 
   async function refreshConsoleLogs(serverId = activeServer?.id): Promise<boolean> {
     if (!serverId) return false;
-    if (demoMode && serverId === demoServerId) {
+    if (demoMode && isDemoServerId(serverId)) {
       if (activeServerIdRef.current === serverId) {
         setLogs((current) => current.length ? current : [
           consoleLine("[demo] Starting minecraft server version 1.21.4"),
@@ -1677,13 +1673,10 @@ export default function App() {
         }
         setDemoRunning(nextRunning);
         setStatus(demoFixtures().demoStatus(activeServer, nextRunning));
-        setOverviewData(demoFixtures().demoOverviewData(nextRunning));
-        setPlayerSnapshots((current) => ({
-          ...current,
-          [demoServerId]: demoFixtures().demoPlayerSnapshot(nextRunning)
-        }));
+        setOverviewData(demoFixtures().demoOverviewData(nextRunning, activeServer.id));
+        setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(nextRunning));
         setLogs((current) => [
-          ...(nextRunning ? demoFixtures().demoConsoleMessages().map(consoleLine) : current),
+          ...(nextRunning ? demoFixtures().demoConsoleMessages(activeServer.id).map(consoleLine) : current),
           consoleLine(`[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`),
           consoleLine(`[demo] Server is now ${nextRunning ? "running" : "stopped"}`)
         ].slice(-consoleScrollbackRef.current));
@@ -1717,7 +1710,7 @@ export default function App() {
     setNotice("");
     try {
       if (activeServerIsDemo) {
-        const snapshot = demoFixtures().demoPlayerSnapshot(true);
+        const snapshot = demoFixtures().demoPlayerSnapshot(true, activeServer.id);
         const response = command === "list"
           ? `There are ${snapshot.online} of a max of ${snapshot.maxPlayers} players online: ${snapshot.names.join(", ")}`
           : command === "seed"
@@ -2040,6 +2033,7 @@ export default function App() {
               runtimeDisplayName={activeRuntimeDefinition?.displayName ?? "Runtime"}
               runtimeVersion={activeServer.runtimeProfile.runtimeVersion}
               minecraftVersion={activeMinecraftVersion}
+              playerSnapshot={playerSnapshots[activeServer.id]}
               nodeOffline={confirmedNodeOffline}
               status={activeStatus}
               controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}

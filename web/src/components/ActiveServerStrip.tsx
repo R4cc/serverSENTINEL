@@ -1,4 +1,4 @@
-import type { ManagedServer, ServerStatus } from "../types";
+import type { ManagedServer, PlayerSnapshot, ServerStatus } from "../types";
 import { ActionMenu } from "./ActionMenu";
 import { RestartRequiredBadge } from "./RestartRequiredBadge";
 import { RuntimeControls } from "./RuntimeControls";
@@ -7,6 +7,12 @@ import { Button, Spinner, StatusBadge } from "./UiPrimitives";
 
 export type ServerStripHealth = { tone: string; message: string } | null;
 export type ServerStripAlert = { title: string; message: string } | null;
+
+/** Null when the count is unknown, so the strip can drop the item entirely. */
+function playerCountLabel(snapshot: PlayerSnapshot | undefined) {
+  if (!snapshot || snapshot.online === null) return null;
+  return snapshot.maxPlayers ? `${snapshot.online} / ${snapshot.maxPlayers}` : String(snapshot.online);
+}
 
 export function ActiveServerStrip({
   server,
@@ -21,6 +27,7 @@ export function ActiveServerStrip({
   runtimeDisplayName,
   runtimeVersion,
   minecraftVersion,
+  playerSnapshot,
   nodeOffline,
   status,
   controlAvailableFallback,
@@ -45,6 +52,7 @@ export function ActiveServerStrip({
   runtimeDisplayName: string;
   runtimeVersion: string;
   minecraftVersion: string;
+  playerSnapshot: PlayerSnapshot | undefined;
   nodeOffline: boolean;
   status: ServerStatus | null;
   controlAvailableFallback: boolean;
@@ -57,6 +65,7 @@ export function ActiveServerStrip({
   refreshDisabled: boolean;
   refreshDisabledReason: string;
 }) {
+  const playerCount = playerCountLabel(playerSnapshot);
   return (
     <div className={`activeServerStrip ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
       <div className="serverStripPrimary">
@@ -96,6 +105,18 @@ export function ActiveServerStrip({
                   <small className="serverStripMeta">
                     MC {minecraftVersion === "Unknown" ? "unknown" : minecraftVersion}
                   </small>
+                  {playerCount && (
+                    <>
+                      <span aria-hidden="true" className="serverStripSeparator">·</span>
+                      <small className="serverStripMeta serverStripPlayers" title="Players online">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="8" r="3" />
+                          <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+                        </svg>
+                        {playerCount}
+                      </small>
+                    </>
+                  )}
                 </>
               )}
             </div>

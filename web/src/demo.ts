@@ -1,9 +1,42 @@
-import { demoServerId } from "./demoRuntime";
+import { demoFleetServerPrefix, demoServerId } from "./demoRuntime";
 import type { ModsDemoFixtureName } from "./features/mods/modsDemoFixtures";
-import type { FileListing, InstalledMod, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from "./types";
+import type { FileListing, InstalledMod, ManagedNode, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from "./types";
 
 const demoStartedAt = Date.now();
 const gibibyte = 1024 * 1024 * 1024;
+
+const demoFleet = [
+  { id: "local", name: "Panel Host", location: "Frankfurt", servers: ["Demo Survival", "Creative Commons", "Skyblock Central", "Modpack Lab"] },
+  { id: "demo-node-berlin", name: "Berlin Edge", location: "Berlin", servers: ["Hardcore One", "Builders United", "Pixelmon EU", "Vanilla Plus"] },
+  { id: "demo-node-london", name: "London Edge", location: "London", servers: ["Survival UK", "Cobblemon Isles", "Redstone Labs", "Weekend SMP"] },
+  { id: "demo-node-helsinki", name: "Helsinki Edge", location: "Helsinki", servers: ["Nordic Survival", "Aurora Creative", "Tech Factory", "Frostbound"] },
+  { id: "demo-node-virginia", name: "Virginia Edge", location: "Virginia", servers: ["US East SMP", "Minigame Hub", "Stoneblock", "Community Build"] },
+  { id: "demo-node-oregon", name: "Oregon Edge", location: "Oregon", servers: ["US West SMP", "Parkour Network", "Create Together", "Frontier"] },
+  { id: "demo-node-singapore", name: "Singapore Edge", location: "Singapore", servers: ["Asia Survival", "OneBlock Asia", "Factory Craft", "Night Owl SMP"] },
+  { id: "demo-node-sydney", name: "Sydney Edge", location: "Sydney", servers: ["Oceania SMP", "Southern Skyblock", "Down Under Creative", "Builders AU"] }
+] as const;
+
+type DemoFleetServerDefinition = {
+  id: string;
+  name: string;
+  nodeId: string;
+  nodeName: string;
+  index: number;
+};
+
+const demoFleetServerDefinitions: DemoFleetServerDefinition[] = demoFleet.flatMap((node, nodeIndex) => (
+  node.servers.map((name, serverIndex) => ({
+    id: nodeIndex === 0 && serverIndex === 0
+      ? demoServerId
+      : `${demoFleetServerPrefix}${nodeIndex + 1}-${serverIndex + 1}`,
+    name,
+    nodeId: node.id,
+    nodeName: node.name,
+    index: nodeIndex * node.servers.length + serverIndex
+  }))
+));
+
+const demoFleetServerIds = demoFleetServerDefinitions.map((server) => server.id);
 
 type DemoTimelineScenarioPlayers = {
   marathon: string;
@@ -228,15 +261,29 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
   };
 }
 
-let activeDemoSession = createDemoSession(Math.random, demoStartedAt);
+function createDemoSessions(startedAt: number) {
+  return new Map(demoFleetServerIds.map((serverId) => [
+    serverId,
+    createDemoSession(Math.random, startedAt)
+  ]));
+}
+
+let activeDemoSessions = createDemoSessions(demoStartedAt);
+let activeDemoSession = activeDemoSessions.get(demoServerId)!;
+
+function demoSession(serverId = demoServerId) {
+  return activeDemoSessions.get(serverId) ?? activeDemoSession;
+}
 
 export function resetDemoSession(startedAt = Date.now()) {
-  activeDemoSession = createDemoSession(Math.random, startedAt);
+  activeDemoSessions = createDemoSessions(startedAt);
+  activeDemoSession = activeDemoSessions.get(demoServerId)!;
   return activeDemoSession;
 }
 
-export function demoConsoleMessages() {
-  const [firstPlayer, secondPlayer] = activeDemoSession.onlinePlayerNames;
+export function demoConsoleMessages(serverId = demoServerId) {
+  const session = demoSession(serverId);
+  const [firstPlayer, secondPlayer] = session.onlinePlayerNames;
   return [
     "[demo] Starting minecraft server version 1.21.4",
     "[demo] Loading Fabric Loader 0.16.10",
@@ -545,14 +592,16 @@ export const initialDemoFiles: Record<string, string> = {
   ].join("\n")
 };
 
-export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedules): ManagedServer {
+function createDemoServer(definition: DemoFleetServerDefinition, schedules: ScheduledExecution[]): ManagedServer {
+  const minecraftPort = 25_565 + definition.index;
+  const storageName = definition.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return {
-    id: demoServerId,
-    displayName: "Demo Survival",
-    nodeId: "local",
-    nodeName: "Internal Node",
-    directoryLabel: "/demo/survival",
-    storageName: "Browser demo",
+    id: definition.id,
+    displayName: definition.name,
+    nodeId: definition.nodeId,
+    nodeName: definition.nodeName,
+    directoryLabel: `/demo/${storageName}`,
+    storageName,
     runtimeProfile: {
       minecraftVersion: "1.21.4",
       runtimeType: "fabric",
@@ -566,9 +615,9 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
       compatibilityStatus: "compatible",
       resolvedAt: new Date(demoStartedAt).toISOString()
     },
-    dockerContainer: "serversentinel-demo",
+    dockerContainer: `serversentinel-${storageName}`,
     dockerImage: "simulated-runtime",
-    dockerPorts: "25565:25565/tcp",
+    dockerPorts: `${minecraftPort}:25565/tcp`,
     javaArgs: "-Xms2G -Xmx4G",
     restartRequiredSince: new Date(demoStartedAt - 1_800_000).toISOString(),
     restartRequiredChanges: [{
@@ -597,6 +646,38 @@ export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedule
   };
 }
 
+export function demoServer(schedules: ScheduledExecution[] = initialDemoSchedules): ManagedServer {
+  return createDemoServer(demoFleetServerDefinitions[0], schedules);
+}
+
+export function demoFleetServers(schedules: ScheduledExecution[] = initialDemoSchedules): ManagedServer[] {
+  return demoFleetServerDefinitions.map((definition, index) => (
+    createDemoServer(definition, index === 0 ? schedules : [])
+  ));
+}
+
+export function demoFleetNodes(): ManagedNode[] {
+  return demoFleet.map((node, index) => ({
+    id: node.id,
+    name: node.name,
+    type: index === 0 ? "local" : "remote",
+    status: "online",
+    isInternal: index === 0,
+    createdAt: new Date(demoStartedAt - (30 - index) * 86_400_000).toISOString(),
+    updatedAt: new Date(demoStartedAt).toISOString(),
+    lastSeenAt: new Date().toISOString(),
+    connectedAt: new Date(demoStartedAt - (12 - index) * 3_600_000).toISOString(),
+    agentVersion: "1.7.0",
+    buildId: `demo-${node.location.toLowerCase()}`,
+    protocolVersion: "3.1",
+    capabilities: ["server-lifecycle", "console", "files", "binary-transfer"],
+    features: ["player-query", "resource-stats"],
+    dockerStatus: "available",
+    dataPathStatus: "ready",
+    totalMemory: (index === 0 ? 32 : 64) * gibibyte
+  }));
+}
+
 export function demoStatus(server: ManagedServer, running: boolean): ServerStatus {
   return {
     server,
@@ -620,20 +701,21 @@ export function demoStatus(server: ManagedServer, running: boolean): ServerStatu
   };
 }
 
-export function demoStats(running: boolean, sampledAt = Date.now()): ResourceSample {
-  const elapsed = (sampledAt - activeDemoSession.startedAt) / 1000;
-  const historyElapsed = Math.max(0, (sampledAt - (activeDemoSession.startedAt - 60 * 60 * 1000)) / 1000);
+export function demoStats(running: boolean, sampledAt = Date.now(), serverId = demoServerId): ResourceSample {
+  const session = demoSession(serverId);
+  const elapsed = (sampledAt - session.startedAt) / 1000;
+  const historyElapsed = Math.max(0, (sampledAt - (session.startedAt - 60 * 60 * 1000)) / 1000);
   const memoryLimitBytes = 4 * gibibyte;
   const cpuCapacityCores = 4;
-  const cpuWave = Math.sin(elapsed / 23 + activeDemoSession.cpuPhase) * 0.65
-    + Math.sin(elapsed / 7 + activeDemoSession.cpuPhase * 1.7) * 0.35;
+  const cpuWave = Math.sin(elapsed / 23 + session.cpuPhase) * 0.65
+    + Math.sin(elapsed / 7 + session.cpuPhase * 1.7) * 0.35;
   const cpuUtilizationPercent = running
-    ? Math.min(85, Math.max(5, activeDemoSession.cpuBasePercent + activeDemoSession.cpuAmplitudePercent * cpuWave))
+    ? Math.min(85, Math.max(5, session.cpuBasePercent + session.cpuAmplitudePercent * cpuWave))
     : 0;
-  const memoryWave = Math.sin(elapsed / 79 + activeDemoSession.memoryPhase) * 0.7
-    + Math.sin(elapsed / 19 + activeDemoSession.memoryPhase * 1.3) * 0.3;
+  const memoryWave = Math.sin(elapsed / 79 + session.memoryPhase) * 0.7
+    + Math.sin(elapsed / 19 + session.memoryPhase * 1.3) * 0.3;
   const memoryUsageBytes = running
-    ? Math.round(Math.min(3.6 * gibibyte, Math.max(1.1 * gibibyte, activeDemoSession.memoryBaseBytes + activeDemoSession.memoryAmplitudeBytes * memoryWave)))
+    ? Math.round(Math.min(3.6 * gibibyte, Math.max(1.1 * gibibyte, session.memoryBaseBytes + session.memoryAmplitudeBytes * memoryWave)))
     : 0;
   return {
     available: true,
@@ -642,9 +724,9 @@ export function demoStats(running: boolean, sampledAt = Date.now()): ResourceSam
     cpuCapacityCores,
     memoryUsageBytes,
     memoryLimitBytes,
-    playersOnline: running ? activeDemoSession.playerCount : 0,
-    networkRxBytes: running ? Math.round(84_000_000 + historyElapsed * activeDemoSession.networkRxBytesPerSecond + Math.sin(elapsed / 5) * 180_000) : 0,
-    networkTxBytes: running ? Math.round(62_000_000 + historyElapsed * activeDemoSession.networkTxBytesPerSecond + Math.cos(elapsed / 6) * 120_000) : 0,
+    playersOnline: running ? session.playerCount : 0,
+    networkRxBytes: running ? Math.round(84_000_000 + historyElapsed * session.networkRxBytesPerSecond + Math.sin(elapsed / 5) * 180_000) : 0,
+    networkTxBytes: running ? Math.round(62_000_000 + historyElapsed * session.networkTxBytesPerSecond + Math.cos(elapsed / 6) * 120_000) : 0,
     readAt: new Date(sampledAt).toISOString(),
     container: "serversentinel-demo",
     message: running ? "Simulated runtime stats." : "Demo server is stopped.",
@@ -656,16 +738,18 @@ export function demoStatsHistory(
   running: boolean,
   sampledAt = Date.now(),
   sampleIntervalMs = 5_000,
-  sampleLimit = 721
+  sampleLimit = 721,
+  serverId = demoServerId
 ): ResourceSample[] {
   return Array.from({ length: sampleLimit }, (_, index) => (
-    demoStats(running, sampledAt - (sampleLimit - index - 1) * sampleIntervalMs)
+    demoStats(running, sampledAt - (sampleLimit - index - 1) * sampleIntervalMs, serverId)
   ));
 }
 
-export function demoTimelineData(running: boolean, schedules: ScheduledExecution[], from: number, to: number): ServerTimelineResponse {
+export function demoTimelineData(running: boolean, schedules: ScheduledExecution[], from: number, to: number, serverId = demoServerId): ServerTimelineResponse {
+  const session = demoSession(serverId);
   const step = Math.max(5_000, Math.ceil((to - from) / 900 / 5_000) * 5_000);
-  const raw = Array.from({ length: Math.max(2, Math.floor((to - from) / step) + 1) }, (_, index) => demoStats(running, Math.min(to, from + index * step)));
+  const raw = Array.from({ length: Math.max(2, Math.floor((to - from) / step) + 1) }, (_, index) => demoStats(running, Math.min(to, from + index * step), serverId));
   const samples = raw.map((sample, index) => {
     const previous = raw[index - 1];
     const elapsedSeconds = previous ? Math.max(1, (sample.sampledAt - previous.sampledAt) / 1000) : 0;
@@ -689,13 +773,13 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     };
   });
   const now = Date.now();
-  const eventFixtures = activeDemoSession.events.filter((event) => event.occurredAt >= from && event.occurredAt <= to);
-  const demoOnlineNames = running ? activeDemoSession.onlinePlayerNames : [];
-  const scenarioPlayers = activeDemoSession.timelineScenarioPlayers;
+  const eventFixtures = session.events.filter((event) => event.occurredAt >= from && event.occurredAt <= to);
+  const demoOnlineNames = running ? session.onlinePlayerNames : [];
+  const scenarioPlayers = session.timelineScenarioPlayers;
   const regularOnlineNames = demoOnlineNames.filter((player) => (
     player !== scenarioPlayers.marathon && player !== scenarioPlayers.reconnect
   ));
-  const regularOfflineNames = activeDemoSession.offlinePlayerNames.filter((player) => player !== scenarioPlayers.blink);
+  const regularOfflineNames = session.offlinePlayerNames.filter((player) => player !== scenarioPlayers.blink);
   const playerSessions = [
     ...(running ? [{
       id: "demo-online:marathon",
@@ -783,8 +867,8 @@ function demoEvent(event: ServerEvent): ServerEvent {
   return event;
 }
 
-export function demoOverviewData(running: boolean): ServerOverviewData {
-  const events = activeDemoSession.events
+export function demoOverviewData(running: boolean, serverId = demoServerId): ServerOverviewData {
+  const events = demoSession(serverId).events
     .slice()
     .sort((left, right) => right.occurredAt - left.occurredAt)
     .map(({ occurredAt: _occurredAt, ...event }) => event);
@@ -804,20 +888,28 @@ export function demoOverviewData(running: boolean): ServerOverviewData {
   };
 }
 
-export function demoPlayerSnapshot(running: boolean): PlayerSnapshot {
+export function demoPlayerSnapshot(running: boolean, serverId = demoServerId): PlayerSnapshot {
+  const session = demoSession(serverId);
   return running ? {
     state: "live",
-    online: activeDemoSession.playerCount,
-    maxPlayers: activeDemoSession.maxPlayers,
-    names: activeDemoSession.onlinePlayerNames,
+    online: session.playerCount,
+    maxPlayers: session.maxPlayers,
+    names: session.onlinePlayerNames,
     sampledAt: new Date().toISOString()
   } : {
     state: "stopped",
     online: 0,
-    maxPlayers: activeDemoSession.maxPlayers,
+    maxPlayers: session.maxPlayers,
     names: [],
     sampledAt: new Date().toISOString()
   };
+}
+
+export function demoPlayerSnapshots(running: boolean): Record<string, PlayerSnapshot> {
+  return Object.fromEntries(demoFleetServerIds.map((serverId) => [
+    serverId,
+    demoPlayerSnapshot(running, serverId)
+  ]));
 }
 
 export function demoListing(path: string, files: Record<string, string>, mods: InstalledMod[]): FileListing {
