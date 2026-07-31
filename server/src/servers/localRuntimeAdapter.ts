@@ -11,7 +11,8 @@ import { allocateQueryPort, assertUniqueDockerHostPorts, dockerPortsWithManagedE
 import { dockerCommandInputCapability, dockerControlConfigured, dockerRecentLogs, dockerStatus, ensureDockerContainer, inspectDockerContainer, minecraftContainerNetworkingConfig, readLatestServerLog, removeManagedDockerContainer, sendDockerStdinCommand, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
 import { dockerAvailable } from "../docker/dockerClient.js";
 import { publicServerStatus } from "./publicViews.js";
-import { streamDockerLogs, streamLatestServerLog, type Client } from "./overview.js";
+import { streamDockerLogs, streamLatestServerLog } from "./overview.js";
+import type { ConsoleUpstream } from "./consoleChannel.js";
 import { basename, dirname } from "node:path";
 import { copyServerFile, createServerFolder, deleteServerEntry, fileUploadSizeLimit, listServerDirectory, moveServerEntry, previewServerFile, publicZipExtractionPlan, readServerTextFile, renameServerEntry, resolveUploadTarget, writeRuntimeUpload, writeServerTextFile } from "../runtime/local/fileService.js";
 import { assertDownloadSize, filePreviewSizeLimit, fileZipLimits, toPublicPath } from "../files/fileService.js";
@@ -178,16 +179,15 @@ export async function localSendConsoleCommand(server: ManagedServer, command: un
   }
 }
 
-export async function localStreamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void) {
-  const consoleClient = client as Client;
-  consoleClient.send(JSON.stringify({ type: "status", status: await dockerStatus(server) }));
+/**
+ * Attaches this server's output to its console buffer and hands back the detach. One follow serves
+ * every viewer of the server, so this runs when the first of them arrives rather than per viewer.
+ */
+export async function localStreamConsole(server: ManagedServer, upstream: ConsoleUpstream) {
   if (dockerControlConfigured(server) && dockerAvailable()) {
-    const logRequest = streamDockerLogs(server, consoleClient);
-    onClose(() => logRequest?.destroy());
-    return;
+    return streamDockerLogs(server, upstream) ?? (() => {});
   }
-
-  onClose(streamLatestServerLog(server, consoleClient));
+  return streamLatestServerLog(server, upstream);
 }
 
 export async function localServerLogs(server: ManagedServer, lineLimit?: number) {

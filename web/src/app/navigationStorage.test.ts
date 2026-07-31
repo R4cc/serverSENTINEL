@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { navigationStorageDurationMs, readStoredActivePage, writeStoredActivePage } from "./navigationStorage";
+import { navigationStorageDurationMs, readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./navigationStorage";
 
 function storage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
@@ -41,5 +41,14 @@ describe("active page storage", () => {
     });
 
     expect(readStoredActivePage(target, 1_001)).toBe("nodes");
+  });
+});
+
+describe("active server storage", () => {
+  it("restores the selected server during the navigation window", () => {
+    const target = storage();
+    writeStoredActiveServerId("server-2", target, 1_000);
+
+    expect(readStoredActiveServerId(target, 1_000 + navigationStorageDurationMs - 1)).toBe("server-2");
   });
 });

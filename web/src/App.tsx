@@ -2,7 +2,7 @@ import { FormEvent, Fragment, Suspense, useCallback, useEffect, useRef, useState
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
@@ -12,14 +12,14 @@ import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSigne
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
-import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
+import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./app/navigationStorage";
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { lazyPage } from "./app/lazyPage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
-import { appendConsoleEntries, ConsoleLineAssembler, consoleReconnectDelay, ConsoleReplayGuard, consoleSnapshotLines, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, reconcileConsoleSnapshot, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppToaster } from "./components/AppToaster";
 import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
@@ -79,9 +79,11 @@ function preloadActivePage(page: ActivePage) {
   return Promise.resolve();
 }
 
-function consoleLine(text: string) {
-  return `${text}\n`;
-}
+/**
+ * Marks a console whose lines this browser wrote itself — the demo server. There is no panel buffer
+ * behind it, so there is nothing to resume against and no cursor to send.
+ */
+const localConsoleEpoch = "local";
 
 const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
@@ -95,9 +97,12 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [appState, setAppState] = useState<AppState>(emptyApp);
-  const [activeServerId, setActiveServerId] = useState("");
+  const [activeServerId, setActiveServerId] = useState(() => readStoredActiveServerId());
   const [status, setStatus] = useState<ServerStatus | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<ConsoleLine[]>([]);
+  // Bumped whenever the console is replaced rather than extended, which is the terminal's cue to
+  // clear. Everything else it receives is an append.
+  const [consoleGeneration, setConsoleGeneration] = useState(0);
   const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [appLoadError, setAppLoadError] = useState("");
   const [appRefreshing, setAppRefreshing] = useState(false);
@@ -161,9 +166,11 @@ export default function App() {
   const consoleLogServerIdRef = useRef("");
   const consoleTabServerIdRef = useRef("");
   const overviewTabServerIdRef = useRef("");
-  const logsRef = useRef<string[]>([]);
-  const pendingLogLinesRef = useRef<string[]>([]);
-  const consoleLineAssemblerRef = useRef(new ConsoleLineAssembler());
+  const logsRef = useRef<ConsoleLine[]>([]);
+  const pendingLogLinesRef = useRef<ConsoleLine[]>([]);
+  /** Where this viewer is in the panel's buffer: the epoch it is reading and the last seq it holds. */
+  const consoleCursorRef = useRef<{ epoch: string; since: number }>({ epoch: "", since: 0 });
+  const displaySeqRef = useRef(0);
   const logFlushFrameRef = useRef<number | null>(null);
   const consoleScrollbackRef = useRef(consoleScrollback);
   const fileWorkspaceServerIdRef = useRef("");
@@ -729,7 +736,7 @@ export default function App() {
     } else if (isDemoServerId(activeServerId)) {
       setActiveServerId("");
       setStatus(null);
-      setLogs([]);
+      resetConsoleBuffer("");
       filesWorkspace.actions.clearWorkspace();
       void refreshApp();
     }
@@ -744,9 +751,9 @@ export default function App() {
     const serverChanged = consoleLogServerIdRef.current !== activeServer.id;
     consoleLogServerIdRef.current = activeServer.id;
     if (serverChanged) {
-      discardQueuedConsoleLines();
-      logsRef.current = [];
-      setLogs([]);
+      // Another server's buffer has its own numbering, so this viewer's cursor goes with the
+      // console it described.
+      resetConsoleBuffer("");
       setConsoleSnapshotReadyServerId("");
       setStatusError("");
       setConsoleError("");
@@ -761,9 +768,14 @@ export default function App() {
     }
     if (demoMode && isDemoServerId(activeServer.id)) {
       setStatus(demoFixtures().demoStatus(activeServer, demoRunning));
-      const demoLogs = demoFixtures().demoConsoleMessages(activeServer.id).map(consoleLine);
-      logsRef.current = demoLogs;
-      setLogs(demoLogs);
+      // This effect also runs on every page change, and re-seeding there would throw away whatever
+      // the demo console has produced since — command output the visitor just asked for.
+      if (serverChanged || !logsRef.current.length) {
+        resetConsoleBuffer(localConsoleEpoch);
+        const demoLogs = toDisplayLines(demoFixtures().demoConsoleMessages(activeServer.id));
+        logsRef.current = demoLogs;
+        setLogs(demoLogs);
+      }
       setConsoleSnapshotReadyServerId(activeServer.id);
       setConsoleConnectionState("live");
       return;
@@ -803,20 +815,12 @@ export default function App() {
     let pollingAvailable = false;
     let pollingInFlight = false;
     let pollingInterval: number | null = null;
-    let snapshotReady = false;
-    let replayGuard: ConsoleReplayGuard | null = null;
-    let initialStreamLines: string[] = [];
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(serverId)}`);
-
-    void refreshConsoleLogs(serverId).finally(() => {
-      if (closedByCleanup || activeServerIdRef.current !== serverId) return;
-      replayGuard = new ConsoleReplayGuard(logsRef.current);
-      snapshotReady = true;
-      const liveLines = replayGuard.push(initialStreamLines);
-      initialStreamLines = [];
-      queueConsoleLines(liveLines);
-    });
+    // Resuming from the cursor is what makes a reconnect invisible: the panel replays only the
+    // lines this viewer is missing, so the terminal appends instead of redrawing.
+    const socket = new WebSocket(
+      `${protocol}//${window.location.host}/ws/console?serverId=${encodeURIComponent(serverId)}${consoleCursorQuery()}`
+    );
 
     function stopPolling() {
       pollingAvailable = false;
@@ -830,7 +834,7 @@ export default function App() {
       if (pollingInFlight || document.hidden || activeServerIdRef.current !== serverId) return;
       pollingInFlight = true;
       try {
-        pollingAvailable = await refreshConsoleLogs(serverId);
+        pollingAvailable = await pollConsoleBacklog(serverId);
         if (pollingAvailable && !closedByCleanup && activeServerIdRef.current === serverId) {
           if (consoleReconnectNoticeTimeoutRef.current !== null) {
             window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
@@ -883,7 +887,7 @@ export default function App() {
 
     socket.onopen = markConsoleLive;
     socket.onmessage = (event) => {
-      let message: { type?: string; source?: string; text?: string; message?: string; code?: string; retryable?: boolean };
+      let message: ConsoleStreamFrame;
       try {
         message = JSON.parse(event.data);
       } catch {
@@ -891,27 +895,30 @@ export default function App() {
         setConsoleConnectionState("error");
         return;
       }
-      // The panel drops console frames when this viewer falls behind and reports the gap as a
-      // "truncated" frame. Render it inline: a silent hole in the console reads as a bug in the
-      // Minecraft server rather than as output this browser was too slow to receive.
-      const streamText = message.type === "log"
-        ? message.text ?? ""
-        : message.type === "truncated"
-          ? `[serverSENTINEL] ${message.message ?? "Console output was dropped because this viewer fell behind."}\n`
-          : undefined;
-      if (streamText !== undefined) {
+      if (message.type === "backlog" || message.type === "log") {
         markConsoleLive();
-        const lines = consoleLineAssemblerRef.current.push(streamText);
-        if (snapshotReady) {
-          queueConsoleLines(replayGuard?.push(lines) ?? lines);
-        } else {
-          initialStreamLines.push(...lines);
-          const overflow = initialStreamLines.length - consoleScrollbackRef.current;
-          if (overflow > 0) initialStreamLines.splice(0, overflow);
+        if (message.type === "backlog") {
+          // A different epoch means the panel's buffer was rebuilt, so what this viewer holds
+          // describes a console that no longer exists and has to be replaced rather than extended.
+          if (message.epoch !== consoleCursorRef.current.epoch) resetConsoleBuffer(message.epoch);
+          if (message.truncated) {
+            queueConsoleLines(toDisplayLines(["[serverSENTINEL] Older console output was dropped while this viewer was away."]));
+          }
+          setConsoleSnapshotReadyServerId(serverId);
+          setConsoleLoading(false);
         }
-        if (message.type === "log" && message.text && hasPotentialEvent(message.text) && activeServerIdRef.current) {
+        ingestConsoleLines(message.lines);
+        if (message.lines.some((line) => hasPotentialEvent(line.text)) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
+      }
+      // The panel drops frames for a viewer that falls behind and reports the gap. Render it
+      // inline: a silent hole in the console reads as a bug in the Minecraft server rather than as
+      // output this browser was too slow to receive.
+      if (message.type === "truncated") {
+        queueConsoleLines(toDisplayLines([
+          `[serverSENTINEL] ${message.message ?? "Console output was dropped because this viewer fell behind."}`
+        ]));
       }
       if (message.type === "unavailable") {
         const unavailableMessage = message.message ?? "Console stream is unavailable.";
@@ -985,6 +992,10 @@ export default function App() {
   useEffect(() => {
     writeStoredActivePage(activePage);
   }, [activePage]);
+
+  useEffect(() => {
+    writeStoredActiveServerId(activeServerId);
+  }, [activeServerId]);
 
   // Mirrors every resolved session into the boot hint, so the six places that settle
   // the session do not each have to remember to keep the next first paint honest.
@@ -1224,7 +1235,7 @@ export default function App() {
     filesWorkspace.actions.setFilesError("");
     consoleLogServerIdRef.current = "";
     setConsoleSnapshotReadyServerId("");
-    setLogs([]);
+    resetConsoleBuffer("");
     filesWorkspace.actions.clearWorkspace();
     notify("warning", "You were logged out because the panel restarted and the loaded state is no longer current. Sign in again to continue.");
     return true;
@@ -1335,7 +1346,7 @@ export default function App() {
     setStatus(null);
     consoleLogServerIdRef.current = "";
     setConsoleSnapshotReadyServerId("");
-    setLogs([]);
+    resetConsoleBuffer("");
     staleSessionLogoutRef.current = false;
     staleSessionSuppressUntilRef.current = 0;
   }
@@ -1391,7 +1402,7 @@ export default function App() {
         setConsoleError("");
         setConsoleConnectionState("connecting");
         consoleReconnectAttemptRef.current = 0;
-        await Promise.allSettled([refreshStatus(currentServer.id), refreshConsoleLogs(currentServer.id)]);
+        await Promise.allSettled([refreshStatus(currentServer.id), pollConsoleBacklog(currentServer.id)]);
         setConsoleStreamVersion((version) => version + 1);
       }
     } catch (error) {
@@ -1435,11 +1446,37 @@ export default function App() {
   }
 
   /**
-   * A chatty server emits log frames far faster than the screen refreshes, and one state update
-   * per frame means one full re-render and one terminal write per line. Collecting the lines and
-   * flushing them once per animation frame keeps a burst to a single render and a single write.
+   * Display numbering, which is deliberately not the panel's numbering. Panel sequences identify
+   * lines in one server's buffer and are what a resume asks against; these identify rows on screen,
+   * including the ones the panel never sent — demo output, and notices this browser wrote itself.
+   * Keeping them apart is what lets a local notice sit between two streamed lines without taking a
+   * sequence number the panel is about to use.
    */
-  function queueConsoleLines(lines: string[]) {
+  function toDisplayLines(texts: string[]): ConsoleLine[] {
+    return texts.map((text) => {
+      displaySeqRef.current += 1;
+      return { seq: displaySeqRef.current, text: text.endsWith("\n") ? text : `${text}\n` };
+    });
+  }
+
+  /**
+   * Takes panel lines the viewer has not seen. Anything at or below the cursor already arrived —
+   * a resume that overlaps, or the backlog and the live stream covering the same line — so it is
+   * dropped here rather than drawn twice.
+   */
+  function ingestConsoleLines(lines: ConsoleLine[]) {
+    const fresh = lines.filter((line) => line.seq > consoleCursorRef.current.since);
+    if (!fresh.length) return;
+    consoleCursorRef.current = { ...consoleCursorRef.current, since: fresh[fresh.length - 1].seq };
+    queueConsoleLines(toDisplayLines(fresh.map((line) => line.text)));
+  }
+
+  /**
+   * A chatty server emits lines far faster than the screen refreshes, and one state update per
+   * batch means one full re-render and one terminal write per batch. Collecting them and flushing
+   * once per animation frame keeps a burst to a single render and a single write.
+   */
+  function queueConsoleLines(lines: ConsoleLine[]) {
     pendingLogLinesRef.current.push(...lines);
     // A background tab never runs animation frames, so cap what can pile up at the same limit
     // the buffer would enforce on flush anyway.
@@ -1454,42 +1491,51 @@ export default function App() {
     const pending = pendingLogLinesRef.current;
     if (!pending.length) return;
     pendingLogLinesRef.current = [];
-    const next = appendConsoleEntries(logsRef.current, pending, consoleScrollbackRef.current);
+    const next = [...logsRef.current, ...pending].slice(-consoleScrollbackRef.current);
     logsRef.current = next;
     setLogs(next);
   }
 
   function discardQueuedConsoleLines() {
     pendingLogLinesRef.current = [];
-    consoleLineAssemblerRef.current.reset();
     if (logFlushFrameRef.current === null) return;
     window.cancelAnimationFrame(logFlushFrameRef.current);
     logFlushFrameRef.current = null;
   }
 
-  async function refreshConsoleLogs(serverId = activeServer?.id): Promise<boolean> {
+  /**
+   * Drops everything on screen and starts a new generation, which is the terminal's signal to clear
+   * rather than append. Only for when the console genuinely changed underneath: another server, or
+   * a panel buffer that was rebuilt while this viewer was away.
+   */
+  function resetConsoleBuffer(epoch: string) {
+    discardQueuedConsoleLines();
+    logsRef.current = [];
+    setLogs([]);
+    consoleCursorRef.current = { epoch, since: 0 };
+    setConsoleGeneration((generation) => generation + 1);
+  }
+
+  function consoleCursorQuery() {
+    const { epoch, since } = consoleCursorRef.current;
+    if (!epoch || epoch === localConsoleEpoch) return "";
+    return `&epoch=${encodeURIComponent(epoch)}&since=${since}`;
+  }
+
+  /**
+   * The polling fallback for viewers whose network blocks websockets. It reads the same buffer the
+   * stream serves, so moving between the two transports is just another resume.
+   */
+  async function pollConsoleBacklog(serverId = activeServer?.id): Promise<boolean> {
     if (!serverId) return false;
-    if (demoMode && isDemoServerId(serverId)) {
-      if (activeServerIdRef.current === serverId) {
-        setLogs((current) => current.length ? current : [
-          consoleLine("[demo] Starting minecraft server version 1.21.4"),
-          consoleLine("[demo] Done (5.132s)! For help, type \"help\"")
-        ]);
-        setConsoleSnapshotReadyServerId(serverId);
-      }
-      return true;
-    }
-    const startLogs = logsRef.current;
-    setConsoleLoading(startLogs.length === 0);
+    // Demo output is written locally, so there is no panel buffer to resume against.
+    if (demoMode && isDemoServerId(serverId)) return true;
     try {
-      const limit = consoleScrollbackRef.current;
-      const result = await api<{ text: string; source: string }>(`/api/servers/${serverId}/logs?limit=${limit}`);
+      const backlog = await api<ConsoleBacklog>(`/api/servers/${serverId}/console?${consoleCursorQuery().slice(1)}`);
       if (activeServerIdRef.current !== serverId) return false;
-      const lines = consoleSnapshotLines(result.text, limit);
-      const nextLogs = lines.map((line) => consoleLine(line));
-      const reconciled = reconcileConsoleSnapshot(startLogs, nextLogs, logsRef.current, limit);
-      logsRef.current = reconciled;
-      setLogs(reconciled);
+      if (backlog.epoch !== consoleCursorRef.current.epoch) resetConsoleBuffer(backlog.epoch);
+      ingestConsoleLines(backlog.lines);
+      setConsoleSnapshotReadyServerId(serverId);
       return true;
     } catch (error) {
       if (handleStaleSession(error)) return false;
@@ -1502,10 +1548,7 @@ export default function App() {
       }
       return false;
     } finally {
-      if (activeServerIdRef.current === serverId) {
-        setConsoleLoading(false);
-        setConsoleSnapshotReadyServerId(serverId);
-      }
+      if (activeServerIdRef.current === serverId) setConsoleLoading(false);
     }
   }
 
@@ -1518,7 +1561,7 @@ export default function App() {
       refreshNodeConnectivity(),
       refreshApp({ silent: true }),
       refreshStatus(serverId),
-      refreshConsoleLogs(serverId)
+      pollConsoleBacklog(serverId)
     ]);
     if (activeServerIdRef.current === serverId) setConsoleStreamVersion((version) => version + 1);
   }
@@ -1610,7 +1653,7 @@ export default function App() {
       setActivePage("overview");
       setConsoleStreamVersion((version) => version + 1);
       await refreshStatus(server.id);
-      await refreshConsoleLogs(server.id);
+      await pollConsoleBacklog(server.id);
       notify("success", `Created ${server.displayName}`);
       window.setTimeout(() => {
         setActiveJobs((current) => current.filter((j) => j.id !== operation.id));
@@ -1736,11 +1779,19 @@ export default function App() {
         setStatus(demoFixtures().demoStatus(activeServer, nextRunning));
         setOverviewData(demoFixtures().demoOverviewData(nextRunning, activeServer.id));
         setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(nextRunning));
-        setLogs((current) => [
-          ...(nextRunning ? demoFixtures().demoConsoleMessages(activeServer.id).map(consoleLine) : current),
-          consoleLine(`[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`),
-          consoleLine(`[demo] Server is now ${nextRunning ? "running" : "stopped"}`)
-        ].slice(-consoleScrollbackRef.current));
+        // A demo restart replaces the console rather than adding to it, so the terminal is told to
+        // clear the same way a rebuilt panel buffer would.
+        if (nextRunning) resetConsoleBuffer(localConsoleEpoch);
+        const demoRestartLines = toDisplayLines([
+          ...(nextRunning ? demoFixtures().demoConsoleMessages(activeServer.id) : []),
+          `[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`,
+          `[demo] Server is now ${nextRunning ? "running" : "stopped"}`
+        ]);
+        setLogs((current) => {
+          const next = [...(nextRunning ? [] : current), ...demoRestartLines].slice(-consoleScrollbackRef.current);
+          logsRef.current = next;
+          return next;
+        });
         showRuntimeFeedback(action);
         notify("success", `Demo server ${completedLabel}`);
         return;
@@ -1749,12 +1800,12 @@ export default function App() {
       await refreshApp({ silent: true });
       await refreshStatus(activeServer.id);
       setConsoleStreamVersion((version) => version + 1);
-      await refreshConsoleLogs(activeServer.id);
+      await pollConsoleBacklog(activeServer.id);
       showRuntimeFeedback(action);
       notify("success", `${activeServer.displayName} ${completedLabel}`);
     } catch (error) {
       setConsoleStreamVersion((version) => version + 1);
-      await refreshConsoleLogs(activeServer.id);
+      await pollConsoleBacklog(activeServer.id);
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
     } finally {
@@ -1767,6 +1818,10 @@ export default function App() {
     if (!activeServer) return;
     const command = commandText.trim().replace(/^\//, "");
     if (!command) return;
+    // The command line is a real input now, so what was typed is gone from the screen the moment it
+    // is submitted. Echoing it into the output keeps the console readable as a transcript: a reply
+    // with no visible question is hard to make sense of later.
+    queueConsoleLines(toDisplayLines([`> ${command}`]));
     setCommandSending(true);
     setNotice("");
     try {
@@ -1781,7 +1836,7 @@ export default function App() {
               : command.startsWith("say ")
                 ? `[Server] ${command.slice(4)}`
                 : `Executed demo command: ${command}`;
-        setLogs((current) => [...current, consoleLine(`[demo] ${response}`)].slice(-consoleScrollbackRef.current));
+        queueConsoleLines(toDisplayLines([`[demo] ${response}`]));
         setCommandHistory((current) => appendCommandHistory(current, command));
         return;
       }
@@ -1795,7 +1850,7 @@ export default function App() {
       }
       consoleCommandRefreshTimeoutRef.current = window.setTimeout(() => {
         consoleCommandRefreshTimeoutRef.current = null;
-        void refreshConsoleLogs(activeServer.id);
+        void pollConsoleBacklog(activeServer.id);
       }, 1_500);
     } catch (error) {
       const message = errorMessage(error, "Could not send the console command. Refresh server status and try again.");
@@ -2155,6 +2210,7 @@ export default function App() {
               <ServerConsoleTab
                 active={activePage === "console"}
                 snapshotReady={consoleSnapshotReadyServerId === activeServer.id}
+                generation={consoleGeneration}
                 entries={logs}
                 canSendCommands={canSendConsoleCommands}
                 disabledReason={consoleCommandDisabledReason}

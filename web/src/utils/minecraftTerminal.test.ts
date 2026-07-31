@@ -2,16 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   appendCommandHistory,
   consumeTerminalTouchScroll,
-  deleteNextTerminalWordAtCursor,
-  deletePreviousTerminalWord,
-  deletePreviousTerminalWordAtCursor,
-  MinecraftLogStreamDecoder,
   minecraftFormattingToAnsi,
-  nextTerminalWordBoundary,
-  previousTerminalWordBoundary,
+  minecraftLogToTerminalText,
   recallNextCommand,
   recallPreviousCommand,
-  terminalBlockCursorRow,
   type TerminalHistoryState
 } from "./minecraftTerminal";
 
@@ -37,57 +31,10 @@ describe("Minecraft terminal helpers", () => {
     expect(draft).toEqual({ value: "sa", historyIndex: null, draft: "" });
   });
 
-  it("deletes the previous word like terminal Ctrl+Backspace", () => {
-    expect(deletePreviousTerminalWord("say hello world")).toBe("say hello ");
-    expect(deletePreviousTerminalWord("say hello   ")).toBe("say ");
-    expect(deletePreviousTerminalWord("single")).toBe("");
-    expect(deletePreviousTerminalWord("   ")).toBe("");
-  });
-
   it("accumulates touch movement into terminal row scrolls", () => {
     expect(consumeTerminalTouchScroll(0, 8, 20)).toEqual({ lines: 0, remainder: 8 });
     expect(consumeTerminalTouchScroll(8, 17, 20)).toEqual({ lines: 1, remainder: 5 });
     expect(consumeTerminalTouchScroll(-8, -17, 20)).toEqual({ lines: -1, remainder: -5 });
-  });
-
-  it("locates the cursor row inside a prompt block that wraps", () => {
-    // "> say hi" on a 45 column terminal: one row, cursor on it wherever it sits.
-    expect(terminalBlockCursorRow(8, 8, 45)).toBe(0);
-    expect(terminalBlockCursorRow(2, 8, 45)).toBe(0);
-
-    // 58 cells wrap onto a second row; the end of the block is on that second row.
-    expect(terminalBlockCursorRow(58, 58, 45)).toBe(1);
-    expect(terminalBlockCursorRow(44, 58, 45)).toBe(0);
-    expect(terminalBlockCursorRow(45, 58, 45)).toBe(1);
-
-    // Filling a row exactly leaves the cursor in a pending wrap on that row, not the next one.
-    expect(terminalBlockCursorRow(45, 45, 45)).toBe(0);
-    expect(terminalBlockCursorRow(90, 90, 45)).toBe(1);
-
-    // An unmeasured terminal must not push the redraw upwards into real output.
-    expect(terminalBlockCursorRow(58, 58, 0)).toBe(0);
-    expect(terminalBlockCursorRow(0, 0, 45)).toBe(0);
-  });
-
-  it("deletes the word before the cursor without changing text after it", () => {
-    expect(deletePreviousTerminalWordAtCursor("say hello world", 9)).toEqual({
-      value: "say  world",
-      cursor: 4
-    });
-  });
-
-  it("finds PowerShell-style word navigation boundaries", () => {
-    expect(previousTerminalWordBoundary("say hello world", 15)).toBe(10);
-    expect(previousTerminalWordBoundary("say hello   world", 12)).toBe(4);
-    expect(nextTerminalWordBoundary("say hello   world", 4)).toBe(12);
-    expect(nextTerminalWordBoundary("say hello", 9)).toBe(9);
-  });
-
-  it("deletes the next word like terminal Ctrl+Delete", () => {
-    expect(deleteNextTerminalWordAtCursor("say hello   world", 4)).toEqual({
-      value: "say world",
-      cursor: 4
-    });
   });
 
   it("converts Minecraft formatting codes into ANSI SGR sequences for xterm", () => {
@@ -96,29 +43,15 @@ describe("Minecraft terminal helpers", () => {
     expect(minecraftFormattingToAnsi("plain &x")).toBe("plain &x");
   });
 
-  it("preserves ANSI and legacy formatting split across stream chunks", () => {
-    const ansi = new MinecraftLogStreamDecoder();
-    expect(ansi.write("\x1b[38;5;")).toBe("");
-    expect(ansi.write("82mLuckPerms\x1b[0m")).toBe("");
-    expect(ansi.write("\n")).toBe("\x1b[38;5;82mLuckPerms\x1b[0m\r\n");
-
-    const legacy = new MinecraftLogStreamDecoder();
-    expect(legacy.write("\u00a7")).toBe("");
-    expect(legacy.write("aLuckPerms &")).toBe("");
-    expect(legacy.write("lOK&r\n")).toBe("\x1b[38;2;85;255;85mLuckPerms \x1b[1mOK\x1b[0m\r\n");
+  it("passes ANSI through and translates legacy formatting", () => {
+    expect(minecraftLogToTerminalText("\x1b[38;5;82mLuckPerms\x1b[0m\n"))
+      .toBe("\x1b[38;5;82mLuckPerms\x1b[0m\r\n");
+    expect(minecraftLogToTerminalText("\u00a7aLuckPerms &lOK&r\n"))
+      .toBe("\x1b[38;2;85;255;85mLuckPerms \x1b[1mOK\x1b[0m\r\n");
   });
 
-  it("does not invent line endings for partial chunks or duplicate split CRLF", () => {
-    const decoder = new MinecraftLogStreamDecoder();
-    expect(decoder.write("partial")).toBe("");
-    expect(decoder.write(" line\r")).toBe("");
-    expect(decoder.write("\nnext\n")).toBe("partial line\r\nnext\r\n");
-  });
-
-  it("discards pending stream text when reset before a history replay", () => {
-    const decoder = new MinecraftLogStreamDecoder();
-    expect(decoder.write("stale partial")).toBe("");
-    decoder.reset();
-    expect(decoder.write("fresh\n")).toBe("fresh\r\n");
+  it("starts each row at column 0 without duplicating an existing carriage return", () => {
+    expect(minecraftLogToTerminalText("first\nsecond\n")).toBe("first\r\nsecond\r\n");
+    expect(minecraftLogToTerminalText("windows\r\n")).toBe("windows\r\n");
   });
 });

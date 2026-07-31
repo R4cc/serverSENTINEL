@@ -92,6 +92,7 @@ export function AppSidebar({
                 const selected = server.id === activeServer?.id;
                 const lockedByDemo = demoMode && server.id !== demoServerId;
                 const minecraftVersion = versionValue(minecraftVersionInfo(server));
+                const statusTone = selected ? serverCommandTone : server.runtimeIntent === "running" ? "running" : server.runtimeIntent === "restarting" ? "starting" : server.runtimeIntent === "stopped" ? "stopped" : "unknown";
                 return {
                   id: server.id,
                   active: selected,
@@ -100,7 +101,7 @@ export function AppSidebar({
                   onSelect: () => onSelectServer(server.id),
                   label: (
                     <span className="serverSwitcherOption">
-                      <span className={`serverSwitcherOptionDot ${selected ? serverCommandTone : "unknown"}`} aria-hidden="true" />
+                      <span className={`serverSwitcherOptionDot ${statusTone}`} aria-hidden="true" />
                       <span className="serverSwitcherOptionCopy">
                         <strong>{server.displayName}</strong>
                         <small>{server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
