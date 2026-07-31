@@ -18,11 +18,25 @@ import { serverJarProvider, startProvisionOperation } from "../servers/provision
 import { type CreateServerInput } from "../servers/ports.js";
 import { lifecycleWithIntent, recordOperation, requireServerStoppedForMutableConfiguration, runtimeResultRunning, sendConsoleCommandWithIntent } from "../servers/lifecycle.js";
 import { startConsoleHeartbeat, timelineHistoryWindow as timelineHistoryWindowMs, type Client } from "../servers/overview.js";
+import { createConsoleSender } from "../servers/consoleBackpressure.js";
+import { consoleHub, type ConsoleCursor } from "../servers/consoleService.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import { timelinePlayerActivity, timelinePlayerIsKnown, timelineResourcePoints, timelineScheduleMarkers } from "../serverTimeline.js";
 import { localNodeId } from "../nodes/nodeService.js";
 import { logDebug, logInfo, logWarn, errorLogFields } from "../logging.js";
 import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
+
+/**
+ * A viewer's resume point. Both halves have to be present and well formed to be trusted: without a
+ * matching epoch a sequence number refers to some other buffer, and honouring it would silently
+ * skip the lines the viewer actually needs.
+ */
+function consoleCursor(params: URLSearchParams): ConsoleCursor | undefined {
+  const epoch = params.get("epoch");
+  const since = Number(params.get("since"));
+  if (!epoch || !Number.isInteger(since) || since < 0) return undefined;
+  return { since, epoch };
+}
 
 export function registerServerRoutes(app: FastifyInstance) {
 app.post<{
@@ -226,7 +240,21 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
     stopHeartbeat = startConsoleHeartbeat(client);
     socket.on("close", stopHeartbeat);
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
-    await runtimeForServer(server).streamConsole(server, client, (cleanup) => socket.on("close", cleanup));
+
+    // Per viewer, not per buffer: a viewer that cannot keep up drops its own frames and resumes
+    // from its cursor, rather than slowing the output everyone else is reading.
+    const sender = createConsoleSender(client);
+    const session = await consoleHub.attach(server, {
+      lines: (lines, epoch) => { sender.send({ type: "log", epoch, lines }); },
+      unavailable: (message, options) => { sender.send({ type: "unavailable", message, ...options }); },
+      empty: (message) => { sender.send({ type: "empty", message }); }
+    }, consoleCursor(url.searchParams));
+    socket.on("close", session.detach);
+
+    sender.send({ type: "backlog", ...session.backlog });
+    session.start();
+    // The viewer refetches status over HTTP; this only tells it that now is the moment to.
+    sender.send({ type: "status" });
   } catch (error) {
     stopHeartbeat?.();
     logWarn({ serverId, source: "console_websocket", ...errorLogFields(error) }, "Console stream unavailable");
@@ -238,6 +266,17 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
       retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
     }));
   }
+});
+
+/**
+ * The polling fallback for viewers whose network blocks websockets. It reads the same buffer as the
+ * stream, so a viewer can move between the two transports without its sequence numbers meaning
+ * anything different.
+ */
+app.get<{ Params: { id: string }; Querystring: { since?: string; epoch?: string } }>("/api/servers/:id/console", async (request) => {
+  await requireRequestPermission(request, "console.view");
+  const server = await getServer(request.params.id);
+  return consoleHub.read(server, consoleCursor(new URLSearchParams(request.query as Record<string, string>)));
 });
 
 app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/servers/:id/logs", async (request) => {

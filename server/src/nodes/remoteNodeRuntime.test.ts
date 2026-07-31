@@ -22,6 +22,24 @@ function testRuntimeProfile(): ServerRuntimeProfile {
   };
 }
 
+/** Stands in for the console buffer a node's forwarded output is written into. */
+function testUpstream() {
+  const written: string[] = [];
+  const failures: Array<{ message: string; code?: string; retryable?: boolean }> = [];
+  return {
+    written,
+    failures,
+    upstream: {
+      write: (chunk: string) => { written.push(chunk); },
+      notice: (message: string) => { written.push(`${message}\n`); },
+      unavailable: (message: string, options?: { code?: string; retryable?: boolean }) => {
+        failures.push({ message, ...options });
+      },
+      empty: () => {}
+    }
+  };
+}
+
 function testNode(): ManagedNode {
   return {
     id: "node-1",
@@ -179,7 +197,7 @@ describe("RemoteNodeRuntime payload projection", () => {
     const server = bookkeepingServer();
     const { runtime, payloads } = payloadRecorder();
 
-    await runtime.streamConsole(server, { readyState: 1, send: () => undefined }, () => undefined);
+    await runtime.streamConsole(server, testUpstream().upstream);
     await runtime.downloadFile(server, "world.zip");
     await runtime.uploadFile(server, "config", "ops.json", { stream: Readable.from([Buffer.from("[]")]), size: 2 });
 
@@ -426,9 +444,9 @@ describe("RemoteNodeRuntime command timeouts", () => {
     }
   });
 
-  it("sends a structured retryable event when console streaming finds the node offline", async () => {
+  it("reports a structured retryable failure when console streaming finds the node offline", async () => {
     const node = testNode();
-    const messages: string[] = [];
+    const sink = testUpstream();
     const connections = { isConnected: () => false } as unknown as PanelNodeConnections;
     const runtime = new RemoteNodeRuntime(
       node.id,
@@ -440,13 +458,10 @@ describe("RemoteNodeRuntime command timeouts", () => {
       async () => undefined
     );
 
-    await runtime.streamConsole(testServer(), {
-      readyState: 1,
-      send: (message: string) => messages.push(message)
-    }, () => undefined);
+    await runtime.streamConsole(testServer(), sink.upstream);
 
-    expect(JSON.parse(messages[0])).toMatchObject({
-      type: "unavailable",
+    expect(sink.failures[0]).toMatchObject({
+      message: expect.stringContaining("offline"),
       code: "NODE_OFFLINE",
       retryable: true
     });

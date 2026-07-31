@@ -29,25 +29,6 @@ export function appendCommandHistory(history: string[], command: string) {
   return [...history.filter((entry) => entry !== normalized), normalized].slice(-50);
 }
 
-export function deletePreviousTerminalWord(value: string) {
-  return deletePreviousTerminalWordAtCursor(value, value.length).value;
-}
-
-/**
- * Which row of a redrawn prompt block the cursor sits on, counted from the block's first row.
- *
- * The prompt is rewritten in place on every keystroke, and a phone-width terminal wraps a
- * command across several rows, so the redraw has to know how far above the cursor the block
- * starts. Filling a row exactly leaves xterm in a pending wrap on that row rather than at the
- * start of the next one, which is why the end of the block is measured differently from a
- * position inside it.
- */
-export function terminalBlockCursorRow(offset: number, width: number, columns: number) {
-  if (columns <= 0 || width <= 0) return 0;
-  if (offset >= width) return Math.ceil(width / columns) - 1;
-  return Math.floor(Math.max(0, offset) / columns);
-}
-
 export function consumeTerminalTouchScroll(remainder: number, pixelDelta: number, rowHeight: number) {
   const nextRemainder = remainder + pixelDelta;
   if (rowHeight <= 0 || !Number.isFinite(rowHeight)) return { lines: 0, remainder: nextRemainder };
@@ -55,35 +36,6 @@ export function consumeTerminalTouchScroll(remainder: number, pixelDelta: number
   return {
     lines,
     remainder: nextRemainder - lines * rowHeight
-  };
-}
-
-export function deletePreviousTerminalWordAtCursor(value: string, cursor: number) {
-  const beforeCursor = value.slice(0, cursor);
-  const afterCursor = value.slice(cursor);
-  const retainedBeforeCursor = beforeCursor.replace(/\s+$/, "").replace(/\S+$/, "");
-  return {
-    value: retainedBeforeCursor + afterCursor,
-    cursor: retainedBeforeCursor.length
-  };
-}
-
-export function previousTerminalWordBoundary(value: string, cursor: number) {
-  const beforeCursor = value.slice(0, cursor);
-  return beforeCursor.replace(/\s+$/, "").replace(/\S+$/, "").length;
-}
-
-export function nextTerminalWordBoundary(value: string, cursor: number) {
-  const afterCursor = value.slice(cursor);
-  const match = afterCursor.match(/^\S*\s*/);
-  return Math.min(value.length, cursor + (match?.[0].length ?? 0));
-}
-
-export function deleteNextTerminalWordAtCursor(value: string, cursor: number) {
-  const boundary = nextTerminalWordBoundary(value, cursor);
-  return {
-    value: value.slice(0, cursor) + value.slice(boundary),
-    cursor
   };
 }
 
@@ -173,25 +125,16 @@ export function minecraftFormattingToAnsi(text: string) {
   return output;
 }
 
-export class MinecraftLogStreamDecoder {
-  private pending = "";
-
-  write(chunk: string) {
-    const text = this.pending + chunk;
-    const lastLineFeed = text.lastIndexOf("\n");
-    if (lastLineFeed === -1) {
-      this.pending = text;
-      return "";
-    }
-
-    const complete = text.slice(0, lastLineFeed + 1);
-    this.pending = text.slice(lastLineFeed + 1);
-    return minecraftFormattingToAnsi(complete).replace(/\r?\n/g, "\r\n");
-  }
-
-  reset() {
-    this.pending = "";
-  }
+/**
+ * Turns console lines into what xterm should draw: Minecraft's section codes become ANSI, and bare
+ * line feeds become the carriage-return pair a terminal needs to start the next row at column 0.
+ *
+ * This used to buffer partial lines as well, because it was handed raw stream chunks that could
+ * stop mid-line. Lines are framed once now, where the panel numbers them, so everything arriving
+ * here is already whole.
+ */
+export function minecraftLogToTerminalText(text: string) {
+  return minecraftFormattingToAnsi(text).replace(/\r?\n/g, "\r\n");
 }
 
 function isHexColor(value: string) {

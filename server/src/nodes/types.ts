@@ -3,6 +3,7 @@ import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
 import type { PlayerObservation } from "../playerSnapshots.js";
+import type { ConsoleUpstream } from "../servers/consoleChannel.js";
 
 export type RuntimeProgressReporter = (progress: number, task: string) => void;
 export type RuntimeAction = "start" | "stop" | "restart";
@@ -28,7 +29,8 @@ export type NodeRuntime = {
   serverStatus(server: ManagedServer): Promise<unknown>;
   lifecycle(server: ManagedServer, action: RuntimeAction): Promise<unknown>;
   sendConsoleCommand(server: ManagedServer, command: unknown): Promise<unknown>;
-  streamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void): Promise<void>;
+  /** Attaches this server's output to its console buffer and resolves with the detach. */
+  streamConsole(server: ManagedServer, upstream: ConsoleUpstream): Promise<() => void>;
   serverLogs(server: ManagedServer, lineLimit?: number): Promise<unknown>;
   readPlayerObservation(server: ManagedServer): Promise<PlayerObservation>;
   serverStats(server: ManagedServer): Promise<unknown>;
