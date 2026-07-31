@@ -11,7 +11,8 @@ import { compactRecentEvents, parseLogEvent } from "./logEvents.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { validateExistingInsideServer } from "../core.js";
-import { consoleClientMaxQueuedBytes, createConsoleSender, type BackpressuredClient } from "./consoleBackpressure.js";
+import { type BackpressuredClient } from "./consoleBackpressure.js";
+import type { ConsoleUpstream } from "./consoleChannel.js";
 import type { ManagedServer, ServerActivity, ServerEvent } from "../types.js";
 export const consoleHeartbeatIntervalMs = 5_000;
 
@@ -23,6 +24,10 @@ export type Client = BackpressuredClient;
  * burst, which the viewer is told about, rather than allocating all of it.
  */
 export const consoleLogPollMaxBytes = 1024 * 1024;
+
+/** History requested when first following a container. Later attachments ask for none of it. */
+export const dockerFollowInitialTail = 200;
+export const dockerFollowRetryMs = 1_000;
 
 export function startConsoleHeartbeat(client: Client, intervalMs = consoleHeartbeatIntervalMs) {
   const timer = setInterval(() => {
@@ -85,19 +90,12 @@ export async function readLocalPlayerObservation(server: ManagedServer) {
   return readMinecraftPlayerObservation({ running, instanceId, props, endpoint, fallbackEndpoints });
 }
 
-export function streamLatestServerLog(server: ManagedServer, client: Client) {
+export function streamLatestServerLog(server: ManagedServer, upstream: ConsoleUpstream) {
   let offset = 0;
   let closed = false;
   let announcedEmpty = false;
   let lastLoggedError = "";
   let inFlight = false;
-  const sender = createConsoleSender(client);
-
-  const send = (text: string) => {
-    if (text) {
-      sender.send({ type: "log", source: "latest.log", text, at: new Date().toISOString() });
-    }
-  };
 
   const poll = async () => {
     if (closed || inFlight) return;
@@ -106,7 +104,7 @@ export function streamLatestServerLog(server: ManagedServer, client: Client) {
       const logPath = await validateExistingInsideServer(server, "logs/latest.log");
       const logStat = await stat(logPath);
       if (!logStat.isFile()) {
-        client.send(JSON.stringify({ type: "unavailable", message: "logs/latest.log is not a file" }));
+        upstream.unavailable("logs/latest.log is not a file");
         return;
       }
 
@@ -121,23 +119,15 @@ export function streamLatestServerLog(server: ManagedServer, client: Client) {
         const chunk = await readFileRange(logPath, start, logStat.size - 1);
         offset = logStat.size;
         if (skipped > 0) {
-          sender.send({
-            type: "truncated",
-            source: "latest.log",
-            message: `Skipped ${skipped} bytes of logs/latest.log written faster than this console could stream them.`,
-            at: new Date().toISOString()
-          });
+          // Numbered in place rather than sent as a side-channel frame, so the gap keeps its
+          // position in the console instead of arriving wherever the viewer happens to be.
+          upstream.notice(`[serverSENTINEL] Skipped ${skipped} bytes of logs/latest.log written faster than the console could read them.`);
         }
-        send(chunk.toString("utf8"));
+        upstream.write(chunk.toString("utf8"));
       } else if (offset === 0 && !announcedEmpty) {
         offset = logStat.size;
         announcedEmpty = true;
-        client.send(JSON.stringify({
-          type: "empty",
-          source: "latest.log",
-          text: "logs/latest.log is empty.",
-          at: new Date().toISOString()
-        }));
+        upstream.empty("logs/latest.log is empty.");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to read logs/latest.log";
@@ -145,9 +135,7 @@ export function streamLatestServerLog(server: ManagedServer, client: Client) {
         lastLoggedError = message;
         logWarn({ ...serverLogFields(server), source: "logs/latest.log", ...errorLogFields(error) }, "Console file log stream unavailable");
       }
-      if (client.readyState === 1) {
-        client.send(JSON.stringify({ type: "unavailable", message }));
-      }
+      upstream.unavailable(message);
     } finally {
       inFlight = false;
     }
@@ -161,58 +149,82 @@ export function streamLatestServerLog(server: ManagedServer, client: Client) {
   };
 }
 
-export function streamDockerLogs(server: ManagedServer, client: Client) {
+/**
+ * Follows a container's output into the server's console buffer.
+ *
+ * The follow ends whenever the container does, which a restart makes routine, so it reattaches
+ * instead of leaving the console silent until someone reloads the page. Reattaching asks for no
+ * history: the buffer already holds everything from before, and re-reading the tail would number
+ * lines it already has a second time.
+ */
+export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstream) {
   if (!dockerControlConfigured(server) || !dockerAvailable()) {
     logWarn({ ...serverLogFields(server), source: "docker" }, "Docker log stream unavailable");
-    client.send(JSON.stringify({ type: "unavailable", message: "Docker logs are not configured for this server" }));
+    upstream.unavailable("Docker logs are not configured for this server");
     return undefined;
   }
 
-  const request = http.request(
-    {
-      socketPath: config.dockerSocket,
-      path: `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=200&follow=1`,
-      method: "GET"
-    },
-    (response) => {
-      if (response.statusCode !== 200) {
-        logWarn({ ...serverLogFields(server), source: "docker", statusCode: response.statusCode }, "Docker log stream returned non-OK status");
-        client.send(JSON.stringify({ type: "unavailable", message: `Docker logs returned ${response.statusCode}` }));
-        return;
-      }
-      const decoder = new DockerLogDecoder();
-      const sender = createConsoleSender(client);
-      response.on("data", (chunk: Buffer) => {
-        const text = decoder.write(chunk).toString("utf8");
-        if (!text) return;
-        sender.send({ type: "log", source: "docker", text, at: new Date().toISOString() });
-        // Pause the Docker socket while the browser drains rather than only dropping frames: without it
-        // the kernel keeps handing us log data for a viewer that is already behind.
-        if ((client.bufferedAmount ?? 0) > consoleClientMaxQueuedBytes && !response.isPaused()) {
-          response.pause();
-          const resume = setInterval(() => {
-            if (client.readyState !== 1) {
-              clearInterval(resume);
-              response.destroy();
-              return;
-            }
-            if ((client.bufferedAmount ?? 0) <= consoleClientMaxQueuedBytes) {
-              clearInterval(resume);
-              response.resume();
-            }
-          }, 250);
+  let closed = false;
+  let attached = false;
+  let request: http.ClientRequest | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const reattach = () => {
+    if (closed || retryTimer) return;
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined;
+      if (closed) return;
+      if (attached) upstream.notice("[serverSENTINEL] Reattached to the container log stream.");
+      attached = false;
+      follow(0);
+    }, dockerFollowRetryMs);
+    retryTimer.unref?.();
+  };
+
+  const follow = (tail: number) => {
+    request = http.request(
+      {
+        socketPath: config.dockerSocket,
+        path: `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=${tail}&follow=1`,
+        method: "GET"
+      },
+      (response) => {
+        if (response.statusCode !== 200) {
+          logWarn({ ...serverLogFields(server), source: "docker", statusCode: response.statusCode }, "Docker log stream returned non-OK status");
+          upstream.unavailable(`Docker logs returned ${response.statusCode}`);
+          reattach();
+          return;
         }
-      });
-    }
-  );
-  request.on("error", (error) => {
-    logWarn({ ...serverLogFields(server), source: "docker", ...errorLogFields(error) }, "Docker log stream failed");
-    if (client.readyState === 1) {
-      client.send(JSON.stringify({ type: "unavailable", message: error.message }));
-    }
-  });
-  request.end();
-  return request;
+        attached = true;
+        const decoder = new DockerLogDecoder();
+        // No socket pausing here: the buffer is shared, so one viewer falling behind must not stop
+        // the workload's output reaching everyone else. Memory stays bounded by the buffer's own
+        // retention, and a viewer that falls too far behind is told its resume point was trimmed.
+        response.on("data", (chunk: Buffer) => {
+          upstream.write(decoder.write(chunk).toString("utf8"));
+        });
+        response.on("end", reattach);
+        response.on("error", (error) => {
+          logWarn({ ...serverLogFields(server), source: "docker", ...errorLogFields(error) }, "Docker log stream failed");
+          reattach();
+        });
+      }
+    );
+    request.on("error", (error) => {
+      logWarn({ ...serverLogFields(server), source: "docker", ...errorLogFields(error) }, "Docker log stream failed");
+      upstream.unavailable(error.message);
+      reattach();
+    });
+    request.end();
+  };
+
+  follow(dockerFollowInitialTail);
+
+  return () => {
+    closed = true;
+    if (retryTimer) clearTimeout(retryTimer);
+    request?.destroy();
+  };
 }
 
 export const resourceStatsHistoryWindow = 7 * 24 * 60 * 60 * 1000;

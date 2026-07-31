@@ -57,6 +57,7 @@ Each stylesheet owns a class family. Change a rule in its owning file rather tha
 - Run focused tests while iterating: `npm --workspace server run test -- --run <path>` for backend tests and `npm --workspace web run test -- --run <path>` for frontend tests.
 - Before handing off a meaningful change, run the checks appropriate to its scope. The full repository checks are `npm test`, `npm run typecheck`, and `npm run build`.
 - Run `git diff --check` before handoff. For responsive or interactive UI changes, also run the relevant browser or mobile smoke verification rather than relying only on unit tests.
+- The browser smokes are `npm run test:console`, `npm run test:mobile`, and `npm run test:overview`. Run `test:console` for any change to the console, the terminal, or the console stream: what it covers — that the terminal draws output and nothing else, that arriving output leaves the command line alone, and that browsing away and back does not rebuild the console — cannot be seen by unit tests, and each assertion stands for a defect that shipped at least once.
 
 # Automated browser testing
 

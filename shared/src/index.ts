@@ -603,6 +603,44 @@ export type ResolvedServerVersions = {
   runtimeVersion: VersionResolution;
 };
 
+export type ConsoleSource = "logs/latest.log" | "docker";
+
+/**
+ * A console line as the panel numbered it. Sequence numbers are assigned once, where the workload's
+ * output enters the panel, so every viewer of a server sees the same line under the same number.
+ * That is what lets a viewer resume with "everything after 4210" instead of comparing text against
+ * the buffer it already holds.
+ */
+export type ConsoleLine = {
+  seq: number;
+  text: string;
+};
+
+/**
+ * Identifies one continuous run of a server's console buffer. Sequence numbers only mean anything
+ * within an epoch: when the panel restarts, or a buffer is evicted and rebuilt, the new epoch tells
+ * viewers their sequence numbers no longer refer to anything and the console has to be redrawn.
+ */
+export type ConsoleEpoch = string;
+
+export type ConsoleBacklog = {
+  epoch: ConsoleEpoch;
+  lines: ConsoleLine[];
+  /** The sequence a viewer should ask for next. Holds even when `lines` is empty. */
+  nextSeq: number;
+  /** Set when the requested sequence had already left the retained window, so lines were skipped. */
+  truncated: boolean;
+};
+
+export type ConsoleStreamFrame =
+  | ({ type: "backlog" } & ConsoleBacklog)
+  | { type: "log"; epoch: ConsoleEpoch; lines: ConsoleLine[] }
+  | { type: "truncated"; message: string; droppedFrames?: number; at?: string }
+  | { type: "unavailable"; message: string; code?: string; retryable?: boolean }
+  | { type: "empty"; message?: string }
+  | { type: "status"; status?: unknown }
+  | { type: "heartbeat"; at?: string };
+
 export type ServerEvent = {
   id: string;
   eventType:
@@ -621,7 +659,7 @@ export type ServerEvent = {
   details?: string;
   timestamp?: string;
   signature: string;
-  source: "logs/latest.log" | "docker";
+  source: ConsoleSource;
   subject?: string;
 };
 

@@ -80,7 +80,7 @@
   border-radius: 999px;
 }
 
-.minecraftTerminalStatus {
+.consolePromptStatus {
   flex: 0 0 auto;
   border-top: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 36%, transparent);
   padding: var(--space-2) var(--space-3);
@@ -90,8 +90,53 @@
   font-weight: var(--weight-meta);
 }
 
-.minecraftTerminalShell.disabled .minecraftTerminal {
-  opacity: 1;
+/* The command line sits inside the terminal's frame and matches its type, so it reads as the
+   console's own prompt row rather than a form control parked underneath it. */
+.consolePrompt {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  border-top: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 22%, transparent);
+  padding: var(--space-2) 10px;
+  background: var(--terminal-bg);
+}
+
+.consolePromptMarker {
+  color: var(--sentinel-accent-muted);
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  user-select: none;
+}
+
+.consolePromptInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--terminal-text);
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  caret-color: var(--sentinel-accent-muted);
+}
+
+.consolePromptInput::placeholder {
+  color: color-mix(in srgb, var(--terminal-text) 45%, transparent);
+}
+
+.consolePromptInput:focus,
+.consolePromptInput:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* The frame already shows focus through the caret, so the ring would only box in the whole row. */
+.consolePrompt:focus-within {
+  border-top-color: color-mix(in srgb, var(--sentinel-accent-muted) 50%, transparent);
 }
 
 

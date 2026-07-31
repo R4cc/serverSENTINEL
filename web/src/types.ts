@@ -13,6 +13,11 @@ import type {
 } from "@serversentinel/contracts";
 
 export type {
+  ConsoleBacklog,
+  ConsoleEpoch,
+  ConsoleLine,
+  ConsoleSource,
+  ConsoleStreamFrame,
   CreateNodeResponse,
   FileEditLease,
   ManagedServerPort,

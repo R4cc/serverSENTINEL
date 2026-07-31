@@ -183,4 +183,17 @@ describe("retired class families stay retired", () => {
   ])("has no %s rules left in the overview stylesheet", (retired) => {
     expect(overviewStyles).not.toContain(retired);
   });
+
+  // The console's command line became a real input rather than characters echoed into the
+  // terminal, so the status row it used to own moved out with it.
+  it.each([
+    "minecraftTerminalStatus"
+  ])("has no %s rules left in the console stylesheet", (retired) => {
+    expect(featureStyles["files-console.css"]).not.toContain(retired);
+  });
+
+  it("keeps the console command line in the console stylesheet", () => {
+    expect(featureStyles["files-console.css"]).toContain(".consolePrompt");
+    expect(featureStyles["files-console.css"]).toContain(".consolePromptInput");
+  });
 });

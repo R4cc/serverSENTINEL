@@ -14,9 +14,7 @@ import { parseServerProperties } from "../runtime/serverProperties.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { config } from "../config.js";
 import { validateServerId } from "../http/validation.js";
-import { createConsoleSender, type BackpressuredClient } from "../servers/consoleBackpressure.js";
-
-type ConsoleClient = BackpressuredClient;
+import type { ConsoleUpstream } from "../servers/consoleChannel.js";
 
 type NodeLookup = (nodeId: string) => Promise<ManagedNode | undefined>;
 type PublicServerFn = (server: ManagedServer, nodes?: ManagedNode[]) => Promise<PublicServer>;
@@ -192,71 +190,55 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "server.console.send", { command });
   }
 
-  async streamConsole(server: ManagedServer, client: unknown, onClose: (cleanup: () => void) => void) {
-    const consoleClient = client as ConsoleClient;
-    // The node hop forwards workload output the panel does not pace, so it needs the same queue ceiling
-    // as the local streams rather than sending every forwarded frame unconditionally.
-    const sender = createConsoleSender(consoleClient);
-    const send = (event: unknown) => { sender.send(event); };
+  /**
+   * Forwards a node's console output into the server's buffer. Sequencing stays on the panel, so
+   * nothing here depends on the node agent's protocol version and an older node keeps working.
+   */
+  async streamConsole(server: ManagedServer, upstream: ConsoleUpstream) {
+    const reportUnavailable = (error: unknown) => {
+      const failure = error as Error & { code?: string };
+      upstream.unavailable(failure.message, {
+        code: failure.code?.toUpperCase(),
+        retryable: failure.code === "node_offline" || failure.code === "command_timeout"
+      });
+    };
 
     const node = await this.lookupNode(server.nodeId);
     if (!node) {
-      send({ type: "unavailable", message: `Node ${server.nodeId} not found`, code: "NODE_NOT_FOUND", retryable: false });
-      return;
+      upstream.unavailable(`Node ${server.nodeId} not found`, { code: "NODE_NOT_FOUND", retryable: false });
+      return () => {};
     }
     if (!this.connections.isConnected(node.id)) {
-      send({ type: "unavailable", message: `Node ${node.name} is offline`, code: "NODE_OFFLINE", retryable: true });
-      return;
+      upstream.unavailable(`Node ${node.name} is offline`, { code: "NODE_OFFLINE", retryable: true });
+      return () => {};
     }
     try {
       assertNodeSupports(node, "server.console.stream");
     } catch (error) {
       const protocolError = error as Error & { code?: string };
-      send({ type: "unavailable", message: protocolError.message, code: protocolError.code?.toUpperCase(), retryable: false });
-      return;
+      upstream.unavailable(protocolError.message, { code: protocolError.code?.toUpperCase(), retryable: false });
+      return () => {};
     }
 
-    try {
-      const status = await this.serverStatus(server) as { docker?: unknown };
-      send({ type: "status", status: { docker: status.docker } });
-    } catch (error) {
-      const statusError = error as Error & { code?: string };
-      send({
-        type: "unavailable",
-        message: statusError.message,
-        code: statusError.code?.toUpperCase(),
-        retryable: statusError.code === "node_offline" || statusError.code === "command_timeout"
-      });
-    }
-
-    try {
-      const cleanup = await this.connections.stream(
-        node,
-        "server.console.stream",
-        { server: compactNodeServerSpec(server) },
-        (event) => send(event),
-        (error) => {
-          if (error) {
-            const streamError = error as Error & { code?: string };
-            send({
-              type: "unavailable",
-              message: streamError.message,
-              code: streamError.code?.toUpperCase(),
-              retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
-            });
-          }
+    return this.connections.stream(
+      node,
+      "server.console.stream",
+      { server: compactNodeServerSpec(server) },
+      (event) => {
+        const frame = event as { type?: string; text?: string; message?: string; code?: string; retryable?: boolean };
+        if (frame.type === "log") upstream.write(frame.text ?? "");
+        else if (frame.type === "empty") upstream.empty(frame.message);
+        else if (frame.type === "unavailable") {
+          upstream.unavailable(frame.message ?? "Console stream is unavailable.", {
+            code: frame.code?.toUpperCase(),
+            retryable: frame.retryable
+          });
         }
-      );
-      onClose(cleanup);
-    } catch (error) {
-      const streamError = error as Error & { code?: string };
-      send({
-        type: "unavailable",
-        message: streamError.message,
-        code: streamError.code?.toUpperCase(),
-        retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
-      });
-    }
+      },
+      (error) => {
+        if (error) reportUnavailable(error);
+      }
+    );
   }
 
   async serverLogs(server: ManagedServer, lineLimit?: number) {

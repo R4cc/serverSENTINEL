@@ -13,6 +13,7 @@
     "dev:web": "npm --workspace web run dev",
     "build": "npm run check:versions && npm --workspace server run build && npm --workspace web run build",
     "test": "npm --workspace server run test && npm --workspace web run test",
+    "test:console": "npm run build && node scripts/console-smoke.mjs",
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
     "test:overview": "npm run build && node scripts/overview-timeline-smoke.mjs",
     "test:server": "npm --workspace server run test",
