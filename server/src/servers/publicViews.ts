@@ -19,6 +19,7 @@ export async function publicServer(server: ManagedServer, nodes?: ManagedNode[])
     dockerPorts: server.dockerPorts,
     javaArgs: server.javaArgs,
     startOnNodeStart: server.startOnNodeStart,
+    runtimeIntent: server.runtimeIntent,
     restartRequiredSince: server.restartRequiredSince,
     restartRequiredChanges: server.restartRequiredChanges,
     schedules: (server.schedules ?? []).map((schedule) => publicSchedule(server.id, schedule)),

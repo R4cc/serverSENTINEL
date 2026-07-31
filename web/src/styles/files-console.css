@@ -80,6 +80,25 @@
   border-radius: 999px;
 }
 
+/* xterm draws its own scrollbar rather than the browser's, so the native scrollbar rules above
+   never reach it. Left alone it fades in under the pointer as a pale bar in a colour of its own
+   choosing, which reads as something appearing rather than as part of the console. Keeping it
+   drawn, in the console's own colours, makes it a scroll position instead of a surprise. */
+.minecraftTerminal .xterm-scrollable-element > .scrollbar.vertical {
+  opacity: 1 !important;
+}
+
+.minecraftTerminal .xterm-scrollable-element > .scrollbar > .slider {
+  background: color-mix(in srgb, var(--terminal-text) 28%, var(--terminal-bg)) !important;
+  border-radius: 999px;
+}
+
+/* The console never scrolls sideways — it wraps — so a horizontal bar would only ever be a
+   full-width line across the bottom of the output. */
+.minecraftTerminal .xterm-scrollable-element > .scrollbar.horizontal {
+  display: none;
+}
+
 .consolePromptStatus {
   flex: 0 0 auto;
   border-top: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 36%, transparent);

@@ -249,7 +249,11 @@ function terminalTheme(styles: CSSStyleDeclaration) {
   return {
     background: cssVar(styles, "--terminal-bg", "#17191e"),
     foreground: cssVar(styles, "--terminal-text", "#dfe3eb"),
-    cursor: cssVar(styles, "--sentinel-accent-muted", "#70d0ff"),
+    // Nothing is typed into this terminal, so it has no cursor to show. `cursorInactiveStyle`
+    // covers it while unfocused, but clicking to select text focuses xterm's hidden textarea and
+    // brings the focused cursor back — a block sitting under the last line of output, right above
+    // the command line. Focus has to stay available for copying, so the cursor is drawn in nothing.
+    cursor: "rgba(0, 0, 0, 0)",
     selectionBackground: "rgba(112, 208, 255, 0.28)"
   };
 }

@@ -12,7 +12,7 @@ import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSigne
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
-import { readStoredActivePage, writeStoredActivePage } from "./app/navigationStorage";
+import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./app/navigationStorage";
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { lazyPage } from "./app/lazyPage";
 import { useServerContext } from "./app/serverContext";
@@ -97,7 +97,7 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [appState, setAppState] = useState<AppState>(emptyApp);
-  const [activeServerId, setActiveServerId] = useState("");
+  const [activeServerId, setActiveServerId] = useState(() => readStoredActiveServerId());
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [logs, setLogs] = useState<ConsoleLine[]>([]);
   // Bumped whenever the console is replaced rather than extended, which is the terminal's cue to
@@ -992,6 +992,10 @@ export default function App() {
   useEffect(() => {
     writeStoredActivePage(activePage);
   }, [activePage]);
+
+  useEffect(() => {
+    writeStoredActiveServerId(activeServerId);
+  }, [activeServerId]);
 
   // Mirrors every resolved session into the boot hint, so the six places that settle
   // the session do not each have to remember to keep the next first paint honest.
