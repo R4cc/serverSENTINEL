@@ -127,7 +127,7 @@
   color: var(--terminal-text);
   font-family: var(--font-mono);
   line-height: 1.4;
-  caret-color: var(--sentinel-accent-muted);
+  caret-color: transparent;
 }
 
 .consolePromptInput::placeholder {
