@@ -131,7 +131,7 @@ describe("stylesheet ownership", () => {
   // token that was never defined reads as "this rule silently does less than it
   // says". Custom properties set from TSX are the only legitimate exception.
   it("defines every token the stylesheets consume", () => {
-    const runtimeTokens = ["--visual-viewport-height", "--xms-percent", "--xmx-percent", "--timeline-annotation-extra", "--console-prompt-font-size"];
+    const runtimeTokens = ["--visual-viewport-height", "--visual-viewport-offset-top", "--xms-percent", "--xmx-percent", "--timeline-annotation-extra", "--console-prompt-font-size"];
     const allStyles = Object.values(featureStyles).join("\n");
     const defined = new Set([...allStyles.matchAll(/(--[\w-]+)\s*:/g)].map((match) => match[1]));
     const referenced = [...allStyles.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1]);

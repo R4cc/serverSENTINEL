@@ -334,6 +334,64 @@ async function assertConsoleViewportOwnership(page, label) {
   assert(!result.panelHeaderPresent, `${label}: removed console header bar is still present`);
 }
 
+/**
+ * The console is the one page sized to the visible area rather than scrolled, so it is the one page
+ * the software keyboard can take apart: opening it shrinks the visible area and, on iOS, slides it
+ * down the page to bring the focused field into view. A shell that keeps its position while the
+ * page stays full height ends up a band at the top of the screen above a blank half, with the
+ * console out of sight above it.
+ *
+ * The keyboard cannot be summoned in a headless browser. `installViewportStandIn` puts a visual
+ * viewport in its place that behaves identically until a test moves it, which is the whole of what
+ * the keyboard does to the page.
+ */
+async function assertConsoleSurvivesTheKeyboard(page, label) {
+  await openPage(page, "console");
+  await page.locator(".consolePromptInput").waitFor();
+
+  const openKeyboard = async (inset, offset) => {
+    await page.evaluate(({ keyboardInset, viewportOffset }) => {
+      window.__keyboardInset = keyboardInset;
+      window.__viewportOffset = viewportOffset;
+      window.visualViewport.dispatchEvent(new Event("resize"));
+      window.visualViewport.dispatchEvent(new Event("scroll"));
+    }, { keyboardInset: inset, viewportOffset: offset });
+    await page.waitForTimeout(120);
+    return page.evaluate(() => {
+      const rect = (selector) => {
+        const element = document.querySelector(selector);
+        if (!(element instanceof HTMLElement)) return null;
+        const box = element.getBoundingClientRect();
+        return { top: Math.round(box.top), bottom: Math.round(box.bottom), height: Math.round(box.height) };
+      };
+      const owner = document.scrollingElement;
+      return {
+        visibleTop: window.visualViewport.offsetTop,
+        visibleHeight: window.visualViewport.height,
+        shell: rect(".appShell"),
+        prompt: rect(".consolePrompt"),
+        terminal: rect(".minecraftTerminal"),
+        scrollHeight: owner instanceof HTMLElement ? owner.scrollHeight : 0,
+        clientHeight: owner instanceof HTMLElement ? owner.clientHeight : 0
+      };
+    });
+  };
+
+  const withKeyboard = await openKeyboard(336, 120);
+  const visibleBottom = withKeyboard.visibleTop + withKeyboard.visibleHeight;
+  assert(withKeyboard.shell && withKeyboard.prompt && withKeyboard.terminal, `${label}: console surfaces are missing under the keyboard`);
+  assert(Math.abs(withKeyboard.shell.top - withKeyboard.visibleTop) <= 1, `${label}: the shell stayed behind when the visible area moved down the page: ${JSON.stringify(withKeyboard)}`);
+  assert(Math.abs(withKeyboard.shell.height - withKeyboard.visibleHeight) <= 1, `${label}: the shell is not the height of what can be seen: ${JSON.stringify(withKeyboard)}`);
+  assert(withKeyboard.prompt.bottom <= visibleBottom + 1, `${label}: the command line sits under the keyboard: ${JSON.stringify(withKeyboard)}`);
+  assert(withKeyboard.prompt.top >= withKeyboard.visibleTop - 1, `${label}: the command line sits above what can be seen: ${JSON.stringify(withKeyboard)}`);
+  assert(withKeyboard.terminal.height > 0, `${label}: the console lost its height to the keyboard: ${JSON.stringify(withKeyboard)}`);
+  assert(withKeyboard.scrollHeight <= withKeyboard.clientHeight + 1, `${label}: the keyboard left a scrollable gap below the console: ${JSON.stringify(withKeyboard)}`);
+
+  const dismissed = await openKeyboard(0, 0);
+  assert(Math.abs(dismissed.shell.top) <= 1 && Math.abs(dismissed.shell.height - dismissed.visibleHeight) <= 1, `${label}: the console did not return to full height when the keyboard closed: ${JSON.stringify(dismissed)}`);
+  assert(dismissed.terminal.height > withKeyboard.terminal.height, `${label}: the console did not take back the space the keyboard had: ${JSON.stringify({ withKeyboard, dismissed })}`);
+}
+
 async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
   const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body }) => {
     const backdropElement = document.querySelector(backdrop);
@@ -377,6 +435,25 @@ async function runProfile(engine, profile, label) {
     await page.addInitScript(() => {
       localStorage.setItem("serversentinel-theme", "light");
       localStorage.setItem("serversentinel-active-page", "overview");
+
+      // A stand-in for the software keyboard, which a headless browser has no way to raise. It
+      // reports the real viewport, and forwards the real events, until a test gives it an inset or
+      // an offset — so every assertion that is not about the keyboard sees what it always saw.
+      const real = window.visualViewport;
+      const standIn = new EventTarget();
+      Object.defineProperties(standIn, {
+        width: { get: () => real?.width ?? window.innerWidth },
+        height: { get: () => (real?.height ?? window.innerHeight) - (window.__keyboardInset ?? 0) },
+        offsetLeft: { get: () => real?.offsetLeft ?? 0 },
+        offsetTop: { get: () => (real?.offsetTop ?? 0) + (window.__viewportOffset ?? 0) },
+        pageLeft: { get: () => real?.pageLeft ?? 0 },
+        pageTop: { get: () => real?.pageTop ?? 0 },
+        scale: { get: () => real?.scale ?? 1 }
+      });
+      for (const type of ["resize", "scroll"]) {
+        real?.addEventListener(type, () => standIn.dispatchEvent(new Event(type)));
+      }
+      Object.defineProperty(window, "visualViewport", { configurable: true, get: () => standIn });
     });
     await signInThroughForm(page, baseUrl);
 
@@ -390,6 +467,7 @@ async function runProfile(engine, profile, label) {
       await assertPageDocumentScroll(page, title, `${label} ${title}`);
     }
     await assertConsoleViewportOwnership(page, `${label} console`);
+    await assertConsoleSurvivesTheKeyboard(page, `${label} console keyboard`);
     await assertEditableFontSizes(page, `${label} settings`);
 
     await openPage(page, "files");
