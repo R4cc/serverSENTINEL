@@ -117,31 +117,30 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback }:
 
     // Reflow is now just reflow: there is no drawn input line for a resize to strand, which is
     // what the phone keyboard opening and closing used to disturb.
+    //
+    // A console with no box yet is the case to refuse rather than to attempt. Asked to fit into
+    // nothing, xterm does not decline — it proposes its minimum geometry and takes it, which is how
+    // a terminal that mounts behind `hidden`, or one frame ahead of its own layout, ends up a
+    // handful of columns wide with every line of output wrapped to match. Reporting whether a fit
+    // happened lets the first write wait for a real one instead of drawing into that.
     const fit = () => {
+      if (!container.clientWidth || !container.clientHeight) return false;
       try {
         fitAddon.fit();
+        return true;
       } catch {
-        // xterm cannot fit while hidden or zero-sized; the next resize will retry.
+        return false;
       }
     };
     fitRef.current = fit;
 
-    let fitFrame: number | null = null;
-    const scheduleFit = () => {
-      if (fitFrame !== null) return;
-      fitFrame = window.requestAnimationFrame(() => {
-        fitFrame = null;
-        fit();
-      });
-    };
-
-    const visualViewport = window.visualViewport;
-    visualViewport?.addEventListener("resize", scheduleFit);
-    window.addEventListener("resize", scheduleFit);
-
-    fitFrame = window.requestAnimationFrame(() => {
-      fitFrame = null;
-      fit();
+    // The buffer is written once the terminal has a width to wrap it against. Until then the
+    // console stays behind its skeleton: there is no width at which the output would be right, and
+    // rewrapping it afterwards is the reflow this is here to avoid.
+    let initialized = false;
+    const initialize = () => {
+      if (!fit()) return;
+      initialized = true;
       initialRenderCompleteRef.current = true;
       writeEntries(entriesRef.current, true);
       terminal.write("", () => {
@@ -149,8 +148,26 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback }:
         terminal.scrollToBottom();
         container.classList.remove("initializing");
       });
-    });
+    };
 
+    let fitFrame: number | null = null;
+    const scheduleFit = () => {
+      if (fitFrame !== null) return;
+      fitFrame = window.requestAnimationFrame(() => {
+        fitFrame = null;
+        if (initialized) fit();
+        else initialize();
+      });
+    };
+
+    const visualViewport = window.visualViewport;
+    visualViewport?.addEventListener("resize", scheduleFit);
+    window.addEventListener("resize", scheduleFit);
+
+    scheduleFit();
+
+    // Observing also delivers the container's current size, so a console that is already laid out
+    // initializes from here and one that is not initializes on the frame it gains a box.
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
 

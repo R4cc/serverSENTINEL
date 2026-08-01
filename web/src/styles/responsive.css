@@ -1174,7 +1174,10 @@ button:disabled,
     pointer-events: none;
   }
 
-  input:not([type="checkbox"]):not([type="radio"]),
+  /* The console prompt is excluded because it has to raise its marker along with its input, which
+     this rule cannot reach. It applies the same 16px floor to the whole row in `files-console.css`
+     instead; the mobile smoke checks every visible editable control, so the floor stays enforced. */
+  input:not([type="checkbox"]):not([type="radio"]):not(.consolePromptInput),
   select,
   textarea,
   [contenteditable="true"],
@@ -2540,8 +2543,30 @@ textarea:hover:not(:disabled),
     overscroll-behavior-y: auto;
   }
 
+  /* Every other page scrolls the document, which is what lets Safari collapse its chrome. The
+     console cannot: it is sized to the visible area so the terminal and the command line divide it
+     between them. That only holds while the page it sits on is the visible area too. Leaving the
+     document at full screen height while the shell shrinks to clear the keyboard leaves a screen's
+     worth of nothing below the shell, and a page long enough for iOS to scroll the shell up out of
+     sight when it brings the command line into view — the console ends up a band at the top of the
+     screen above a blank half. Pinning the shell to the visible area, and taking the page down to
+     the same size, leaves nowhere to scroll to and nothing to reveal. */
+  html:has(.workspacePage-console),
+  body:has(.workspacePage-console),
+  #root:has(.workspacePage-console) {
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   .appShell:has(.workspacePage-console),
   .sidebarCollapsed.appShell:has(.workspacePage-console) {
+    position: fixed;
+    inset-inline: 0;
+    /* Not `top: 0`: that is the top of the page, and the keyboard can leave the visible area some
+       way down it. */
+    top: var(--visual-viewport-offset-top, 0px);
     height: var(--visual-viewport-height, 100dvh);
     min-height: 0;
     grid-template-rows: 68px minmax(0, 1fr);

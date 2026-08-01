@@ -65,6 +65,7 @@ export function ServerConsoleTab({
               canSendCommands={canSendCommands}
               disabledReason={disabledReason}
               commandHistory={commandHistory}
+              fontSize={fontSize}
               onCommand={onCommand}
             />
           </div>

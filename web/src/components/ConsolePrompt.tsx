@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import type { ConsoleFontSize } from "../features/settings/settingsPreferences";
 import { recallNextCommand, recallPreviousCommand, type TerminalHistoryState } from "../utils/minecraftTerminal";
 
 type ConsolePromptProps = {
   canSendCommands: boolean;
   disabledReason: string;
   commandHistory: string[];
+  /** The console's own type size, so the command line is set like the output above it. */
+  fontSize: ConsoleFontSize;
   onCommand(command: string): void;
 };
 
@@ -18,7 +21,7 @@ type ConsolePromptProps = {
  * the line on every keystroke and every batch of arriving output. The browser does all of it, and a
  * caret it owns cannot be caught mid-redraw by a frame that lands at the wrong moment.
  */
-export function ConsolePrompt({ canSendCommands, disabledReason, commandHistory, onCommand }: ConsolePromptProps) {
+export function ConsolePrompt({ canSendCommands, disabledReason, commandHistory, fontSize, onCommand }: ConsolePromptProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [value, setValue] = useState("");
   // Where arrow-key recall currently sits, and what was typed before it started.
@@ -81,7 +84,12 @@ export function ConsolePrompt({ canSendCommands, disabledReason, commandHistory,
   }
 
   return (
-    <form className="consolePrompt" onSubmit={handleSubmit}>
+    <form
+      className="consolePrompt"
+      // The terminal's type size is a preference, not a token, so the row reads it from here.
+      style={{ "--console-prompt-font-size": `${fontSize}px` } as React.CSSProperties}
+      onSubmit={handleSubmit}
+    >
       <span className="consolePromptMarker" aria-hidden="true">&gt;</span>
       <input
         ref={inputRef}

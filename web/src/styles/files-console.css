@@ -97,7 +97,11 @@
 }
 
 /* The command line sits inside the terminal's frame and matches its type, so it reads as the
-   console's own prompt row rather than a form control parked underneath it. */
+   console's own prompt row rather than a form control parked underneath it. The size the terminal
+   is drawn at is a user preference rather than a token, so the prompt carries it in as a custom
+   property and the marker and the input both take it from the row. Without that, both fall back to
+   the shared form rules and the command line is set in the UI font at the UI size, a step off the
+   output directly above it. */
 .consolePrompt {
   flex: 0 0 auto;
   display: flex;
@@ -106,11 +110,13 @@
   border-top: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 22%, transparent);
   padding: var(--space-2) 10px;
   background: var(--terminal-bg);
+  font-size: var(--console-prompt-font-size, var(--type-code-size));
 }
 
 .consolePromptMarker {
   color: var(--sentinel-accent-muted);
   font-family: var(--font-mono);
+  font-size: inherit;
   line-height: 1.4;
   user-select: none;
 }
@@ -130,6 +136,14 @@
   caret-color: transparent;
 }
 
+/* Text inputs are 44px boxes set in the UI font, which is the right shape for a form field and the
+   wrong one for a line of console. Both of those come from a selector that outweighs a lone class,
+   so this one is written to outweigh it in turn and hand the row back its own line box. */
+.consolePrompt input.consolePromptInput {
+  height: auto;
+  font-size: inherit;
+}
+
 .consolePromptInput::placeholder {
   color: color-mix(in srgb, var(--terminal-text) 45%, transparent);
 }
@@ -138,6 +152,26 @@
 .consolePromptInput:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+/* Focusing an input set below 16px zooms the page on iOS, so every editable control on a phone is
+   raised to that floor. The console prompt takes the floor here rather than through the shared
+   rule in `responsive.css`, because that rule reaches the input and not the marker beside it: the
+   command text would step up to 16px while the `>` stayed at the console's size. Raising the row
+   moves both. Stretching them fills the 44px touch target with the input rather than with padding
+   that does not focus it. */
+@media (max-width: 720px) {
+  .consolePrompt {
+    align-items: stretch;
+    min-height: 44px;
+    padding-block: 0;
+    font-size: max(var(--console-prompt-font-size, var(--type-code-size)), 16px);
+  }
+
+  .consolePromptMarker {
+    display: flex;
+    align-items: center;
+  }
 }
 
 .fileTypeIcon {
