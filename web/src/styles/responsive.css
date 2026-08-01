@@ -1174,7 +1174,10 @@ button:disabled,
     pointer-events: none;
   }
 
-  input:not([type="checkbox"]):not([type="radio"]),
+  /* The console prompt is excluded because it has to raise its marker along with its input, which
+     this rule cannot reach. It applies the same 16px floor to the whole row in `files-console.css`
+     instead; the mobile smoke checks every visible editable control, so the floor stays enforced. */
+  input:not([type="checkbox"]):not([type="radio"]):not(.consolePromptInput),
   select,
   textarea,
   [contenteditable="true"],
