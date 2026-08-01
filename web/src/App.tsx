@@ -14,6 +14,7 @@ import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./app/navigationStorage";
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
+import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -1014,29 +1015,29 @@ export default function App() {
     const refreshWhenActive = () => {
       if (!document.hidden) void refreshNodeConnectivity();
     };
-    const handleVisibility = () => refreshWhenActive();
 
     void refreshNodeConnectivity();
     const interval = window.setInterval(refreshWhenActive, 5_000);
-    window.addEventListener("focus", refreshWhenActive);
-    window.addEventListener("online", refreshWhenActive);
-    document.addEventListener("visibilitychange", handleVisibility);
+    const unsubscribe = subscribeToPageReactivation(refreshWhenActive);
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener("focus", refreshWhenActive);
-      window.removeEventListener("online", refreshWhenActive);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      unsubscribe();
     };
   }, [activeServer?.id, activeServerUsesInternalNode, demoMode]);
 
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
     const serverId = activeServer.id;
-    const interval = window.setInterval(() => {
+    const refreshWhenActive = () => {
       if (document.hidden) return;
       void refreshStatus(serverId);
-    }, serverStatusPollMs);
-    return () => window.clearInterval(interval);
+    };
+    const interval = window.setInterval(refreshWhenActive, serverStatusPollMs);
+    const unsubscribe = subscribeToPageReactivation(refreshWhenActive);
+    return () => {
+      window.clearInterval(interval);
+      unsubscribe();
+    };
   }, [activeServer?.id, demoMode, activeNodeRuntimeBlocked]);
 
   useEffect(() => {
@@ -1071,9 +1072,11 @@ export default function App() {
     }
     void loadOverviewData();
     const interval = window.setInterval(() => void loadOverviewData(), 30_000);
+    const unsubscribe = subscribeToPageReactivation(() => void loadOverviewData());
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      unsubscribe();
     };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning, demoSessionVersion, refreshOverviewData]);
 
