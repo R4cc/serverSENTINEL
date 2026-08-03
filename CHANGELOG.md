@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+## 1.7.2 - 2026-08-03
+
 - Showed the console command caret.
 - Refreshed server data when pages reactivate.
+- Closed the timeline event popover on a click outside it.
+- Updated dependencies to their most recent compatible versions.
 
 ## 1.7.1 - 2026-08-01
 
