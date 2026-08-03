@@ -12,12 +12,13 @@ for (const manifest of ["server/package.json", "shared/package.json", "web/packa
 
 const expectedText = [
   // The 1.7.1 entry was missed because nothing checked for it; the release shipped with
-  // the changelog's newest entry still reading 1.7.0.
+  // the changelog's newest entry still reading 1.7.0. This script also runs inside the
+  // Docker build stage, so every path listed here must be COPYed in before `npm run build`.
   ["CHANGELOG.md", `## ${version} - `],
   ["server/src/buildInfo.ts", `?? "${version}"`],
   ["web/src/app/appConfig.ts", `appVersion = "${version}"`],
   ["docker/Dockerfile", `ARG SS_VERSION=${version}`],
-  ["docker/Dockerfile", "COPY docker-compose.yml .env.example README.md ./"],
+  ["docker/Dockerfile", "COPY docker-compose.yml .env.example README.md CHANGELOG.md ./"],
   ["docker-compose.yml", "image: nl2109/serversentinel:latest"],
   ["docker-compose.yml", "SERVERSENTINEL_NODE_IMAGE:-nl2109/serversentinel:latest"],
   [".env.example", "SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:latest"],
