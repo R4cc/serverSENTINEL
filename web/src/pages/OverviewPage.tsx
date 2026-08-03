@@ -14,7 +14,7 @@ import { serverRuntimeDefinition } from '@serversentinel/contracts';
 import { formatRelativeTimestamp, minecraftVersionInfo, runtimeVersionInfo, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
-import { AppIcon } from '../components/FileTypeIcon';
+import { AppIcon, SidebarIcon } from '../components/FileTypeIcon';
 import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
@@ -23,7 +23,7 @@ import { playerHeadSource, playerHeadVersion } from '../utils/playerHeads';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const activePlayerPreviewLimit = 8;
-const modUpdateCardSlotCount = 3;
+const overviewSupportCardSlotCount = 4;
 const upcomingScheduleDisplayLimit = 4;
 const upcomingScheduleWindowMs = 24 * 60 * 60 * 1000;
 
@@ -84,6 +84,39 @@ function OverviewCard({
       {children}
     </Surface>
   );
+}
+
+function OverviewCardState({
+  title,
+  message,
+  icon,
+  tone = "neutral",
+  onClick,
+  ariaLabel
+}: {
+  title: ReactNode;
+  message: ReactNode;
+  icon: ReactNode;
+  tone?: "neutral" | "success";
+  onClick?: () => void;
+  ariaLabel?: string;
+}) {
+  const content = (
+    <>
+      <span className={`overviewCardStateIcon tone-${tone}`}>{icon}</span>
+      <span className="overviewCardStateCopy">
+        <strong>{title}</strong>
+        <small>{message}</small>
+      </span>
+      {onClick && <AppIcon name="chevronRight" />}
+    </>
+  );
+
+  return onClick ? (
+    <button type="button" className="overviewCardRow overviewCardStateItem" onClick={onClick} aria-label={ariaLabel}>
+      {content}
+    </button>
+  ) : <div className="overviewCardRow overviewCardStateItem">{content}</div>;
 }
 
 export function OverviewSummary({
@@ -289,7 +322,7 @@ export function ModHealthPanel({
 
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
-  const visibleUpdates = availableUpdates.slice(0, modUpdateCardSlotCount);
+  const visibleUpdates = availableUpdates.slice(0, overviewSupportCardSlotCount);
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
   const description = updateCount === 0
     ? "No updates available"
@@ -311,19 +344,14 @@ export function ModHealthPanel({
       {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
       <div className="overviewCardList modUpdatesList">
         {updateCount === 0 ? (
-          <button
-            type="button"
-            className="overviewCardRow modUpdatesListItem modUpdatesListItem--healthy"
+          <OverviewCardState
+            title="Everything is up to date"
+            message={`New ${contentSingular} updates will appear here.`}
+            icon={<AppIcon name="check" />}
+            tone="success"
             onClick={onOpenMods}
-            aria-label={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
-          >
-            <span className="modUpdatesHealthyIcon"><AppIcon name="check" /></span>
-            <span className="modUpdatesListCopy">
-              <strong>Everything is up to date</strong>
-              <small>New {contentSingular} updates will appear here.</small>
-            </span>
-            <AppIcon name="chevronRight" />
-          </button>
+            ariaLabel={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
+          />
         ) : visibleUpdates.map((entry) => (
           <button
             type="button"
@@ -347,7 +375,7 @@ export function ModHealthPanel({
       </div>
       {remainingUpdates > 0 && (
         <Button variant="ghost" compact className="modUpdatesRemaining" onClick={onOpenMods}>
-          +{remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}
+          {remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}
         </Button>
       )}
     </OverviewCard>
@@ -462,14 +490,25 @@ export function SchedulePanel({
       actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={() => onOpenSchedules()}>Open Schedules</Button>}
     >
       <div className="overviewCardBody">{!canView ? (
-        <EmptyState compact title="Schedules unavailable" message="View schedules permission is required." />
+        <OverviewCardState title="Schedules unavailable" message="View schedules permission is required." icon={<AppIcon name="shield" />} />
       ) : schedules.length === 0 ? (
-        <EmptyState compact title="No schedules configured" message="Create recurring console actions from Schedules." />
+        <OverviewCardState
+          title="No schedules configured"
+          message="Create recurring console actions from Schedules."
+          icon={<SidebarIcon name="schedule" />}
+          onClick={() => onOpenSchedules()}
+          ariaLabel="Open Schedules to create a schedule"
+        />
       ) : snapshot.schedules.length === 0 ? (
-        <EmptyState compact title="No upcoming schedules" message="Enabled schedules will appear here when their next run is planned." />
+        <OverviewCardState
+          title="No upcoming schedules"
+          message="Enabled schedules will appear here when their next run is planned."
+          icon={<SidebarIcon name="schedule" />}
+          onClick={() => onOpenSchedules()}
+          ariaLabel="Open Schedules, no upcoming schedules"
+        />
       ) : (
         <div className="scheduleUpcoming">
-          <span className="scheduleUpcomingLabel">Next up</span>
           <div className="scheduleUpcomingList">
             {snapshot.schedules.map((schedule) => {
               const nextRunAt = schedule.nextRunAt!;
@@ -490,13 +529,14 @@ export function SchedulePanel({
             })}
           </div>
           {snapshot.remainingInNext24Hours > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              compact
               className="scheduleUpcomingMore"
               onClick={() => onOpenSchedules()}
             >
               {snapshot.remainingInNext24Hours} more {snapshot.remainingInNext24Hours === 1 ? "schedule" : "schedules"} in the next 24 hours
-            </button>
+            </Button>
           )}
         </div>
       )}</div>

@@ -421,8 +421,8 @@ describe("mod health", () => {
     expect(healthyHtml).toContain("<h2>Mod updates</h2>");
     expect(healthyHtml).toContain("No updates available");
     expect(healthyHtml).toContain("Everything is up to date");
-    expect(healthyHtml).toContain("modUpdatesListItem modUpdatesListItem--healthy");
-    expect(healthyHtml).toContain("modUpdatesListCopy");
+    expect(healthyHtml).toContain("overviewCardStateItem");
+    expect(healthyHtml).toContain("overviewCardStateCopy");
     expect(healthyHtml).not.toContain("modUpdatesHealthyState");
     expect(healthyHtml).toContain("Open Mods, no mod updates available");
     const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
@@ -503,8 +503,8 @@ describe("mod health", () => {
     expect(html.match(/modUpdatesListItem/g)).toHaveLength(1);
   });
 
-  it("fills all predefined update slots with real updates", () => {
-    const entries = Array.from({ length: 3 }, (_, index): ModUpdatePlanEntry => ({
+  it("shows four update rows and summarizes the remaining updates", () => {
+    const entries = Array.from({ length: 10 }, (_, index): ModUpdatePlanEntry => ({
       filename: `mod-${index}.jar`,
       displayName: `Mod ${index}`,
       iconUrl: undefined,
@@ -520,13 +520,16 @@ describe("mod health", () => {
       enabled: true
     }));
     const html = renderToStaticMarkup(createElement(ModHealthPanel, {
-      updatePlan: updatePlan({ safeUpdates: 3 }, entries),
+      updatePlan: updatePlan({ safeUpdates: 10 }, entries),
       onOpenMods: () => undefined
     }));
 
     expect(html).not.toContain("modUpdatesListItem--placeholder");
     expect(html.indexOf("Mod 0")).toBeLessThan(html.indexOf("Mod 1"));
     expect(html.indexOf("Mod 1")).toBeLessThan(html.indexOf("Mod 2"));
+    expect(html).toContain("Mod 3");
+    expect(html).not.toContain("Mod 4");
+    expect(html).toContain("6 more updates");
   });
 });
 
@@ -575,13 +578,19 @@ describe("upcoming schedule summary", () => {
 
   it("renders empty and permission-limited states", () => {
     const props = { schedules: [], formatDate: String, onOpenSchedules: () => undefined };
-    expect(renderToStaticMarkup(createElement(SchedulePanel, props))).toContain("No schedules configured");
-    expect(renderToStaticMarkup(createElement(SchedulePanel, { ...props, canView: false }))).toContain("View schedules permission is required");
+    const emptyHtml = renderToStaticMarkup(createElement(SchedulePanel, props));
+    const unavailableHtml = renderToStaticMarkup(createElement(SchedulePanel, { ...props, canView: false }));
+    expect(emptyHtml).toContain("No schedules configured");
+    expect(emptyHtml).toContain("overviewCardStateItem");
+    expect(emptyHtml).toContain('aria-label="Open Schedules to create a schedule"');
+    expect(unavailableHtml).toContain("View schedules permission is required");
+    expect(unavailableHtml).toContain("overviewCardStateItem");
+    expect(unavailableHtml).not.toContain("uiEmptyState");
   });
 
   it("renders at most four upcoming schedules and summarizes the rest", () => {
     const html = renderToStaticMarkup(createElement(SchedulePanel, {
-      schedules: Array.from({ length: 6 }, (_, index) => schedule({
+      schedules: Array.from({ length: 10 }, (_, index) => schedule({
         id: `schedule-${index}`,
         name: `Task ${index}`,
         nextRunAt: upcomingAt(index + 1),
@@ -593,11 +602,11 @@ describe("upcoming schedule summary", () => {
     }));
 
     expect(html).toContain(">Schedule<");
-    expect(html).toContain(">Next up<");
+    expect(html).not.toContain(">Next up<");
     expect((html.match(/class="overviewCardRow scheduleUpcomingItem"/g) ?? []).length).toBe(4);
-    expect(html).toContain("2 more schedules in the next 24 hours");
+    expect(html).toContain("6 more schedules in the next 24 hours");
     expect(html).not.toContain("Task 4");
-    expect(html).not.toContain("Task 5");
+    expect(html).not.toContain("Task 9");
     expect(html).not.toContain("Past activity");
     expect(html).not.toContain("Last run");
     expect(html).not.toContain("Running now");
