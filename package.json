@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "private": true,
   "packageManager": "npm@11.17.0",
   "workspaces": [
@@ -25,11 +25,11 @@
     "start": "npm --workspace server run start"
   },
   "devDependencies": {
-    "@fontsource-variable/cascadia-code": "^5.2.2",
-    "playwright": "1.61.1"
+    "@fontsource-variable/cascadia-code": "^5.3.0",
+    "playwright": "1.62.1"
   },
   "overrides": {
-    "vite": "^8.1.5",
+    "vite": "^8.2.0",
     "esbuild": "^0.28.1"
   }
 }

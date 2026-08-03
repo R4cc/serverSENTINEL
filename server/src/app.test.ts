@@ -32,7 +32,8 @@ import {
   localFilePathInput
 } from "./files/fileService.js";
 import { uploadManagedContentBuffer } from "./mods/managedContent.js";
-import { isMinecraftStopCommand, mutableServerConfigurationBlockedReason } from "./servers/lifecycle.js";
+import { isMinecraftStopCommand } from "./servers/lifecycle.js";
+import { mutableServerConfigurationBlockedReason } from "./servers/mutableConfigurationGate.js";
 import { modrinthSearchFacets } from "./mods/modService.js";
 import { assertSameOriginRequest } from "./http/requestOrigin.js";
 import { publicInstalledModsResult, publicServerStatus } from "./servers/publicViews.js";

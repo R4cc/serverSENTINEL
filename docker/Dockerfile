@@ -1,4 +1,4 @@
-ARG SS_VERSION=1.7.1
+ARG SS_VERSION=1.7.2
 FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
@@ -26,7 +26,7 @@ COPY server server
 COPY web web
 COPY scripts scripts
 COPY docker docker
-COPY docker-compose.yml .env.example README.md ./
+COPY docker-compose.yml .env.example README.md CHANGELOG.md ./
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runtime

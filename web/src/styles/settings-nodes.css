@@ -48,11 +48,6 @@
   font-weight: var(--weight-heading);
 }
 
-.nodeModalBody.nodeDetailsBody {
-  background: color-mix(in srgb, var(--surface-muted) 52%, var(--surface-raised));
-  overflow: auto;
-}
-
 .nodeWarnings {
   display: grid;
   gap: var(--space-1);

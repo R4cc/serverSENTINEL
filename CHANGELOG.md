@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 1.7.2 - 2026-08-03
+
+- Showed the console command caret.
+- Refreshed server data when pages reactivate.
+- Closed the timeline event popover on a click outside it.
+- Updated dependencies to their most recent compatible versions.
+
+## 1.7.1 - 2026-08-01
+
+- Took the console prompt out of the terminal and made the command line a real input with its own type, so focus, hover, caret, and wrapped mobile input behave like a normal field.
+- Drew the console only once it has a width to wrap against, and kept it on screen when the on-screen keyboard opens.
+- Kept the console terminal and the overview timeline alive between page visits, and made the first visit to a page as fast as a repeat one.
+- Preserved the workspace shell while the session resolves instead of flashing the sign-in surface.
+- Persisted the active server selection and exposed runtime intent.
+- Moved user management out of the authentication panel.
+- Added a browser smoke covering the console's drawn behaviour.
+
 ## 1.7.0 - 2026-07-29
 
 - Set the direct upgrade floor to panel/node 1.6.2, SQLite schema 20, export schema 3, and panel-node protocol 3.1.

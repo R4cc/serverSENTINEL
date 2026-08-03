@@ -944,9 +944,3 @@ export type ImportValidationResult = {
     servers: ImportPlanServer[];
   };
 };
-
-export type ImportedContentFailure = {
-  serverName: string;
-  filename: string;
-  reason: string;
-};

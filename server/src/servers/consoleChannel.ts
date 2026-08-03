@@ -33,8 +33,6 @@ export type ConsoleUpstream = {
   empty(message?: string): void;
 };
 
-export type ConsoleUpstreamFactory = (upstream: ConsoleUpstream) => Promise<() => void> | (() => void);
-
 export type ConsoleSubscriber = {
   lines(lines: ConsoleLine[], epoch: ConsoleEpoch): void;
   unavailable(message: string, options?: { code?: string; retryable?: boolean }): void;

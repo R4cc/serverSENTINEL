@@ -192,6 +192,19 @@ describe("retired class families stay retired", () => {
     expect(featureStyles["files-console.css"]).not.toContain(retired);
   });
 
+  // These three had no markup left anywhere in web/src but were still maintained across
+  // several stylesheets -- buttonRow alone spanned four files and eight rule sites.
+  it.each([
+    "buttonRow",
+    "layoutBalanced",
+    "nodeDetailsBody"
+  ])("has no %s rules left in any stylesheet", (retired) => {
+    const owners = Object.entries(featureStyles)
+      .filter(([, sheet]) => sheet.includes(retired))
+      .map(([name]) => name);
+    expect(owners).toEqual([]);
+  });
+
   it("keeps the console command line in the console stylesheet", () => {
     expect(featureStyles["files-console.css"]).toContain(".consolePrompt");
     expect(featureStyles["files-console.css"]).toContain(".consolePromptInput");

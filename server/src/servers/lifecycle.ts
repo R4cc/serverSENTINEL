@@ -4,7 +4,7 @@ import { logWarn, errorLogFields } from "../logging.js";
 
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 
-import { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason, stoppedLikeDockerStates, stoppedServerMutationMessage } from "./mutableConfigurationGate.js";
+import { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason } from "./mutableConfigurationGate.js";
 
 import type { ForegroundOperationInput } from "../operations/operationService.js";
 import type { ManagedServer, OperationRecord } from "../types.js";
@@ -18,8 +18,6 @@ export async function recordOperation<T>(
 ) {
   return services.operationService.run(input, action);
 }
-
-export { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason, stoppedLikeDockerStates, stoppedServerMutationMessage };
 
 export function blockingRuntimeOperations(serverId: string) {
   return services.operationsRepository.listActive(serverId).filter((operation) => blockingRuntimeOperationTypes.has(operation.type));

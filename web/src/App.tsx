@@ -14,6 +14,7 @@ import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./app/navigationStorage";
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
+import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
 import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -193,6 +194,10 @@ export default function App() {
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
   const staleSessionSuppressUntilRef = useRef(0);
+  // handleStaleSession is reached through memoized callbacks that do not list it as a
+  // dependency, so reading authSession directly would pin whichever value was current
+  // when those callbacks last rebuilt. Only demoEnabled survives the logout reset.
+  const demoEnabledRef = useRef<boolean | undefined>(undefined);
 
   useEffect(() => {
     setRuntimeFeedbackAction(null);
@@ -258,6 +263,10 @@ export default function App() {
   useEffect(() => {
     triggerOverviewRefreshRef.current = triggerOverviewRefresh;
   }, [triggerOverviewRefresh]);
+
+  useEffect(() => {
+    demoEnabledRef.current = authSession?.demoEnabled;
+  }, [authSession?.demoEnabled]);
 
   const darkMode = resolveDarkTheme(themePreference, systemDark);
   const themeClassName = resolvedThemeClassName(themePreference, systemDark);
@@ -982,14 +991,6 @@ export default function App() {
   }, [commandHistory, rememberConsoleHistory]);
 
   useEffect(() => {
-    try {
-      window.localStorage.removeItem("serversentinel-player-metrics");
-    } catch {
-      // Ignore unavailable browser storage; player snapshots are server-owned.
-    }
-  }, []);
-
-  useEffect(() => {
     writeStoredActivePage(activePage);
   }, [activePage]);
 
@@ -1014,29 +1015,29 @@ export default function App() {
     const refreshWhenActive = () => {
       if (!document.hidden) void refreshNodeConnectivity();
     };
-    const handleVisibility = () => refreshWhenActive();
 
     void refreshNodeConnectivity();
     const interval = window.setInterval(refreshWhenActive, 5_000);
-    window.addEventListener("focus", refreshWhenActive);
-    window.addEventListener("online", refreshWhenActive);
-    document.addEventListener("visibilitychange", handleVisibility);
+    const unsubscribe = subscribeToPageReactivation(refreshWhenActive);
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener("focus", refreshWhenActive);
-      window.removeEventListener("online", refreshWhenActive);
-      document.removeEventListener("visibilitychange", handleVisibility);
+      unsubscribe();
     };
   }, [activeServer?.id, activeServerUsesInternalNode, demoMode]);
 
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
     const serverId = activeServer.id;
-    const interval = window.setInterval(() => {
+    const refreshWhenActive = () => {
       if (document.hidden) return;
       void refreshStatus(serverId);
-    }, serverStatusPollMs);
-    return () => window.clearInterval(interval);
+    };
+    const interval = window.setInterval(refreshWhenActive, serverStatusPollMs);
+    const unsubscribe = subscribeToPageReactivation(refreshWhenActive);
+    return () => {
+      window.clearInterval(interval);
+      unsubscribe();
+    };
   }, [activeServer?.id, demoMode, activeNodeRuntimeBlocked]);
 
   useEffect(() => {
@@ -1071,9 +1072,11 @@ export default function App() {
     }
     void loadOverviewData();
     const interval = window.setInterval(() => void loadOverviewData(), 30_000);
+    const unsubscribe = subscribeToPageReactivation(() => void loadOverviewData());
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      unsubscribe();
     };
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, demoMode, demoRunning, demoSessionVersion, refreshOverviewData]);
 
@@ -1218,7 +1221,7 @@ export default function App() {
     writeStoredDemoMode(false);
     setDemoMode(false);
     setAuthNotice("Sign in again to continue.");
-    setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: authSession?.demoEnabled, user: null });
+    setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: demoEnabledRef.current, user: null });
     setAppState(emptyApp);
     setAppStateLoaded(false);
     setAppLoadError("");
@@ -1339,7 +1342,7 @@ export default function App() {
     resetSessionRequestGuards();
     writeStoredDemoMode(false);
     setDemoMode(false);
-    setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: authSession?.demoEnabled, user: null });
+    setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: demoEnabledRef.current, user: null });
     setAppState(emptyApp);
     setAppStateLoaded(false);
     setActiveServerId("");
