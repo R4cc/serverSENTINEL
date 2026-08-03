@@ -26,16 +26,19 @@ function testRuntimeProfile(): ServerRuntimeProfile {
 function testUpstream() {
   const written: string[] = [];
   const failures: Array<{ message: string; code?: string; retryable?: boolean }> = [];
+  const ends: number[] = [];
   return {
     written,
     failures,
+    ends,
     upstream: {
       write: (chunk: string) => { written.push(chunk); },
       notice: (message: string) => { written.push(`${message}\n`); },
       unavailable: (message: string, options?: { code?: string; retryable?: boolean }) => {
         failures.push({ message, ...options });
       },
-      empty: () => {}
+      empty: () => {},
+      ended: () => { ends.push(failures.length); }
     }
   };
 }
@@ -465,6 +468,43 @@ describe("RemoteNodeRuntime command timeouts", () => {
       code: "NODE_OFFLINE",
       retryable: true
     });
+    // Nothing was attached, so the console must not be held as live. Recording it is what left a
+    // recovered node still reading as offline to every viewer that came afterwards.
+    expect(sink.ends).toHaveLength(1);
+  });
+
+  it("reports the console as ended when the node stops sending", async () => {
+    const node = testNode();
+    const sink = testUpstream();
+    let close: (error?: Error) => void = () => {};
+    const connections = {
+      isConnected: () => true,
+      stream: async (
+        _node: ManagedNode,
+        _command: string,
+        _payload: unknown,
+        _onData: (event: unknown) => void,
+        onClose?: (error?: Error) => void
+      ) => {
+        close = onClose ?? (() => {});
+        return () => {};
+      }
+    } as unknown as PanelNodeConnections;
+    const runtime = new RemoteNodeRuntime(
+      node.id,
+      async () => node,
+      connections,
+      async (server) => server as never,
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    await runtime.streamConsole(testServer(), sink.upstream);
+    expect(sink.ends).toHaveLength(0);
+    close();
+
+    expect(sink.ends).toHaveLength(1);
   });
 
   it("allows slow remote server provisioning commands to outlive the default request timeout", async () => {

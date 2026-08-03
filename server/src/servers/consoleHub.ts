@@ -104,11 +104,26 @@ export class ConsoleHub {
   private async ensureUpstream(server: ManagedServer, entry: ChannelEntry) {
     if (entry.stopUpstream) return;
     if (entry.starting) return entry.starting;
-    const upstream = entry.channel.upstream();
+    let ended = false;
+    const upstream: ConsoleUpstream = {
+      ...entry.channel.upstream(),
+      // A node hop ends when the node's stream ends, which the hub is told about nowhere else.
+      // Without this the producer stays recorded as live for as long as the buffer survives: the
+      // next viewer attaches to a channel nothing is writing to and is handed the failure that
+      // ended it, so a node that has been back for an hour still reads as offline.
+      ended: () => {
+        if (ended) return;
+        ended = true;
+        this.releaseUpstream(entry);
+      }
+    };
     entry.starting = this.startUpstream(server, upstream)
       .then((stop) => {
         // Nothing is left attached to feed, so release the producer rather than leaking a follow.
-        if (!this.entries.has(server.id)) {
+        // A producer that already reported itself finished — a node that was offline when the
+        // stream was requested resolves with a no-op stop — must not be recorded either, or the
+        // next viewer would never get a new one.
+        if (!this.entries.has(server.id) || ended) {
           stop();
           return;
         }
@@ -126,6 +141,18 @@ export class ConsoleHub {
         entry.starting = undefined;
       });
     return entry.starting;
+  }
+
+  /**
+   * Forgets the producer without dropping the buffer. The remembered failure goes with it: the
+   * next viewer starts a fresh producer, and that is what decides whether the console is available
+   * now, not what the previous one reported before it stopped.
+   */
+  private releaseUpstream(entry: ChannelEntry) {
+    const stop = entry.stopUpstream;
+    entry.stopUpstream = undefined;
+    stop?.();
+    entry.channel.markAvailable();
   }
 
   private cancelEviction(entry: ChannelEntry) {

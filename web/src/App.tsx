@@ -20,7 +20,7 @@ import { useServerContext } from "./app/serverContext";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
-import { consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppToaster } from "./components/AppToaster";
 import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
@@ -186,6 +186,11 @@ export default function App() {
   const consoleReconnectNoticeTimeoutRef = useRef<number | null>(null);
   const consoleReconnectAttemptRef = useRef(0);
   const consoleCommandRefreshTimeoutRef = useRef<number | null>(null);
+  // Read from the node connectivity poller, whose closure is rebuilt only when the active server
+  // changes and would otherwise keep testing whatever the console state was at that moment.
+  const consoleConnectionStateRef = useRef<ConsoleConnectionState>("connecting");
+  /** Guards the console retry below to one attempt per offline report, so a console that really cannot attach is not reconnected every poll. */
+  const consoleOfflineRecheckedRef = useRef(false);
   const runtimeFeedbackTimeoutRef = useRef<number | null>(null);
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
@@ -267,6 +272,15 @@ export default function App() {
   useEffect(() => {
     demoEnabledRef.current = authSession?.demoEnabled;
   }, [authSession?.demoEnabled]);
+
+  useEffect(() => {
+    consoleConnectionStateRef.current = consoleConnectionState;
+    // Only a console that actually came back earns another recheck. Clearing this on "connecting"
+    // would clear it on the recheck's own reconnect, which is how one retry becomes a retry loop.
+    if (consoleConnectionState === "live" || consoleConnectionState === "polling") {
+      consoleOfflineRecheckedRef.current = false;
+    }
+  }, [consoleConnectionState]);
 
   const darkMode = resolveDarkTheme(themePreference, systemDark);
   const themeClassName = resolvedThemeClassName(themePreference, systemDark);
@@ -768,6 +782,7 @@ export default function App() {
       setConsoleError("");
       setConsoleConnectionState("connecting");
       consoleReconnectAttemptRef.current = 0;
+      consoleOfflineRecheckedRef.current = false;
       if (consoleReconnectNoticeTimeoutRef.current !== null) {
         window.clearTimeout(consoleReconnectNoticeTimeoutRef.current);
         consoleReconnectNoticeTimeoutRef.current = null;
@@ -1398,7 +1413,20 @@ export default function App() {
       const nextNode = currentServer ? result.nodes.find((node) => node.id === currentServer.nodeId) : undefined;
       setAppState((current) => ({ ...current, nodes: result.nodes }));
 
-      if (currentServer && currentNode && nextNode && !isNodeRuntimeUsable(currentNode) && isNodeRuntimeUsable(nextNode)) {
+      // The console reporting the node offline is what the panel shows a node-offline badge for,
+      // and nothing else revisits it: a console stream that ended while the node stayed reachable
+      // leaves every page claiming the node is down until the browser is reloaded. Treat the node
+      // record saying otherwise as the contradiction it is and reconnect once to settle it.
+      const consoleContradictsNode = nextNode !== undefined && consoleOfflineContradictsNode({
+        consoleConnectionState: consoleConnectionStateRef.current,
+        nodeRuntimeUsable: isNodeRuntimeUsable(nextNode),
+        alreadyRechecked: consoleOfflineRecheckedRef.current
+      });
+      if (consoleContradictsNode) consoleOfflineRecheckedRef.current = true;
+      const nodeBecameUsable = currentNode !== undefined && nextNode !== undefined
+        && !isNodeRuntimeUsable(currentNode) && isNodeRuntimeUsable(nextNode);
+
+      if (currentServer && (nodeBecameUsable || consoleContradictsNode)) {
         await refreshApp({ silent: true });
         if (activeServerIdRef.current !== currentServer.id) return;
         setStatusError("");
