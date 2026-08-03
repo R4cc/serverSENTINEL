@@ -59,6 +59,13 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback }:
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.open(container);
+    // xterm creates a focusable input surface even when stdin is disabled. This terminal is output
+    // only, so leave the helper available for xterm's mouse-driven selection internals without
+    // exposing an invisible, non-functional "Terminal input" control in the keyboard or a11y flow.
+    if (terminal.textarea) {
+      terminal.textarea.tabIndex = -1;
+      terminal.textarea.setAttribute("aria-hidden", "true");
+    }
     terminalRef.current = terminal;
 
     // The fallback DOM renderer rewrites a row's markup for every cell change, so a scrolling

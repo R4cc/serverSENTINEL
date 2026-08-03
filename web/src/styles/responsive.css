@@ -184,6 +184,35 @@
 
 }
 
+/* The compact shell stacks its navigation above the workspace. The desktop console contract uses
+   a full-viewport workspace from 721px upward, so without a bounded shell that workspace adds its
+   own 100vh below the compact navigation and pushes the command line out of short viewports. */
+@media (min-width: 721px) and (max-width: 1100px) {
+  .appShell:has(.workspacePage-console),
+  .sidebarCollapsed.appShell:has(.workspacePage-console) {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .appShell:has(.workspacePage-console) > .workspacePage-console {
+    height: 100%;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1100px) and (max-height: 520px) {
+  .workspacePage-console {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .workspacePage-console > .workspaceHeader {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   .workspace,
   .sidebar {

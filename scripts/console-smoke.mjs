@@ -13,6 +13,9 @@
  *   redrew every row whenever that comparison failed.
  * - Leaving the console page and returning rebuilt the terminal from scratch.
  * - The command field accepted input while its native caret was explicitly made transparent.
+ * - Copying selected command text abandoned the entire line instead of leaving it available.
+ * - The compact tablet shell added its header above a 100vh console and hid the command line.
+ * - xterm exposed its disabled input helper as an invisible keyboard and screen-reader target.
  */
 
 import assert from "node:assert/strict";
@@ -70,6 +73,19 @@ async function assertTerminalDrawsOutputOnly(page) {
     promptRows,
     [],
     `The terminal is drawing a prompt line again, so command entry has moved back into it: ${JSON.stringify(promptRows)}`
+  );
+}
+
+async function assertTerminalHelperIsNotInteractive(page) {
+  const helper = await page.locator(".xterm-helper-textarea").evaluate((field) => ({
+    ariaHidden: field.getAttribute("aria-hidden"),
+    readOnly: field.readOnly,
+    tabIndex: field.tabIndex
+  }));
+  assert.deepEqual(
+    helper,
+    { ariaHidden: "true", readOnly: true, tabIndex: -1 },
+    `The output-only terminal exposed its invisible input helper: ${JSON.stringify(helper)}`
   );
 }
 
@@ -148,9 +164,37 @@ async function assertCommandLineShortcuts(page) {
   await page.keyboard.press("ArrowDown");
   assert.equal(await input.inputValue(), "", "Arrow down did not return to the empty draft");
 
+  await input.type("say copy me");
+  await input.selectText();
+  await page.keyboard.press("Control+c");
+  assert.equal(await input.inputValue(), "say copy me", "Ctrl+C abandoned selected command text instead of copying it");
+
+  await input.fill("");
   await input.type("say oops");
   await page.keyboard.press("Control+c");
   assert.equal(await input.inputValue(), "", "Ctrl+C did not abandon the line");
+}
+
+async function assertCompactLandscapeKeepsCommandLineVisible(page) {
+  const layout = await page.evaluate(() => {
+    const prompt = document.querySelector(".consolePrompt")?.getBoundingClientRect();
+    const terminal = document.querySelector(".minecraftTerminal")?.getBoundingClientRect();
+    return {
+      documentHeight: document.documentElement.scrollHeight,
+      promptBottom: prompt?.bottom ?? 0,
+      terminalHeight: terminal?.height ?? 0,
+      viewportHeight: window.innerHeight
+    };
+  });
+  assert(
+    layout.promptBottom <= layout.viewportHeight,
+    `The compact landscape console put its command line below the viewport: ${JSON.stringify(layout)}`
+  );
+  assert(
+    layout.documentHeight <= layout.viewportHeight,
+    `The compact landscape console made the document taller than the viewport: ${JSON.stringify(layout)}`
+  );
+  assert(layout.terminalHeight > 0, `The compact landscape console collapsed its output: ${JSON.stringify(layout)}`);
 }
 
 /**
@@ -226,9 +270,20 @@ try {
   const context = await browser.newContext({ locale: "en-US", timezoneId: "UTC", reducedMotion: "reduce" });
   await signInThroughApi(context, baseUrl);
 
+  // Between the phone and desktop shells, navigation sits above the workspace. A short landscape
+  // viewport must still leave the command line and output inside the visible area. Run this before
+  // the desktop restart scenario so it observes the demo's initial console history.
+  const compactLandscape = await createConsolePage(context, { width: 844, height: 390 });
+  await openConsole(compactLandscape.page, { mobile: true });
+  await assertTerminalHelperIsNotInteractive(compactLandscape.page);
+  await assertCompactLandscapeKeepsCommandLineVisible(compactLandscape.page);
+  assert.deepEqual(compactLandscape.browserErrors, [], `Compact landscape browser errors: ${compactLandscape.browserErrors.join("\n")}`);
+  await compactLandscape.page.close();
+
   const desktop = await createConsolePage(context, { width: 1440, height: 900 });
   await openConsole(desktop.page);
   await assertTerminalDrawsOutputOnly(desktop.page);
+  await assertTerminalHelperIsNotInteractive(desktop.page);
   await assertTypingLeavesOutputAlone(desktop.page);
   await assertOutputIsAppendedInOrder(desktop.page);
   await assertCommandLineShortcuts(desktop.page);
@@ -241,12 +296,13 @@ try {
   const mobile = await createConsolePage(context, { width: 390, height: 844 });
   await openConsole(mobile.page, { mobile: true });
   await assertTerminalDrawsOutputOnly(mobile.page);
+  await assertTerminalHelperIsNotInteractive(mobile.page);
   await assertTypingLeavesOutputAlone(mobile.page);
   await assertOutputIsAppendedInOrder(mobile.page);
   assert.deepEqual(mobile.browserErrors, [], `Mobile browser errors: ${mobile.browserErrors.join("\n")}`);
   await mobile.page.close();
 
-  console.log("Console smoke passed: output-only terminal, undisturbed command line, output appended in order, and a console that survives navigation.");
+  console.log("Console smoke passed: output-only terminal, usable command line, compact landscape layout, ordered output, and navigation survival.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();
