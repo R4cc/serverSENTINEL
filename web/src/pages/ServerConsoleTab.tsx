@@ -1,10 +1,13 @@
-import { Suspense } from "react";
+import { Suspense, useRef } from "react";
 import { lazyPage } from "../app/lazyPage";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import type { ConsoleLine } from "../types";
+import type { TerminalSelection } from "../components/MinecraftTerminal";
 import { ConsolePrompt } from "../components/ConsolePrompt";
 import { TerminalLoadingSkeleton } from "../components/LoadingSkeletons";
 import { Surface } from "../components/UiPrimitives";
+import { copyToClipboard } from "../utils/clipboard";
+import { shouldCopyTerminalSelection } from "../utils/minecraftTerminal";
 
 const { Component: MinecraftTerminal, preload: loadMinecraftTerminal } = lazyPage(
   () => import("../components/MinecraftTerminal"),
@@ -44,11 +47,41 @@ export function ServerConsoleTab({
   scrollback: ConsoleScrollback;
   onCommand: (command: string) => void;
 }) {
+  const selectionRef = useRef<TerminalSelection | null>(null);
+
+  /**
+   * Answers Ctrl+C for the whole console, in the capture phase so it settles before the command
+   * line's own Ctrl+C — which abandons the line — ever sees the keystroke. Handling it here is also
+   * what makes the shortcut work while the terminal itself holds focus, where the command line's
+   * handler never runs at all.
+   */
+  function handleCopyShortcut(event: React.KeyboardEvent<HTMLDivElement>) {
+    const selection = selectionRef.current;
+    const target = event.target as Partial<HTMLInputElement> | null;
+    const copyable = shouldCopyTerminalSelection(event, {
+      terminal: selection?.text ?? "",
+      input: target?.selectionStart != null && target.selectionStart !== target.selectionEnd,
+      document: window.getSelection()?.toString() ?? ""
+    });
+    if (!copyable || !selection) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    void copyToClipboard(selection.text).then((copied) => {
+      // Letting go of the selection is the only acknowledgement the console can give, and it leaves
+      // the next Ctrl+C free to be the shell key again.
+      if (copied) selection.clear();
+    });
+  }
+
   return (
     <section className="tabPage layoutWide consoleTabPage" hidden={!active}>
       <Surface className="consolePanel">
         <div className="terminal">
-          <div className={`minecraftTerminalShell ${canSendCommands ? "" : "disabled"}`}>
+          <div
+            className={`minecraftTerminalShell ${canSendCommands ? "" : "disabled"}`}
+            onKeyDownCapture={handleCopyShortcut}
+          >
             {!snapshotReady ? (
               <TerminalLoadingSkeleton />
             ) : (
@@ -58,6 +91,7 @@ export function ServerConsoleTab({
                   generation={generation}
                   fontSize={fontSize}
                   scrollback={scrollback}
+                  onSelectionChange={(selection) => { selectionRef.current = selection; }}
                 />
               </Suspense>
             )}

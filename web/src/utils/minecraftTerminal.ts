@@ -66,6 +66,33 @@ export function recallNextCommand(history: string[], state: TerminalHistoryState
   };
 }
 
+export type ConsoleCopyKeystroke = {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+};
+
+/**
+ * Whether a keystroke should copy what is selected in the terminal.
+ *
+ * The terminal draws its own selection, so nothing the browser knows about is selected and its
+ * native copy has nothing to act on. The page has to answer the keystroke itself — but only when
+ * the terminal is what holds the selection: text selected in the command line, or anywhere else on
+ * the page, is the browser's to copy, and a selection of nothing leaves Ctrl+C as the shell key
+ * that abandons the command line.
+ */
+export function shouldCopyTerminalSelection(event: ConsoleCopyKeystroke, selected: {
+  terminal: string;
+  input: boolean;
+  document: string;
+}) {
+  if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return false;
+  if (event.key.toLowerCase() !== "c") return false;
+  return Boolean(selected.terminal) && !selected.input && !selected.document;
+}
+
 export function minecraftFormattingToAnsi(text: string) {
   let output = "";
   for (let index = 0; index < text.length; index += 1) {

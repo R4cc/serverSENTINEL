@@ -8,12 +8,24 @@ import { terminalPreferenceOptions, type ConsoleFontSize, type ConsoleScrollback
 import type { ConsoleLine } from "../types";
 import { consumeTerminalTouchScroll, minecraftLogToTerminalText } from "../utils/minecraftTerminal";
 
+/** What the console page needs of a terminal selection to copy it and to let go of it afterwards. */
+export type TerminalSelection = {
+  text: string;
+  clear(): void;
+};
+
 type MinecraftTerminalProps = {
   entries: ConsoleLine[];
   /** Changes when the console was replaced rather than extended, which is the cue to clear. */
   generation: number;
   fontSize: ConsoleFontSize;
   scrollback: ConsoleScrollback;
+  /**
+   * Reports what is selected as it changes. The selection is drawn by xterm rather than held by the
+   * document, so it is invisible to `window.getSelection()` and nothing outside this component can
+   * see it — including the Ctrl+C the page has to answer.
+   */
+  onSelectionChange?: (selection: TerminalSelection) => void;
 };
 
 type TerminalTheme = ReturnType<typeof terminalTheme>;
@@ -23,9 +35,10 @@ type TerminalTheme = ReturnType<typeof terminalTheme>;
  * {@link ../components/ConsolePrompt} — which leaves this with nothing to draw but the workload's
  * output, and nothing to redraw at all.
  */
-export function MinecraftTerminal({ entries, generation, fontSize, scrollback }: MinecraftTerminalProps) {
+export function MinecraftTerminal({ entries, generation, fontSize, scrollback, onSelectionChange }: MinecraftTerminalProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const selectionListenerRef = useRef(onSelectionChange);
   const fitRef = useRef<() => void>(() => {});
   const initialRenderCompleteRef = useRef(false);
   const lastWrittenSeqRef = useRef(0);
@@ -34,6 +47,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback }:
   const appliedThemeRef = useRef<TerminalTheme | null>(null);
 
   entriesRef.current = entries;
+  selectionListenerRef.current = onSelectionChange;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -88,6 +102,13 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback }:
         return undefined;
       }
     })();
+
+    const selectionChange = terminal.onSelectionChange(() => {
+      selectionListenerRef.current?.({
+        text: terminal.getSelection(),
+        clear: () => terminal.clearSelection()
+      });
+    });
 
     let previousTouchY: number | null = null;
     let touchScrollRemainder = 0;
@@ -188,6 +209,10 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback }:
       visualViewport?.removeEventListener("resize", scheduleFit);
       window.removeEventListener("resize", scheduleFit);
       contextLoss?.dispose();
+      selectionChange.dispose();
+      // Nothing is selected in a terminal that no longer exists, and the page must not be left
+      // holding a selection whose clear() would reach into a disposed terminal.
+      selectionListenerRef.current?.({ text: "", clear: () => {} });
       fitRef.current = () => {};
       terminalRef.current = null;
       appliedThemeRef.current = null;

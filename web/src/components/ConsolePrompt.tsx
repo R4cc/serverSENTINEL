@@ -60,7 +60,8 @@ export function ConsolePrompt({ canSendCommands, disabledReason, commandHistory,
       return;
     }
     // Ctrl+C abandons the line, as it would in a shell — but only when it would not be a copy.
-    // Text selected inside an input is not exposed through window.getSelection().
+    // Text selected inside an input is not exposed through window.getSelection(). A selection in
+    // the terminal above never reaches here: the console page answers that in the capture phase.
     const inputSelection = event.currentTarget.selectionStart !== event.currentTarget.selectionEnd;
     if (event.ctrlKey && event.key.toLowerCase() === "c" && !inputSelection && !window.getSelection()?.toString()) {
       event.preventDefault();

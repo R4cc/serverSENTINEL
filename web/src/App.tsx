@@ -17,6 +17,7 @@ import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } 
 import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
 import { useServerContext } from "./app/serverContext";
+import { copyToClipboard } from "./utils/clipboard";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
@@ -1764,12 +1765,11 @@ export default function App() {
   }
 
   async function copyText(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      notify("success", text.includes("SS_JOIN_TOKEN") ? "Copied install command. Treat the join token as a secret." : "Copied to clipboard");
-    } catch {
+    if (!await copyToClipboard(text)) {
       notify("error", "Could not copy to clipboard");
+      return;
     }
+    notify("success", text.includes("SS_JOIN_TOKEN") ? "Copied install command. Treat the join token as a secret." : "Copied to clipboard");
   }
 
   async function clearConsoleHistory() {

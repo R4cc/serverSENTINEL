@@ -6,6 +6,7 @@ import {
   minecraftLogToTerminalText,
   recallNextCommand,
   recallPreviousCommand,
+  shouldCopyTerminalSelection,
   type TerminalHistoryState
 } from "./minecraftTerminal";
 
@@ -14,6 +15,21 @@ describe("Minecraft terminal helpers", () => {
     expect(appendCommandHistory(["say hi"], "   ")).toEqual(["say hi"]);
     expect(appendCommandHistory(["list", "say hi"], "/say hi")).toEqual(["list", "say hi"]);
     expect(appendCommandHistory(["say hi", "list"], "say hi")).toEqual(["list", "say hi"]);
+  });
+
+  it("copies the terminal's own selection on Ctrl+C and leaves every other copy alone", () => {
+    const ctrlC = { key: "c", ctrlKey: true, metaKey: false, shiftKey: false, altKey: false };
+    const onlyTerminal = { terminal: "[12:00:00] Done (5.1s)!", input: false, document: "" };
+
+    expect(shouldCopyTerminalSelection(ctrlC, onlyTerminal)).toBe(true);
+    expect(shouldCopyTerminalSelection({ ...ctrlC, ctrlKey: false, metaKey: true }, onlyTerminal)).toBe(true);
+    // Nothing selected in the terminal leaves Ctrl+C as the shell key that abandons the command line.
+    expect(shouldCopyTerminalSelection(ctrlC, { ...onlyTerminal, terminal: "" })).toBe(false);
+    // The browser copies what it can see itself; answering these too would copy the wrong text.
+    expect(shouldCopyTerminalSelection(ctrlC, { ...onlyTerminal, input: true })).toBe(false);
+    expect(shouldCopyTerminalSelection(ctrlC, { ...onlyTerminal, document: "picked with the mouse" })).toBe(false);
+    expect(shouldCopyTerminalSelection({ ...ctrlC, shiftKey: true }, onlyTerminal)).toBe(false);
+    expect(shouldCopyTerminalSelection({ ...ctrlC, key: "v" }, onlyTerminal)).toBe(false);
   });
 
   it("recalls previous and next commands while preserving the typed draft", () => {
