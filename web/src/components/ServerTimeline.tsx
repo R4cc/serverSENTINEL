@@ -486,6 +486,17 @@ export function timelineAnnotationGridTop(_clusters: PositionedMarkerCluster[]) 
   return timelineChartGrid.top;
 }
 
+/**
+ * A pointer press dismisses the event popover unless it lands inside the popover itself or on a
+ * cluster marker, whose own click handler owns opening, switching, and toggling the selection.
+ */
+export function annotationPopoverDismissedByPointer(target: EventTarget | null, popover: Pick<Element, "contains"> | null) {
+  const element = target as Element | null;
+  if (!element || typeof element.closest !== "function") return true;
+  if (popover?.contains(element)) return false;
+  return !element.closest(".timelineAnnotationCluster");
+}
+
 function uniqueBy<T>(items: T[], key: (item: T) => string | number) {
   return [...new Map(items.map((item) => [key(item), item])).values()];
 }
@@ -794,6 +805,7 @@ export function ServerTimeline({
   const panelRef = useRef<HTMLElement>(null);
   const visualizationRef = useRef<HTMLDivElement>(null);
   const annotationRailRef = useRef<HTMLDivElement>(null);
+  const annotationPopoverRef = useRef<HTMLElement>(null);
   const viewportRef = useRef(viewport);
   const dataRef = useRef<ServerTimelineResponse | null>(null);
   const liveRef = useRef(live);
@@ -922,6 +934,15 @@ export function ServerTimeline({
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [hoverTooltip?.pinned, selectedCluster]);
+
+  useEffect(() => {
+    if (!selectedCluster) return;
+    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
+      if (annotationPopoverDismissedByPointer(event.target, annotationPopoverRef.current)) setSelectedCluster(null);
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [selectedCluster]);
 
   // A hidden element measures zero. Keeping the last real width stops the whole chart being laid
   // out again for a size nobody is looking at, and then a second time on the way back.
@@ -1321,6 +1342,7 @@ export function ServerTimeline({
             )}
             {selectedCluster && selectedPosition && (
               <section
+                ref={annotationPopoverRef}
                 className="serverTimelineAnnotationPopover"
                 id="server-timeline-annotation-popover"
                 aria-label="Events at selected time"

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { ServerTimelineResponse } from "../types";
 import {
+  annotationPopoverDismissedByPointer,
   clusterTimelineMarkers,
   formatTimelineDuration,
   mergeTimelineResponses,
@@ -124,6 +125,29 @@ function response(): ServerTimelineResponse {
     truncated: { schedules: false }
   };
 }
+
+describe("server timeline event popover dismissal", () => {
+  const element = (matches: string[]) => ({
+    closest: (selector: string) => matches.includes(selector) ? {} : null
+  }) as unknown as Element;
+  const popover = (contains: boolean) => ({ contains: () => contains });
+
+  it("dismisses the popover for a press anywhere outside it", () => {
+    expect(annotationPopoverDismissedByPointer(element([]), popover(false))).toBe(true);
+  });
+
+  it("keeps the popover open for a press inside it", () => {
+    expect(annotationPopoverDismissedByPointer(element([]), popover(true))).toBe(false);
+  });
+
+  it("leaves cluster markers to their own toggle", () => {
+    expect(annotationPopoverDismissedByPointer(element([".timelineAnnotationCluster"]), popover(false))).toBe(false);
+  });
+
+  it("dismisses the popover when the press has no element target", () => {
+    expect(annotationPopoverDismissedByPointer(null, popover(false))).toBe(true);
+  });
+});
 
 describe("server timeline markers", () => {
   it("renders event popover rows as non-interactive entries with absolute timestamps", () => {
