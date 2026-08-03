@@ -16,9 +16,3 @@ export function scheduleDelayParts(seconds: number): { value: number; unit: Sche
   if (seconds > 0 && seconds % 60 === 0) return { value: seconds / 60, unit: "minutes" };
   return { value: seconds, unit: "seconds" };
 }
-
-export function scheduleDelayLabel(seconds: number) {
-  const { value, unit } = scheduleDelayParts(seconds);
-  const singular = value === 1 ? unit.slice(0, -1) : unit;
-  return `${value} ${singular}`;
-}

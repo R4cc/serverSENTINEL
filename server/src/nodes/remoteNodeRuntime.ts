@@ -11,6 +11,7 @@ import type { ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 import { compactRecentEvents, parseLogEvent } from "../servers/logEvents.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
+import { configuredServerPort, normalizeJavaRuntime, validDockerTimestamp } from "../runtime/local/dockerContainers.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { config } from "../config.js";
 import { validateServerId } from "../http/validation.js";
@@ -44,24 +45,6 @@ function normalizeRemotePath(path: string) {
 function publicRemotePath(path: string) {
   const normalized = normalizeRemotePath(path);
   return normalized === "." ? "/" : `/${normalized}`;
-}
-
-function configuredServerPort(server: ManagedServer, props: Record<string, string>) {
-  if (props["server-port"]) return props["server-port"];
-  const firstTcp = (server.dockerPorts || "25565:25565/tcp").split(",").map((part) => part.trim()).find((part) => /\/tcp$|^\d+:\d+$|^\d+$/.test(part));
-  return firstTcp?.split(":")[0]?.replace(/\/tcp$/, "") || "25565";
-}
-
-function javaRuntimeLabel(server: ManagedServer) {
-  if (/temurin/i.test(server.dockerImage || "")) {
-    const version = server.dockerImage?.match(/temurin:([^,\s]+)/i)?.[1];
-    return version ? `Temurin ${version.replace(/-jre$/i, "")}` : "Temurin";
-  }
-  return server.runtimeProfile?.javaMajorVersion ? `Java ${server.runtimeProfile.javaMajorVersion}` : undefined;
-}
-
-function validDockerTimestamp(value?: string) {
-  return value && !value.startsWith("0001-") ? value : undefined;
 }
 
 export class RemoteNodeRuntime implements NodeRuntime {
@@ -311,7 +294,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
       currentWorld: props["level-name"],
       serverPort: configuredServerPort(server, props),
       eulaAccepted,
-      javaRuntime: javaRuntimeLabel(server)
+      javaRuntime: normalizeJavaRuntime(server)
     };
     return {
       events: compactRecentEvents(parsedEvents, 20),

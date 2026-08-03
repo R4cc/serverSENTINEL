@@ -3,13 +3,12 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ExportSelection } from "@serversentinel/contracts";
+import { EXPORT_SCHEMA_VERSION, type ExportSelection } from "@serversentinel/contracts";
 import type { ManagedServer } from "./types.js";
 import {
   applyImportArchive,
   assertExportManifest,
   createExportPlan,
-  exportArtifactSchemaVersion,
   readExportManifest,
   serverArchiveKey,
   validateImportArchive,
@@ -252,7 +251,7 @@ function manifestFixture(overrides: Partial<ExportManifest["servers"][number]> =
   const server = managedServer();
   return {
     artifactType: "serversentinel.export",
-    schemaVersion: exportArtifactSchemaVersion,
+    schemaVersion: EXPORT_SCHEMA_VERSION,
     manifest: {
       exportedAt: "2026-07-29T00:00:00.000Z",
       appVersion: "1.7.0",
@@ -297,7 +296,7 @@ describe("export archives", () => {
     const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
     const manifest = await readExportManifest(written.path);
 
-    expect(manifest.schemaVersion).toBe(exportArtifactSchemaVersion);
+    expect(manifest.schemaVersion).toBe(EXPORT_SCHEMA_VERSION);
     expect(manifest.servers).toHaveLength(1);
     expect(manifest.servers[0].key).toBe(serverArchiveKey(0, managedServer()));
     expect(manifest.servers[0].server.runtimeProfile.minecraftVersion).toBe("1.21.1");

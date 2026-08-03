@@ -11,6 +11,9 @@ for (const manifest of ["server/package.json", "shared/package.json", "web/packa
 }
 
 const expectedText = [
+  // The 1.7.1 entry was missed because nothing checked for it; the release shipped with
+  // the changelog's newest entry still reading 1.7.0.
+  ["CHANGELOG.md", `## ${version} - `],
   ["server/src/buildInfo.ts", `?? "${version}"`],
   ["web/src/app/appConfig.ts", `appVersion = "${version}"`],
   ["docker/Dockerfile", `ARG SS_VERSION=${version}`],

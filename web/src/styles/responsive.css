@@ -224,14 +224,12 @@
   }
 
 .workspaceActions,
-.buttonRow,
 .fileToolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
 .workspaceActions button,
-.buttonRow button,
 .fileToolbar button,
 .keyFormActions button,
 .keyFormConfigured button {
@@ -684,19 +682,11 @@ button:disabled,
   margin-top: 0;
 }
 
-.nodeModalBody.nodeDetailsBody {
-  padding: var(--space-6) var(--space-7) var(--space-7);
-}
-
 @media (max-width: 640px) {
   .nodeModalPanel {
     width: calc(100vw - 20px);
     max-height: calc(100vh - 20px);
     border-radius: 14px;
-  }
-
-  .nodeModalBody.nodeDetailsBody {
-    padding: var(--space-4);
   }
 
 }
@@ -903,7 +893,6 @@ button:disabled,
 }
 
 /* Unified interaction primitives */
-.buttonRow,
 .userActions,
 .keyFormActions,
 .fileToolbar,

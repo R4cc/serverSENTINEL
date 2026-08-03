@@ -691,7 +691,6 @@
 }
 
 .workspaceActions,
-.buttonRow,
 .fileToolbar,
 .selectionActions,
 .modsWorkspaceToolbar,
@@ -794,7 +793,6 @@
 
 @media (max-width: 760px) {
   .workspaceActions,
-.buttonRow,
 .fileToolbar,
 .selectionActions,
 .modsWorkspaceToolbar,

@@ -20,7 +20,7 @@ import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchiv
 import { extractZipArchive, planZipExtraction } from "../zipArchive.js";
 import { deleteModIcon } from "../mods/icons.js";
 import { downloadServerJar, serverJarProvider } from "./provisioning.js";
-import { stoppedServerMutationMessage } from "./lifecycle.js";
+import { stoppedServerMutationMessage } from "./mutableConfigurationGate.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { writeVersionMetadataFile } from "./versions.js";
 import type { RuntimeUploadSource } from "../nodes/types.js";

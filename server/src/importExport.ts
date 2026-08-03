@@ -30,9 +30,6 @@ import { planServerContent } from "./servers/exportContent.js";
 import { config } from "./config.js";
 import type { NodeRuntime } from "./nodes/types.js";
 
-export const exportArtifactType = EXPORT_ARTIFACT_TYPE;
-export const exportArtifactSchemaVersion = EXPORT_SCHEMA_VERSION;
-
 const maxManifestBytes = 64 * 1024 * 1024;
 const contentFileSuffixes = [".jar", ".jar.disabled"];
 

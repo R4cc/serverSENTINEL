@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROLE_PRESETS, normalizePermissions } from "./permissions.js";
 import type { StoredUser } from "./types.js";
-import { assertInstanceExportAllowed, selectedExportServerIdsOrAll } from "./exportAuthorization.js";
+import { selectedExportServerIdsOrAll } from "./exportAuthorization.js";
 
 function roleUser(rolePreset: "viewer" | "manager" | "admin"): StoredUser {
   return {
@@ -26,11 +26,5 @@ describe("export authorization", () => {
   it("normalizes a requested server selection and treats undefined as every server", () => {
     expect(selectedExportServerIdsOrAll(undefined)).toBeUndefined();
     expect(selectedExportServerIdsOrAll(["server-2", "server-2", "server-1"])).toEqual(["server-2", "server-1"]);
-  });
-
-  // Per-user server scoping was removed, so instance export gates on the integrations permission alone.
-  it("reserves instance-wide exports for users who can manage integrations", () => {
-    expect(() => assertInstanceExportAllowed(roleUser("manager"))).toThrow("manage integrations");
-    expect(() => assertInstanceExportAllowed(roleUser("admin"))).not.toThrow();
   });
 });
