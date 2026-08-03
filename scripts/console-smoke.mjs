@@ -12,6 +12,7 @@
  * - The console reconciled a snapshot against the live stream by comparing text, and cleared and
  *   redrew every row whenever that comparison failed.
  * - Leaving the console page and returning rebuilt the terminal from scratch.
+ * - The command field accepted input while its native caret was explicitly made transparent.
  */
 
 import assert from "node:assert/strict";
@@ -77,6 +78,11 @@ async function assertTypingLeavesOutputAlone(page) {
   const before = await terminalRows(page);
   const input = page.locator(".consolePromptInput");
   await input.click();
+  const caretColor = await input.evaluate((field) => getComputedStyle(field).caretColor);
+  assert(
+    caretColor !== "transparent" && caretColor !== "rgba(0, 0, 0, 0)",
+    `The focused command field has no visible caret: ${JSON.stringify(caretColor)}`
+  );
   await input.type("say hello", { delay: 40 });
 
   assert.deepEqual(await terminalRows(page), before, "Typing a command changed what the terminal had drawn");
