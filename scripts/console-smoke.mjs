@@ -14,6 +14,8 @@
  * - Leaving the console page and returning rebuilt the terminal from scratch.
  * - The command field accepted input while its native caret was explicitly made transparent.
  * - Copying selected command text abandoned the entire line instead of leaving it available.
+ * - Ctrl+C could not copy the output at all: xterm draws its own selection, so nothing the browser
+ *   can see is selected and its native copy has nothing to act on.
  * - The compact tablet shell added its header above a 100vh console and hid the command line.
  * - xterm exposed its disabled input helper as an invisible keyboard and screen-reader target.
  */
@@ -175,6 +177,41 @@ async function assertCommandLineShortcuts(page) {
   assert.equal(await input.inputValue(), "", "Ctrl+C did not abandon the line");
 }
 
+/**
+ * Selecting output and pressing Ctrl+C copies it. The selection belongs to xterm rather than to the
+ * document, so the browser's own copy sees nothing to act on and the keystroke used to fall through
+ * to the command line, which read it as the shell key that abandons the line.
+ */
+async function assertTerminalSelectionCopiesOnCtrlC(page) {
+  const input = page.locator(".consolePromptInput");
+  await input.click();
+  await input.fill("say still here");
+
+  const row = page.locator(".minecraftTerminal .xterm-rows > div").filter({ hasText: /\S/ }).first();
+  const box = await row.boundingBox();
+  // Dragged rather than clicked, and kept inside one row: a triple click would take the whole
+  // logical line, which at this width may be wrapped across two of them.
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + Math.min(160, box.width - 2), box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.press("Control+c");
+
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  assert(copied.trim().length > 0, "Ctrl+C copied nothing after selecting console output");
+  const rowText = (await row.textContent()).replace(/ /g, " ");
+  assert(
+    rowText.includes(copied),
+    `Ctrl+C copied something other than the selected output: ${JSON.stringify({ copied, rowText })}`
+  );
+  assert.equal(
+    await input.inputValue(),
+    "say still here",
+    "Ctrl+C abandoned the command line instead of copying the console selection"
+  );
+  await input.fill("");
+}
+
 async function assertCompactLandscapeKeepsCommandLineVisible(page) {
   const layout = await page.evaluate(() => {
     const prompt = document.querySelector(".consolePrompt")?.getBoundingClientRect();
@@ -267,7 +304,13 @@ try {
   // what was drawn, and whether it was appended to or replaced — belongs to the buffer rather than
   // to the renderer. A defect specific to the WebGL path would not be caught here.
   browser = await launchBrowser(chromium, { args: ["--disable-webgl", "--disable-webgl2"] });
-  const context = await browser.newContext({ locale: "en-US", timezoneId: "UTC", reducedMotion: "reduce" });
+  const context = await browser.newContext({
+    locale: "en-US",
+    timezoneId: "UTC",
+    reducedMotion: "reduce",
+    // Reading the clipboard back is the only way to assert that Ctrl+C copied what was selected.
+    permissions: ["clipboard-read", "clipboard-write"]
+  });
   await signInThroughApi(context, baseUrl);
 
   // Between the phone and desktop shells, navigation sits above the workspace. A short landscape
@@ -287,6 +330,7 @@ try {
   await assertTypingLeavesOutputAlone(desktop.page);
   await assertOutputIsAppendedInOrder(desktop.page);
   await assertCommandLineShortcuts(desktop.page);
+  await assertTerminalSelectionCopiesOnCtrlC(desktop.page);
   await assertOutputDoesNotDisturbTheCommandLine(desktop.page);
   await assertConsoleSurvivesNavigation(desktop.page);
   assert.deepEqual(desktop.browserErrors, [], `Desktop browser errors: ${desktop.browserErrors.join("\n")}`);

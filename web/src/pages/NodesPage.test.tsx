@@ -161,8 +161,8 @@ describe("dense node fleets", () => {
     const toolbar = html.slice(html.indexOf('class="uiToolbar nodesToolbar"'), html.indexOf("nodesBoard"));
 
     // `uiButton--compact` is 32px against the 40px the other two stand at, so one compact button in
-    // the row leaves Import shorter than the Refresh button beside it.
-    expect(toolbar).toContain("Import");
+    // the row leaves Import server shorter than the Refresh button beside it.
+    expect(toolbar).toContain("Import server");
     expect(toolbar).toContain("Refresh");
     expect(toolbar).toContain("Add node");
     expect(toolbar).not.toContain("uiButton--compact");

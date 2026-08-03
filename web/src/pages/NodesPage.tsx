@@ -606,7 +606,7 @@ export function NodesPage({
               <>
                 {canImportServers && (
                   <Button variant="secondary" onClick={onImportServers} disabled={busy}>
-                    <AppIcon name="fileUp" /> Import
+                    <AppIcon name="fileUp" /> Import server
                   </Button>
                 )}
                 <Button variant="secondary" onClick={onRefresh} disabled={busy} title="Refresh node status">

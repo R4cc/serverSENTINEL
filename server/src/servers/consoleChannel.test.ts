@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ConsoleChannel } from "./consoleChannel.js";
+import { ConsoleChannel, type ConsoleUpstream } from "./consoleChannel.js";
 import { ConsoleHub } from "./consoleHub.js";
 import type { ManagedServer } from "../types.js";
 
@@ -142,6 +142,16 @@ describe("ConsoleChannel", () => {
     channel.subscribe({ lines: () => {}, unavailable, empty: () => {} });
     expect(unavailable).toHaveBeenCalledWith("Node is offline", expect.objectContaining({ code: "NODE_OFFLINE" }));
   });
+
+  it("forgets a failure the producer has since written past", () => {
+    const channel = new ConsoleChannel();
+    const upstream = channel.upstream();
+    upstream.unavailable("Docker logs returned 404", { retryable: true });
+    upstream.write("the follow reattached and output resumed\n");
+    const unavailable = vi.fn();
+    channel.subscribe({ lines: () => {}, unavailable, empty: () => {} });
+    expect(unavailable).not.toHaveBeenCalled();
+  });
 });
 
 const testServer = { id: "server-1" } as ManagedServer;
@@ -278,6 +288,54 @@ describe("ConsoleHub", () => {
       code: "NODE_OFFLINE",
       retryable: true
     }));
+    hub.disposeAll();
+  });
+
+  it("starts a new producer for the next viewer after the previous one ended", async () => {
+    // A node hop ends when the node's stream ends. Holding it as live is what left a returning
+    // viewer watching a console nothing was writing to.
+    let end: () => void = () => {};
+    const stop = vi.fn();
+    const start = vi.fn(async (_server: ManagedServer, upstream: ConsoleUpstream) => {
+      end = () => upstream.ended?.();
+      return stop;
+    });
+    const hub = new ConsoleHub(start);
+    const first = await hub.attach(testServer, collector().subscriber);
+    first.detach();
+    end();
+
+    await hub.attach(testServer, collector().subscriber);
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(stop).toHaveBeenCalledTimes(1);
+    hub.disposeAll();
+  });
+
+  it("does not replay the failure that ended a producer to the viewer that restarts it", async () => {
+    // The node was offline, the stream ended, and the node came back. The next viewer's verdict
+    // comes from the producer it starts, not from what the previous one reported on its way out.
+    let attempt = 0;
+    const hub = new ConsoleHub(async (_server: ManagedServer, upstream: ConsoleUpstream) => {
+      attempt += 1;
+      if (attempt === 1) {
+        upstream.unavailable("Node disconnected", { code: "NODE_OFFLINE", retryable: true });
+        upstream.ended?.();
+        return () => {};
+      }
+      upstream.write("the node is back\n");
+      return () => {};
+    });
+    const first = await hub.attach(testServer, collector().subscriber);
+    first.start();
+    first.detach();
+
+    const viewer = collector();
+    const unavailable = vi.fn();
+    const returning = await hub.attach(testServer, { ...viewer.subscriber, unavailable });
+    returning.start();
+
+    expect(unavailable).not.toHaveBeenCalled();
+    expect(viewer.received.map((line) => line.text)).toEqual(["the node is back\n"]);
     hub.disposeAll();
   });
 

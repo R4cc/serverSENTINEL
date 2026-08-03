@@ -186,21 +186,28 @@ export class RemoteNodeRuntime implements NodeRuntime {
       });
     };
 
+    // Nothing was attached, so the caller must not hold this as a live stream: the next viewer has
+    // to ask again rather than watch a console no node is feeding.
+    const nothingAttached = () => {
+      upstream.ended?.();
+      return () => {};
+    };
+
     const node = await this.lookupNode(server.nodeId);
     if (!node) {
       upstream.unavailable(`Node ${server.nodeId} not found`, { code: "NODE_NOT_FOUND", retryable: false });
-      return () => {};
+      return nothingAttached();
     }
     if (!this.connections.isConnected(node.id)) {
       upstream.unavailable(`Node ${node.name} is offline`, { code: "NODE_OFFLINE", retryable: true });
-      return () => {};
+      return nothingAttached();
     }
     try {
       assertNodeSupports(node, "server.console.stream");
     } catch (error) {
       const protocolError = error as Error & { code?: string };
       upstream.unavailable(protocolError.message, { code: protocolError.code?.toUpperCase(), retryable: false });
-      return () => {};
+      return nothingAttached();
     }
 
     return this.connections.stream(
@@ -220,6 +227,9 @@ export class RemoteNodeRuntime implements NodeRuntime {
       },
       (error) => {
         if (error) reportUnavailable(error);
+        // The node stopped sending, whether it ended the stream or dropped off the panel. This is
+        // the only place that is known, so it is where the console has to be released.
+        upstream.ended?.();
       }
     );
   }

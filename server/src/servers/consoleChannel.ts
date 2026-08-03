@@ -31,6 +31,13 @@ export type ConsoleUpstream = {
   notice(message: string): void;
   unavailable(message: string, options?: { code?: string; retryable?: boolean }): void;
   empty(message?: string): void;
+  /**
+   * This producer has stopped feeding the channel and will send nothing more. Producers that
+   * recover on their own — a docker follow that reattaches, a file tail that keeps polling — must
+   * not call it; it is for a producer that is genuinely finished, so the hub knows to start a new
+   * one for the next viewer instead of holding a dead one as live.
+   */
+  ended?(): void;
 };
 
 export type ConsoleSubscriber = {
@@ -98,6 +105,9 @@ export class ConsoleChannel {
 
   private append(texts: string[]) {
     if (!texts.length) return;
+    // Output means the producer is feeding the channel again, so whatever it last failed with no
+    // longer describes this console and must not be replayed to a viewer that arrives later.
+    this.lastUnavailable = undefined;
     const appended: ConsoleLine[] = [];
     for (const text of texts) {
       const line = { seq: this.nextSeq, text };
