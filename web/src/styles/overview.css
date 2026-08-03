@@ -103,6 +103,73 @@
   text-align: left;
 }
 
+.overviewCardStateItem {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: var(--space-3);
+  border: 0;
+  border-bottom: var(--border-subtle) solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 7px 2px;
+}
+
+.overviewCardStateItem:not(button) {
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+
+.overviewCardStateItem > .buttonIcon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+}
+
+.overviewCardStateIcon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 12%, var(--surface-raised));
+  color: var(--text-muted);
+}
+
+.overviewCardStateIcon.tone-success {
+  background: color-mix(in srgb, var(--sentinel-success) 16%, var(--surface-raised));
+  color: var(--sentinel-success);
+}
+
+.overviewCardStateIcon > .buttonIcon,
+.overviewCardStateIcon > .sideIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.overviewCardStateCopy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.overviewCardStateCopy > strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-title);
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overviewCardStateCopy > small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 button.overviewCardRow {
   cursor: pointer;
 }
@@ -1209,36 +1276,6 @@ button.overviewCardRow:focus-visible {
   height: 10px;
 }
 
-.modUpdatesCard--healthy .modUpdatesListItem--healthy {
-  border-color: var(--border-muted);
-  background: transparent;
-}
-
-.modUpdatesHealthyIcon {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sentinel-warning) 18%, var(--surface-raised));
-  color: var(--sentinel-warning);
-}
-
-.modUpdatesCard--healthy .modUpdatesHealthyIcon {
-  background: color-mix(in srgb, var(--sentinel-success) 16%, var(--surface-raised));
-  color: var(--sentinel-success);
-}
-
-.modUpdatesHealthyIcon > svg {
-  width: 20px;
-  height: 20px;
-}
-
-.modUpdatesListItem--healthy .modUpdatesListCopy > small > span:last-child {
-  color: var(--text-muted);
-  font-weight: inherit;
-}
-
 .schedulePanel {
   align-self: stretch;
   grid-template-rows: auto minmax(0, 1fr);
@@ -1251,14 +1288,6 @@ button.overviewCardRow:focus-visible {
   align-self: start;
   align-content: start;
   gap: var(--space-1);
-}
-
-.scheduleUpcomingLabel {
-  color: var(--sentinel-accent-strong);
-  font-size: 10px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
 }
 
 .scheduleUpcomingList {
@@ -1332,20 +1361,9 @@ button.overviewCardRow:focus-visible {
 }
 
 .scheduleUpcomingMore {
-  width: max-content;
+  justify-self: start;
   max-width: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  padding: 5px 2px 0;
-  font: inherit;
-  font-size: 11px;
   text-align: left;
-  cursor: pointer;
-}
-
-.scheduleUpcomingMore:hover {
-  color: var(--sentinel-accent-strong);
 }
 
 .overviewPage .consolePanel {
@@ -1977,6 +1995,7 @@ button.overviewCardRow:focus-visible {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-self: stretch;
+    align-items: start;
     align-content: start;
     gap: var(--space-4);
   }
@@ -2046,11 +2065,11 @@ button.overviewCardRow:focus-visible {
 
   .activePlayerGrid { align-content: start; }
 
-  /* Both sit in one row of the support stack, so they stretch to a shared height
-     instead of each shrinking to its own content. Their bodies stay top-aligned. */
+  /* Support cards share row geometry but size to their own state. A dense schedule
+     list should not turn a one-row update card into a large empty surface. */
   .modUpdatesCard,
   .schedulePanel {
-    align-self: stretch;
+    align-self: start;
   }
 
   .modUpdatesList,
@@ -2064,7 +2083,8 @@ button.overviewCardRow:focus-visible {
     height: 52px;
   }
 
-  .modUpdatesRemaining {
+  .modUpdatesRemaining,
+  .scheduleUpcomingMore {
     justify-self: start;
     margin-top: var(--space-1);
   }
