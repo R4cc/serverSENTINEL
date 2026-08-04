@@ -482,7 +482,9 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
     successTask: "Server stopped"
   }, () => stopServerWithIntent(server)),
   setLifecycle: (serverId, patch) => {
-    const server = services.serversRepository.list().find((candidate) => candidate.id === serverId);
+    // Indexed lookup rather than a full list scan: this runs on the five-second reconcile poll, and
+    // `list()` loads every server's ports, schedules, and retained runs to reach one row.
+    const server = services.serversRepository.find(serverId);
     if (!server) return;
     setRuntimeLifecycle(server, patch);
   },

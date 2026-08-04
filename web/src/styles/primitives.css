@@ -475,14 +475,6 @@
 }
 
 /* Shared application patterns */
-.fileToolbar .uiButton,
-.selectionActions .uiButton,
-.fileEditorFooter .uiButton,
-.modalFooter .uiButton,
-.userModalFooter .uiButton {
-  white-space: nowrap;
-}
-
 @media (max-width: 980px) and (orientation: portrait) {
   .applicationOverviewTimelinePanel { display: none; }
   .applicationOverviewPanelGrid {
@@ -526,10 +518,6 @@
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-body);
-}
-
-.scheduleRowActions .uiButton {
-  min-height: var(--control-height-compact);
 }
 
 .scheduleRowActions .uiButton--critical {
@@ -594,11 +582,10 @@
   transform: none;
 }
 
-.uiButton,
+/* `.uiButton`, `.iconButton` and `.iconOnlyButton` already clear this at the top
+   of the file; only the two shell controls need it restated here. */
 .quickActionButton,
-.runtimeControlButton,
-.iconButton,
-.iconOnlyButton {
+.runtimeControlButton {
   box-shadow: none;
 }
 
@@ -608,7 +595,6 @@
   color: var(--swiss-white);
 }
 
-.uiButton--secondary:hover:not(:disabled),
 .quickActionButton:hover:not(:disabled),
 .runtimeControlButton.restart:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
@@ -677,8 +663,6 @@
   text-transform: none;
 }
 
-.uiPanelHeader p,
-.uiPanelHeaderCopy p,
 .modsWorkspaceListHeader span,
 .modsDrawerHeader p,
 .nodeModalHeader p,
@@ -758,21 +742,6 @@
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
-}
-
-.uiStatusBadge,
-.settingsStatus,
-.runtimeBadge,
-.roleBadge,
-.modsStatusChip {
-  min-height: 24px;
-  border-width: var(--border-subtle);
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: var(--type-badge-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-badge);
-  line-height: 1.1;
 }
 
 .nodeStatusDot,

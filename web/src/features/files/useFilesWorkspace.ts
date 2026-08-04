@@ -159,10 +159,11 @@ export function useFilesWorkspace({
   const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "view");
   const canUploadToCurrentPath = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload");
 
-  const selectedEntries = useMemo(() => {
-    const selected = new Set(selectedFilePaths);
-    return listing.entries.filter((entry) => selected.has(entry.path));
-  }, [listing.entries, selectedFilePaths]);
+  const selectedFilePathSet = useMemo(() => new Set(selectedFilePaths), [selectedFilePaths]);
+  const selectedEntries = useMemo(
+    () => listing.entries.filter((entry) => selectedFilePathSet.has(entry.path)),
+    [listing.entries, selectedFilePathSet]
+  );
   const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
   const selectedZipEntry = selectedEntry?.type === "file" && /\.zip$/i.test(selectedEntry.name) ? selectedEntry : null;
   const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
@@ -170,7 +171,6 @@ export function useFilesWorkspace({
   const selectedEntryTouchesServerSettings = Boolean(selectedEntry && isServerPropertiesPath(selectedEntry.path));
   const sortedFileEntries = useMemo(() => sortFileEntries(listing.entries, fileSort), [listing.entries, fileSort]);
   const sortedFilePaths = sortedFileEntries.map((entry) => entry.path);
-  const selectedFilePathSet = useMemo(() => new Set(selectedFilePaths), [selectedFilePaths]);
   const allFilesSelected = sortedFilePaths.length > 0 && sortedFilePaths.every((path) => selectedFilePathSet.has(path));
   const someFilesSelected = !allFilesSelected && sortedFilePaths.some((path) => selectedFilePathSet.has(path));
 
@@ -277,6 +277,24 @@ export function useFilesWorkspace({
     void loadFilePreview(selectedEntry);
   }, [selectedEntry?.path, selectedEntry?.modifiedAt, selectedEntry?.size, activeServer?.id, demoFiles]);
 
+  /**
+   * Carries the selection across a reload, dropping whatever no longer exists. Surviving paths are
+   * matched through a set, so a folder with thousands of selected rows does not cost a scan of the
+   * whole listing per selected path.
+   */
+  function applyPostLoadSelection(nextEntries: FileEntry[], preserveSelection: boolean) {
+    if (!preserveSelection) {
+      setSelectedFilePaths([]);
+      setFocusedFilePath("");
+      setSelectionAnchorPath("");
+      return;
+    }
+    const availablePaths = nextEntries.map((entry) => entry.path);
+    const available = new Set(availablePaths);
+    setSelectedFilePaths((current) => current.filter((entryPath) => available.has(entryPath)));
+    setFocusedFilePath((current) => retainedFileFocus(current, availablePaths));
+  }
+
   async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace", preserveSelection = false) {
     if (isProvisioning) return false;
     if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
@@ -294,9 +312,7 @@ export function useFilesWorkspace({
         const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
         writeStoredFileLocation(serverId, nextListing.path);
-        setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
-        setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
-        if (!preserveSelection) setSelectionAnchorPath("");
+        applyPostLoadSelection(nextListing.entries, preserveSelection);
         setFilePreview({ path: "", loading: false, data: null, error: "" });
         if (historyMode === "push" && nextListing.path !== previousPath) {
           setFileBackStack((current) => [...current, previousPath].slice(-50));
@@ -311,9 +327,7 @@ export function useFilesWorkspace({
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
         writeStoredFileLocation(serverId, nextListing.path);
-        setSelectedFilePaths((current) => preserveSelection ? current.filter((entryPath) => nextListing.entries.some((entry) => entry.path === entryPath)) : []);
-        setFocusedFilePath((current) => preserveSelection ? retainedFileFocus(current, nextListing.entries.map((entry) => entry.path)) : "");
-        if (!preserveSelection) setSelectionAnchorPath("");
+        applyPostLoadSelection(nextListing.entries, preserveSelection);
         setFilePreview({ path: "", loading: false, data: null, error: "" });
         setFilesError("");
         if (historyMode === "push" && nextListing.path !== previousPath) {
@@ -1041,6 +1055,7 @@ export function useFilesWorkspace({
       zipDestinationLoading,
       zipOperationId,
       selectedFilePaths,
+      selectedFilePathSet,
       fileSort,
       allFilesSelected
     },

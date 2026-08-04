@@ -259,23 +259,33 @@ export async function fetchModrinthIcon(iconUrl: unknown) {
   return request;
 }
 
+/**
+ * Returns the cached icon URL for a mod, fetching and storing one first if the cache has none.
+ *
+ * Resolving `modIconUrl` costs two realpath checks and up to five stats per mod, and the installed
+ * list needs the value anyway, so the result is returned rather than looked up a second time by the
+ * caller. That halves the per-mod filesystem work in the common case where the icon is already cached.
+ */
 export async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string, metadata?: InstalledModMetadata) {
-  if (await modIconUrl(server, filename)) return;
+  const cached = await modIconUrl(server, filename);
+  if (cached) return cached;
   try {
     if (metadata?.projectId) {
       const project = await fetchProject(metadata.projectId);
       await saveModIcon(server, filename, project.icon_url);
-      return;
+    } else {
+      const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
+      const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
+      const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
+      const version = await versionResponse.json() as { project_id?: string };
+      if (version.project_id) {
+        const project = await fetchProject(version.project_id);
+        await saveModIcon(server, filename, project.icon_url);
+      }
     }
-    const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
-    const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
-    const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
-    const version = await versionResponse.json() as { project_id?: string };
-    if (!version.project_id) return;
-    const project = await fetchProject(version.project_id);
-    await saveModIcon(server, filename, project.icon_url);
   } catch {
     // Non-Modrinth/manual mods simply keep the generic JAR icon.
   }
+  return modIconUrl(server, filename);
 }
 

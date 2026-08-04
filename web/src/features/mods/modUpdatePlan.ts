@@ -11,6 +11,22 @@ export function updatePlanEntryForMod(plan: ModUpdatePlan | null, mod: Installed
   return plan?.updates.find((entry) => modFilenameIdentity(entry.filename) === filename || modFilenameIdentity(entry.currentFilename) === filename) ?? null;
 }
 
+/**
+ * The same lookup as {@link updatePlanEntryForMod}, indexed once. Resolving a plan entry per row was
+ * a linear scan of the whole plan, so a list of n installed mods cost n * n filename normalizations
+ * on every render. Both filenames of an entry are keys, and the first entry to claim a key keeps it,
+ * which is the entry `find` would have returned.
+ */
+export function updatePlanEntryLookup(plan: ModUpdatePlan | null) {
+  const byFilename = new Map<string, ModUpdatePlanEntry>();
+  for (const entry of plan?.updates ?? []) {
+    for (const key of [modFilenameIdentity(entry.filename), modFilenameIdentity(entry.currentFilename)]) {
+      if (!byFilename.has(key)) byFilename.set(key, entry);
+    }
+  }
+  return (mod: InstalledMod) => byFilename.get(modFilenameIdentity(mod.filename)) ?? null;
+}
+
 export function applyUpdatePlanEntry(mod: InstalledMod, entry: ModUpdatePlanEntry | null) {
   if (!entry || entry.status === "unknown") return mod;
   return {

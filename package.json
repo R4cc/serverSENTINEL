@@ -16,6 +16,7 @@
     "test:console": "npm run build && node scripts/console-smoke.mjs",
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
     "test:overview": "npm run build && node scripts/overview-timeline-smoke.mjs",
+    "test:smoke": "npm run build && node scripts/console-smoke.mjs && node scripts/mobile-ui-smoke.mjs && node scripts/overview-timeline-smoke.mjs",
     "test:server": "npm --workspace server run test",
     "test:web": "npm --workspace web run test",
     "typecheck": "npm run check:versions && npm --workspace server run typecheck && npm --workspace web run typecheck",

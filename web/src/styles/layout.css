@@ -259,16 +259,6 @@ button .buttonIcon {
   background: var(--surface-raised);
 }
 
-.activeServerStrip {
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-  background: var(--surface-raised);
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
 .serverStripLeft {
   display: flex;
   align-items: center;
@@ -414,11 +404,6 @@ button .buttonIcon {
 }
 
 /* Overflow Menu Container and Dropdown */
-.overflowMenuContainer {
-  position: relative;
-  z-index: 5;
-}
-
 .overflowButton {
   width: 44px;
   height: 44px;
@@ -1203,11 +1188,6 @@ button .buttonIcon {
 .roleBadge.expanded {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-.roleBadge.manager {
-  border-color: var(--sentinel-accent-strong);
-  color: var(--sentinel-accent-strong);
 }
 
 .roleBadge.admin {

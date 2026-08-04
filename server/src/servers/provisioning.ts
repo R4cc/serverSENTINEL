@@ -152,7 +152,7 @@ export async function createManagedServer(input: CreateServerInput, report?: (pr
   };
   const existingServers = await listManagedServers();
   const { serverPort, dockerPorts, queryPort, managedPorts } = normalizeCreateServerPorts(input, existingServers, localNodeId, { ignoreJobId: jobId });
-  assertNodePortsAvailable(await listManagedServers(), localNodeId, dockerPorts, { ignoreJobId: jobId });
+  assertNodePortsAvailable(existingServers, localNodeId, dockerPorts, { ignoreJobId: jobId });
   const dockerContainer = validateDockerContainerName(input.dockerContainer?.trim() || defaultServerContainerName(id));
   const dockerImage = validateDockerImageName(input.dockerImage?.trim() || defaultDockerImageForMinecraftVersion(runtimeProfileForRecord.minecraftVersion));
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || "-Xms2G -Xmx4G");
@@ -209,8 +209,9 @@ export async function startProvisionOperation(input: CreateServerInput, createdB
   if (!nodeId) {
     throw new Error("nodeId is required when serverSENTINEL runs in panel mode");
   }
-  const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, await listManagedServers(), nodeId);
-  assertNodePortsAvailable(await listManagedServers(), nodeId, dockerPorts);
+  const existingServers = await listManagedServers();
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(input, existingServers, nodeId);
+  assertNodePortsAvailable(existingServers, nodeId, dockerPorts);
   input.dockerPorts = dockerPorts;
   input.queryPort = String(queryPort);
   return services.operationService.enqueue<ManagedServer>({
