@@ -2021,16 +2021,6 @@ button.overviewCardRow:focus-visible {
     box-shadow: none;
   }
 
-  .overviewSummary .uiMetricTile--meter {
-    grid-template-columns: 29px minmax(0, 1fr);
-  }
-
-  .overviewSummary .uiMetricTileMarker--meter {
-    width: 29px;
-    height: 29px;
-    border-radius: 999px;
-  }
-
   .overviewSummary .uiMetricTileCopy > strong {
     display: block;
     overflow: hidden;

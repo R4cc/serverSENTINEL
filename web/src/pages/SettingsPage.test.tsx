@@ -6,8 +6,6 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
   return {
     loading: false,
     themePreference: "system",
-    accentPreference: "signal-blue",
-    motionPreference: "on",
     relativeTimestamps: true,
     regionalFormatPreference: "user",
     displayTimeZonePreference: "panel",
@@ -15,8 +13,6 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     browserTimeZone: "Europe/Vienna",
     displayTimeZone: "Europe/Vienna",
     onThemeChange: vi.fn(),
-    onAccentChange: vi.fn(),
-    onMotionChange: vi.fn(),
     onRelativeTimestampsChange: vi.fn(),
     onRegionalFormatChange: vi.fn(),
     onDisplayTimeZoneChange: vi.fn(),
@@ -85,11 +81,6 @@ describe("SettingsPage", () => {
     expect(html).toContain(">System</option>");
     expect(html).toContain(">Light</option>");
     expect(html).toContain(">Dark</option>");
-    expect(html).toContain('name="accent-color"');
-    expect(html.match(/type="radio"/g)).toHaveLength(4);
-    expect(html).toContain('<legend class="srOnly">Accent color</legend>');
-    expect(html).toContain("Pulse cyan");
-    expect(html).toContain('aria-label="Animate interface signals"');
     expect(html).not.toContain("Make serverSENTINEL work your way");
     expect(html).not.toContain("Personal + panel settings");
   });

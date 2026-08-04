@@ -7,7 +7,6 @@ import { ActionMenu } from "./ActionMenu";
 import { BrandLogo } from "./BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./FileTypeIcon";
 import { Button } from "./UiPrimitives";
-import { SignalFingerprint } from "./SignalVisuals";
 
 export function AppSidebar({
   sidebarCollapsed,
@@ -102,10 +101,7 @@ export function AppSidebar({
                   onSelect: () => onSelectServer(server.id),
                   label: (
                     <span className="serverSwitcherOption">
-                      <span className="serverSwitcherOptionIdentity" aria-hidden="true">
-                        <SignalFingerprint serverId={server.id} />
-                        <span className={`serverSwitcherOptionDot ${statusTone}`} />
-                      </span>
+                      <span className={`serverSwitcherOptionDot ${statusTone}`} aria-hidden="true" />
                       <span className="serverSwitcherOptionCopy">
                         <strong>{server.displayName}</strong>
                         <small>{server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
@@ -117,10 +113,7 @@ export function AppSidebar({
               })}
               trigger={(
                 <>
-                  <span className="serverSwitcherIdentity" aria-hidden="true">
-                    <SignalFingerprint serverId={activeServer?.id ?? "unselected-server"} />
-                    <span className={`serverSwitcherStatus ${activeServer ? serverCommandTone : "unknown"}`} />
-                  </span>
+                  <span className={`serverSwitcherStatus ${activeServer ? serverCommandTone : "unknown"}`} aria-hidden="true" />
                   <span className="serverSwitcherCopy">
                     <small>Managed server</small>
                     <strong>{activeServer?.displayName ?? "Select a server"}</strong>

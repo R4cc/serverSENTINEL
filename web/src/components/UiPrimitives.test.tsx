@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Banner, Button, EmptyState, FormField, MetricTile, PanelHeader, Surface, Toolbar } from "./UiPrimitives";
+import { Banner, Button, FormField, MetricTile, PanelHeader, Surface, Toolbar } from "./UiPrimitives";
 
 describe("UI primitives", () => {
   it("renders surfaces with semantic element, density, and tone contracts", () => {
@@ -36,17 +36,8 @@ describe("UI primitives", () => {
   });
 
   it("renders metric tiles with semantic tones and optional detail", () => {
-    const html = renderToStaticMarkup(<MetricTile tone="success" label="Status" value="Running" detail="Online" meter={73} />);
+    const html = renderToStaticMarkup(<MetricTile tone="success" label="Status" value="Running" detail="Online" />);
     expect(html).toContain("uiMetricTile--success");
     expect(html).toContain("uiMetricTileDetail");
-    expect(html).toContain("signalMeter");
-  });
-
-  it("adds optional signal illustrations without replacing empty-state copy", () => {
-    const html = renderToStaticMarkup(<EmptyState title="No files" message="Upload one to begin." illustration="files" compact action={<Button>Upload file</Button>} />);
-    expect(html).toContain("signalIllustration--compact");
-    expect(html).toContain("No files");
-    expect(html).toContain("Upload one to begin.");
-    expect(html).toContain("Upload file");
   });
 });

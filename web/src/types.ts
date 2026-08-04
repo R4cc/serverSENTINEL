@@ -367,8 +367,6 @@ export type ScheduleNavigationTarget =
   | { kind: "completed-run"; scheduleId: string; runId: string };
 
 export type ThemePreference = "light" | "dark" | "system";
-export type AccentPreference = "signal-blue" | "pulse-cyan" | "orbit-violet" | "beacon-amber";
-export type MotionPreference = "on" | "off";
 
 export type RegionalFormatPreference = "user" | "en-US" | "en-GB" | "de-DE" | "fr-FR" | "ja-JP";
 

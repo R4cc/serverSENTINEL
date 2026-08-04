@@ -1,5 +1,4 @@
 import type { ActivePage, AppState, PlaceholderNode } from "../types";
-import type { SignalGlyphKind } from "../components/SignalVisuals";
 
 export const appVersion = "1.7.3";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
@@ -104,24 +103,20 @@ export function writeStoredSignedIn(value: boolean, storage: Storage = window.lo
 }
 
 /**
- * The workspace header presentation for a page. Mods/plugins follow the active
+ * The workspace header title for a page. Mods/plugins follow the active
  * server's runtime terminology, so the title is derived rather than fixed.
  */
-export function pagePresentation(page: ActivePage, contentPluralTitle: string, applicationReady: boolean): { title: string; subtitle: string; glyph: SignalGlyphKind } {
-  const presentations: Record<ActivePage, { title: string; subtitle: string; glyph: SignalGlyphKind }> = {
-    create: { title: "Create new managed server", subtitle: "Connect a runtime, storage, and host through one guided setup.", glyph: "create" },
-    overview: { title: "Overview", subtitle: "Live health, activity, and recent change signals.", glyph: "overview" },
-    console: { title: "Console", subtitle: "Watch and control the live server process.", glyph: "console" },
-    files: { title: "Files", subtitle: "Browse, preview, and manage server storage.", glyph: "files" },
-    mods: { title: contentPluralTitle, subtitle: "Manage installed content, compatibility, and safe updates.", glyph: "mods" },
-    schedule: { title: "Schedules", subtitle: "Automate commands, restarts, and recurring work.", glyph: "schedules" },
-    properties: { title: "Properties", subtitle: "Tune runtime and gameplay configuration.", glyph: "properties" },
-    settings: { title: "Settings", subtitle: "Personalize the panel and manage system configuration.", glyph: "settings" },
-    nodes: { title: "Nodes", subtitle: "Monitor hosts and the servers they operate.", glyph: "nodes" }
+export function pageTitle(page: ActivePage, contentPluralTitle: string, applicationReady: boolean) {
+  const titles: Record<ActivePage, string> = {
+    create: "Create new managed server",
+    overview: "Overview",
+    console: "Console",
+    files: "Files",
+    mods: contentPluralTitle,
+    schedule: "Schedules",
+    properties: "Properties",
+    settings: "Settings",
+    nodes: "Nodes"
   };
-  return presentations[page] ?? {
-    title: !applicationReady ? "Loading" : "Welcome",
-    subtitle: !applicationReady ? "Resolving the latest panel state." : "Choose a workspace to begin.",
-    glyph: "overview"
-  };
+  return titles[page] ?? (!applicationReady ? "Loading" : "Welcome");
 }

@@ -560,7 +560,7 @@ export function SchedulePage({
                 </article>
                 );
               }) : (
-                <EmptyState compact illustration="schedules" className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
+                <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
               )}
             </div>
           </div>
@@ -614,7 +614,7 @@ export function SchedulePage({
               ))}
             </div>
           ) : (
-            <EmptyState compact illustration="schedules" className="scheduledRunsEmpty" title="No runs yet" message="Recent scheduled executions will appear here after schedules run." />
+            <EmptyState compact className="scheduledRunsEmpty" title="No runs yet" message="Recent scheduled executions will appear here after schedules run." />
           )}
         </aside>
       </div>

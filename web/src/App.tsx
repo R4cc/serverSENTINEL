@@ -9,7 +9,7 @@ import { trimFormValue } from "./utils/validation";
 import { authValidationErrors, type AuthField } from "./utils/authValidation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, emptyApp, isServerWorkspacePage, pagePresentation, readStoredSignedIn, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
@@ -33,14 +33,13 @@ import { AuthLoadingSkeleton, FeaturePageLoadingSkeleton } from "./components/Lo
 import { Button, EmptyState } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
-import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
 import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTab";
 import { loadServerCreatePage, ServerCreateTab } from "./pages/ServerCreateTab";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
-import { resolvedAccentClassName, resolvedMotionClassName, resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
+import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
 import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { managedContentTerminology } from "./features/mods/contentTerminology";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
@@ -143,10 +142,6 @@ export default function App() {
   const {
     themePreference,
     setThemePreference,
-    accentPreference,
-    setAccentPreference,
-    motionPreference,
-    setMotionPreference,
     demoMode,
     setDemoMode,
     regionalFormatPreference,
@@ -292,10 +287,9 @@ export default function App() {
 
   const darkMode = resolveDarkTheme(themePreference, systemDark);
   const themeClassName = resolvedThemeClassName(themePreference, systemDark);
-  const appearanceClassName = `${themeClassName} ${resolvedAccentClassName(accentPreference)} ${resolvedMotionClassName(motionPreference)}`;
   useEffect(() => {
     const root = document.documentElement;
-    const classes = appearanceClassName.split(" ");
+    const classes = themeClassName.split(" ");
     root.classList.add(...classes);
     // Mobile browsers paint their toolbars in the page theme colour, so tracking the active
     // theme keeps the chrome above and below the app from staying light while the panel is
@@ -312,7 +306,7 @@ export default function App() {
         if (previous !== null) meta.setAttribute("content", previous);
       });
     };
-  }, [appearanceClassName]);
+  }, [themeClassName]);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
   const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
   const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
@@ -2016,7 +2010,7 @@ export default function App() {
     );
   }
 
-  const currentPagePresentation = pagePresentation(activePage, managedContent.pluralTitle, applicationReady);
+  const currentPageTitle = pageTitle(activePage, managedContent.pluralTitle, applicationReady);
   const overviewInitialLoading = shouldShowInitialOverviewLoading(
     overviewLoading,
     overviewData.events.length,
@@ -2031,7 +2025,7 @@ export default function App() {
   return (
     <>
       <AppToaster darkMode={darkMode} />
-      <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${phoneLayout && !sidebarCollapsed ? "mobileNavigationOpen" : ""} ${appearanceClassName}`.replace(/\s+/g, " ").trim()}>
+      <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${phoneLayout && !sidebarCollapsed ? "mobileNavigationOpen" : ""} ${themeClassName}`.replace(/\s+/g, " ").trim()}>
         <AppSidebar
           sidebarCollapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
@@ -2055,10 +2049,14 @@ export default function App() {
         />
 
       <section inert={phoneLayout && !sidebarCollapsed ? true : undefined} className={`workspace workspacePage-${activePage} ${isServerWorkspacePage(activePage) && (activeServer || (!applicationReady && shellVisible)) ? "workspaceServerPage" : ""}`.trim()}>
-        <WorkspaceHeader
-          {...currentPagePresentation}
-          actions={activePage === "create" ? <Button variant="secondary" onClick={() => setActivePage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</Button> : undefined}
-        />
+        <header className="workspaceHeader">
+          <div>
+            <h2>{currentPageTitle}</h2>
+          </div>
+          <div className="workspaceActions">
+            {activePage === "create" && <Button variant="secondary" onClick={() => setActivePage("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Cancel server creation"}>Cancel</Button>}
+          </div>
+        </header>
 
         <WorkspaceNotices
           activePage={activePage}
@@ -2096,8 +2094,6 @@ export default function App() {
           <SettingsPage
             loading={settingsDataLoading}
             themePreference={themePreference}
-            accentPreference={accentPreference}
-            motionPreference={motionPreference}
             relativeTimestamps={relativeTimestamps}
             regionalFormatPreference={regionalFormatPreference}
             displayTimeZonePreference={displayTimeZonePreference}
@@ -2105,8 +2101,6 @@ export default function App() {
             browserTimeZone={browserTimeZone}
             displayTimeZone={displayTimeZone}
             onThemeChange={setThemePreference}
-            onAccentChange={setAccentPreference}
-            onMotionChange={setMotionPreference}
             onRelativeTimestampsChange={setRelativeTimestamps}
             onRegionalFormatChange={setRegionalFormatPreference}
             onDisplayTimeZoneChange={setDisplayTimeZonePreference}
@@ -2180,7 +2174,6 @@ export default function App() {
           <EmptyState
             title="No server selected"
             message="A server exists, but none is open right now. Choose one from the sidebar or Nodes page to view its console, files, managed content, and settings."
-            illustration="servers"
             action={<Button onClick={() => setActivePage("nodes")}>Open nodes</Button>}
           />
         )}

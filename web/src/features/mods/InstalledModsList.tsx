@@ -101,7 +101,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
         {initialLoading ? (
           Array.from({ length: 5 }, (_, index) => <InstalledModSkeletonRow key={index} />)
         ) : visible.length === 0 ? (
-          <EmptyState compact illustration={mods.length ? "search" : "mods"} className="modsWorkspaceEmpty" title={mods.length ? `No matching ${terminology.plural}` : `No ${terminology.plural} installed yet`} message={mods.length ? "Try a different search." : `Add a compatible ${terminology.runtimeName} ${terminology.singular} or upload a jar to get started.`} />
+          <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? `No matching ${terminology.plural}` : `No ${terminology.plural} installed yet`} message={mods.length ? "Try a different search." : `Add a compatible ${terminology.runtimeName} ${terminology.singular} or upload a jar to get started.`} />
         ) : visible.map(({ mod, plannedUpdate, health }) => {
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);

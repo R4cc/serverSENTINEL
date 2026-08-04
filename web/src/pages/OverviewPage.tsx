@@ -170,8 +170,8 @@ export function OverviewSummary({
       <MetricTile className="summaryTile" label="Minecraft" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
       <MetricTile className="summaryTile" label={runtime.displayName} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(runtimeVersion)} />
       <MetricTile className="summaryTile" label="Uptime" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" meter={!loading && hasResourceStats && normalizedCpu !== null ? normalizedCpu : undefined} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" meter={!loading && hasResourceStats && latestResourceSample?.memoryUtilizationPercent != null ? latestResourceSample.memoryUtilizationPercent : undefined} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
     </section>
   );
 }
@@ -200,11 +200,11 @@ export function ActivePlayersPanel({
   if (loading && !snapshot) {
     content = <div className="overviewPanelSkeleton" aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="playerNameSkeleton" />)}</div>;
   } else if (!running || snapshot?.state === "stopped") {
-    content = <EmptyState compact illustration="players" title="Server is not running" message="Player activity will appear after the server starts." />;
+    content = <EmptyState compact title="Server is not running" message="Player activity will appear after the server starts." />;
   } else if (!snapshot || snapshot.state === "unavailable") {
-    content = <EmptyState compact illustration="players" title="Player query unavailable" message={snapshot?.message ?? "Waiting for the first complete player snapshot."} />;
+    content = <EmptyState compact title="Player query unavailable" message={snapshot?.message ?? "Waiting for the first complete player snapshot."} />;
   } else if (online === 0) {
-    content = <EmptyState compact illustration="players" title="No players online" message="The server is ready for players." />;
+    content = <EmptyState compact title="No players online" message="The server is ready for players." />;
   } else {
     const visibleNames = playersExpanded ? snapshot.names : snapshot.names.slice(0, activePlayerPreviewLimit);
     const hiddenPlayerCount = snapshot.names.length - visibleNames.length;
@@ -865,7 +865,6 @@ export function RecentEventsPanel({
         )) : (
           <EmptyState
             compact
-            illustration="events"
             className="eventEmpty"
             title={hasHiddenEvents ? "Recent events are hidden" : eventsStatus === "unavailable" ? "Events are unavailable" : "No recent events yet"}
             message={hasHiddenEvents ? "Reset hidden events to show them again." : eventsStatus === "unavailable" ? "Open the console to inspect raw logs, or try again after the server writes new output." : undefined}

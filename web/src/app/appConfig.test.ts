@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pagePresentation, readStoredSignedIn, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredSignedIn } from "./appConfig";
+import { readStoredSignedIn, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredSignedIn } from "./appConfig";
 
 function memoryStorage(seed: Record<string, string> = {}) {
   const entries = new Map(Object.entries(seed));
@@ -14,11 +14,6 @@ function memoryStorage(seed: Record<string, string> = {}) {
 }
 
 describe("application loading layout", () => {
-  it("provides a stable signal presentation for every workspace", () => {
-    expect(pagePresentation("overview", "Mods", true)).toEqual({ title: "Overview", subtitle: "Live health, activity, and recent change signals.", glyph: "overview" });
-    expect(pagePresentation("mods", "Plugins", true)).toMatchObject({ title: "Plugins", glyph: "mods" });
-  });
-
   it("keeps the static settings structure in place instead of stacking a page skeleton above it", () => {
     expect(shouldShowApplicationLoadingSkeleton("settings")).toBe(false);
     expect(shouldShowApplicationLoadingSkeleton("overview")).toBe(true);

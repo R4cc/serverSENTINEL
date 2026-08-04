@@ -77,11 +77,10 @@ export function AddModsWorkflow(props: Props) {
         {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message={`Add a Modrinth API key in Settings to search and install ${terminology.plural}.`} />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
         {props.error && <InlineState tone="error" title="Search failed" message={props.error} actionLabel="Refresh" onAction={props.onRetrySearch} busy={props.searching} />}
-        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact illustration="mods" className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and serverSENTINEL will recommend the safest release." />}
+        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and serverSENTINEL will recommend the safest release." />}
         {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && (
           <EmptyState
             compact
-            illustration="search"
             className="modsWorkspaceEmpty"
             title={props.showIncompatibleResults ? `No matching ${terminology.plural} found` : `No compatible ${terminology.plural} found`}
             message={props.showIncompatibleResults ? "Try a shorter or different search." : `Try a different search, or show incompatible ${terminology.plural} if you want to review risky matches.`}
