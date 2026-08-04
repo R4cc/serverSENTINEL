@@ -916,7 +916,6 @@ button:disabled,
 }
 
 .panel,
-.authPanel,
 .modalPanel {
   background: var(--glass-tint);
   border: var(--border-subtle) solid var(--glass-edge);
@@ -924,7 +923,6 @@ button:disabled,
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
 }
 
-.authPanel,
 .modalPanel { background: var(--glass-tint-strong); border-radius: var(--radius-lg); }
 
 .consolePanel,
@@ -1975,7 +1973,6 @@ button:disabled,
 }
 
 .panel,
-.authPanel,
 .modalPanel,
 .fileCodeEditor,
 .fileEditorStateFill,
@@ -1986,7 +1983,6 @@ button:disabled,
 }
 
 .themeDark .panel,
-.themeDark .authPanel,
 .themeDark .modalPanel,
 .themeDark .fileCodeEditor,
 .themeDark .fileEditorStateFill,

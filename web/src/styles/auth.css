@@ -13,9 +13,16 @@
   padding: var(--space-5);
   display: grid;
   gap: var(--space-4);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
+  box-shadow: var(--shadow-elevated);
   -webkit-backdrop-filter: var(--glass-filter-modal);
   backdrop-filter: var(--glass-filter-modal);
+}
+
+/* The auth card is large enough that the shared rim and refractive inset read
+   as a second nested panel. Keep a single border and the frosted CSS surface. */
+.authPanel::after,
+.authPanel > .uiLiquidGlassEffect {
+  display: none;
 }
 
 .authPanel .brandLockup {
