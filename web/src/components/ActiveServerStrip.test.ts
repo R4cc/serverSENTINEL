@@ -60,3 +60,13 @@ describe("ActiveServerStrip player count", () => {
     expect(render(undefined)).not.toContain("serverStripPlayers");
   });
 });
+
+describe("ActiveServerStrip refresh action", () => {
+  it("uses a direct icon-only refresh button instead of an overflow menu", () => {
+    const markup = render(undefined);
+    expect(markup).toContain('aria-label="Refresh server status"');
+    expect(markup).toContain("refreshStatusButton");
+    expect(markup).not.toContain("More server actions");
+    expect(markup).not.toContain('aria-haspopup="menu"');
+  });
+});

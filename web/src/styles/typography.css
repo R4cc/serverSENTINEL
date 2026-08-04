@@ -105,8 +105,7 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
-.brandBlock p,
-.authPanel .brandLockup p {
+.brandBlock p {
   margin-top: 2px;
   color: var(--text-muted);
   font-size: var(--type-meta-size);

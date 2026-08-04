@@ -15,7 +15,7 @@ export function AuthLoadingSkeleton() {
         <LoadingLabel>Checking session</LoadingLabel>
         <div className="brandLockup" aria-hidden="true">
           <BrandLogo />
-          <div><SkeletonBlock className="authSkeletonTitle" /><SkeletonBlock className="authSkeletonSubtitle" /></div>
+          <div><SkeletonBlock className="authSkeletonTitle" /></div>
         </div>
         <div className="authSkeletonFields" aria-hidden="true">
           <SkeletonBlock className="authSkeletonLabel" /><SkeletonBlock className="authSkeletonInput" />

@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+## 1.7.3 - 2026-08-04
+
 - Stopped a console stream that ended from leaving an online node reported as offline until the browser was reloaded.
 - Copied the console's selected output with Ctrl+C.
 - Renamed the Nodes toolbar "Import" button to "Import server".
+- Simplified the sign-in and first-run pages with consistent inline validation, alerts, and session-ended messaging.
 
 ## 1.7.2 - 2026-08-03
 

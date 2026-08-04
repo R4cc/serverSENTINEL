@@ -1,5 +1,5 @@
 import type { ManagedServer, PlayerSnapshot, ServerStatus } from "../types";
-import { ActionMenu } from "./ActionMenu";
+import { AppIcon } from "./FileTypeIcon";
 import { RestartRequiredBadge } from "./RestartRequiredBadge";
 import { RuntimeControls } from "./RuntimeControls";
 import { ServerRuntimeAlert } from "./ServerRuntimeAlert";
@@ -143,28 +143,17 @@ export function ActiveServerStrip({
             </svg>
             <span>Console</span>
           </Button>
-          <ActionMenu
-            label="More server actions"
-            className="overflowMenuContainer"
-            triggerClassName="iconButton overflowButton"
-            menuClassName="overflowDropdown"
-            items={[
-              {
-                id: "refresh",
-                label: health || alert ? "Retry connection" : "Refresh status",
-                onSelect: onRetryConnection,
-                disabled: refreshDisabled,
-                title: refreshDisabled ? refreshDisabledReason : "Refresh server status"
-              }
-            ]}
-            trigger={
-              <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                <circle cx="12" cy="5" r="1.5" fill="currentColor" />
-                <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-                <circle cx="12" cy="19" r="1.5" fill="currentColor" />
-              </svg>
-            }
-          />
+          <Button
+            variant="secondary"
+            iconOnly
+            className="refreshStatusButton"
+            onClick={onRetryConnection}
+            disabled={refreshDisabled}
+            aria-label={health || alert ? "Retry server connection" : "Refresh server status"}
+            title={refreshDisabled ? refreshDisabledReason : health || alert ? "Retry server connection" : "Refresh server status"}
+          >
+            <AppIcon name="refresh" />
+          </Button>
         </div>
       </div>
       {alert && <ServerRuntimeAlert title={alert.title} message={alert.message} />}
