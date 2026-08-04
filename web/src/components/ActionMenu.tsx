@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "./UiPrimitives";
 import { focusNextMenuItem } from "./menuFocus";
+import { GlassEffect } from "./GlassEffect";
 
 export type ActionMenuItem = {
   id: string;
@@ -84,7 +85,8 @@ export function ActionMenu({
         {trigger}
       </Button>
       {open && (
-        <div id={menuId} className={`actionMenuPopover actionMenuPopover--${align} ${menuClassName}`.trim()} role="menu" aria-label={label}>
+        <div id={menuId} className={`actionMenuPopover uiGlassSurface uiGlassSurface--floating actionMenuPopover--${align} ${menuClassName}`.trim()} role="menu" aria-label={label}>
+          <GlassEffect variant="floating" />
           {items.map((item, index) => (
             <Fragment key={item.id}>
               {item.separatorBefore && index > 0 && <div className="actionMenuSeparator" role="separator" />}

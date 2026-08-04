@@ -18,11 +18,13 @@
   top: var(--space-4);
   display: grid;
   gap: 6px;
-  border: 1px solid var(--border-row);
+  border: 1px solid var(--glass-edge);
   border-radius: calc(var(--radius-md) + 2px);
-  background: color-mix(in srgb, var(--surface-raised) 92%, var(--surface-muted));
+  background: var(--glass-tint);
   padding: 7px;
-  box-shadow: 0 10px 26px rgb(15 23 42 / 5%);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
 }
 
 .settingsHubCategories > button {
@@ -114,6 +116,8 @@
   border-radius: calc(var(--radius-md) + 2px);
   background: var(--surface-raised);
   box-shadow: 0 12px 30px rgb(15 23 42 / 6%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .settingsHubContent:focus-visible {

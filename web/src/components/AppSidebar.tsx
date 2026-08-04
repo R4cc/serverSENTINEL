@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { ChevronDown, CircleUserRound, LogOut } from "lucide-react";
 import { demoServerId } from "../demoRuntime";
 import type { ActivePage, ManagedServer } from "../types";
 import { minecraftVersionInfo, versionValue } from "../utils/format";
@@ -7,6 +8,7 @@ import { ActionMenu } from "./ActionMenu";
 import { BrandLogo } from "./BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./FileTypeIcon";
 import { Button } from "./UiPrimitives";
+import { GlassEffect } from "./GlassEffect";
 
 export function AppSidebar({
   sidebarCollapsed,
@@ -58,7 +60,8 @@ export function AppSidebar({
   });
 
   return (
-    <aside className="sidebar" id="application-sidebar">
+    <aside className="sidebar uiGlassSurface uiGlassSurface--chrome" id="application-sidebar">
+      <GlassEffect variant="chrome" />
       <div className="brandBlock">
         <div className="brandLockup">
           <BrandLogo />
@@ -119,9 +122,7 @@ export function AppSidebar({
                     <strong>{activeServer?.displayName ?? "Select a server"}</strong>
                     <span>{activeServer?.nodeName || (activeServer ? "Server workspace" : "Choose a workspace")}</span>
                   </span>
-                  <svg className="serverSwitcherChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" aria-hidden="true">
-                    <path d="m7 9 5 5 5-5" />
-                  </svg>
+                  <ChevronDown className="serverSwitcherChevron" strokeWidth={2.25} aria-hidden="true" />
                 </>
               )}
             />
@@ -166,18 +167,11 @@ export function AppSidebar({
         </button>
         <div className="accountChip">
           <span className="accountIcon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 21a8 8 0 0 1 16 0" />
-            </svg>
+            <CircleUserRound />
           </span>
           <span className="accountName">{demoMode ? "Demo" : accountName}</span>
           <Button variant="ghost" iconOnly className="accountLogoutButton" onClick={onLogout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"} title={isProvisioning ? provisioningNavigationReason : demoMode ? "Exit demo" : "Log out"}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 5H5v14h5" />
-              <path d="M14 8l4 4-4 4" />
-              <path d="M8 12h10" />
-            </svg>
+            <LogOut aria-hidden="true" />
           </Button>
         </div>
       </nav>

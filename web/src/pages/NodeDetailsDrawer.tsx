@@ -71,13 +71,7 @@ function valueTone(value?: string) {
 }
 
 function MoreIcon() {
-  return (
-    <svg className="buttonIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.8" />
-      <circle cx="12" cy="12" r="1.8" />
-      <circle cx="19" cy="12" r="1.8" />
-    </svg>
-  );
+  return <AppIcon name="moreHorizontal" />;
 }
 
 function NodeGlyph() {

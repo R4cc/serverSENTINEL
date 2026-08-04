@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
+import { Copy, Palette, PlugZap, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
 import type { DisplayTimeZonePreference, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
@@ -86,16 +87,17 @@ function formatCacheSize(bytes: number) {
 }
 
 function SettingsGlyph({ name }: { name: SettingsCategory | "refresh" | "copy" }) {
-  const paths: Record<typeof name, ReactNode> = {
-    appearance: <><path d="M12 3a9 9 0 1 0 0 18h1.3a2.2 2.2 0 0 0 0-4.4h-.8a1.6 1.6 0 0 1 0-3.2H15A6 6 0 0 0 15 3h-3Z" /><circle cx="7.5" cy="9" r="1" /><circle cx="10" cy="6.5" r="1" /></>,
-    console: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3M12.5 15H17" /></>,
-    integrations: <><path d="M8 12h8M12 8v8" /><path d="M7 4v3M17 4v3M7 17v3M17 17v3" /><rect x="5" y="7" width="14" height="10" rx="3" /></>,
-    users: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 8.5a2.5 2.5 0 0 1 0 5M16 15.5a4.5 4.5 0 0 1 4.5 4.5" /></>,
-    system: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></>,
-    refresh: <><path d="M20 6v5h-5" /><path d="M18.5 15a7 7 0 1 1-.8-7.8L20 11" /></>,
-    copy: <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>
+  const icons: Record<typeof name, LucideIcon> = {
+    appearance: Palette,
+    console: SquareTerminal,
+    integrations: PlugZap,
+    users: Users,
+    system: SettingsIcon,
+    refresh: RefreshCw,
+    copy: Copy
   };
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+  const Icon = icons[name];
+  return <Icon strokeWidth={1.8} aria-hidden="true" />;
 }
 
 function PreferenceRow({ title, description, children, className = "" }: { title: string; description: ReactNode; children: ReactNode; className?: string }) {

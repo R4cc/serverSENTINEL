@@ -24,6 +24,7 @@
   --surface: var(--swiss-white);
   --surface-raised: var(--swiss-white);
   --surface-muted: var(--swiss-muted);
+  --app-background: #eef3fb;
   --surface-read-only: #f7f7f7;
   --surface-disabled: #eceff2;
   --sidebar-background: #09162c;
@@ -50,6 +51,26 @@
   --editor-heading: #111827;
   --editor-link: #3858e9;
   --overlay: rgb(0 0 0 / 0.48);
+  --accent-contrast: var(--swiss-white);
+  --glass-tint: rgb(255 255 255 / 0.62);
+  --glass-tint-strong: rgb(255 255 255 / 0.76);
+  --glass-tint-soft: rgb(255 255 255 / 0.48);
+  --glass-border: rgb(255 255 255 / 0.76);
+  --glass-border-muted: rgb(255 255 255 / 0.5);
+  --glass-edge: color-mix(in srgb, var(--glass-border) 74%, var(--border-panel));
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.82);
+  --glass-shadow: 0 18px 48px rgb(34 55 92 / 0.13), 0 2px 10px rgb(34 55 92 / 0.08);
+  --glass-shadow-floating: 0 22px 64px rgb(34 55 92 / 0.2), 0 4px 14px rgb(34 55 92 / 0.12);
+  --glass-shadow-panel: var(--glass-shadow);
+  --glass-shadow-chrome: var(--glass-shadow);
+  --glass-shadow-modal: var(--glass-shadow-floating);
+  --glass-blur: 24px;
+  --glass-blur-panel: var(--glass-blur);
+  --glass-blur-chrome: 28px;
+  --glass-blur-floating: 20px;
+  --glass-blur-modal: 32px;
+  --glass-saturation: 155%;
+  --solid-control-surface: rgb(255 255 255 / 0.84);
   /* Elevation scale. `xs` lifts a control off its own track, `md` floats a
      tooltip or popover, `elevated` carries a drawer or modal. */
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.08);
@@ -60,8 +81,9 @@
   --surface-inset: color-mix(in srgb, var(--surface-muted) 56%, var(--surface-raised));
   --border-strong: 1px;
   --border-heavy: 2px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --radius-sm: 11px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -132,7 +154,7 @@
 }
 
 html {
-  background: var(--surface);
+  background: var(--app-background);
   scrollbar-gutter: stable;
 }
 
@@ -140,10 +162,11 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.018) 1px, transparent 0) 0 0 / 20px 20px,
-    linear-gradient(rgb(0 0 0 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
-    linear-gradient(90deg, rgb(0 0 0 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
-    var(--surface);
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--accent) 20%, transparent) 0, transparent 32%),
+    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--sentinel-info) 15%, transparent) 0, transparent 34%),
+    radial-gradient(circle at 58% 92%, color-mix(in srgb, var(--sentinel-accent-muted) 18%, transparent) 0, transparent 38%),
+    var(--app-background);
+  background-attachment: fixed;
   color: var(--text);
 }
 
@@ -163,9 +186,9 @@ textarea {
 
 button {
   min-height: var(--control-height);
-  border: var(--border-strong) solid var(--border);
-  background: var(--text);
-  color: var(--surface);
+  border: var(--border-strong) solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
   padding: 0 var(--control-padding-inline);
   cursor: pointer;
   font-size: var(--type-button-size);
@@ -221,13 +244,14 @@ input,
 select,
 textarea {
   width: 100%;
-  border: var(--border-strong) solid var(--border);
-  background: var(--surface);
+  border: var(--border-strong) solid var(--border-muted);
+  background: var(--solid-control-surface);
   color: var(--text);
   padding: 10px 12px;
   text-transform: none;
   letter-spacing: normal;
-  transition: background 150ms linear, border-color 150ms linear, color 150ms linear;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--glass-border) 72%, transparent);
+  transition: background 150ms linear, border-color 150ms linear, box-shadow 150ms linear, color 150ms linear;
 }
 
 input:not([type="checkbox"]):not([type="radio"]),
@@ -267,6 +291,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), inset 0 1px 0 color-mix(in srgb, var(--glass-border) 72%, transparent);
 }
 
 input[aria-invalid="true"] {

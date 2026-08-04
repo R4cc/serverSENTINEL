@@ -27,9 +27,9 @@
   transition: background var(--control-transition), color var(--control-transition), border-color var(--control-transition), box-shadow var(--control-transition), transform var(--control-transition);
 }
 
-.uiButton--primary { border-color: var(--text); background: var(--text); color: var(--surface); }
-.uiButton--primary:hover:not(:disabled) { transform: none; }
-.uiButton--secondary { border-color: var(--border-muted); background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted)); color: var(--text); }
+.uiButton--primary { border-color: color-mix(in srgb, var(--accent) 84%, var(--glass-edge)); background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-xs), var(--glass-highlight); }
+.uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 78%, var(--text)); background: color-mix(in srgb, var(--accent) 88%, var(--text)); transform: none; }
+.uiButton--secondary { border-color: var(--glass-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--glass-highlight); backdrop-filter: blur(14px) saturate(125%); -webkit-backdrop-filter: blur(14px) saturate(125%); }
 .uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .uiButton--ghost,
 .textLinkButton { border-color: transparent; background: transparent; color: var(--accent); box-shadow: none; }
@@ -57,15 +57,37 @@
 .uiSurface,
 .panel {
   min-width: 0;
-  border: var(--border-subtle) solid var(--border-panel);
+  border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  box-shadow: none;
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
 }
 .uiSurface--default { padding: var(--space-4); }
 .uiSurface--compact { padding: var(--space-3); }
 .uiSurface--flush { padding: 0; overflow: hidden; }
-.uiSurface--subtle { border-color: var(--border-row); background: var(--surface-inset); }
+.uiSurface--subtle { border-color: var(--glass-edge); background: var(--glass-tint-soft); }
+.uiSurface--solid { border-color: var(--border-panel); background: var(--surface-raised); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* Shared glass is progressive enhancement: CSS owns the polished frosted fallback,
+   while the optional refractive layer is decorative and never receives input. */
+.uiGlassSurface {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--glass-edge);
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+}
+.uiGlassSurface--chrome { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-chrome); backdrop-filter: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation)); -webkit-backdrop-filter: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation)); }
+.uiGlassSurface--floating { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-floating); backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)); -webkit-backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)); }
+.uiGlassSurface--modal { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-modal); backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation)); -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation)); }
+.uiGlassSurface > :not(.uiLiquidGlassEffect) { position: relative; z-index: 1; }
+.uiLiquidGlassEffect { position: absolute; z-index: 0; inset: 0; display: block; overflow: hidden; border-radius: inherit; pointer-events: none; opacity: 0.4; }
+.uiLiquidGlassEffect > div { width: 100%; height: 100%; border-radius: inherit; }
+.uiLiquidGlassFill { width: 100%; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--glass-tint-soft) 42%, transparent); }
 
 .uiPanelHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
 .uiPanelHeader--compact { gap: var(--space-2); }
@@ -107,7 +129,7 @@
 .uiBanner--warning { border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised)); }
 .uiBanner--error { border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface-raised)); }
 
-.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface-raised); }
+.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--glass-edge); border-radius: var(--radius-md); padding: var(--space-3); background: var(--glass-tint-soft); box-shadow: var(--glass-highlight); }
 .uiMetricTileMarker { width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--text-muted) 6%, transparent); }
 .uiMetricTile--info .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-info) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-info) 7%, transparent); }
 .uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 15%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--accent) 7%, transparent); }
@@ -168,7 +190,7 @@
 .fileTypeIcon svg { width: 22px; height: 22px; }
 
 .actionMenu { position: relative; display: inline-flex; }
-.actionMenuTrigger svg { width: var(--control-icon-size); height: var(--control-icon-size); fill: currentColor; }
+.actionMenuTrigger svg { width: var(--control-icon-size); height: var(--control-icon-size); fill: none; }
 .actionMenuPopover {
   position: absolute;
   z-index: 80;
@@ -176,10 +198,12 @@
   display: grid;
   min-width: 190px;
   overflow: hidden;
-  border: var(--border-subtle) solid var(--border-panel);
+  border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-lg);
+  background: var(--glass-tint-strong);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
 }
 .actionMenuPopover--end { right: 0; }
 .actionMenuPopover--start { left: 0; }
@@ -274,6 +298,30 @@
     border-color: var(--spinner-indicator);
     opacity: 0.5;
   }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .uiSurface,
+  .panel,
+  .uiGlassSurface,
+  .uiMetricTile,
+  .actionMenuPopover,
+  .scheduleTableCard,
+  .modsWorkspaceInstalled,
+  .modsResultCard,
+  .modsReviewHero,
+  .modsAdvancedOptions,
+  .modsReviewLine,
+  .modsDependencySummary,
+  .modsCompatibilityCard,
+  .nodeInstallBox,
+  .summaryTile {
+    background: var(--surface-raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .uiLiquidGlassEffect { display: none; }
 }
 
 @keyframes spin {
@@ -603,9 +651,9 @@
 }
 
 .uiButton--primary:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--swiss-white);
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--text));
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
+  color: var(--accent-contrast);
 }
 
 .uiButton--secondary:hover:not(:disabled),
@@ -635,10 +683,12 @@
 .modsCompatibilityCard,
 .nodeInstallBox,
 .summaryTile {
-  border-color: var(--border-panel);
+  border-color: var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  box-shadow: none;
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
 }
 
 .panel .panel,
@@ -647,6 +697,28 @@
 .fileEditorBody .panel {
   border-color: var(--border-row);
   background: var(--surface);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Dense, data-heavy regions stay opaque so text, grids, charts, and code keep
+   their existing contrast instead of stacking translucent materials. */
+.consolePanel,
+.fileEditorModal,
+.serverTimelinePanel,
+.filesPanel,
+.fileDetailsPanel,
+.modsWorkspaceInstalled,
+.scheduleTableCard,
+.scheduledRunsCard,
+.settingsHubPanel,
+.usersSettings {
+  border-color: var(--border-panel);
+  background: var(--surface-raised);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .uiPanelHeader,

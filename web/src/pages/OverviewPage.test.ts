@@ -461,7 +461,7 @@ describe("mod health", () => {
 
     expect(html).not.toContain('class="modUpdatesCardOpen"');
     expect(html).toContain('aria-label="Recheck mods for updates"');
-    expect(html).toContain('<path d="M20 6v5h-5"></path>');
+    expect(html).toContain("lucide-refresh-cw");
     expect(html).not.toContain('modUpdatesRefreshLabel');
     expect(html).toContain('uiButton--secondary');
     expect(html).not.toContain('>Open Mods</button>');
