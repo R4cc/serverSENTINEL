@@ -917,7 +917,6 @@ button:disabled,
 
 .panel,
 .authPanel,
-.activeServerStrip,
 .modalPanel {
   background: var(--glass-tint);
   border: var(--border-subtle) solid var(--glass-edge);
@@ -1977,7 +1976,6 @@ button:disabled,
 
 .panel,
 .authPanel,
-.activeServerStrip,
 .modalPanel,
 .fileCodeEditor,
 .fileEditorStateFill,
@@ -1989,7 +1987,6 @@ button:disabled,
 
 .themeDark .panel,
 .themeDark .authPanel,
-.themeDark .activeServerStrip,
 .themeDark .modalPanel,
 .themeDark .fileCodeEditor,
 .themeDark .fileEditorStateFill,

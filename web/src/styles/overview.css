@@ -1949,7 +1949,7 @@ button.overviewCardRow:focus-visible {
 .uiButton.runtimeControlButton.start {
   border-color: var(--sentinel-success);
   background: var(--sentinel-success);
-  color: var(--swiss-white);
+  color: var(--sentinel-success-contrast);
 }
 
 .uiButton.runtimeControlButton.start:hover:not(:disabled) {
@@ -1960,7 +1960,7 @@ button.overviewCardRow:focus-visible {
 .uiButton.runtimeControlButton.stop {
   border-color: var(--sentinel-danger);
   background: var(--sentinel-danger);
-  color: var(--swiss-white);
+  color: var(--sentinel-danger-contrast);
 }
 
 .uiButton.runtimeControlButton.restart,
