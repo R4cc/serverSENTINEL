@@ -22,7 +22,7 @@
   border-radius: calc(var(--radius-md) + 2px);
   background: var(--glass-tint);
   padding: 7px;
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  box-shadow: var(--glass-shadow-panel);
   -webkit-backdrop-filter: var(--glass-filter-panel);
   backdrop-filter: var(--glass-filter-panel);
 }
@@ -67,7 +67,7 @@
   display: grid;
   place-items: center;
   border: 1px solid var(--border-row);
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--text-muted);
 }
@@ -115,7 +115,7 @@
   border: 1px solid var(--border-row);
   border-radius: calc(var(--radius-md) + 2px);
   background: var(--surface-raised);
-  box-shadow: 0 12px 30px rgb(15 23 42 / 6%);
+  box-shadow: var(--shadow-xs);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -287,7 +287,7 @@
   height: 18px;
   border-radius: 999px;
   background: var(--surface-raised);
-  box-shadow: 0 2px 5px rgb(15 23 42 / 18%);
+  box-shadow: var(--shadow-xs);
   transition: transform 150ms ease;
 }
 
@@ -379,11 +379,27 @@
 .settingsHubUsers {
   min-width: 0;
   overflow-x: auto;
-  padding: var(--space-4) var(--space-5) var(--space-5);
+  padding: 0;
 }
 
 .settingsHubUsers .usersSettings {
   min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.settingsHubUsers .usersTable {
+  background: transparent;
+}
+
+.settingsHubUsers .usersTable tbody tr {
+  background: var(--surface-raised);
+  transition: background var(--control-transition);
+}
+
+.settingsHubUsers .usersTable tbody tr:hover,
+.settingsHubUsers .usersTable tbody tr:focus-within {
+  background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
 }
 
 .settingsHubSystemOverview {

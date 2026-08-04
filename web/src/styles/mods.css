@@ -11,11 +11,10 @@
 .modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-raised); }
 .modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
 .modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: 8px; }
-.modsWorkspaceListHeader h3 { margin: 0; font-size: 1rem; }
-.modsWorkspaceListHeader > div span { color: var(--text-muted); font-size: .78rem; }
-.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: 8px; min-width: 250px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.modsWorkspaceListHeader h3 { margin: 0; }
+.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: 8px; min-width: 250px; padding: 0 11px; border: 1px solid var(--border-muted); }
 .modsWorkspaceSearch { width: clamp(280px, 34vw, 440px); }
-.modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: var(--shadow-xs), 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
 .modsWorkspaceSearch input, .modsAddSearch input { width: 100%; min-height: 38px; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
 .modsWorkspaceTable { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
@@ -380,7 +379,8 @@
   min-height: var(--control-height);
   border-color: var(--border-muted);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--solid-control-surface);
+  box-shadow: var(--shadow-xs);
 }
 
 .modsWorkspaceSearch .buttonIcon,
