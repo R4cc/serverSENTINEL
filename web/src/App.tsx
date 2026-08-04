@@ -5,7 +5,8 @@ import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./
 import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
-import { trimFormValue, validatePassword, validateUsername } from "./utils/validation";
+import { trimFormValue } from "./utils/validation";
+import { authValidationErrors, type AuthField } from "./utils/authValidation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
 import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
@@ -27,7 +28,7 @@ import { AppToaster } from "./components/AppToaster";
 import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
 import { WorkspaceNotices } from "./components/WorkspaceNotices";
 import { AppSidebar } from "./components/AppSidebar";
-import { AuthPanel } from "./components/AuthPanel";
+import { AuthPanel, type AuthNotice } from "./components/AuthPanel";
 import { AuthLoadingSkeleton, FeaturePageLoadingSkeleton } from "./components/LoadingSkeletons";
 import { Button, EmptyState } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
@@ -96,7 +97,8 @@ export default function App() {
   // Read once, at mount: the hint only decides which surface the first paint reserves,
   // and it must not change under the pending session or the guess itself shifts layout.
   const [bootsIntoShell] = useState(() => readStoredSignedIn());
-  const [authNotice, setAuthNotice] = useState("");
+  const [authNotice, setAuthNotice] = useState<AuthNotice | null>(null);
+  const [authFieldErrors, setAuthFieldErrors] = useState<Partial<Record<AuthField, string>>>({});
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [appState, setAppState] = useState<AppState>(emptyApp);
   const [activeServerId, setActiveServerId] = useState(() => readStoredActiveServerId());
@@ -1236,7 +1238,11 @@ export default function App() {
     resetSessionRequestGuards();
     writeStoredDemoMode(false);
     setDemoMode(false);
-    setAuthNotice("Sign in again to continue.");
+    setAuthNotice({
+      tone: "warning",
+      title: "Session ended",
+      message: "Sign in again to continue."
+    });
     setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: demoEnabledRef.current, user: null });
     setAppState(emptyApp);
     setAppStateLoaded(false);
@@ -1256,7 +1262,6 @@ export default function App() {
     setConsoleSnapshotReadyServerId("");
     resetConsoleBuffer("");
     filesWorkspace.actions.clearWorkspace();
-    notify("warning", "You were logged out because the panel restarted and the loaded state is no longer current. Sign in again to continue.");
     return true;
   }
 
@@ -1273,12 +1278,12 @@ export default function App() {
         resetDemoState();
         setActivePage("overview");
       }
-      setAuthNotice("");
+      setAuthNotice(null);
       setAuthSession(session);
     } catch (error) {
       writeStoredDemoMode(false);
       setDemoMode(false);
-      setAuthNotice("");
+      setAuthNotice(null);
       setAuthSession({ authenticated: false, setupRequired: false, demoEnabled: false, user: null });
       setAppStateLoaded(false);
     }
@@ -1295,20 +1300,14 @@ export default function App() {
     const setupToken = String(form.get("setupToken") || "");
     const setupRequired = authSession?.setupRequired ?? false;
     const demoLogin = Boolean(authSession?.demoEnabled) && username === "demo" && password === "demo";
-    setAuthNotice("");
-    if (!demoLogin) {
-      const passwordError = setupRequired ? validatePassword(password, true) : password ? null : "Password is required.";
-      const errors = [
-        validateUsername(username) ? { field: "username", message: validateUsername(username)! } : null,
-        passwordError ? { field: "password", message: passwordError } : null
-      ].filter((error): error is { field: string; message: string } => Boolean(error));
-      if (setValidationNotice(formElement, errors, setAuthNotice)) return;
-    }
-    if (setupRequired && !demoLogin) {
-      if (password !== confirmPassword) {
-        setValidationNotice(formElement, [{ field: "confirmPassword", message: "Passwords do not match." }], setAuthNotice);
-        return;
-      }
+    setAuthNotice(null);
+    setAuthFieldErrors({});
+    const errors = authValidationErrors({ setupRequired, demoLogin, setupToken, username, password, confirmPassword });
+    if (errors.length) {
+      setAuthFieldErrors(Object.fromEntries(errors.map((error) => [error.field, error.message])));
+      const firstInvalidField = formElement.elements.namedItem(errors[0].field);
+      if (firstInvalidField instanceof HTMLElement) firstInvalidField.focus();
+      return;
     }
     setAuthSubmitting(true);
     authSubmittingRef.current = true;
@@ -1325,7 +1324,7 @@ export default function App() {
         await loadDemoFixtures();
         writeStoredDemoMode(true);
         resetDemoState();
-        setAuthNotice("");
+        setAuthNotice(null);
         setNotice("");
         setAppStateLoaded(false);
         staleSessionLogoutRef.current = false;
@@ -1336,7 +1335,7 @@ export default function App() {
         setActivePage("overview");
         return;
       }
-      setAuthNotice("");
+      setAuthNotice(null);
       setNotice("");
       setAppStateLoaded(false);
       setDemoMode(false);
@@ -1345,12 +1344,17 @@ export default function App() {
       setAuthSession(session);
       formElement.reset();
     } catch (error) {
-      setAuthNotice((error as Error).message);
+      setAuthNotice({ tone: "error", title: "Sign-in failed", message: (error as Error).message });
     } finally {
       authSubmittingRef.current = false;
       if (!loginSucceeded) staleSessionSuppressUntilRef.current = 0;
       setAuthSubmitting(false);
     }
+  }
+
+  function clearAuthFieldError(field: AuthField) {
+    setAuthFieldErrors((current) => current[field] ? { ...current, [field]: "" } : current);
+    setAuthNotice((current) => current?.tone === "error" ? null : current);
   }
 
   async function logout() {
@@ -1952,6 +1956,8 @@ export default function App() {
           setupRequired={authSession.setupRequired}
           demoEnabled={authSession.demoEnabled}
           notice={authNotice}
+          fieldErrors={authFieldErrors}
+          onFieldChange={clearAuthFieldError}
           onSubmit={submitAuth}
           busy={authSubmitting}
         />
