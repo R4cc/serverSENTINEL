@@ -255,7 +255,7 @@ export function FilesPage({
   if (selectedEntries.length > 0) {
     secondarySelectionActions.push({ id: "delete", label: "Delete", icon: <AppIcon name="trash" />, onSelect: actions.openDeleteDialog, disabled: !canDeleteSelectedItems, critical: true, title: fileActionBlockedReason || "Delete selected items" });
   }
-  const expandedOverflowSelectionActions = secondarySelectionActions.filter((item) => item.id !== "rename" && item.id !== "delete");
+  const expandedOverflowSelectionActions = secondarySelectionActions.filter((item) => item.id !== "duplicate" && item.id !== "rename" && item.id !== "delete");
 
   const selectionContextActions: ActionMenuItem[] = [];
   if (selectedEntry?.type === "directory") {
@@ -395,12 +395,10 @@ export function FilesPage({
                 <AppIcon name="download" />
                 <span className="selectionActionLabel">Download</span>
               </Button>}
-              {expandedOverflowSelectionActions.length > 0 && <ActionMenu
-                label="More file actions"
-                className="selectionActionMenu selectionActionMenu--expanded"
-                items={expandedOverflowSelectionActions}
-                trigger={<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>}
-              />}
+              {selectedEntry?.type === "file" && <Button variant="secondary" compact className="selectionActionPromoted" aria-label="Duplicate selected file" onClick={actions.openDuplicateDialog} disabled={!canDuplicateSelectedFile} title={fileActionBlockedReason || "Duplicate selected file"}>
+                <AppIcon name="copy" />
+                <span className="selectionActionLabel">Duplicate</span>
+              </Button>}
               {selectedEntry && <Button variant="secondary" compact className="selectionActionPromoted" aria-label="Rename selected item" onClick={actions.openRenameDialog} disabled={!canRenameSelectedItem} title={fileActionBlockedReason || "Rename selected item"}>
                 <AppIcon name="rename" />
                 <span className="selectionActionLabel">Rename</span>
@@ -409,6 +407,12 @@ export function FilesPage({
                 <AppIcon name="trash" />
                 <span className="selectionActionLabel">Delete</span>
               </Button>}
+              {expandedOverflowSelectionActions.length > 0 && <ActionMenu
+                label="More file actions"
+                className="selectionActionMenu selectionActionMenu--expanded"
+                items={expandedOverflowSelectionActions}
+                trigger={<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>}
+              />}
               {secondarySelectionActions.length > 0 && <ActionMenu
                 label="More file actions"
                 className="selectionActionMenu selectionActionMenu--compact"

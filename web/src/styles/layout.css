@@ -1970,14 +1970,14 @@ button .buttonIcon {
   color: var(--sentinel-accent-strong);
 }
 
-.activeServerStrip .overflowButton {
+.activeServerStrip .refreshStatusButton {
   width: 40px;
   height: 40px;
   min-width: 40px;
   min-height: 40px;
-  border-color: var(--border-row);
-  background: var(--surface);
-  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 32%, var(--surface));
+  color: var(--sentinel-accent-strong);
 }
 
 @media (max-width: 980px) {
@@ -2010,7 +2010,7 @@ button .buttonIcon {
     flex: 1 1 140px;
   }
 
-  .activeServerStrip .overflowMenuContainer {
+  .activeServerStrip .refreshStatusButton {
     margin-left: auto;
   }
 
