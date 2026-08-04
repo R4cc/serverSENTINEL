@@ -38,8 +38,6 @@
   }
 
   .sidebar {
-    position: static;
-    height: auto;
     width: 100% !important;
     transition: none !important;
     padding: var(--space-4) !important;
@@ -80,13 +78,11 @@
   }
 
   .sidebarCollapsed .brandBlock {
-    display: flex;
     flex-direction: row;
     justify-content: space-between;
   }
 
   .sidebarCollapsed .sideNav button {
-    justify-content: flex-start;
     padding: 10px 12px;
     gap: var(--space-3) !important;
   }
@@ -306,11 +302,6 @@
     grid-template-columns: 1fr;
   }
 
-  .userModalHeader,
-  .userModalFooter {
-    padding: var(--space-3);
-  }
-
   .userModalBody {
     padding: var(--space-3);
   }
@@ -517,13 +508,6 @@
   align-content: stretch;
 }
 
-
-.panel,
-.activeServerStrip,
-.modalPanel {
-  border-radius: var(--radius-sm);
-}
-
 .serverStripInfo {
   min-width: 0;
 }
@@ -556,14 +540,7 @@ button:disabled,
 }
 
 .sideNav button:disabled {
-  background: var(--surface-muted);
-  border-color: var(--border-muted);
   color: var(--text-soft);
-  opacity: 0.64;
-}
-
-.sideNav button.active {
-  box-shadow: inset 5px 0 0 var(--accent);
 }
 
 .sideNav button:not(.active):hover:not(:disabled) {
@@ -586,15 +563,6 @@ button:disabled,
   min-width: 0;
 }
 
-.inlineState-empty,
-.emptyInline,
-.eventEmpty,
-.fileDetailsEmpty {
-  background:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.025) 0 1px, transparent 1px 10px),
-    var(--surface-muted);
-}
-
 .themeDark .inlineState-empty,
 .themeDark .emptyInline,
 .themeDark .eventEmpty,
@@ -610,24 +578,6 @@ button:disabled,
   padding: var(--space-4);
 }
 
-.modalHeader,
-.modalFooter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.modalHeader {
-  border-bottom: var(--border-strong) solid var(--border);
-}
-
-.modalHeader h2 {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .modalBody {
   display: grid;
   gap: var(--space-3);
@@ -638,12 +588,6 @@ button:disabled,
   font-size: 14px;
   font-weight: var(--weight-body);
   line-height: 1.5;
-}
-
-.modalFooter {
-  justify-content: flex-end;
-  border-top: var(--border-strong) solid var(--border);
-  background: var(--surface-muted);
 }
 
 .confirmModalPanel,
@@ -911,7 +855,6 @@ button:disabled,
 .selectionActionBar {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-raised);
   padding: var(--space-3);
 }
 
@@ -1022,14 +965,12 @@ button:disabled,
 
 .settingsStatus.ready,
 .runtimeBadge.running {
-  border-color: color-mix(in srgb, var(--sentinel-success) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface));
   color: var(--status-success-foreground);
 }
 
 .settingsStatus.warning,
 .runtimeBadge.starting {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
   color: var(--status-warning-foreground);
 }
@@ -1037,7 +978,6 @@ button:disabled,
 .settingsStatus.limited,
 .runtimeBadge.stopped,
 .runtimeBadge.exited {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--border));
   background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
   color: var(--status-danger-foreground);
 }
@@ -1054,11 +994,6 @@ button:disabled,
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
 }
 
-.fileTableRow:hover,
-.eventRow:hover {
-  background: var(--sentinel-accent-soft);
-}
-
 .modalPanel {
   padding: 0;
 }
@@ -1069,7 +1004,6 @@ button:disabled,
 .fileEditorFooter {
   justify-content: flex-end;
   border-top: var(--border-strong) solid var(--border);
-  background: var(--surface-muted);
   padding: var(--space-4);
 }
 
@@ -1168,8 +1102,6 @@ button:disabled,
   body,
   #root {
     width: 100%;
-    height: var(--visual-viewport-height, 100dvh);
-    min-height: 0;
     overflow: hidden;
     overscroll-behavior: none;
   }
@@ -1177,11 +1109,7 @@ button:disabled,
   .appShell,
   .sidebarCollapsed.appShell {
     width: 100%;
-    height: var(--visual-viewport-height, 100dvh);
-    min-height: 0;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 68px minmax(0, 1fr);
-    overflow: hidden;
   }
 
   .sidebar,
@@ -1194,8 +1122,6 @@ button:disabled,
 
   .workspace {
     width: 100%;
-    height: 100%;
-    min-height: 0;
     align-content: start;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1205,7 +1131,6 @@ button:disabled,
   }
 
   .workspaceServerPage {
-    overflow: hidden;
     touch-action: auto;
   }
 
@@ -1274,14 +1199,6 @@ button:disabled,
     width: 44px;
     min-width: 44px;
     height: 44px;
-  }
-
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
-    flex-basis: 44px;
-  }
-
-  .workspacePage-files .fileBreadcrumbs button {
-    max-width: min(160px, 54vw);
   }
 
   .modalBackdrop,
@@ -1408,14 +1325,6 @@ button:disabled,
 
 /* Mobile workspaces reserve the viewport for the active page rather than the shell. */
 @media (max-width: 720px) {
-  .appShell {
-    height: 100vh;
-    height: 100dvh;
-    height: var(--visual-viewport-height, 100dvh);
-    min-height: 0;
-    grid-template-rows: 68px minmax(0, 1fr);
-    overflow: hidden;
-  }
 
   .sidebar,
   .sidebarCollapsed .sidebar {
@@ -1425,11 +1334,8 @@ button:disabled,
   .workspaceServerPage {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-height: 0;
     padding: 8px 12px 12px;
     gap: 8px;
-    overflow: hidden;
   }
 
   .workspaceServerPage > .workspaceHeader {
@@ -1483,7 +1389,6 @@ button:disabled,
 
   .workspaceServerPage > .activeServerStrip .serverStripRight {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 32px;
     width: 100%;
     gap: 6px;
   }
@@ -1499,14 +1404,11 @@ button:disabled,
   .workspaceServerPage > .activeServerStrip .refreshStatusButton {
     width: auto;
     min-width: 0;
-    height: 32px;
-    min-height: 32px;
     padding-inline: 8px;
     font-size: 10px;
   }
 
   .workspaceServerPage > .activeServerStrip .refreshStatusButton {
-    width: 32px;
     padding: 0;
   }
 
@@ -1517,9 +1419,6 @@ button:disabled,
   .workspaceServerPage > .tabPage,
   .workspaceServerPage > .filesPage {
     width: 100%;
-    min-height: 0;
-    flex: 1 1 auto;
-    overflow: auto;
     overscroll-behavior: contain;
   }
 
@@ -1586,10 +1485,6 @@ button:disabled,
     gap: 6px;
   }
 
-  .workspacePage-files .fileBreadcrumbs {
-    min-height: 32px;
-  }
-
   .workspacePage-files .fileToolbar {
     grid-area: actions;
   }
@@ -1602,10 +1497,6 @@ button:disabled,
   .workspacePage-files .fileNavButtons .uiButton,
   .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
   .workspacePage-files .fileBreadcrumbs button {
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
     padding: 0;
   }
 
@@ -1645,7 +1536,6 @@ button:disabled,
   .workspacePage-files .fileTableRow {
     grid-template-columns: 34px minmax(0, 1fr);
     min-width: 0;
-    min-height: 42px;
     padding-inline: 4px;
   }
 
@@ -1951,7 +1841,6 @@ button:disabled,
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
-  box-shadow: none;
 }
 
 .sideNav button.active {
@@ -2433,10 +2322,6 @@ textarea:hover:not(:disabled),
 
 /* These cascade last because the compact tablet shell is declared after the feature breakpoints. */
 @media (max-width: 720px) {
-  .appShell,
-  .sidebarCollapsed.appShell {
-    grid-template-rows: 68px minmax(0, 1fr);
-  }
 
   .sidebar,
   .sidebarCollapsed .sidebar {
@@ -2513,14 +2398,9 @@ textarea:hover:not(:disabled),
   .workspacePage-files .fileNavButtons .uiButton,
   .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
   .workspacePage-files .fileBreadcrumbs button {
-    width: 44px;
     min-width: 44px;
     height: 44px;
     min-height: 44px;
-  }
-
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
-    flex-basis: 44px;
   }
 
   .workspacePage-files .fileBreadcrumbs button {

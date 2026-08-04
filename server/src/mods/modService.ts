@@ -21,7 +21,7 @@ import { assessRequiredModDependencies } from "../modrinth/dependencyHealth.js";
 import { createModUpdatePlan, type ModUpdatePlan } from "../modrinth/updatePlan.js";
 import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertModrinthJarHashes, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
-import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modIconUrl, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
+import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
 import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
 import { managedContentRuntime } from "../servers/versions.js";
 
@@ -586,7 +586,7 @@ export async function localListMods(server: ManagedServer, options: { forceRefre
           }
         }
 
-        await ensureModrinthIconForFile(server, entry.name, modPath, metadata);
+        const iconUrl = await ensureModrinthIconForFile(server, entry.name, modPath, metadata);
         let versionInfo: any = null;
         if (options.forceRefresh) {
           try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel, metadata, options); } catch { versionInfo = null; }
@@ -598,7 +598,7 @@ export async function localListMods(server: ManagedServer, options: { forceRefre
           size: modStat.size,
           modifiedAt: modStat.mtime.toISOString(),
           sha1,
-          iconUrl: await modIconUrl(server, entry.name) ?? metadata?.iconUrl,
+          iconUrl: iconUrl ?? metadata?.iconUrl,
           preferredChannel,
           compatibility: installedModCompatibility(server, metadata),
           modrinth: metadata,

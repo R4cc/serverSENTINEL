@@ -45,8 +45,9 @@ app.post<{
   const user = await requireRequestPermission(request, "servers.create");
   const nodeId = request.body.nodeId?.trim() || (config.runtimeMode === "all-in-one" ? localNodeId : "");
   if (!nodeId) throw new Error("nodeId is required when serverSENTINEL runs in panel mode");
-  const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, await listManagedServers(), nodeId);
-  assertNodePortsAvailable(await listManagedServers(), nodeId, dockerPorts);
+  const existingServers = await listManagedServers();
+  const { dockerPorts, queryPort } = normalizeCreateServerPorts(request.body, existingServers, nodeId);
+  assertNodePortsAvailable(existingServers, nodeId, dockerPorts);
   request.body.dockerPorts = dockerPorts;
   request.body.queryPort = String(queryPort);
   const server = await recordOperation({
@@ -105,7 +106,7 @@ app.put<{
   const dockerPorts = dockerPortsWithManagedEntries(requestedDockerPorts || "", managedPorts);
   if (dockerPorts) {
     assertUniqueDockerHostPorts(dockerPorts);
-    assertNodePortsAvailable(await listManagedServers(), server.nodeId, dockerPorts, { ignoreServerId: server.id });
+    assertNodePortsAvailable(servers, server.nodeId, dockerPorts, { ignoreServerId: server.id });
   }
   const updatedServer = await runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) });
   return runtimeForServer(updatedServer).publicServer(updatedServer);

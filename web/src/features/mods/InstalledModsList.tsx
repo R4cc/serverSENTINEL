@@ -1,10 +1,10 @@
-import { useState, type DragEvent, type ReactNode } from "react";
+import { useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
-import { applyUpdatePlanEntry, updatePlanEntryForMod } from "./modUpdatePlan";
+import { applyUpdatePlanEntry, updatePlanEntryLookup } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
 import { ModStatusBadge } from "./ModStatusBadge";
@@ -42,19 +42,24 @@ function restartChangeMatchesMod(mod: InstalledMod, change: RestartRequiredChang
 }
 
 export function InstalledModsList({ terminology = fabricContentTerminology, mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
-  const visible = filterInstalledMods(mods, query)
-    .map((mod) => {
-      const plannedUpdate = updatePlanEntryForMod(updatePlan ?? null, mod);
-      return {
-        mod,
-        plannedUpdate,
-        health: getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate), terminology),
-        updateAvailable: plannedUpdate
-          ? plannedUpdate.status === "safe_update" || plannedUpdate.status === "needs_review"
-          : mod.versionInfo?.upToDate === false && Boolean(mod.versionInfo.latestVersion)
-      };
-    })
-    .sort((a, b) => Number(b.updateAvailable) - Number(a.updateAvailable));
+  // Filtering, health resolution, and sorting cost more than the rows they feed, and the parent
+  // re-renders for reasons that have nothing to do with this list — console output, for one.
+  const visible = useMemo(() => {
+    const plannedUpdateFor = updatePlanEntryLookup(updatePlan ?? null);
+    return filterInstalledMods(mods, query)
+      .map((mod) => {
+        const plannedUpdate = plannedUpdateFor(mod);
+        return {
+          mod,
+          plannedUpdate,
+          health: getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate), terminology),
+          updateAvailable: plannedUpdate
+            ? plannedUpdate.status === "safe_update" || plannedUpdate.status === "needs_review"
+            : mod.versionInfo?.upToDate === false && Boolean(mod.versionInfo.latestVersion)
+        };
+      })
+      .sort((a, b) => Number(b.updateAvailable) - Number(a.updateAvailable));
+  }, [mods, query, terminology, updatePlan]);
   const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
 

@@ -42,8 +42,10 @@ export async function readConsoleLogTail(path: string, requestedLineLimit: numbe
       if (bytesRead === 0) break;
       const chunk = buffer.subarray(0, bytesRead);
       chunks.unshift(chunk);
-      for (const byte of chunk) {
-        if (byte === 10) newlineCount += 1;
+      // `indexOf` scans in native code. A per-byte JS iteration over the same chunks walked up to
+      // 32 MiB one boxed byte at a time, on the request path for every console tail read.
+      for (let found = chunk.indexOf(10); found !== -1; found = chunk.indexOf(10, found + 1)) {
+        newlineCount += 1;
       }
       bufferedBytes += bytesRead;
       position = start;

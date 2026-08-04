@@ -45,8 +45,12 @@ export function updateFileSelection(
     const anchorIndex = orderedPaths.indexOf(anchorPath);
     if (targetIndex !== -1 && anchorIndex !== -1) {
       const range = orderedPaths.slice(Math.min(anchorIndex, targetIndex), Math.max(anchorIndex, targetIndex) + 1);
+      // Membership through sets: scanning both arrays per candidate made an additive range selection
+      // quadratic in the size of the folder.
+      const current = new Set(currentPaths);
+      const inRange = new Set(range);
       const selectedPaths = modifiers.additive
-        ? orderedPaths.filter((path) => currentPaths.includes(path) || range.includes(path))
+        ? orderedPaths.filter((path) => current.has(path) || inRange.has(path))
         : range;
       return { selectedPaths, anchorPath };
     }

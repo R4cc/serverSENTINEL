@@ -508,8 +508,6 @@ export function NodesPage({
   formatDate: (value: string | number | Date) => string;
 }) {
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
-  const internalNode = nodes.find((node) => node.isInternal || node.type === "local");
-  const externalNodes = nodes.filter((node) => !(node.isInternal || node.type === "local"));
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
   const nodeVersionState = (node: NodeView) => {
     if (node.isInternal || !node.agentVersion) return "unknown";
@@ -536,12 +534,16 @@ export function NodesPage({
     return `Upgrade node agent to ${panelVersion}`;
   };
 
+  // Derived inside the memo: splitting the list first meant the dependency was a fresh array on
+  // every render, so this and everything keyed off it recomputed even when the fleet was unchanged.
   const sortedNodes = useMemo(() => {
+    const internalNode = nodes.find((node) => node.isInternal || node.type === "local");
+    const externalNodes = nodes.filter((node) => !(node.isInternal || node.type === "local"));
     return [
       ...(internalNode ? [internalNode] : []),
       ...externalNodes.sort((a, b) => a.name.localeCompare(b.name))
     ];
-  }, [externalNodes, internalNode]);
+  }, [nodes]);
   const selectedContextNode = selectedNode ? sortedNodes.find((candidate) => candidate.id === selectedNode.id) : undefined;
   const selectedDetailsNode = selectedContextNode ?? selectedNode;
   const selectedOperation = selectedDetailsNode ? nodeOperations[selectedDetailsNode.id] : undefined;

@@ -87,7 +87,7 @@ export function FilesPage({
     fileReadActionBlockedReason,
     zipDestinationLoading,
     zipOperationId,
-    selectedFilePaths,
+    selectedFilePathSet,
     fileSort,
     allFilesSelected
   } = state;
@@ -468,7 +468,9 @@ export function FilesPage({
               <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
             )}
             {sortedFileEntries.map((entry) => {
-              const selected = selectedFilePaths.includes(entry.path);
+              // Set membership, not a scan of the selection: selecting everything in a large folder
+              // otherwise made drawing the table quadratic in the number of rows.
+              const selected = selectedFilePathSet.has(entry.path);
               return (
                 <div
                   key={entry.path}
