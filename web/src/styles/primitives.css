@@ -29,7 +29,7 @@
 
 .uiButton--primary { border-color: color-mix(in srgb, var(--accent) 84%, var(--glass-edge)); background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-xs), var(--glass-highlight); }
 .uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 78%, var(--text)); background: color-mix(in srgb, var(--accent) 88%, var(--text)); transform: none; }
-.uiButton--secondary { border-color: var(--glass-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--glass-highlight); backdrop-filter: blur(14px) saturate(125%); -webkit-backdrop-filter: blur(14px) saturate(125%); }
+.uiButton--secondary { border-color: var(--glass-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--glass-highlight); -webkit-backdrop-filter: var(--glass-filter-control); backdrop-filter: var(--glass-filter-control); }
 .uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .uiButton--ghost,
 .textLinkButton { border-color: transparent; background: transparent; color: var(--accent); box-shadow: none; }
@@ -61,14 +61,14 @@
   border-radius: var(--radius-md);
   background: var(--glass-tint);
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
 }
 .uiSurface--default { padding: var(--space-4); }
 .uiSurface--compact { padding: var(--space-3); }
 .uiSurface--flush { padding: 0; overflow: hidden; }
 .uiSurface--subtle { border-color: var(--glass-edge); background: var(--glass-tint-soft); }
-.uiSurface--solid { border-color: var(--border-panel); background: var(--surface-raised); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.uiSurface--solid { border-color: var(--border-panel); background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 /* Shared glass is progressive enhancement: CSS owns the polished frosted fallback,
    while the optional refractive layer is decorative and never receives input. */
@@ -78,13 +78,36 @@
   border-color: var(--glass-edge);
   background: var(--glass-tint);
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
 }
-.uiGlassSurface--chrome { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-chrome); backdrop-filter: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation)); -webkit-backdrop-filter: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation)); }
-.uiGlassSurface--floating { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-floating); backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)); -webkit-backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)); }
-.uiGlassSurface--modal { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-modal); backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation)); -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation)); }
+.uiGlassSurface--chrome { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-chrome); -webkit-backdrop-filter: var(--glass-filter-chrome); backdrop-filter: var(--glass-filter-chrome); }
+.uiGlassSurface--floating { background: var(--glass-tint-menu); box-shadow: var(--glass-highlight), var(--glass-shadow-floating); -webkit-backdrop-filter: var(--glass-filter-floating); backdrop-filter: var(--glass-filter-floating); }
+.uiGlassSurface--modal { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-modal); -webkit-backdrop-filter: var(--glass-filter-modal); backdrop-filter: var(--glass-filter-modal); }
 .uiGlassSurface > :not(.uiLiquidGlassEffect) { position: relative; z-index: 1; }
+
+/* Directional specular edge. The inset rim in `--glass-highlight` lights all
+   four sides evenly, which is right for a small control but reads flat across a
+   large pane -- real glass catches the light on the corner facing it and loses
+   it on the opposite one. This traces a 1px gradient ring around the same
+   border box to reintroduce that falloff, and only on surfaces that already
+   establish a stacking context, so no layout can shift under it. */
+.uiGlassSurface::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(148deg, var(--glass-rim-top) 0%, transparent 34%, transparent 64%, var(--glass-rim-base) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
 .uiLiquidGlassEffect { position: absolute; z-index: 0; inset: 0; display: block; overflow: hidden; border-radius: inherit; pointer-events: none; opacity: 0.4; }
 .uiLiquidGlassEffect > div { width: 100%; height: 100%; border-radius: inherit; }
 .uiLiquidGlassFill { width: 100%; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--glass-tint-soft) 42%, transparent); }
@@ -129,7 +152,7 @@
 .uiBanner--warning { border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised)); }
 .uiBanner--error { border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface-raised)); }
 
-.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--glass-edge); border-radius: var(--radius-md); padding: var(--space-3); background: var(--glass-tint-soft); box-shadow: var(--glass-highlight); }
+.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--glass-edge); border-radius: var(--radius-md); padding: var(--space-3); background: var(--glass-tint-soft); box-shadow: var(--glass-highlight), var(--glass-shadow-panel); -webkit-backdrop-filter: var(--glass-filter-panel); backdrop-filter: var(--glass-filter-panel); }
 .uiMetricTileMarker { width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--text-muted) 6%, transparent); }
 .uiMetricTile--info .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-info) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-info) 7%, transparent); }
 .uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 15%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--accent) 7%, transparent); }
@@ -200,10 +223,10 @@
   overflow: hidden;
   border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--glass-tint-strong);
+  background: var(--glass-tint-menu);
   box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
 }
 .actionMenuPopover--end { right: 0; }
 .actionMenuPopover--start { left: 0; }
@@ -317,11 +340,12 @@
   .nodeInstallBox,
   .summaryTile {
     background: var(--surface-raised);
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
-  .uiLiquidGlassEffect { display: none; }
+  .uiLiquidGlassEffect,
+  .uiGlassSurface::after { display: none; }
 }
 
 @keyframes spin {
@@ -687,8 +711,8 @@
   border-radius: var(--radius-md);
   background: var(--glass-tint);
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
 }
 
 .panel .panel,
@@ -698,8 +722,8 @@
   border-color: var(--border-row);
   background: var(--surface);
   box-shadow: none;
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* Dense, data-heavy regions stay opaque so text, grids, charts, and code keep
@@ -717,8 +741,8 @@
   border-color: var(--border-panel);
   background: var(--surface-raised);
   box-shadow: none;
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .uiPanelHeader,

@@ -24,7 +24,7 @@
   --surface: var(--swiss-white);
   --surface-raised: var(--swiss-white);
   --surface-muted: var(--swiss-muted);
-  --app-background: #eef3fb;
+  --app-background: #dde5f5;
   --surface-read-only: #f7f7f7;
   --surface-disabled: #eceff2;
   --sidebar-background: #09162c;
@@ -52,15 +52,50 @@
   --editor-link: #3858e9;
   --overlay: rgb(0 0 0 / 0.48);
   --accent-contrast: var(--swiss-white);
-  --glass-tint: rgb(255 255 255 / 0.62);
-  --glass-tint-strong: rgb(255 255 255 / 0.76);
-  --glass-tint-soft: rgb(255 255 255 / 0.48);
-  --glass-border: rgb(255 255 255 / 0.76);
+  /* Liquid glass material.
+     A pane of glass is described by four things, and each has its own token
+     group so a surface never hand-rolls one of them:
+       tint       — the frosting laid over whatever shows through
+       rim        — the specular highlight the lens throws along its edges
+       shadow     — the contact shadow and the ambient drop below it
+       filter     — the backdrop treatment (blur, saturation, luminance lift)
+     Tint stays low enough that the ambient wash behind the shell is still
+     legible through the pane; the rim, not the opacity, is what makes it read
+     as a solid object. */
+  --glass-tint: rgb(255 255 255 / 0.54);
+  --glass-tint-strong: rgb(255 255 255 / 0.68);
+  --glass-tint-soft: rgb(255 255 255 / 0.4);
+  /* Menus and tooltips open over whatever happens to be underneath -- a chart, a
+     table, the dark sidebar -- and their text has to survive all of it, so they
+     take a denser tint than a panel that sits on the page wash. */
+  --glass-tint-menu: rgb(255 255 255 / 0.94);
+  --glass-border: rgb(255 255 255 / 0.82);
   --glass-border-muted: rgb(255 255 255 / 0.5);
   --glass-edge: color-mix(in srgb, var(--glass-border) 74%, var(--border-panel));
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.82);
-  --glass-shadow: 0 18px 48px rgb(34 55 92 / 0.13), 0 2px 10px rgb(34 55 92 / 0.08);
-  --glass-shadow-floating: 0 22px 64px rgb(34 55 92 / 0.2), 0 4px 14px rgb(34 55 92 / 0.12);
+  /* The rim is brightest along the top edge, where the lens catches the light,
+     falls off around the sides, and returns as a dim bounce along the bottom.
+     A single flat top highlight reads as a border; this reads as thickness. */
+  --glass-rim-top: rgb(255 255 255 / 0.92);
+  --glass-rim-side: rgb(255 255 255 / 0.46);
+  --glass-rim-base: rgb(255 255 255 / 0.3);
+  --glass-rim-bloom: rgb(255 255 255 / 0.42);
+  --glass-highlight:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 1px 0 0 var(--glass-rim-side),
+    inset -1px 0 0 var(--glass-rim-side),
+    inset 0 -1px 0 var(--glass-rim-base),
+    inset 0 8px 16px -14px var(--glass-rim-bloom);
+  /* The hairline contact ring is what separates a pane from the wash behind it
+     once the tint is low enough to see through; the wide ambient shadow alone
+     leaves the edge undefined. */
+  --glass-shadow:
+    0 0 0 0.5px rgb(34 55 92 / 0.07),
+    0 16px 40px -14px rgb(34 55 92 / 0.18),
+    0 3px 10px -4px rgb(34 55 92 / 0.09);
+  --glass-shadow-floating:
+    0 0 0 0.5px rgb(34 55 92 / 0.09),
+    0 26px 60px -18px rgb(34 55 92 / 0.3),
+    0 6px 16px -6px rgb(34 55 92 / 0.14);
   --glass-shadow-panel: var(--glass-shadow);
   --glass-shadow-chrome: var(--glass-shadow);
   --glass-shadow-modal: var(--glass-shadow-floating);
@@ -69,7 +104,17 @@
   --glass-blur-chrome: 28px;
   --glass-blur-floating: 20px;
   --glass-blur-modal: 32px;
-  --glass-saturation: 155%;
+  --glass-saturation: 180%;
+  /* Blur and saturation alone leave translucent panes muddier than the surface
+     behind them. The luminance lift is what keeps a light pane reading as
+     frosted glass rather than as a dimmed hole in the page. */
+  --glass-brightness: 1.06;
+  --glass-filter-panel: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-chrome: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-floating: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-modal: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-control: blur(14px) saturate(150%) brightness(var(--glass-brightness));
+  --glass-filter-scrim: blur(10px) saturate(120%);
   --solid-control-surface: rgb(255 255 255 / 0.84);
   /* Elevation scale. `xs` lifts a control off its own track, `md` floats a
      tooltip or popover, `elevated` carries a drawer or modal. */
@@ -158,13 +203,18 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* The ambient wash is the only thing a glass pane has to refract. It is kept
+   deliberately uneven -- warm on one side, cool on the other -- so a pane
+   dragged across the page picks up a different colour at each corner instead of
+   looking like a flat white card on a flat white page. */
 body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--accent) 20%, transparent) 0, transparent 32%),
-    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--sentinel-info) 15%, transparent) 0, transparent 34%),
-    radial-gradient(circle at 58% 92%, color-mix(in srgb, var(--sentinel-accent-muted) 18%, transparent) 0, transparent 38%),
+    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--accent) 40%, transparent) 0, transparent 38%),
+    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--sentinel-info) 32%, transparent) 0, transparent 40%),
+    radial-gradient(circle at 66% 48%, color-mix(in srgb, var(--sentinel-warning) 16%, transparent) 0, transparent 34%),
+    radial-gradient(circle at 28% 94%, color-mix(in srgb, var(--sentinel-accent-muted) 38%, transparent) 0, transparent 46%),
     var(--app-background);
   background-attachment: fixed;
   color: var(--text);

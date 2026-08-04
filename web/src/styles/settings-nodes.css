@@ -1824,11 +1824,17 @@
 
 
 
+/* The summary tiles are the first surfaces on the Overview and Nodes pages and
+   carry no dense content, so they take the panel material rather than an opaque
+   fill -- the tile row is where the shell's translucency is most legible. */
 .summaryTile {
   min-height: 72px;
-  border: var(--border-strong) solid var(--border);
+  border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-muted);
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
   padding: var(--space-3);
   display: grid;
   grid-template-rows: auto auto;
@@ -1842,27 +1848,29 @@
   display: none;
 }
 
+/* State is a tint mixed into the glass, not a replacement for it: mixing against
+   `--surface-raised` would quietly turn a status tile opaque and break the row. */
 .summaryTile.running,
 .summaryTile.state.running {
-  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--glass-edge));
+  background: color-mix(in srgb, var(--sentinel-success) 9%, var(--glass-tint));
 }
 
 .summaryTile.stopped,
 .summaryTile.state.stopped {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--glass-edge));
+  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--glass-tint));
 }
 
 .summaryTile.danger,
 .summaryTile.state.danger {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-panel));
-  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--glass-edge));
+  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--glass-tint));
 }
 
 .summaryTile.neutral {
-  border-color: color-mix(in srgb, var(--text-soft) 34%, var(--border-panel));
-  background: color-mix(in srgb, var(--text-soft) 5%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--text-soft) 34%, var(--glass-edge));
+  background: color-mix(in srgb, var(--text-soft) 7%, var(--glass-tint));
 }
 
 .summaryTile span,
@@ -2018,7 +2026,8 @@
   display: flex;
   justify-content: flex-end;
   background: var(--overlay);
-  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: var(--glass-filter-scrim);
+  backdrop-filter: var(--glass-filter-scrim);
   animation: nodeDrawerFadeIn 150ms ease-out;
 }
 
@@ -2031,8 +2040,8 @@
   border-left: 1px solid var(--glass-edge);
   background: var(--glass-tint-strong);
   box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
-  backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
   animation: nodeDrawerSlideIn 200ms ease-out;
 }
 

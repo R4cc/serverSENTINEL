@@ -42,22 +42,39 @@
   --editor-link: #b7c4ff;
   --overlay: rgb(0 0 0 / 0.62);
   --accent-contrast: #09111f;
-  --glass-tint: rgb(26 30 40 / 0.66);
-  --glass-tint-strong: rgb(29 33 44 / 0.8);
-  --glass-tint-soft: rgb(35 39 51 / 0.54);
-  --glass-border: rgb(255 255 255 / 0.16);
+  /* Dark glass is the same material lit from the same direction: the rim stays
+     bright, the tint goes dark and the luminance lift becomes a dip so a pane
+     over a bright chart does not glow. The outer ring is dark here rather than
+     cool, because the surrounding wash is darker than the pane. */
+  --glass-tint: rgb(26 30 40 / 0.6);
+  --glass-tint-strong: rgb(29 33 44 / 0.74);
+  --glass-tint-soft: rgb(35 39 51 / 0.46);
+  --glass-tint-menu: rgb(30 34 45 / 0.94);
+  --glass-border: rgb(255 255 255 / 0.2);
   --glass-border-muted: rgb(255 255 255 / 0.1);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.12);
-  --glass-shadow: 0 20px 54px rgb(0 0 0 / 0.34), 0 3px 12px rgb(0 0 0 / 0.22);
-  --glass-shadow-floating: 0 28px 72px rgb(0 0 0 / 0.48), 0 5px 18px rgb(0 0 0 / 0.3);
+  --glass-rim-top: rgb(255 255 255 / 0.26);
+  --glass-rim-side: rgb(255 255 255 / 0.11);
+  --glass-rim-base: rgb(255 255 255 / 0.06);
+  --glass-rim-bloom: rgb(255 255 255 / 0.14);
+  --glass-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.5),
+    0 18px 46px -14px rgb(0 0 0 / 0.5),
+    0 3px 12px -4px rgb(0 0 0 / 0.34);
+  --glass-shadow-floating:
+    0 0 0 0.5px rgb(0 0 0 / 0.6),
+    0 28px 68px -18px rgb(0 0 0 / 0.62),
+    0 6px 18px -6px rgb(0 0 0 / 0.42);
+  --glass-brightness: 0.86;
+  --glass-saturation: 165%;
   --solid-control-surface: rgb(25 28 37 / 0.9);
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.32);
   --shadow-md: 0 8px 24px rgb(0 0 0 / 0.38);
   --shadow-elevated: 0 18px 52px rgb(0 0 0 / 0.36);
   background:
-    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--accent) 18%, transparent) 0, transparent 34%),
-    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--sentinel-info) 13%, transparent) 0, transparent 36%),
-    radial-gradient(circle at 58% 92%, color-mix(in srgb, var(--sentinel-accent-muted) 14%, transparent) 0, transparent 40%),
+    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--accent) 28%, transparent) 0, transparent 38%),
+    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--sentinel-info) 22%, transparent) 0, transparent 40%),
+    radial-gradient(circle at 66% 48%, color-mix(in srgb, var(--sentinel-warning) 10%, transparent) 0, transparent 34%),
+    radial-gradient(circle at 28% 94%, color-mix(in srgb, var(--sentinel-accent-muted) 26%, transparent) 0, transparent 46%),
     var(--app-background);
 }
 

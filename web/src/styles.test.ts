@@ -139,6 +139,25 @@ describe("stylesheet ownership", () => {
     }
   });
 
+  // The CSS minifier collapses a `backdrop-filter` / `-webkit-backdrop-filter`
+  // pair down to whichever comes last, so writing the standard property first
+  // leaves a production bundle carrying only the `-webkit-` spelling -- which
+  // Chrome and Firefox reject outright. Every frosted surface in the app then
+  // renders flat, while `vite dev` (which does not minify) still looks correct,
+  // so nothing short of inspecting a built bundle catches it.
+  it("writes the prefixed backdrop filter before the standard one", () => {
+    for (const [name, sheet] of Object.entries(featureStyles)) {
+      const misordered = sheet.match(/(?<!-webkit-)backdrop-filter:[^;]+;\s*-webkit-backdrop-filter:/g);
+      expect(`${name}: ${misordered?.length ?? 0} misordered`).toBe(`${name}: 0 misordered`);
+    }
+  });
+
+  it("routes backdrop treatments through the shared glass recipes", () => {
+    for (const [name, sheet] of Object.entries(featureStyles)) {
+      expect(`${name}: ${sheet.match(/backdrop-filter:\s*(?:blur|saturate|brightness)\(/g)?.join(", ") ?? "none"}`).toBe(`${name}: none`);
+    }
+  });
+
   // A `var()` that resolves to nothing takes its whole declaration with it, so a
   // token that was never defined reads as "this rule silently does less than it
   // says". Custom properties set from TSX are the only legitimate exception.

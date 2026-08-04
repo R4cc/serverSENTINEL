@@ -14,8 +14,8 @@
   display: grid;
   gap: var(--space-4);
   box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
-  backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
 }
 
 .authPanel .brandLockup {
@@ -43,8 +43,8 @@
   gap: var(--space-4);
   box-sizing: border-box;
   box-shadow: var(--glass-highlight), var(--glass-shadow-chrome);
-  backdrop-filter: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-chrome);
+  backdrop-filter: var(--glass-filter-chrome);
 }
 
 .themeDark .sidebar {

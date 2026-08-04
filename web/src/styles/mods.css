@@ -72,8 +72,8 @@
 .modsUpdateSkeleton { width: min(170px, 90%); height: 32px; }
 .modsToggleSkeleton { width: 38px; height: 20px; border-radius: 999px; }
 .modsActionSkeleton { justify-self: center; }
-.modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: var(--overlay); backdrop-filter: blur(2px); animation: modsFadeIn .15s ease-out; }
-.modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: var(--border-subtle) solid var(--border-row); background: var(--surface-raised); box-shadow: var(--shadow-elevated); animation: modsSlideIn .2s ease-out; }
+.modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: var(--overlay); -webkit-backdrop-filter: var(--glass-filter-scrim); backdrop-filter: var(--glass-filter-scrim); animation: modsFadeIn .15s ease-out; }
+.modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: var(--border-subtle) solid var(--border-row); box-shadow: var(--shadow-elevated); animation: modsSlideIn .2s ease-out; }
 .modsDetailsDrawer { width: min(440px, 96vw); }
 .modsAddWorkflow { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; }
 .modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
@@ -505,8 +505,8 @@
   border-color: var(--glass-edge);
   background: var(--glass-tint-strong);
   box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
-  backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
 }
 
 .modsDrawerHeader,

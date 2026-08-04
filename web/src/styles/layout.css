@@ -253,7 +253,6 @@ button .buttonIcon {
 }
 
 .panel,
-.activeServerStrip,
 .toast,
 .notice {
   border: var(--border-subtle) solid var(--glass-edge);
@@ -753,7 +752,7 @@ button .buttonIcon {
 
 .sonnerToast {
   --toast-severity: var(--sentinel-info);
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-tint-strong));
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-tint-menu));
   --toast-severity-border: color-mix(in srgb, var(--toast-severity) 34%, var(--glass-edge));
   width: min(468px, calc(100vw - 32px)) !important;
   min-height: 58px !important;
@@ -764,8 +763,8 @@ button .buttonIcon {
   background: var(--toast-severity-bg) !important;
   color: var(--text) !important;
   box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
-  backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)) !important;
-  -webkit-backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)) !important;
+  -webkit-backdrop-filter: var(--glass-filter-floating) !important;
+  backdrop-filter: var(--glass-filter-floating) !important;
   font-family: var(--font-sans) !important;
   font-weight: var(--weight-body) !important;
 }
@@ -788,7 +787,7 @@ button .buttonIcon {
 }
 
 .themeDark .sonnerToast {
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 11%, var(--glass-tint-strong));
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 11%, var(--glass-tint-menu));
   --toast-severity-border: color-mix(in srgb, var(--toast-severity) 42%, var(--glass-edge));
   box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
 }
@@ -1203,15 +1202,15 @@ button .buttonIcon {
   transform: translateX(-50%);
   border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--glass-tint-strong);
+  background: var(--glass-tint-menu);
   color: var(--text);
   padding: var(--space-2) var(--space-3);
   font-size: 12px;
   font-weight: var(--weight-strong);
   line-height: 1.35;
   box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms linear;
@@ -1252,9 +1251,9 @@ button .buttonIcon {
   z-index: 20;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--overlay) 76%, transparent);
-  backdrop-filter: blur(8px) saturate(110%);
-  -webkit-backdrop-filter: blur(8px) saturate(110%);
+  background: color-mix(in srgb, var(--overlay) 68%, transparent);
+  -webkit-backdrop-filter: var(--glass-filter-scrim);
+  backdrop-filter: var(--glass-filter-scrim);
 }
 
 .modalPanel {
@@ -1266,8 +1265,8 @@ button .buttonIcon {
   background: var(--glass-tint-strong);
   padding: var(--space-5);
   box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
-  backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
 }
 
 .modalCloseButton {
@@ -1553,10 +1552,12 @@ button .buttonIcon {
   min-width: 0;
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-row);
+  /* The strip carries the glass classes and the refractive layer from
+     `ActiveServerStrip`, so it takes the chrome material from `primitives.css`
+     rather than repainting itself opaque here -- which is what previously left
+     the refraction layer rendering underneath a solid fill. */
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-muted));
-  box-shadow: 0 10px 28px rgb(15 23 42 / 0.06);
 }
 
 .activeServerStrip .serverStripPrimary {
@@ -1569,9 +1570,7 @@ button .buttonIcon {
 }
 
 .themeDark .activeServerStrip {
-  border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 90%, var(--surface-muted));
-  box-shadow: 0 14px 36px rgb(0 0 0 / 0.22);
+  border-color: var(--glass-edge);
 }
 
 .activeServerStrip .serverStripLeft {
@@ -1586,11 +1585,11 @@ button .buttonIcon {
   width: 34px;
   height: 34px;
   min-width: 34px;
-  border-color: var(--border-row);
+  border-color: var(--glass-edge);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--glass-tint-soft);
   color: var(--accent);
-  box-shadow: none;
+  box-shadow: var(--glass-highlight);
 }
 
 .activeServerStrip .server-icon-cube {
@@ -1636,10 +1635,10 @@ button .buttonIcon {
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  background: var(--glass-tint-strong);
+  background: var(--glass-tint-menu);
   box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
   color: var(--text);
   font-size: 12px;
   line-height: 1.45;
@@ -1704,8 +1703,8 @@ button .buttonIcon {
 .activeServerStrip .runtimeBadge {
   flex: 0 0 auto;
   padding: 5px 10px;
-  border-color: var(--border-row);
-  background: var(--surface);
+  border-color: var(--glass-edge);
+  background: var(--glass-tint-soft);
   color: var(--text-muted);
   font-size: 11px;
   font-weight: var(--weight-meta);
@@ -1897,11 +1896,18 @@ button .buttonIcon {
   min-width: 112px;
 }
 
+/* Neutral controls on the strip are glass chips rather than opaque buttons, so
+   the bar reads as one material with its controls cut from it. Start and Stop
+   stay solid: a prominent, destructive or primary action should not be
+   see-through. */
 .activeServerStrip .uiButton.runtimeControlButton.restart,
 .activeServerStrip .uiButton.quickActionButton {
-  border-color: var(--border-row);
-  background: var(--surface);
+  border-color: var(--glass-edge);
+  background: var(--glass-tint-soft);
   color: var(--text);
+  box-shadow: var(--glass-highlight);
+  -webkit-backdrop-filter: var(--glass-filter-control);
+  backdrop-filter: var(--glass-filter-control);
 }
 
 .activeServerStrip .uiButton.runtimeControlButton.restart:disabled {
