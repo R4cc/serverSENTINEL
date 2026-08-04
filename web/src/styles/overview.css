@@ -1871,7 +1871,11 @@ button.overviewCardRow:focus-visible {
 .overviewSummary .statusTile.warning { --status-card-color: var(--sentinel-warning); }
 .overviewSummary .statusTile.stopped,
 .overviewSummary .statusTile.danger { --status-card-color: var(--sentinel-danger); }
-.overviewSummary .statusTile { background-color: color-mix(in srgb, var(--status-card-color) 7%, var(--surface-raised)); }
+.overviewSummary .summaryTile.statusTile.state {
+  border-color: color-mix(in srgb, var(--status-card-color) 62%, var(--glass-edge));
+  background: color-mix(in srgb, var(--status-card-color) 22%, var(--surface-raised));
+  box-shadow: 0 10px 28px -22px color-mix(in srgb, var(--status-card-color) 72%, transparent);
+}
 
 .overviewSummary .summaryStatusText {
   color: var(--text);

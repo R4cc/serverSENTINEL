@@ -281,6 +281,10 @@
     animation: none;
   }
 
+  .sideNav button.active::after {
+    display: none;
+  }
+
   .uiSurface,
   .panel,
   .uiGlassSurface,

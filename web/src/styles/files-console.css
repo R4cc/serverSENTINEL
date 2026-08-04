@@ -49,6 +49,13 @@
   touch-action: pan-x pinch-zoom;
 }
 
+/* xterm names its own root `.terminal`, which would otherwise inherit the app's
+   framed terminal surface and draw a second rounded border above the prompt. */
+.minecraftTerminal > .terminal.xterm {
+  border: 0;
+  border-radius: 0;
+}
+
 .minecraftTerminal .xterm-helper-textarea {
   min-height: 0;
   padding: 0;

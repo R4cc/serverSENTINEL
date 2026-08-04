@@ -91,6 +91,30 @@ async function assertTerminalHelperIsNotInteractive(page) {
   );
 }
 
+async function assertTerminalHasOnlyOneFrame(page) {
+  const nestedFrame = await page.locator(".minecraftTerminal > .terminal.xterm").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderTopWidth: style.borderTopWidth,
+      borderRightWidth: style.borderRightWidth,
+      borderBottomWidth: style.borderBottomWidth,
+      borderLeftWidth: style.borderLeftWidth,
+      borderRadius: style.borderRadius
+    };
+  });
+  assert.deepEqual(
+    nestedFrame,
+    {
+      borderTopWidth: "0px",
+      borderRightWidth: "0px",
+      borderBottomWidth: "0px",
+      borderLeftWidth: "0px",
+      borderRadius: "0px"
+    },
+    `xterm inherited a second terminal frame: ${JSON.stringify(nestedFrame)}`
+  );
+}
+
 /** Typing is the browser's business now: the output surface must not react to it at all. */
 async function assertTypingLeavesOutputAlone(page) {
   const before = await terminalRows(page);
@@ -319,6 +343,7 @@ try {
   const compactLandscape = await createConsolePage(context, { width: 844, height: 390 });
   await openConsole(compactLandscape.page, { mobile: true });
   await assertTerminalHelperIsNotInteractive(compactLandscape.page);
+  await assertTerminalHasOnlyOneFrame(compactLandscape.page);
   await assertCompactLandscapeKeepsCommandLineVisible(compactLandscape.page);
   assert.deepEqual(compactLandscape.browserErrors, [], `Compact landscape browser errors: ${compactLandscape.browserErrors.join("\n")}`);
   await compactLandscape.page.close();
@@ -327,6 +352,7 @@ try {
   await openConsole(desktop.page);
   await assertTerminalDrawsOutputOnly(desktop.page);
   await assertTerminalHelperIsNotInteractive(desktop.page);
+  await assertTerminalHasOnlyOneFrame(desktop.page);
   await assertTypingLeavesOutputAlone(desktop.page);
   await assertOutputIsAppendedInOrder(desktop.page);
   await assertCommandLineShortcuts(desktop.page);
