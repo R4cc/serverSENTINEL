@@ -26,6 +26,7 @@
   --sentinel-info: #8fb4ff;
   --sentinel-warning: #f6c177;
   --sentinel-danger: #dc2626;
+  --sentinel-success-contrast: var(--surface);
   --status-success-foreground: #8dd6c3;
   --status-warning-foreground: #f6c177;
   --status-danger-foreground: #ff8a8a;

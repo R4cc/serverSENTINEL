@@ -1548,6 +1548,13 @@ button .buttonIcon {
      the refraction layer rendering underneath a solid fill. */
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-md);
+  box-shadow: var(--glass-shadow-chrome);
+}
+
+/* A compact strip needs one crisp boundary. The shared inset highlight and
+   directional rim sit just inside its real border and read as a second card. */
+.activeServerStrip::after {
+  display: none;
 }
 
 .activeServerStrip .serverStripPrimary {
@@ -1879,7 +1886,7 @@ button .buttonIcon {
   min-width: 112px;
   border-color: var(--sentinel-success);
   background: var(--sentinel-success);
-  color: var(--swiss-white);
+  color: var(--sentinel-success-contrast);
 }
 
 .activeServerStrip .uiButton.runtimeControlButton.stop {

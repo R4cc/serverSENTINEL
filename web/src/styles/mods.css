@@ -504,6 +504,14 @@
   backdrop-filter: var(--glass-filter-modal);
 }
 
+/* These drawers are flush with the viewport, so the modal refraction layer's
+   baked-in rounded corners fight the drawer's straight edge and border. The CSS
+   glass material remains intact without that decorative layer. */
+.modsWorkflowDrawer > .uiLiquidGlassEffect,
+.modsDetailsDrawer > .uiLiquidGlassEffect {
+  display: none;
+}
+
 .modsDrawerHeader,
 .modsDrawerFooter {
   background: var(--glass-tint-soft);

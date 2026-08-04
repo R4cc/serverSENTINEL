@@ -17,6 +17,8 @@
   --sentinel-info: #2563c9;
   --sentinel-warning: #b7791f;
   --sentinel-danger: #dc2626;
+  --sentinel-success-contrast: var(--swiss-white);
+  --sentinel-danger-contrast: var(--swiss-white);
   --status-success-foreground: #276b59;
   --status-warning-foreground: #8a570f;
   --status-danger-foreground: #bd1f1f;
