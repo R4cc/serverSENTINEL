@@ -1089,6 +1089,7 @@ button:disabled,
 
 .sidebar .accountChip {
   border-color: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--sidebar-foreground) 5%, transparent);
 }
 
@@ -2305,7 +2306,7 @@ textarea:hover:not(:disabled),
   border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-contrast);
-  box-shadow: var(--glass-highlight), 0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .sidebar .sideNav button.active:hover {
@@ -2315,8 +2316,15 @@ textarea:hover:not(:disabled),
 
 .sidebar .accountIcon {
   border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
+  border-radius: var(--radius-sm);
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
+}
+
+.sidebar .sideNav button.active .settingsVersionText {
+  border-color: color-mix(in srgb, var(--accent-contrast) 22%, transparent);
+  background: color-mix(in srgb, var(--accent-contrast) 12%, transparent);
+  color: var(--accent-contrast);
 }
 
 /* These cascade last because the compact tablet shell is declared after the feature breakpoints. */

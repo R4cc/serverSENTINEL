@@ -29,7 +29,8 @@
 .modsWorkspaceIdentity { display: flex; align-items: center; justify-content: flex-start; gap: 11px; width: 100%; min-width: 0; padding: 0; border: 0; color: inherit; background: none; text-align: left; box-shadow: none; }
 .modsWorkspaceIdentity:hover:not(:disabled) { transform: none; background: none; color: inherit; }
 .modsWorkspaceIdentity img, .modsDetailsTitle img, .modsReviewHero img, .modsResultCard > img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: 9px; object-fit: cover; }
-.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 9px; color: var(--text-muted); background: var(--surface); font-size: .66rem; font-weight: var(--weight-heading); }
+.modsWorkspaceIdentity img { border: 1px solid var(--border-panel); border-radius: 6px; }
+.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border-panel); border-radius: 6px; color: var(--text-muted); background: var(--surface); font-size: .66rem; font-weight: var(--weight-heading); }
 .modsWorkspaceIdentity > span { display: grid; min-width: 0; gap: 3px; text-align: left; }
 .modsWorkspaceIdentity > svg { width: 18px; height: 18px; flex: 0 0 auto; margin-left: auto; color: var(--text-muted); }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
