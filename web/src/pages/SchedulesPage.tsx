@@ -547,13 +547,7 @@ export function SchedulePage({
                             separatorBefore: true
                           }
                         ]}
-                        trigger={
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="12" cy="5" r="1.7" />
-                            <circle cx="12" cy="12" r="1.7" />
-                            <circle cx="12" cy="19" r="1.7" />
-                          </svg>
-                        }
+                        trigger={<AppIcon name="moreVertical" />}
                       />
                     </div>
                   </div>

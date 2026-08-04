@@ -76,7 +76,7 @@ export function ServerConsoleTab({
 
   return (
     <section className="tabPage layoutWide consoleTabPage" hidden={!active}>
-      <Surface className="consolePanel">
+      <Surface className="consolePanel" material="solid">
         <div className="terminal">
           <div
             className={`minecraftTerminalShell ${canSendCommands ? "" : "disabled"}`}

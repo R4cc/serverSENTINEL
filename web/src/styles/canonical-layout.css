@@ -143,8 +143,10 @@
 .activeServerStrip,
 .modalPanel {
   border-width: 1px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
+
+.modalPanel { border-radius: var(--radius-lg); }
 
 .panel {
   padding: var(--space-4);

@@ -2028,9 +2028,11 @@
   width: min(480px, 100vw);
   height: 100dvh;
   min-height: 0;
-  border-left: 1px solid var(--border-row);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-elevated);
+  border-left: 1px solid var(--glass-edge);
+  background: var(--glass-tint-strong);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
+  backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
   animation: nodeDrawerSlideIn 200ms ease-out;
 }
 
@@ -2042,7 +2044,7 @@
 .nodeDrawerFooter {
   flex: 0 0 auto;
   border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+  background: var(--glass-tint-soft);
 }
 
 .nodeDrawerHeader {

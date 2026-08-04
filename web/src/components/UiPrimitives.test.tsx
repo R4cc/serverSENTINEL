@@ -1,3 +1,4 @@
+import { createRef, type ReactElement, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Banner, Button, FormField, MetricTile, PanelHeader, Surface, Toolbar } from "./UiPrimitives";
@@ -8,6 +9,22 @@ describe("UI primitives", () => {
     expect(html).toContain("<aside");
     expect(html).toContain("uiSurface--compact");
     expect(html).toContain("uiSurface--subtle");
+    expect(html).toContain("uiSurface--glass");
+    expect(html).toContain("uiGlassSurface--panel");
+  });
+
+  it("supports opaque surfaces and forwards the semantic element ref", () => {
+    const html = renderToStaticMarkup(<Surface material="solid">Data</Surface>);
+    expect(html).toContain("uiSurface--solid");
+    expect(html).not.toContain("uiGlassSurface");
+
+    const ref = createRef<HTMLElement>();
+    const renderSurface = (Surface as unknown as {
+      render: (props: { as: "aside"; children: string }, ref: Ref<HTMLElement>) => ReactElement<{ ref?: Ref<HTMLElement> }>;
+    }).render;
+    const element = renderSurface({ as: "aside", children: "Details" }, ref);
+    expect(element.type).toBe("aside");
+    expect(element.props.ref).toBe(ref);
   });
 
   it("renders compact panel headers at the requested heading level", () => {

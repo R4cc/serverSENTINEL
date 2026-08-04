@@ -3,6 +3,7 @@ import { Banner, Button, FormField } from './UiPrimitives';
 import { BrandLogo } from './BrandLogo';
 import { usernameInputPattern } from '../utils/inputPatterns';
 import type { AuthField } from '../utils/authValidation';
+import { GlassEffect } from './GlassEffect';
 
 export type AuthNotice = {
   tone: "error" | "warning";
@@ -29,7 +30,8 @@ export function AuthPanel({
 }) {
   return (
     <main className="authShell">
-      <section className="authPanel">
+      <section className="authPanel uiGlassSurface uiGlassSurface--modal">
+        <GlassEffect variant="modal" />
         <div className="brandLockup">
           <BrandLogo />
           <div>

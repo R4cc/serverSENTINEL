@@ -80,6 +80,18 @@ describe("stylesheet ownership", () => {
     expect(primitiveStyles).toContain(".uiFormField");
     expect(primitiveStyles).toContain(".uiBanner");
     expect(primitiveStyles).toContain(".uiMetricTile");
+    expect(primitiveStyles).toContain(".uiGlassSurface");
+    expect(primitiveStyles).toContain(".uiSurface--solid");
+    expect(primitiveStyles).toContain("prefers-reduced-transparency");
+  });
+
+  it("centralizes glass tokens and preserves opaque data surfaces", () => {
+    for (const token of ["--glass-tint", "--glass-edge", "--glass-blur-panel", "--glass-saturation", "--glass-shadow-panel"]) {
+      expect(tokenStyles).toContain(`${token}:`);
+    }
+    for (const surface of ["consolePanel", "fileEditorModal", "serverTimelinePanel", "filesPanel", "modsWorkspaceInstalled", "scheduleTableCard", "settingsHubContent"]) {
+      expect(Object.values(featureStyles).some((sheet) => sheet.includes(`.${surface}`))).toBe(true);
+    }
   });
 
   it("does not let feature stylesheets redefine primitives or raw colors", () => {

@@ -411,13 +411,13 @@ export function FilesPage({
                 label="More file actions"
                 className="selectionActionMenu selectionActionMenu--expanded"
                 items={expandedOverflowSelectionActions}
-                trigger={<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>}
+                trigger={<AppIcon name="moreHorizontal" />}
               />}
               {secondarySelectionActions.length > 0 && <ActionMenu
                 label="More file actions"
                 className="selectionActionMenu selectionActionMenu--compact"
                 items={secondarySelectionActions}
-                trigger={<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>}
+                trigger={<AppIcon name="moreHorizontal" />}
               />}
             </div>
           </div>

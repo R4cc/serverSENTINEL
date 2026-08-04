@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { GlassEffect } from "./GlassEffect";
 import { useDialogFocus } from "./useDialogFocus";
 
 export function DialogSurface({
@@ -36,13 +37,14 @@ export function DialogSurface({
   const surface = (
     <section
       ref={dialogRef}
-      className={className}
+      className={`uiGlassSurface uiGlassSurface--modal ${className}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
       tabIndex={-1}
     >
+      <GlassEffect variant="modal" />
       {children}
     </section>
   );

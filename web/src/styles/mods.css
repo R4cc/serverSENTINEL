@@ -495,13 +495,16 @@
 
 .modsWorkflowDrawer,
 .modsDetailsDrawer {
-  border-color: var(--border-panel);
-  background: var(--surface-raised);
+  border-color: var(--glass-edge);
+  background: var(--glass-tint-strong);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
+  backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation));
 }
 
 .modsDrawerHeader,
 .modsDrawerFooter {
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
+  background: var(--glass-tint-soft);
 }
 
 .modsRecommendedVersion,
