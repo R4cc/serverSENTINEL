@@ -1103,6 +1103,13 @@ button:disabled,
   background: var(--sidebar-background);
 }
 
+@media (min-width: 1101px) {
+  .sidebar {
+    /* Cover the viewport exposed above the sticky rail during elastic overscroll. */
+    box-shadow: 0 -100vh 0 var(--sidebar-background);
+  }
+}
+
 .sidebar .brandBlock,
 .sidebar .accountChip {
   color: var(--sidebar-foreground);
