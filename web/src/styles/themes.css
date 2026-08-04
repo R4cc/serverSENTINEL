@@ -1,3 +1,11 @@
+:root,
+.appShell {
+  --signal-blue-swatch: #3658d4;
+  --pulse-cyan-swatch: #087e8b;
+  --orbit-violet-swatch: #7651d4;
+  --beacon-amber-swatch: #b5680b;
+}
+
 :root.themeDark,
 .appShell.themeDark {
   color-scheme: dark;
@@ -52,4 +60,59 @@
 
 .themeLight {
   color-scheme: light;
+}
+
+/* Browser-local accent palettes. Semantic status colors stay independent. */
+:root.accent-pulse-cyan,
+.appShell.accent-pulse-cyan {
+  --sentinel-accent: #087e8b;
+  --sentinel-accent-strong: #07515a;
+  --sentinel-accent-soft: #e4f8fa;
+  --sentinel-accent-muted: #78cbd2;
+  --accent: var(--sentinel-accent);
+  --focus-ring: var(--sentinel-accent);
+}
+
+:root.accent-orbit-violet,
+.appShell.accent-orbit-violet {
+  --sentinel-accent: #7651d4;
+  --sentinel-accent-strong: #4a2b9b;
+  --sentinel-accent-soft: #f1ecff;
+  --sentinel-accent-muted: #b7a2ee;
+  --accent: var(--sentinel-accent);
+  --focus-ring: var(--sentinel-accent);
+}
+
+:root.accent-beacon-amber,
+.appShell.accent-beacon-amber {
+  --sentinel-accent: #b5680b;
+  --sentinel-accent-strong: #754005;
+  --sentinel-accent-soft: #fff4df;
+  --sentinel-accent-muted: #d8a45f;
+  --accent: var(--sentinel-accent);
+  --focus-ring: var(--sentinel-accent);
+}
+
+:root.themeDark.accent-pulse-cyan,
+.appShell.themeDark.accent-pulse-cyan {
+  --sentinel-accent: #70e2ea;
+  --sentinel-accent-strong: #b6f4f7;
+  --sentinel-accent-soft: #17363b;
+  --sentinel-accent-muted: #4da0a7;
+}
+
+:root.themeDark.accent-orbit-violet,
+.appShell.themeDark.accent-orbit-violet {
+  --sentinel-accent: #c8b3ff;
+  --sentinel-accent-strong: #e7ddff;
+  --sentinel-accent-soft: #302749;
+  --sentinel-accent-muted: #8974bd;
+}
+
+:root.themeDark.accent-beacon-amber,
+.appShell.themeDark.accent-beacon-amber {
+  --sentinel-accent: #ffc66d;
+  --sentinel-accent-strong: #ffe1ae;
+  --sentinel-accent-soft: #3d2f1b;
+  --sentinel-accent-muted: #b4884c;
 }

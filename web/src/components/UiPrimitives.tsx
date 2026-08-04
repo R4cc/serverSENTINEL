@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import { SignalIllustration, SignalMeter, type SignalIllustrationKind } from "./SignalVisuals";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
@@ -92,17 +93,20 @@ export function EmptyState({
   title,
   message,
   action,
+  illustration,
   compact = false,
   className
 }: {
   title: ReactNode;
   message?: ReactNode;
   action?: ReactNode;
+  illustration?: SignalIllustrationKind;
   compact?: boolean;
   className?: string;
 }) {
   return (
     <div className={classes("uiEmptyState", compact && "uiEmptyState--compact", className)}>
+      {illustration && <SignalIllustration kind={illustration} compact={compact} />}
       <strong>{title}</strong>
       {message && <span>{message}</span>}
       {action}
@@ -241,6 +245,7 @@ export function MetricTile({
   label,
   value,
   detail,
+  meter,
   tone = "neutral",
   variant = "default",
   className,
@@ -249,12 +254,15 @@ export function MetricTile({
   label: ReactNode;
   value: ReactNode;
   detail?: ReactNode;
+  meter?: number;
   tone?: MetricTone;
   variant?: MetricVariant;
 }) {
   return (
-    <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, variant !== "default" && `uiMetricTile--${variant}`, className)}>
-      <span className="uiMetricTileMarker" aria-hidden="true" />
+    <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, variant !== "default" && `uiMetricTile--${variant}`, meter !== undefined && "uiMetricTile--meter", className)}>
+      {meter === undefined
+        ? <span className="uiMetricTileMarker" aria-hidden="true" />
+        : <span className="uiMetricTileMarker uiMetricTileMarker--meter" aria-hidden="true"><SignalMeter value={meter} /></span>}
       <div className="uiMetricTileCopy">
         <span className="uiMetricTileLabel">{label}</span>
         <strong>{value}</strong>

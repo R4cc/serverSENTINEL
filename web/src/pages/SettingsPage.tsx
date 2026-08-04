@@ -1,9 +1,9 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import type { DisplayTimeZonePreference, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
+import type { AccentPreference, DisplayTimeZonePreference, MotionPreference, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
-import { themeOptions } from "../features/settings/themePreferences";
+import { accentOptions, themeOptions } from "../features/settings/themePreferences";
 import { ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
@@ -34,6 +34,8 @@ export type SettingsPageProps = {
   initialCategory?: SettingsCategory;
   loading: boolean;
   themePreference: ThemePreference;
+  accentPreference: AccentPreference;
+  motionPreference: MotionPreference;
   relativeTimestamps: boolean;
   regionalFormatPreference: RegionalFormatPreference;
   displayTimeZonePreference: DisplayTimeZonePreference;
@@ -41,6 +43,8 @@ export type SettingsPageProps = {
   browserTimeZone: string;
   displayTimeZone: string;
   onThemeChange(value: ThemePreference): void;
+  onAccentChange(value: AccentPreference): void;
+  onMotionChange(value: MotionPreference): void;
   onRelativeTimestampsChange(value: boolean): void;
   onRegionalFormatChange(value: RegionalFormatPreference): void;
   onDisplayTimeZoneChange(value: DisplayTimeZonePreference): void;
@@ -180,6 +184,21 @@ export function SettingsPage(props: SettingsPageProps) {
             <select aria-label="Theme" value={props.themePreference} onChange={(event) => props.onThemeChange(event.target.value as ThemePreference)}>
               {themeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
+          </PreferenceRow>
+          <PreferenceRow title="Accent color" description="Choose the signal color used for navigation, focus, and decorative identity.">
+            <fieldset className="settingsAccentPicker">
+              <legend className="srOnly">Accent color</legend>
+              {accentOptions.map((option) => (
+                <label key={option.value} className={`settingsAccentOption accent-${option.value}`}>
+                  <input type="radio" name="accent-color" value={option.value} checked={props.accentPreference === option.value} onChange={() => props.onAccentChange(option.value)} />
+                  <span className="settingsAccentSwatch" aria-hidden="true"><span /></span>
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </fieldset>
+          </PreferenceRow>
+          <PreferenceRow title="Interface motion" description="Animate decorative signals and success feedback. Functional progress remains visible when this is off.">
+            <Toggle checked={props.motionPreference === "on"} onChange={(enabled) => props.onMotionChange(enabled ? "on" : "off")} label="Animate interface signals" stateLabel={props.motionPreference === "on" ? "On" : "Off"} />
           </PreferenceRow>
           <PreferenceRow title="Relative timestamps" description="Show times as “2 hours ago” instead of the full date and time.">
             <Toggle checked={props.relativeTimestamps} onChange={props.onRelativeTimestampsChange} label="Use relative timestamps" stateLabel={props.relativeTimestamps ? "Relative" : "Full date and time"} />

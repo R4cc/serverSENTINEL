@@ -73,9 +73,9 @@
   animation: sentinelRuntimeIgnition 850ms var(--motion-ease-spring) both;
 }
 
-.activeServerStrip.runtimeFeedback-start .serverStripIcon,
-.activeServerStrip.runtimeFeedback-restart .serverStripIcon {
-  animation: sentinelCubeIgnition 700ms var(--motion-ease-spring) both;
+.activeServerStrip.runtimeFeedback-start .serverStripIcon .signalFingerprint,
+.activeServerStrip.runtimeFeedback-restart .serverStripIcon .signalFingerprint {
+  animation: sentinelSignalIgnition 700ms var(--motion-ease-spring) both;
 }
 
 /* Navigation ------------------------------------------------------------ */
@@ -108,13 +108,14 @@
   pointer-events: none;
 }
 
-/* Decorative server cube ----------------------------------------------- */
+/* Decorative signal fields --------------------------------------------- */
 .serverStripIcon {
-  perspective: 180px;
-  transition: border-color var(--motion-duration-base) ease, box-shadow var(--motion-duration-base) ease, transform var(--motion-duration-base) var(--motion-ease-spring);
+  transition: border-color var(--motion-duration-base) ease, box-shadow var(--motion-duration-base) ease;
 }
 
-.serverStripIcon .server-icon-cube {
+.serverStripIcon .signalFingerprint,
+.serverSwitcherIdentity .signalFingerprint,
+.serverSwitcherOptionIdentity .signalFingerprint {
   transform-origin: center;
   transition: transform var(--motion-duration-base) var(--motion-ease-spring);
 }
@@ -122,11 +123,32 @@
 .serverStripIcon:hover {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
   box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 16%, transparent);
-  transform: translateY(-1px);
 }
 
-.serverStripIcon:hover .server-icon-cube {
-  transform: rotateX(-8deg) rotateY(12deg) scale(1.06);
+.serverStripIcon:hover .signalFingerprint {
+  transform: rotate(8deg) scale(1.04);
+}
+
+.serverSwitcherTrigger:hover .signalFingerprint,
+.serverSwitcherOption:hover .signalFingerprint {
+  transform: rotate(7deg);
+}
+
+.signalGlyphPing {
+  animation: sentinelSignalPing 720ms var(--motion-ease-standard) 120ms both;
+}
+
+.workspaceHeaderSignal span {
+  transform-origin: right center;
+  animation: sentinelHeaderSweep 900ms var(--motion-ease-standard) both;
+}
+
+.workspaceHeaderSignal span:nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.workspaceHeaderSignal span:nth-child(3) {
+  animation-delay: 130ms;
 }
 
 /* Positive feedback ---------------------------------------------------- */
@@ -136,6 +158,22 @@
 
 .sonnerToast[data-type="success"] .toastSeverityIcon {
   animation: sentinelSuccessIcon 460ms var(--motion-ease-spring) 70ms both;
+}
+
+.sonnerToast[data-type="success"] [data-icon]::before,
+.sonnerToast[data-type="success"] [data-icon]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1px solid color-mix(in srgb, var(--sentinel-success) 68%, transparent);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  animation: sentinelSuccessBurst 620ms var(--motion-ease-standard) 90ms both;
+}
+
+.sonnerToast[data-type="success"] [data-icon]::after {
+  animation-delay: 180ms;
 }
 
 @keyframes sentinelStatusHeartbeat {
@@ -149,10 +187,22 @@
   36% { filter: drop-shadow(0 8px 14px color-mix(in srgb, var(--sentinel-success) 22%, transparent)); }
 }
 
-@keyframes sentinelCubeIgnition {
+@keyframes sentinelSignalIgnition {
   0% { transform: scale(1); }
-  38% { transform: translateY(-2px) scale(1.1); }
+  38% { transform: rotate(12deg) scale(1.1); }
   100% { transform: scale(1); }
+}
+
+@keyframes sentinelSignalPing {
+  0% { opacity: 0; transform: scale(0.45); }
+  36% { opacity: 0.52; }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes sentinelHeaderSweep {
+  0% { opacity: 0; transform: translateY(-50%) scale(0.82); }
+  58% { opacity: 0.8; }
+  100% { opacity: 1; transform: translateY(-50%) scale(1); }
 }
 
 @keyframes sentinelNavGlint {
@@ -172,6 +222,55 @@
   100% { opacity: 1; transform: scale(1); }
 }
 
+@keyframes sentinelSuccessBurst {
+  0% { opacity: 0; transform: scale(0.6); }
+  32% { opacity: 0.64; }
+  100% { opacity: 0; transform: scale(1.55); }
+}
+
+.motion-off .serverCommandStatusDot.running::after,
+.motion-off .serverSwitcherStatus.running::after,
+.motion-off .serverCommandStatusDot.starting::after,
+.motion-off .serverSwitcherStatus.starting::after,
+.motion-off .activeServerStrip.runtimeAction-start .serverCommandStatusDot::after,
+.motion-off .activeServerStrip.runtimeAction-restart .serverCommandStatusDot::after {
+  animation: none;
+  opacity: 0.32;
+  transform: scale(1);
+}
+
+.motion-off .runtimeControlButton .controlGlyphSVG,
+.motion-off .sideNav button .sideIcon,
+.motion-off .serverStripIcon,
+.motion-off .serverStripIcon .signalFingerprint,
+.motion-off .serverSwitcherIdentity .signalFingerprint,
+.motion-off .serverSwitcherOptionIdentity .signalFingerprint {
+  transition: none;
+}
+
+.motion-off .runtimeControlButton:hover:not(:disabled) .controlGlyphSVG,
+.motion-off .runtimeControlButton:active:not(:disabled) .controlGlyphSVG,
+.motion-off .sideNav button:hover:not(:disabled) .sideIcon,
+.motion-off .serverStripIcon:hover .signalFingerprint,
+.motion-off .serverSwitcherTrigger:hover .signalFingerprint,
+.motion-off .serverSwitcherOption:hover .signalFingerprint {
+  transform: none;
+}
+
+.motion-off .activeServerStrip.runtimeFeedback-start,
+.motion-off .activeServerStrip.runtimeFeedback-restart,
+.motion-off .activeServerStrip.runtimeFeedback-start .serverStripIcon .signalFingerprint,
+.motion-off .activeServerStrip.runtimeFeedback-restart .serverStripIcon .signalFingerprint,
+.motion-off .sideNav button.active::after,
+.motion-off .signalGlyphPing,
+.motion-off .workspaceHeaderSignal span,
+.motion-off .sonnerToast[data-type="success"],
+.motion-off .sonnerToast[data-type="success"] .toastSeverityIcon,
+.motion-off .sonnerToast[data-type="success"] [data-icon]::before,
+.motion-off .sonnerToast[data-type="success"] [data-icon]::after {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .serverCommandStatusDot.running::after,
   .serverSwitcherStatus.running::after,
@@ -187,25 +286,32 @@
   .runtimeControlButton .controlGlyphSVG,
   .sideNav button .sideIcon,
   .serverStripIcon,
-  .serverStripIcon .server-icon-cube {
+  .serverStripIcon .signalFingerprint,
+  .serverSwitcherIdentity .signalFingerprint,
+  .serverSwitcherOptionIdentity .signalFingerprint {
     transition: none;
   }
 
   .runtimeControlButton:hover:not(:disabled) .controlGlyphSVG,
   .runtimeControlButton:active:not(:disabled) .controlGlyphSVG,
   .sideNav button:hover:not(:disabled) .sideIcon,
-  .serverStripIcon:hover,
-  .serverStripIcon:hover .server-icon-cube {
+  .serverStripIcon:hover .signalFingerprint,
+  .serverSwitcherTrigger:hover .signalFingerprint,
+  .serverSwitcherOption:hover .signalFingerprint {
     transform: none;
   }
 
   .activeServerStrip.runtimeFeedback-start,
   .activeServerStrip.runtimeFeedback-restart,
-  .activeServerStrip.runtimeFeedback-start .serverStripIcon,
-  .activeServerStrip.runtimeFeedback-restart .serverStripIcon,
+  .activeServerStrip.runtimeFeedback-start .serverStripIcon .signalFingerprint,
+  .activeServerStrip.runtimeFeedback-restart .serverStripIcon .signalFingerprint,
   .sideNav button.active::after,
+  .signalGlyphPing,
+  .workspaceHeaderSignal span,
   .sonnerToast[data-type="success"],
-  .sonnerToast[data-type="success"] .toastSeverityIcon {
+  .sonnerToast[data-type="success"] .toastSeverityIcon,
+  .sonnerToast[data-type="success"] [data-icon]::before,
+  .sonnerToast[data-type="success"] [data-icon]::after {
     animation: none;
   }
 }

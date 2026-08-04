@@ -161,6 +161,13 @@ describe("layout stability guards", () => {
     expect(motionStyles).not.toMatch(/\.workspace\s*>\s*\.(?:tabPage|pageStack|createServerPanel)[^{]*\{[^}]*animation\s*:/s);
   });
 
+  it("lets the browser preference and OS preference disable decorative motion", () => {
+    expect(motionStyles).toContain(".motion-off");
+    expect(motionStyles).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(motionStyles).toContain(".signalGlyphPing");
+    expect(motionStyles).not.toMatch(/\.uiSpinner[^}]*animation:\s*none/);
+  });
+
   it("reserves scrollbar gutters before async content changes page height", () => {
     expect(tokenStyles).toContain("scrollbar-gutter: stable");
     expect(modsStyles).toContain("scrollbar-gutter: stable");

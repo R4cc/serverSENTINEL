@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { demoFixtures, demoFixturesLoaded } from "../demoRuntime";
 import { readModsDemoFixture } from "../features/mods/modsDemoFixtures";
-import type { DisplayTimeZonePreference, InstalledMod, RegionalFormatPreference, ScheduledExecution, ThemePreference } from "../types";
+import type { AccentPreference, DisplayTimeZonePreference, InstalledMod, MotionPreference, RegionalFormatPreference, ScheduledExecution, ThemePreference } from "../types";
 import { readDisplayTimeZonePreference, readRegionalFormatPreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
 import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
 import {
@@ -13,6 +13,12 @@ import {
   readConsoleHistoryEnabled,
   readConsoleScrollback
 } from "../features/settings/settingsPreferences";
+import {
+  accentPreferenceStorageKey,
+  motionPreferenceStorageKey,
+  readAccentPreference,
+  readMotionPreference
+} from "../features/settings/themePreferences";
 
 function writePreference(key: string, value: string) {
   try {
@@ -24,6 +30,8 @@ function writePreference(key: string, value: string) {
 
 export function usePreferencesState() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
+  const [accentPreference, setAccentPreference] = useState<AccentPreference>(() => readAccentPreference());
+  const [motionPreference, setMotionPreference] = useState<MotionPreference>(() => readMotionPreference());
   const [demoMode, setDemoMode] = useState(() => readStoredDemoMode());
   const [regionalFormatPreference, setRegionalFormatPreference] = useState<RegionalFormatPreference>(() => readRegionalFormatPreference());
   const [displayTimeZonePreference, setDisplayTimeZonePreference] = useState<DisplayTimeZonePreference>(() => readDisplayTimeZonePreference());
@@ -56,6 +64,14 @@ export function usePreferencesState() {
   useEffect(() => {
     writePreference("serversentinel-theme", themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    writePreference(accentPreferenceStorageKey, accentPreference);
+  }, [accentPreference]);
+
+  useEffect(() => {
+    writePreference(motionPreferenceStorageKey, motionPreference);
+  }, [motionPreference]);
 
   useEffect(() => {
     writePreference("serversentinel-regional-format", regionalFormatPreference);
@@ -93,6 +109,10 @@ export function usePreferencesState() {
   return {
     themePreference,
     setThemePreference,
+    accentPreference,
+    setAccentPreference,
+    motionPreference,
+    setMotionPreference,
     demoMode,
     setDemoMode,
     regionalFormatPreference,

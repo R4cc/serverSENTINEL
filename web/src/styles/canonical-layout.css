@@ -184,11 +184,6 @@
   min-width: 36px;
 }
 
-.server-icon-cube {
-  width: 20px;
-  height: 20px;
-}
-
 .serverStripInfo {
   display: grid;
   gap: 3px;

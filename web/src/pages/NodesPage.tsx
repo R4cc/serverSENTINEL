@@ -3,6 +3,7 @@ import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, EmptyState, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
+import { SignalFingerprint } from "../components/SignalVisuals";
 import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
@@ -44,16 +45,6 @@ function sharedStatusTone(value?: string): "success" | "danger" | "neutral" {
 
 function shortBuildId(value?: string) {
   return value ? value.slice(0, 12) : undefined;
-}
-
-function ServerRowIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" />
-      <path d="m4 7 8 4 8-4" />
-      <path d="M12 11v10" />
-    </svg>
-  );
 }
 
 function PlayerIcon() {
@@ -633,6 +624,7 @@ export function NodesPage({
         {!hasNodes && (
           <EmptyState
             className="nodesEmptyState"
+            illustration="servers"
             title="No nodes yet"
             message="No host is connected yet. Add a node so serverSENTINEL has a place to run Minecraft servers."
             action={addNodeButton}
@@ -722,7 +714,7 @@ export function NodesPage({
                         const playerLabel = playerCountLabel(snapshot);
                         return (
                           <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
-                            <span className="nodeServerRowIcon" aria-hidden="true"><ServerRowIcon /></span>
+                            <span className="nodeServerRowIcon" aria-hidden="true"><SignalFingerprint serverId={server.id} /></span>
                             <span className="nodeServerRowName">{server.displayName}</span>
                             <span className={`nodeServerRowState ${state.toLowerCase()}`}>
                               <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />

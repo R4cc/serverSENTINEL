@@ -30,6 +30,7 @@ export function NoManagedServersEmptyState({
     <EmptyState
       title={title}
       message={message}
+      illustration="servers"
       action={needsNodeFirst ? (
         <Button
           onClick={onAddNode}

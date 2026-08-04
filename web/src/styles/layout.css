@@ -280,9 +280,9 @@ button .buttonIcon {
   flex-shrink: 0;
 }
 
-.server-icon-cube {
-  width: 24px;
-  height: 24px;
+.serverStripIcon .signalFingerprint {
+  width: 34px;
+  height: 34px;
 }
 
 .serverStripInfo {
@@ -1567,9 +1567,9 @@ button .buttonIcon {
   box-shadow: none;
 }
 
-.activeServerStrip .server-icon-cube {
-  width: 18px;
-  height: 18px;
+.activeServerStrip .signalFingerprint {
+  width: 28px;
+  height: 28px;
 }
 
 .activeServerStrip .serverStripInfo {

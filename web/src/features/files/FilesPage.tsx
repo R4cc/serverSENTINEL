@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Keybo
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
-import { Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
+import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
+import { SignalIllustration } from "../../components/SignalVisuals";
 import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
 import { formatBytes } from "../../utils/format";
 import { hasFileManagerPermission } from "../../utils/permissions";
@@ -465,7 +466,7 @@ export function FilesPage({
             {initialFilesLoading && <LoadingLabel>Loading files in {listing.path}</LoadingLabel>}
             {initialFilesLoading && Array.from({ length: 8 }, (_, index) => <FileTableSkeletonRow key={index} />)}
             {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
-              <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
+              <EmptyState compact illustration="files" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
             )}
             {sortedFileEntries.map((entry) => {
               // Set membership, not a scan of the selection: selecting everything in a large folder
@@ -535,6 +536,7 @@ export function FilesPage({
       <aside className="panel fileDetailsPanel">
         {!selectedEntry && selectedEntries.length === 0 && (
           <div className="fileDetailsEmpty">
+            <SignalIllustration kind="files" compact />
             <h2>No file selected</h2>
             <p>Select a file or folder from the list to view details. Text files will also show a read-only preview here.</p>
           </div>

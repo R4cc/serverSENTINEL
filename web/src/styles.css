@@ -3,6 +3,7 @@
 @import "./styles/themes.css";
 @import "./styles/typography.css";
 @import "./styles/primitives.css";
+@import "./styles/signal.css";
 @import "./styles/canonical-layout.css";
 @import "./styles/layout.css";
 @import "./styles/auth.css";

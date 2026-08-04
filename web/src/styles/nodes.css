@@ -278,17 +278,12 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  color: var(--text-soft);
+  color: var(--accent);
 }
 
-.nodeServerRowIcon svg {
+.nodeServerRowIcon .signalFingerprint {
   width: 18px;
   height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .nodeServerRowName {
