@@ -334,7 +334,7 @@
 .activeServerStripLoadingSkeleton .serverStripLoadingBadge { width: 64px; height: 22px; border-radius: 999px; }
 .activeServerStripLoadingSkeleton .serverStripLoadingMeta { width: min(240px, 54vw); height: 11px; }
 .activeServerStripLoadingSkeleton .serverStripLoadingButton { display: block; width: 86px; height: var(--control-height); }
-.activeServerStripLoadingSkeleton .serverStripLoadingOverflow { display: block; width: var(--control-height); height: var(--control-height); }
+.activeServerStripLoadingSkeleton .serverStripLoadingIconButton { display: block; width: var(--control-height); height: var(--control-height); }
 .featurePageLoadingSkeleton { width: 100%; min-height: min(560px, calc(100vh - 238px)); align-content: stretch; }
 .applicationSkeletonSummary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-3); }
 .applicationSkeletonTile { height: 82px; }

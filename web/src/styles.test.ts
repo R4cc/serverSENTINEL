@@ -192,12 +192,17 @@ describe("retired class families stay retired", () => {
     expect(featureStyles["files-console.css"]).not.toContain(retired);
   });
 
-  // These three had no markup left anywhere in web/src but were still maintained across
+  // These had no markup left anywhere in web/src but were still maintained across
   // several stylesheets -- buttonRow alone spanned four files and eight rule sites.
+  // The overflow family went with the server-strip menu whose refresh and duplicate
+  // actions were promoted onto the strip itself.
   it.each([
     "buttonRow",
     "layoutBalanced",
-    "nodeDetailsBody"
+    "nodeDetailsBody",
+    "overflowButton",
+    "overflowDropdown",
+    "overflowMenuContainer"
   ])("has no %s rules left in any stylesheet", (retired) => {
     const owners = Object.entries(featureStyles)
       .filter(([, sheet]) => sheet.includes(retired))
