@@ -403,68 +403,6 @@ button .buttonIcon {
   border-color: var(--border);
 }
 
-/* Overflow Menu Container and Dropdown */
-.overflowButton {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  border: var(--border-strong) solid var(--border);
-  display: grid;
-  place-items: center;
-}
-
-.overflowButton:hover {
-  background: var(--text);
-  color: var(--surface);
-}
-
-.overflowDropdown {
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  right: 0;
-  background: var(--surface-raised);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-elevated);
-  display: flex;
-  flex-direction: column;
-  z-index: 30;
-  padding: var(--space-2);
-}
-
-.overflowDropdown button {
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  padding: var(--space-2) var(--space-3);
-  font-size: 11px;
-  font-weight: var(--weight-heading);
-  letter-spacing: var(--tracking-label);
-  cursor: pointer;
-  min-height: 38px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-}
-
-.overflowDropdown button:hover:not(:disabled) {
-  background: var(--text);
-  color: var(--surface);
-  transform: none;
-}
-
-.overflowDropdown button:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-
 .runtimeControls {
   display: flex;
   gap: var(--space-2);

@@ -214,23 +214,6 @@
   padding: 0 var(--space-3);
 }
 
-.overflowButton {
-  width: var(--control-height);
-  height: var(--control-height);
-  min-width: var(--control-height);
-  min-height: var(--control-height);
-}
-
-.overflowDropdown {
-  padding: 6px;
-  min-width: 180px;
-}
-
-.overflowDropdown button {
-  min-height: 36px;
-  padding: 8px 10px;
-}
-
 .inlineState,
 .eventEmpty,
 .fileDetailsEmpty {

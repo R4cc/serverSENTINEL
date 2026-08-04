@@ -63,16 +63,11 @@ button,
 .dangerTextButton,
 .fileNameCell,
 .modInstallVersionRow,
-.accountLogoutButton,
-.overflowDropdown button {
+.accountLogoutButton {
   font-size: var(--type-button-size);
   font-weight: var(--weight-button);
   letter-spacing: var(--tracking-ui);
   text-transform: none;
-}
-
-.overflowDropdown button {
-  font-size: var(--type-meta-size);
 }
 
 input,

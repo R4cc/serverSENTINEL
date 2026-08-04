@@ -95,14 +95,12 @@ async function assertFloatingSurfaces(page, label) {
     assert(tooltip.left >= 0 && tooltip.right <= tooltip.width && tooltip.top >= 0 && tooltip.bottom <= tooltip.height, `${label}: restart tooltip leaves the viewport: ${JSON.stringify(tooltip)}`);
   }
 
-  await page.getByRole("button", { name: "More server actions" }).click();
-  const menu = await page.locator(".overflowDropdown").evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: innerWidth, height: innerHeight };
-  });
-  assert(menu.left >= 0 && menu.right <= menu.width && menu.top >= 0 && menu.bottom <= menu.height, `${label}: server action menu leaves the viewport: ${JSON.stringify(menu)}`);
+  // The server strip used to hide refresh and duplicate behind a "More server actions"
+  // overflow menu. Both are promoted to the strip itself now, so there is no menu to
+  // open -- assert the promoted control is present and reachable instead.
+  assert(await page.locator(".activeServerStrip .refreshStatusButton").count(), `${label}: promoted refresh control is missing from the server strip`);
+  assert(await page.getByRole("button", { name: "More server actions" }).count() === 0, `${label}: retired server action menu is back`);
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
-  await page.keyboard.press("Escape");
 }
 
 async function assertScheduleActionMenuVisible(page, label) {
@@ -460,7 +458,7 @@ async function runProfile(engine, profile, label) {
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
     await assertNavigationOverlay(page, label);
-    await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .overflowButton"], label);
+    await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .refreshStatusButton"], label);
     await assertFloatingSurfaces(page, label);
 
     for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings"]) {
