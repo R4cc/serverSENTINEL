@@ -23,8 +23,8 @@
   background: var(--glass-tint);
   padding: 7px;
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
 }
 
 .settingsHubCategories > button {
@@ -116,8 +116,8 @@
   border-radius: calc(var(--radius-md) + 2px);
   background: var(--surface-raised);
   box-shadow: 0 12px 30px rgb(15 23 42 / 6%);
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .settingsHubContent:focus-visible {

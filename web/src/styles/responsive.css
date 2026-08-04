@@ -880,7 +880,7 @@ button:disabled,
 .scheduleTableCard,
 .scheduledRunsCard,
 .settingsHubContent,
-.usersSettings { background: var(--surface-raised); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.usersSettings { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 .nodeInstallHeader,
 .modalHeader,
@@ -1041,20 +1041,31 @@ button:disabled,
 }
 
 /* Surface and interaction hierarchy */
+/* The rail is the app's largest pane of glass. It is tinted from the navy
+   sidebar colour rather than from the shared white tint, but the material is
+   the same one `primitives.css` defines -- the rim, blur and shadow all come
+   from `uiGlassSurface--chrome`, and only the tint is restated here. */
 .sidebar {
   border-right: var(--border-subtle) solid color-mix(in srgb, var(--sidebar-foreground) 16%, var(--sidebar-background));
-  background: color-mix(in srgb, var(--sidebar-background) 84%, transparent);
+  background: color-mix(in srgb, var(--sidebar-background) 78%, transparent);
   color: var(--sidebar-foreground);
 }
 
 .themeDark .sidebar {
-  background: color-mix(in srgb, var(--sidebar-background) 86%, transparent);
+  background: color-mix(in srgb, var(--sidebar-background) 80%, transparent);
+}
+
+.sidebar::after {
+  /* The rail meets the workspace on one edge only, so it lights that edge
+     instead of tracing a ring that its own overflow would clip. */
+  background: linear-gradient(180deg, var(--glass-rim-top) 0%, transparent 42%);
 }
 
 @media (min-width: 1101px) {
   .sidebar {
-    /* Cover the viewport exposed above the sticky rail during elastic overscroll. */
-    box-shadow: 0 -100vh 0 var(--sidebar-background);
+    /* Cover the viewport exposed above the sticky rail during elastic overscroll,
+       without dropping the rim and ambient shadow the chrome material sets. */
+    box-shadow: var(--glass-highlight), var(--glass-shadow-chrome), 0 -100vh 0 var(--sidebar-background);
   }
 }
 
@@ -1676,10 +1687,14 @@ button:disabled,
   right: auto;
   width: 100%;
   min-width: 100%;
+  max-height: min(520px, calc(100dvh - 260px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 5px;
   border-color: var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--glass-tint-strong);
+  background: var(--glass-tint-menu);
   color: var(--text);
   box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
 }
@@ -2044,16 +2059,10 @@ textarea:hover:not(:disabled),
   opacity: 0.46;
 }
 
-.summaryTile,
 .usersTable,
 .fileTable,
 .scheduleTableFrame {
   border-color: var(--border-row);
-}
-
-.summaryTile {
-  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
-  box-shadow: none;
 }
 
 .summaryTile::before {
@@ -2517,6 +2526,7 @@ textarea:hover:not(:disabled),
     height: auto;
     min-height: calc(100dvh - 68px);
     background: transparent;
+    -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 
