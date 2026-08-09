@@ -124,6 +124,65 @@ describe("Fastify application factory", () => {
     }
   });
 
+  it("queues export preflight failures instead of holding the create request open", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-export-preflight-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18090",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const app = await buildApp();
+
+    try {
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(login.statusCode, login.body).toBe(200);
+      const cookie = sessionCookieFrom(login);
+
+      // A missing server is a deterministic preflight failure. The create route must still return
+      // the operation immediately; real exports may spend much longer traversing a large world.
+      const started = await app.inject({
+        method: "POST",
+        url: "/api/exports",
+        headers: { cookie, "x-requested-with": "XMLHttpRequest" },
+        payload: {
+          serverIds: ["00000000-0000-4000-8000-000000000001"],
+          selection: { categories: ["world"], contentStrategy: "jars" }
+        }
+      });
+      expect(started.statusCode, started.body).toBe(200);
+      const operationId = started.json().id as string;
+
+      await vi.waitFor(async () => {
+        const operation = await app.inject({
+          method: "GET",
+          url: `/api/operations/${operationId}`,
+          headers: { cookie, "x-requested-with": "XMLHttpRequest" }
+        });
+        expect(operation.statusCode, operation.body).toBe(200);
+        expect(operation.json()).toMatchObject({
+          status: "failed",
+          errorMessage: "One or more selected servers could not be found"
+        });
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("refuses downloads after an export artifact expires", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-expired-export-"));
     temporaryDirectories.push(dataDir);

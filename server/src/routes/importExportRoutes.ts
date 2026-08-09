@@ -10,10 +10,7 @@ import { config } from "../config.js";
 import { destructiveRateLimit } from "../http/rateLimits.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
 import {
-  assertExportDiskSpace,
-  assertServersStopped,
   estimateExport,
-  resolveExportServers,
   selectedExportServerIds,
   startExportOperation,
   startImportOperation,
@@ -72,12 +69,9 @@ app.post<{ Body: { serverIds?: unknown; selection?: unknown } }>("/api/exports",
   const user = await requireRequestPermission(request, "servers.export");
   const selection = normalizeExportSelection(request.body?.selection);
   const serverIds = selectedExportServerIdsOrAll(selectedExportServerIds(request.body?.serverIds));
-  // Fail fast in the request rather than inside the operation, so the modal can show the reason
-  // instead of the operator discovering it in a failed job. The operation re-checks both.
-  const servers = await resolveExportServers(serverIds);
-  await assertServersStopped(servers);
-  const estimate = await estimateExport(serverIds, selection);
-  await assertExportDiskSpace(estimate.totalBytes);
+  // Server-state, file-selection, size-limit, and disk-space checks run inside the queued operation.
+  // Walking a multi-gigabyte world here duplicates the modal's estimate and can hold this request
+  // open past a reverse proxy timeout before the browser receives an operation id to poll.
   return startExportOperation({ serverIds, selection }, user.id);
 });
 
