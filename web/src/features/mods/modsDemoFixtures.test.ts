@@ -14,6 +14,7 @@ describe("Mods demo fixtures", () => {
 
   it("reads only known fixture names", () => {
     expect(readModsDemoFixture("?mods-fixture=large")).toBe("large");
+    expect(readModsDemoFixture("?mods-fixture=updates")).toBe("updates");
     expect(readModsDemoFixture("?mods-fixture=not-real")).toBe("default");
   });
 
@@ -31,6 +32,14 @@ describe("Mods demo fixtures", () => {
     expect(plan.updates.map((entry) => entry.status)).toEqual(["safe_update", "needs_review", "blocked", "unknown", "up_to_date"]);
     expect(plan.counts).toMatchObject({ totalInstalled: 5, safeUpdates: 1, reviewUpdates: 1, blockedUpdates: 1, unknown: 1, upToDate: 1 });
     expect(mods.find((mod) => mod.displayName === "Missing Dependency Fixture")?.dependencyHealth?.missing[0].title).toBe("Cloth Config API");
+  });
+
+  it("provides ten available updates for Overview geometry checks", () => {
+    const mods = modsForDemoFixture("updates");
+    const plan = createDemoUpdatePlan("demo", mods, "2026-01-01T00:00:00.000Z");
+    expect(mods).toHaveLength(10);
+    expect(plan.counts).toMatchObject({ totalInstalled: 10, safeUpdates: 10 });
+    expect(plan.updates.every((entry) => entry.status === "safe_update")).toBe(true);
   });
 
   it("exposes missing configuration and deterministic request failures", () => {
