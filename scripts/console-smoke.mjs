@@ -190,7 +190,9 @@ async function assertCommandLineShortcuts(page) {
   await page.keyboard.press("ArrowDown");
   assert.equal(await input.inputValue(), "", "Arrow down did not return to the empty draft");
 
-  await input.type("say copy me");
+  // Typing itself is exercised above. Establish this shortcut fixture atomically so a pending
+  // controlled-input commit cannot collapse the selection between selectText() and Ctrl+C.
+  await input.fill("say copy me");
   await input.selectText();
   await page.keyboard.press("Control+c");
   assert.equal(await input.inputValue(), "say copy me", "Ctrl+C abandoned selected command text instead of copying it");
