@@ -170,9 +170,14 @@ function InstallInstructions({
           {result.install.joinToken && <p className="sensitiveHint">This command contains a secret join token. Copy it only to the node host.</p>}
         </div>
       </div>
-      <div className="installTabs" role="tablist" aria-label="Install method">
-        <Button variant="ghost" compact className={method === "run" ? "active" : ""} onClick={() => onMethodChange("run")}>docker run Recommended</Button>
-        <Button variant="ghost" compact className={method === "compose" ? "active" : ""} onClick={() => onMethodChange("compose")}>Docker Compose</Button>
+      {/* A group of toggles rather than a tablist: these buttons swap the snippet
+          below in place and never own a tabpanel, so `role="tablist"` promised
+          arrow-key semantics the markup could not deliver. */}
+      <div className="installTabs" role="group" aria-label="Install method">
+        <Button variant="ghost" compact className={method === "run" ? "active" : ""} aria-pressed={method === "run"} onClick={() => onMethodChange("run")}>
+          docker run<span className="installTabBadge">Recommended</span>
+        </Button>
+        <Button variant="ghost" compact className={method === "compose" ? "active" : ""} aria-pressed={method === "compose"} onClick={() => onMethodChange("compose")}>Docker Compose</Button>
       </div>
       <div className="installSnippetShell">
         <Button variant="secondary" iconOnly className="installCopyButton" onClick={() => onCopy(snippet)} aria-label="Copy install command" title="Copy install command">
@@ -215,11 +220,16 @@ function AddNodeStepper({ activeStep, completeAll }: { activeStep: number; compl
         const isComplete = stepNumber <= completedUntil;
         const isActive = !completeAll && stepNumber === activeStep;
         return (
-          <li key={label} className={`addNodeStep ${isComplete ? "complete" : ""} ${isActive ? "active" : ""}`}>
+          <li
+            key={label}
+            className={`addNodeStep ${isComplete ? "complete" : ""} ${isActive ? "active" : ""}`}
+            aria-current={isActive ? "step" : undefined}
+          >
             {index > 0 && <span className={`addNodeConnector ${index <= completedUntil ? "complete" : ""}`} aria-hidden="true" />}
             <span className="addNodeStepContent">
               <span className="addNodeStepCircle" aria-hidden="true">{isComplete ? "✓" : stepNumber}</span>
               <span className="addNodeStepLabel">{label}</span>
+              {isComplete && <span className="srOnly">completed</span>}
             </span>
           </li>
         );
@@ -231,7 +241,7 @@ function AddNodeStepper({ activeStep, completeAll }: { activeStep: number; compl
 function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowState: AddNodeFlowState; node?: NodeView }) {
   if (flowState === "success") {
     return (
-      <div className="addNodeStatusCard success">
+      <div className="addNodeStatusCard success" role="status" aria-live="polite">
         <span className="addNodeStatusIcon" aria-hidden="true">✓</span>
         <div>
           <h3>Node added successfully</h3>
@@ -244,7 +254,7 @@ function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowStat
 
   if (flowState === "expired") {
     return (
-      <div className="addNodeStatusCard error">
+      <div className="addNodeStatusCard error" role="alert">
         <span className="addNodeStatusIcon" aria-hidden="true">!</span>
         <div>
           <h3>Join token expired</h3>
@@ -256,7 +266,7 @@ function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowStat
 
   if (flowState === "disconnected") {
     return (
-      <div className="addNodeStatusCard error">
+      <div className="addNodeStatusCard error" role="alert">
         <span className="addNodeStatusIcon" aria-hidden="true">!</span>
         <div>
           <h3>Node disconnected</h3>
@@ -508,8 +518,6 @@ export function NodesPage({
   formatDate: (value: string | number | Date) => string;
 }) {
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
-  const internalNode = nodes.find((node) => node.isInternal || node.type === "local");
-  const externalNodes = nodes.filter((node) => !(node.isInternal || node.type === "local"));
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
   const nodeVersionState = (node: NodeView) => {
     if (node.isInternal || !node.agentVersion) return "unknown";
@@ -536,12 +544,16 @@ export function NodesPage({
     return `Upgrade node agent to ${panelVersion}`;
   };
 
+  // Derived inside the memo: splitting the list first meant the dependency was a fresh array on
+  // every render, so this and everything keyed off it recomputed even when the fleet was unchanged.
   const sortedNodes = useMemo(() => {
+    const internalNode = nodes.find((node) => node.isInternal || node.type === "local");
+    const externalNodes = nodes.filter((node) => !(node.isInternal || node.type === "local"));
     return [
       ...(internalNode ? [internalNode] : []),
       ...externalNodes.sort((a, b) => a.name.localeCompare(b.name))
     ];
-  }, [externalNodes, internalNode]);
+  }, [nodes]);
   const selectedContextNode = selectedNode ? sortedNodes.find((candidate) => candidate.id === selectedNode.id) : undefined;
   const selectedDetailsNode = selectedContextNode ?? selectedNode;
   const selectedOperation = selectedDetailsNode ? nodeOperations[selectedDetailsNode.id] : undefined;
@@ -609,7 +621,13 @@ export function NodesPage({
                     <AppIcon name="fileUp" /> Import server
                   </Button>
                 )}
-                <Button variant="secondary" onClick={onRefresh} disabled={busy} title="Refresh node status">
+                <Button
+                  variant="secondary"
+                  onClick={onRefresh}
+                  disabled={busy}
+                  title="Refresh node status"
+                  reserveLabel={<><AppIcon name="refresh" />Refreshing…</>}
+                >
                   <AppIcon name="refresh" />
                   {busy ? "Refreshing…" : "Refresh"}
                 </Button>
@@ -694,6 +712,7 @@ export function NodesPage({
                         onClick={() => onUpdateNode(node)}
                         disabled={busyNodeId === node.id || Boolean(operation) || !canManageNodes || !nodeCanPanelUpdate(node)}
                         title={nodeUpdateTitle(node)}
+                        reserveLabel="Restarting…"
                       >
                         {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
                       </Button>
@@ -713,7 +732,7 @@ export function NodesPage({
                     </Button>
                   </header>
                   {visibleServers.length > 0 ? (
-                    <div className="nodeServerList">
+                    <div className="nodeServerList" id={`node-servers-${node.id}`}>
                       {visibleServers.map((server) => {
                         const state = serverStateLabel(server.id);
                         const snapshot = playerSnapshots[server.id];
@@ -721,7 +740,7 @@ export function NodesPage({
                         return (
                           <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
                             <span className="nodeServerRowIcon" aria-hidden="true"><ServerRowIcon /></span>
-                            <span className="nodeServerRowName">{server.displayName}</span>
+                            <span className="nodeServerRowName" title={server.displayName}>{server.displayName}</span>
                             <span className={`nodeServerRowState ${state.toLowerCase()}`}>
                               <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
                               {state}
@@ -743,6 +762,8 @@ export function NodesPage({
                       variant="ghost"
                       compact
                       className="nodeListMore"
+                      aria-expanded={expanded}
+                      aria-controls={`node-servers-${node.id}`}
                       onClick={() => setExpandedNodeIds((current) => ({ ...current, [node.id]: !expanded }))}
                     >
                       {hiddenServerCount > 0 ? `Show all ${node.servers.length} servers` : "Show fewer servers"}

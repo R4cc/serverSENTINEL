@@ -81,7 +81,7 @@ export function ServerOverviewTab({
   formatShortTime: (value: string | number | Date) => string;
 }) {
   return (
-    <section className="tabPage overviewPage layoutDashboard" hidden={!active}>
+    <section className="tabPage overviewPage layoutWide" hidden={!active}>
       {overviewError && (
         <InlineState
           tone="warning"

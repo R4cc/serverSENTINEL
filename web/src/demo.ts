@@ -1019,6 +1019,37 @@ function largeMods(count = 50): InstalledMod[] {
   });
 }
 
+function updateAvailableMods(count = 10): InstalledMod[] {
+  return Array.from({ length: count }, (_, index) => {
+    const number = index + 1;
+    const suffix = String(number).padStart(2, "0");
+    const projectId = `demo-update-${suffix}`;
+    const currentVersion = `1.${number}.0`;
+    const latestVersion = `1.${number}.1`;
+    const filename = `${projectId}-${currentVersion}.jar`;
+    return {
+      filename,
+      displayName: `Update Fixture ${suffix}`,
+      description: `Deterministic available-update fixture mod ${number}.`,
+      enabled: true,
+      size: 180_000 + number * 7_500,
+      modifiedAt: new Date(Date.UTC(2026, 0, 1, 12, number)).toISOString(),
+      compatibility: { status: "compatible", compatible: true, reason: "Compatible with this server", serverSide: "optional", clientSide: "optional", matchedGameVersions: ["1.21.4"], matchedLoaders: ["fabric"] },
+      versionInfo: { currentVersion, latestVersion, latestChannel: "release", upToDate: false },
+      modrinth: {
+        projectId,
+        versionId: `${projectId}-v1`,
+        filename,
+        versionNumber: currentVersion,
+        gameVersions: ["1.21.4"],
+        loaders: ["fabric"],
+        installedAt: new Date(Date.UTC(2026, 0, 1, 12, number)).toISOString(),
+        installedWithForceIncompatible: false
+      }
+    };
+  });
+}
+
 function mixedHealthMods(): InstalledMod[] {
   const [upToDate, dependency, review, safe, manual] = initialDemoMods.map(cloneMod);
   return [
@@ -1052,5 +1083,6 @@ export function modsForDemoFixture(fixture: ModsDemoFixtureName): InstalledMod[]
   if (fixture === "empty") return [];
   if (fixture === "large") return largeMods();
   if (fixture === "mixed") return mixedHealthMods();
+  if (fixture === "updates") return updateAvailableMods();
   return initialDemoMods.map(cloneMod);
 }

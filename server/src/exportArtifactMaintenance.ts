@@ -80,6 +80,18 @@ export class ExportArtifactMaintenance {
     const referenced = new Set<string>();
     const activePrefixes: string[] = [];
 
+    // One directory read for the whole pass. Every export operation used to trigger its own
+    // `readdir` of this directory to find leftover `.tmp` siblings, so a fleet with a few hundred
+    // retained exports scanned the same directory a few hundred times per maintenance run.
+    let entries: Dirent[] = [];
+    let directoryError: unknown;
+    try {
+      entries = await readdir(this.exportsDir, { withFileTypes: true });
+    } catch (error) {
+      directoryError = error;
+    }
+    const fileNames = directoryError === undefined ? entries.filter((entry) => entry.isFile()).map((entry) => entry.name) : undefined;
+
     for (const operation of this.operations.listExportOperations()) {
       if (operation.status === "queued" || operation.status === "running") {
         const canonical = this.canonicalPath(operation.id);
@@ -90,7 +102,7 @@ export class ExportArtifactMaintenance {
         continue;
       }
       if (operation.status === "failed" || operation.status === "cancelled") {
-        const cleanup = await this.removeOperationFiles(operation, report);
+        const cleanup = await this.removeOperationFiles(operation, report, fileNames);
         report.abandonedArtifacts += cleanup.removed;
         continue;
       }
@@ -98,7 +110,7 @@ export class ExportArtifactMaintenance {
       if (expiresAt !== undefined && expiresAt <= now) {
         const artifact = objectValue(exportOperationResult(operation).artifact) as ExportArtifactMetadata | undefined;
         const wasExpired = Boolean(artifact?.expiredAt && !exportOperationResult(operation).artifactPath);
-        if (await this.expireOperation(operation, now, report)) {
+        if (await this.expireOperation(operation, now, report, fileNames)) {
           if (!wasExpired) report.expiredArtifacts += 1;
         } else this.referenceOperationFiles(operation, referenced);
       } else {
@@ -107,12 +119,8 @@ export class ExportArtifactMaintenance {
       }
     }
 
-    let entries: Dirent[];
-    try {
-      entries = await readdir(this.exportsDir, { withFileTypes: true });
-    } catch (error) {
-      report.failures.push({ path: this.exportsDir, message: errorMessage(error) });
-      entries = [];
+    if (directoryError !== undefined) {
+      report.failures.push({ path: this.exportsDir, message: errorMessage(directoryError) });
     }
     for (const entry of entries) {
       if (!entry.isFile()) continue;
@@ -132,7 +140,7 @@ export class ExportArtifactMaintenance {
     ].map((operation) => [operation.id, operation]));
     const deletable: string[] = [];
     for (const operation of candidates.values()) {
-      if (operation.type !== "export.run" || (await this.removeOperationFiles(operation, report)).success) {
+      if (operation.type !== "export.run" || (await this.removeOperationFiles(operation, report, fileNames)).success) {
         deletable.push(operation.id);
       }
     }
@@ -145,8 +153,8 @@ export class ExportArtifactMaintenance {
     return (await this.removeOperationFiles(operation)).success;
   }
 
-  async expireOperation(operation: OperationRecord, now = Date.now(), report?: ExportMaintenanceReport) {
-    const cleanup = await this.removeOperationFiles(operation, report);
+  async expireOperation(operation: OperationRecord, now = Date.now(), report?: ExportMaintenanceReport, directoryFileNames?: string[]) {
+    const cleanup = await this.removeOperationFiles(operation, report, directoryFileNames);
     if (!cleanup.success) return false;
     const result = exportOperationResult(operation);
     const artifact = objectValue(result.artifact) as ExportArtifactMetadata | undefined ?? {};
@@ -191,21 +199,29 @@ export class ExportArtifactMaintenance {
     });
   }
 
-  private async removeOperationFiles(operation: OperationRecord, report?: ExportMaintenanceReport) {
+  /**
+   * `directoryFileNames` is the caller's already-read listing of `exportsDir`. A maintenance pass
+   * hands the same snapshot to every operation instead of re-reading the directory per operation;
+   * callers without one still read it themselves.
+   */
+  private async removeOperationFiles(operation: OperationRecord, report?: ExportMaintenanceReport, directoryFileNames?: string[]) {
     const paths = new Set([this.canonicalPath(operation.id)]);
     const storedPath = this.storedPath(operation);
     if (storedPath) paths.add(storedPath);
-    try {
-      const entries = await readdir(this.exportsDir, { withFileTypes: true });
-      const temporaryPrefix = `${exportArtifactFilename(operation.id)}.`;
-      for (const entry of entries) {
-        if (entry.isFile() && entry.name.startsWith(temporaryPrefix) && entry.name.endsWith(".tmp")) {
-          paths.add(resolve(this.exportsDir, entry.name));
-        }
+    let names = directoryFileNames;
+    if (!names) {
+      try {
+        names = (await readdir(this.exportsDir, { withFileTypes: true })).filter((entry) => entry.isFile()).map((entry) => entry.name);
+      } catch (error) {
+        report?.failures.push({ operationId: operation.id, path: this.exportsDir, message: errorMessage(error) });
+        return { success: false, removed: 0 };
       }
-    } catch (error) {
-      report?.failures.push({ operationId: operation.id, path: this.exportsDir, message: errorMessage(error) });
-      return { success: false, removed: 0 };
+    }
+    const temporaryPrefix = `${exportArtifactFilename(operation.id)}.`;
+    for (const name of names) {
+      if (name.startsWith(temporaryPrefix) && name.endsWith(".tmp")) {
+        paths.add(resolve(this.exportsDir, name));
+      }
     }
     let succeeded = true;
     let removed = 0;

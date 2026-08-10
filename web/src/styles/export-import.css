@@ -2,6 +2,12 @@
   width: min(640px, calc(100vw - 32px));
 }
 
+/* The title carries a server display name, which the user chose and can be long. */
+.exportModalPanel .modalHeader h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .exportModalBody {
   display: grid;
   gap: var(--space-4);
@@ -29,10 +35,24 @@
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   cursor: pointer;
+  transition: background var(--control-transition), border-color var(--control-transition);
 }
 
-.exportCategoryOption:hover {
+/* Hover, keyboard focus, and the checked state are the same affordance seen
+   three ways, so they read as one row treatment rather than three. */
+.exportCategoryOption:hover,
+.exportCategoryOption:focus-within {
   border-color: var(--border);
+}
+
+.exportCategoryOption:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border-panel));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 45%, transparent);
+}
+
+.exportCategoryOption:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .exportCategoryOption input {
@@ -51,6 +71,13 @@
 
 .exportCategoryCopy small {
   color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.4;
+}
+
+.exportSelectionHint {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
   line-height: 1.4;
 }
 
@@ -95,7 +122,7 @@
 
 .importPlan h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--type-row-title-size);
 }
 
 .importPlan ul {
@@ -107,6 +134,7 @@
 }
 
 .importPlan li {
+  min-width: 0;
   display: grid;
   gap: 2px;
   border: var(--border-strong) solid var(--border-panel);
@@ -114,9 +142,15 @@
   padding: var(--space-2) var(--space-3);
 }
 
+/* Server names arrive from an archive, so they can be arbitrarily long. */
+.importPlan li strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .importPlan li span {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--type-helper-size);
 }
 
 @media (max-width: 520px) {

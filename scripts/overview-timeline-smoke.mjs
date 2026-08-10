@@ -386,7 +386,7 @@ async function assertMobile(page) {
   assert(mobileMetrics.rosterTargetHeight >= 44, `Mobile roster disclosure is smaller than 44px: ${JSON.stringify(mobileMetrics)}`);
 }
 
-async function createOverviewPage(context, viewport) {
+async function createOverviewPage(context, viewport, search = "") {
   const page = await context.newPage();
   await page.setViewportSize(viewport);
   await page.clock.setFixedTime(fixedNow);
@@ -406,7 +406,7 @@ async function createOverviewPage(context, viewport) {
   page.on("response", (response) => {
     if (response.status() >= 400) browserErrors.push(`response ${response.status()}: ${response.url()}`);
   });
-  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await page.goto(`${baseUrl}${search}`, { waitUntil: "domcontentloaded" });
   try {
     await page.locator(".overviewDashboardGrid").waitFor({ timeout: 10_000 });
   } catch {
@@ -414,6 +414,50 @@ async function createOverviewPage(context, viewport) {
     throw new Error(`Overview did not mount at ${page.url()}. Browser errors: ${JSON.stringify(browserErrors)}. Body: ${bodyText}`);
   }
   return { page, browserErrors };
+}
+
+async function assertSupportCardGeometry(context, viewport) {
+  const { page, browserErrors } = await createOverviewPage(context, viewport, "?mods-fixture=updates");
+  try {
+    const metrics = await page.evaluate(() => {
+      const mods = document.querySelector(".modUpdatesCard");
+      const schedule = document.querySelector(".schedulePanel");
+      const updates = [...document.querySelectorAll(".modUpdatesListItem")];
+      const remaining = document.querySelector(".modUpdatesRemaining");
+      const documentElement = document.documentElement;
+      const rect = (element) => element?.getBoundingClientRect();
+      const modsRect = rect(mods);
+      const scheduleRect = rect(schedule);
+      const remainingRect = rect(remaining);
+      return {
+        viewportWidth: documentElement.clientWidth,
+        documentWidth: documentElement.scrollWidth,
+        updateCount: updates.length,
+        remainingText: remaining?.textContent?.trim() ?? "",
+        mods: modsRect ? { top: modsRect.top, bottom: modsRect.bottom, height: modsRect.height } : null,
+        schedule: scheduleRect ? { top: scheduleRect.top, bottom: scheduleRect.bottom, height: scheduleRect.height } : null,
+        remainingBottom: remainingRect?.bottom ?? 0,
+        scheduleOverflow: schedule ? schedule.scrollHeight - schedule.clientHeight : 0
+      };
+    });
+
+    assert.equal(metrics.updateCount, 4, `Ten updates should render four preview rows at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.remainingText, "6 more updates", `Ten updates should summarize the remaining six at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.mods && metrics.schedule, `Overview support cards are missing at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.remainingBottom <= metrics.mods.bottom + 1, `The update disclosure overflows its card at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.scheduleOverflow <= 1, `The Schedule card clips vertically at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.documentWidth <= metrics.viewportWidth, `Support cards cause horizontal overflow at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+
+    if (viewport.width >= 981) {
+      assertNear(metrics.schedule.top, metrics.mods.top, 1, `Side-by-side support cards do not share a top edge at ${viewport.width}px`);
+      assert(metrics.schedule.height < metrics.mods.height, `The Schedule card stretches to the ten-update card height at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    } else {
+      assert(metrics.schedule.top >= metrics.mods.bottom, `Stacked support cards overlap at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    }
+    assert.deepEqual(browserErrors, [], `Support-card browser errors at ${viewport.width}px: ${browserErrors.join("\n")}`);
+  } finally {
+    await page.close();
+  }
 }
 
 try {
@@ -442,7 +486,16 @@ try {
   assert.deepEqual(mobile.browserErrors, [], `Mobile browser errors: ${mobile.browserErrors.join("\n")}`);
   await mobile.page.close();
 
-  console.log("Overview timeline smoke passed: realistic sessions, all ranges, pan, drag, zoom, scroll, schedule popover contrast, roster, and mobile layout.");
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 1180, height: 900 },
+    { width: 981, height: 844 },
+    { width: 980, height: 844 },
+    { width: 768, height: 900 },
+    { width: 390, height: 844 }
+  ]) await assertSupportCardGeometry(context, viewport);
+
+  console.log("Overview timeline smoke passed: realistic sessions, all ranges, pan, drag, zoom, scroll, schedule popover contrast, roster, mobile layout, and ten-update support-card geometry.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

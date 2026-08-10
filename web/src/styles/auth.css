@@ -7,12 +7,22 @@
 
 .authPanel {
   width: min(460px, 100%);
-  border: var(--border-heavy) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-tint-strong);
   padding: var(--space-5);
   display: grid;
   gap: var(--space-4);
+  box-shadow: var(--shadow-elevated);
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
+}
+
+/* The auth card is large enough that the shared rim reads as a second nested
+   panel. Keep a single border and the frosted CSS surface. The refractive layer
+   is not suppressed here any more -- `AuthPanel` no longer mounts one. */
+.authPanel::after {
+  display: none;
 }
 
 .authPanel .brandLockup {
@@ -32,19 +42,18 @@
   overflow-x: hidden;
   white-space: nowrap;
   transition: padding var(--sidebar-ease), gap var(--sidebar-ease);
-  border-right: var(--border-heavy) solid var(--border);
-  background:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.025) 0 1px, transparent 1px 10px),
-    var(--surface-muted);
+  border-right: var(--border-subtle) solid var(--glass-edge);
+  background: var(--glass-tint-strong);
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   box-sizing: border-box;
+  box-shadow: var(--glass-highlight), var(--glass-shadow-chrome);
+  -webkit-backdrop-filter: var(--glass-filter-chrome);
+  backdrop-filter: var(--glass-filter-chrome);
 }
 
 .themeDark .sidebar {
-  background:
-    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.022) 0 1px, transparent 1px 10px),
-    var(--surface-muted);
+  background: var(--glass-tint-strong);
 }

@@ -30,7 +30,7 @@
   opacity: 1;
   max-width: 180px;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -68,8 +68,10 @@
   background: var(--swiss-white);
 }
 
+/* Deliberately not `.activeServerStrip span`: the strip's spans are badges,
+   status dots and button labels, each of which owns its own type. A blanket
+   rule here only forced every one of them to be undone again further down. */
 .brandBlock p,
-.activeServerStrip span,
 .muted {
   color: var(--text-muted);
   font-size: 13px;
@@ -91,15 +93,16 @@
   padding: 0;
   display: inline-grid;
   place-items: center;
-  background: var(--surface);
+  background: var(--glass-tint-soft);
   color: var(--text);
-  border: var(--border-strong) solid var(--border);
+  border: var(--border-subtle) solid var(--glass-edge);
+  box-shadow: var(--shadow-xs);
 }
 
 .iconButton:hover:not(:disabled) {
-  background: var(--text);
-  color: var(--surface);
-  border-color: var(--text);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-edge));
   transform: translateY(-1px);
 }
 
@@ -159,9 +162,9 @@ button .buttonIcon {
   gap: var(--space-3);
   align-items: center;
   text-align: left;
-  background: var(--surface);
+  background: transparent;
   color: var(--text);
-  border: var(--border-strong) solid var(--border);
+  border: var(--border-subtle) solid transparent;
   border-radius: var(--radius-md);
   padding: 10px 12px;
 }
@@ -169,15 +172,16 @@ button .buttonIcon {
 .sideNav button {
   justify-content: flex-start;
   overflow: hidden;
-  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), background-color 0.2s, border-color 0.2s, color 0.2s;
+  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), background-color 100ms, border-color 100ms, color 100ms;
 }
 
 .navLabel {
   opacity: 1;
   max-width: 180px;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
   overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.4;
   padding-block: 1px;
   white-space: nowrap;
@@ -186,14 +190,15 @@ button .buttonIcon {
 }
 
 .sideNav button.active {
-  background: var(--text);
-  color: var(--surface);
-  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: color-mix(in srgb, var(--accent) 82%, var(--glass-edge));
+  box-shadow: var(--glass-highlight), var(--shadow-xs);
 }
 
 .sideNav button.active:hover {
-  background: var(--accent);
-  color: var(--surface-raised);
+  background: color-mix(in srgb, var(--accent) 88%, var(--text));
+  color: var(--accent-contrast);
 }
 
 .sideIcon {
@@ -202,8 +207,8 @@ button .buttonIcon {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sideIcon circle,
@@ -220,8 +225,8 @@ button .buttonIcon {
 }
 
 .sidebarDivider {
-  height: 2px;
-  background-color: var(--border-muted);
+  height: 1px;
+  background-color: var(--glass-edge);
   margin: var(--space-2) 0;
   width: 100%;
 }
@@ -251,22 +256,12 @@ button .buttonIcon {
 }
 
 .panel,
-.activeServerStrip,
 .toast,
 .notice {
-  border: var(--border-strong) solid var(--border);
+  border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-}
-
-.activeServerStrip {
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-  background: var(--surface-raised);
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-4);
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
 }
 
 .serverStripLeft {
@@ -317,24 +312,8 @@ button .buttonIcon {
   margin-top: 1px;
 }
 
-.activeServerStrip strong {
-  font-size: 20px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-tight);
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .runtimeBadge {
   line-height: 1.2;
-}
-
-.serverStripMeta {
-  font-size: 12px;
-  color: var(--text-soft);
-  font-weight: 600;
 }
 
 .serverStripRight {
@@ -397,88 +376,11 @@ button .buttonIcon {
   border-color: var(--border-muted);
 }
 
-/* Prevent activeServerStrip span from overriding button text styling and colors */
-.activeServerStrip .runtimeControlButton span,
-.activeServerStrip .quickActionButton.consoleLink span {
-  color: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-  letter-spacing: inherit;
-}
-
 .quickActionButton.active {
   background: var(--text);
   color: var(--surface);
   border-color: var(--border);
 }
-
-/* Overflow Menu Container and Dropdown */
-.overflowMenuContainer {
-  position: relative;
-  z-index: 5;
-}
-
-.overflowButton {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  border: var(--border-strong) solid var(--border);
-  display: grid;
-  place-items: center;
-}
-
-.overflowButton:hover {
-  background: var(--text);
-  color: var(--surface);
-}
-
-.overflowDropdown {
-  position: absolute;
-  top: calc(100% + var(--space-2));
-  right: 0;
-  background: var(--surface-raised);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-elevated);
-  display: flex;
-  flex-direction: column;
-  z-index: 30;
-  padding: var(--space-2);
-}
-
-.overflowDropdown button {
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  padding: var(--space-2) var(--space-3);
-  font-size: 11px;
-  font-weight: var(--weight-heading);
-  letter-spacing: var(--tracking-label);
-  cursor: pointer;
-  min-height: 38px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-}
-
-.overflowDropdown button:hover:not(:disabled) {
-  background: var(--text);
-  color: var(--surface);
-  transform: none;
-}
-
-.overflowDropdown button:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
 
 .runtimeControls {
   display: flex;
@@ -684,11 +586,13 @@ button .buttonIcon {
   font-weight: var(--weight-heading);
 }
 
+/* No bottom margin: the workspace is a grid and already spaces its children, so
+   a margin here made this the one notice in the stack that sat further from the
+   page than the `uiBanner` notices beside it. */
 .systemBanner {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-4);
   display: grid;
   grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
   gap: var(--space-4);
@@ -762,7 +666,7 @@ button .buttonIcon {
 .inlineState-loading {
   border-color: var(--accent);
   background:
-    repeating-linear-gradient(45deg, rgb(56 88 233 / 0.08) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 8%, transparent) 0 1px, transparent 1px 10px),
     var(--surface);
 }
 
@@ -770,6 +674,12 @@ button .buttonIcon {
   border-color: var(--sentinel-danger);
   color: var(--sentinel-danger);
   background: color-mix(in srgb, var(--surface) 86%, var(--sentinel-danger) 14%);
+}
+
+/* Third child of the two-column banner grid, so without this it lands back in
+   the narrow title column and the failure log scrolls inside ~180px. */
+.systemBanner > .failureDetails {
+  grid-column: 1 / -1;
 }
 
 .failureDetails {
@@ -817,17 +727,19 @@ button .buttonIcon {
 
 .sonnerToast {
   --toast-severity: var(--sentinel-info);
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 8%, var(--surface-raised));
-  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 38%, var(--border-panel));
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-tint-menu));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 34%, var(--glass-edge));
   width: min(468px, calc(100vw - 32px)) !important;
   min-height: 58px !important;
   padding: 14px 40px 14px 66px !important;
   border: var(--border-strong) solid var(--toast-severity-border) !important;
-  border-left: 5px solid var(--toast-severity) !important;
-  border-radius: var(--radius-sm) !important;
+  border-left: 3px solid var(--toast-severity) !important;
+  border-radius: var(--radius-md) !important;
   background: var(--toast-severity-bg) !important;
   color: var(--text) !important;
-  box-shadow: 0 14px 34px rgb(0 0 0 / 0.08) !important;
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
+  -webkit-backdrop-filter: var(--glass-filter-floating) !important;
+  backdrop-filter: var(--glass-filter-floating) !important;
   font-family: var(--font-sans) !important;
   font-weight: var(--weight-body) !important;
 }
@@ -850,9 +762,9 @@ button .buttonIcon {
 }
 
 .themeDark .sonnerToast {
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 12%, var(--surface-raised));
-  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 46%, var(--border-panel));
-  box-shadow: 0 18px 42px rgb(0 0 0 / 0.26) !important;
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 11%, var(--glass-tint-menu));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 42%, var(--glass-edge));
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
 }
 
 .sonnerToast [data-icon] {
@@ -885,7 +797,7 @@ button .buttonIcon {
   display: block;
   width: 28px;
   height: 28px;
-  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.12));
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--overlay) 25%, transparent));
 }
 
 /* Custom styling for Sonner toast close button to place it in the top right, non-colored */
@@ -913,7 +825,7 @@ button .buttonIcon {
   color: var(--text-muted) !important;
   box-shadow: none !important;
   border-radius: 50% !important;
-  transition: background 150ms linear, color 150ms linear !important;
+  transition: background var(--motion-duration-base) var(--motion-ease-standard), color var(--motion-duration-base) var(--motion-ease-standard) !important;
 }
 
 .sonnerToast [data-close-button]:hover {
@@ -1008,7 +920,7 @@ button .buttonIcon {
   min-height: 46px;
   min-width: 0;
   width: 100%;
-  transition: gap 0.18s cubic-bezier(0.4, 0, 0.2, 1), padding 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: gap 90ms cubic-bezier(0.4, 0, 0.2, 1), padding 90ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .accountIcon {
@@ -1043,7 +955,7 @@ button .buttonIcon {
   opacity: 1;
   max-width: 150px;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
 }
 
 .accountLogoutButton {
@@ -1060,7 +972,7 @@ button .buttonIcon {
   color: var(--text);
   opacity: 1;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 160ms ease, padding var(--sidebar-ease), margin var(--sidebar-ease), border-width var(--sidebar-ease);
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 80ms ease, padding var(--sidebar-ease), margin var(--sidebar-ease), border-width var(--sidebar-ease);
 }
 
 .sideNav .accountLogoutButton {
@@ -1071,7 +983,7 @@ button .buttonIcon {
   display: flex;
   justify-content: center;
   align-items: center;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 80ms ease;
 }
 
 .settingsNavLabel {
@@ -1084,10 +996,15 @@ button .buttonIcon {
 }
 
 .settingsVersionText {
-  color: var(--text-soft);
+  color: var(--sidebar-foreground);
   font-size: 11px;
   font-weight: var(--weight-heading);
   letter-spacing: 0;
+  line-height: 1.25;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
   text-transform: none;
 }
 
@@ -1205,11 +1122,6 @@ button .buttonIcon {
   color: var(--accent);
 }
 
-.roleBadge.manager {
-  border-color: var(--sentinel-accent-strong);
-  color: var(--sentinel-accent-strong);
-}
-
 .roleBadge.admin {
   border-color: var(--sentinel-success);
   color: var(--sentinel-success);
@@ -1263,15 +1175,17 @@ button .buttonIcon {
   z-index: 40;
   width: 220px;
   transform: translateX(-50%);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  background: var(--glass-tint-menu);
   color: var(--text);
   padding: var(--space-2) var(--space-3);
   font-size: 12px;
   font-weight: var(--weight-strong);
   line-height: 1.35;
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms linear;
@@ -1312,18 +1226,22 @@ button .buttonIcon {
   z-index: 20;
   display: grid;
   place-items: center;
-  background: var(--overlay);
+  background: color-mix(in srgb, var(--overlay) 68%, transparent);
+  -webkit-backdrop-filter: var(--glass-filter-scrim);
+  backdrop-filter: var(--glass-filter-scrim);
 }
 
 .modalPanel {
   width: min(520px, 100%);
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-tint-strong);
   padding: var(--space-5);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
 }
 
 .modalCloseButton {
@@ -1609,10 +1527,19 @@ button .buttonIcon {
   min-width: 0;
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-row);
+  /* The strip carries the glass classes and the refractive layer from
+     `ActiveServerStrip`, so it takes the chrome material from `primitives.css`
+     rather than repainting itself opaque here -- which is what previously left
+     the refraction layer rendering underneath a solid fill. */
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-muted));
-  box-shadow: 0 10px 28px rgb(15 23 42 / 0.06);
+  box-shadow: var(--glass-shadow-chrome);
+}
+
+/* A compact strip needs one crisp boundary. The shared inset highlight and
+   directional rim sit just inside its real border and read as a second card. */
+.activeServerStrip::after {
+  display: none;
 }
 
 .activeServerStrip .serverStripPrimary {
@@ -1625,9 +1552,7 @@ button .buttonIcon {
 }
 
 .themeDark .activeServerStrip {
-  border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 90%, var(--surface-muted));
-  box-shadow: 0 14px 36px rgb(0 0 0 / 0.22);
+  border-color: var(--glass-edge);
 }
 
 .activeServerStrip .serverStripLeft {
@@ -1642,11 +1567,11 @@ button .buttonIcon {
   width: 34px;
   height: 34px;
   min-width: 34px;
-  border-color: var(--border-row);
+  border-color: var(--glass-edge);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--glass-tint-soft);
   color: var(--accent);
-  box-shadow: none;
+  box-shadow: var(--glass-highlight);
 }
 
 .activeServerStrip .server-icon-cube {
@@ -1680,6 +1605,13 @@ button .buttonIcon {
   text-transform: none;
 }
 
+/* The badge is a `span` carrying `tabindex`, so the global focus ring -- which
+   only reaches buttons and form controls -- never applied to it, leaving the one
+   keyboard-reachable element on the strip with no visible focus. */
+.restartRequirementBadge:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
 .restartRequirementTooltip {
   position: absolute;
   z-index: 60;
@@ -1689,11 +1621,13 @@ button .buttonIcon {
   gap: 6px;
   width: max-content;
   max-width: min(360px, calc(100vw - 32px));
-  border: 1px solid var(--border-row);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-elevated);
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
   color: var(--text);
   font-size: 12px;
   line-height: 1.45;
@@ -1758,8 +1692,8 @@ button .buttonIcon {
 .activeServerStrip .runtimeBadge {
   flex: 0 0 auto;
   padding: 5px 10px;
-  border-color: var(--border-row);
-  background: var(--surface);
+  border-color: var(--glass-edge);
+  background: var(--glass-tint-soft);
   color: var(--text-muted);
   font-size: 11px;
   font-weight: var(--weight-meta);
@@ -1944,18 +1878,43 @@ button .buttonIcon {
   min-width: 112px;
   border-color: var(--sentinel-success);
   background: var(--sentinel-success);
-  color: var(--swiss-white);
+  color: var(--sentinel-success-contrast);
 }
 
 .activeServerStrip .uiButton.runtimeControlButton.stop {
   min-width: 112px;
 }
 
+/* Neutral controls on the strip are glass chips rather than opaque buttons, so
+   the bar reads as one material with its controls cut from it. Start and Stop
+   stay solid: a prominent, destructive or primary action should not be
+   see-through. */
 .activeServerStrip .uiButton.runtimeControlButton.restart,
 .activeServerStrip .uiButton.quickActionButton {
-  border-color: var(--border-row);
-  background: var(--surface);
+  border-color: var(--glass-edge);
+  background: var(--glass-tint-soft);
   color: var(--text);
+  box-shadow: var(--shadow-xs);
+  -webkit-backdrop-filter: var(--glass-filter-control);
+  backdrop-filter: var(--glass-filter-control);
+}
+
+/* The strip restates the base colours of these buttons, which also outranks the
+   `uiButton--secondary` and `uiButton--primary` hover states -- so without the
+   rules below Start, Restart and Console are the only buttons in the app that
+   look identical under the pointer. The values match the primitives they shadow
+   so the strip responds like every other control. */
+.activeServerStrip .uiButton.runtimeControlButton.restart:hover:not(:disabled),
+.activeServerStrip .uiButton.quickActionButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.start:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 78%, var(--text));
+  background: color-mix(in srgb, var(--sentinel-success) 86%, var(--text));
+  color: var(--sentinel-success-contrast);
 }
 
 .activeServerStrip .uiButton.runtimeControlButton.restart:disabled {
@@ -1968,6 +1927,12 @@ button .buttonIcon {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-row));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
+}
+
+/* The console button is already tinted while its page is open, so hovering it
+   deepens the same tint rather than repeating the neutral-to-accent move. */
+.activeServerStrip .quickActionButton.consoleLink.active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 74%, var(--surface-raised));
 }
 
 .activeServerStrip .refreshStatusButton {
@@ -2016,5 +1981,23 @@ button .buttonIcon {
 
   .serverRuntimeAlert {
     padding: var(--space-3);
+  }
+}
+
+/* The sidebar collapse animates width, padding and label opacity from this
+   file, so it is also where those transitions have to be switched off --
+   `motion.css` loads later but never named them, which left collapsing the rail
+   as the one motion in the shell a reduced-motion visitor still saw. */
+@media (prefers-reduced-motion: reduce) {
+  .brandBlock,
+  .brandLockup,
+  .brandLockup > div,
+  .sideNav button,
+  .navLabel,
+  .accountChip,
+  .accountName,
+  .accountLogoutButton,
+  .sideNav .accountLogoutButton {
+    transition: none;
   }
 }

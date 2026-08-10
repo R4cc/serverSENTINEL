@@ -27,9 +27,9 @@
   transition: background var(--control-transition), color var(--control-transition), border-color var(--control-transition), box-shadow var(--control-transition), transform var(--control-transition);
 }
 
-.uiButton--primary { border-color: var(--text); background: var(--text); color: var(--surface); }
-.uiButton--primary:hover:not(:disabled) { transform: none; }
-.uiButton--secondary { border-color: var(--border-muted); background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted)); color: var(--text); }
+.uiButton--primary { border-color: color-mix(in srgb, var(--accent) 84%, var(--glass-edge)); background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-xs); }
+.uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 78%, var(--text)); background: color-mix(in srgb, var(--accent) 88%, var(--text)); color: var(--accent-contrast); transform: none; }
+.uiButton--secondary { border-color: var(--glass-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: var(--glass-filter-control); backdrop-filter: var(--glass-filter-control); }
 .uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .uiButton--ghost,
 .textLinkButton { border-color: transparent; background: transparent; color: var(--accent); box-shadow: none; }
@@ -44,9 +44,42 @@
 .uiButton:active:not(:disabled),
 .iconButton:active:not(:disabled),
 .iconOnlyButton:active:not(:disabled) { transform: none; }
+/* One disabled treatment across every control shape. `aria-disabled` is listed
+   alongside `:disabled` because a `.uiButton` rendered as an anchor -- the
+   download link in the export flow is the live case -- cannot carry the
+   attribute the pseudo-class matches, and would otherwise stay fully lit and
+   clickable while reading as unavailable. */
 .uiButton:disabled,
+.uiButton[aria-disabled="true"],
 .iconButton:disabled,
-.iconOnlyButton:disabled { opacity: 0.42; box-shadow: none; }
+.iconOnlyButton:disabled {
+  cursor: not-allowed;
+  opacity: var(--disabled-opacity);
+  box-shadow: none;
+  transform: none;
+}
+
+a.uiButton[aria-disabled="true"] { pointer-events: none; }
+
+/* Busy is not disabled: the control keeps its label, its size and its focus,
+   and only says that a request is in flight. */
+.uiButton[aria-busy="true"]:not(:disabled) { cursor: progress; }
+
+/* Focus. `tokens.css` rings every bare element; this reaches the two cases it
+   cannot. A `.uiButton` anchor is not a `<button>`, and a menu item sits flush
+   inside a popover that clips overflow, so an outward offset would be sliced
+   off on all four sides -- it is drawn inside the item instead. */
+.uiButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.actionMenuItem:focus-visible,
+.uiSortHeaderButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
 .uiButton--reserved { justify-content: center; }
 .uiButtonStableContent { display: grid; grid-template-areas: "content"; align-items: center; justify-items: center; min-width: 0; }
 .uiButtonReserveContent,
@@ -57,15 +90,60 @@
 .uiSurface,
 .panel {
   min-width: 0;
-  border: var(--border-subtle) solid var(--border-panel);
+  border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  box-shadow: none;
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
 }
 .uiSurface--default { padding: var(--space-4); }
 .uiSurface--compact { padding: var(--space-3); }
 .uiSurface--flush { padding: 0; overflow: hidden; }
-.uiSurface--subtle { border-color: var(--border-row); background: var(--surface-inset); }
+.uiSurface--subtle { border-color: var(--glass-edge); background: var(--glass-tint-soft); }
+.uiSurface--solid { border-color: var(--border-panel); background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Shared glass is progressive enhancement: CSS owns the polished frosted fallback,
+   while the optional refractive layer is decorative and never receives input. */
+.uiGlassSurface {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--glass-edge);
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+}
+.uiGlassSurface--chrome { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-chrome); -webkit-backdrop-filter: var(--glass-filter-chrome); backdrop-filter: var(--glass-filter-chrome); }
+.uiGlassSurface--floating { background: var(--glass-tint-menu); box-shadow: var(--glass-highlight), var(--glass-shadow-floating); -webkit-backdrop-filter: var(--glass-filter-floating); backdrop-filter: var(--glass-filter-floating); }
+.uiGlassSurface--modal { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-modal); -webkit-backdrop-filter: var(--glass-filter-modal); backdrop-filter: var(--glass-filter-modal); }
+.uiGlassSurface > :not(.uiLiquidGlassEffect) { position: relative; z-index: 1; }
+
+/* Directional specular edge. The inset rim in `--glass-highlight` lights all
+   four sides evenly, which is right for a small control but reads flat across a
+   large pane -- real glass catches the light on the corner facing it and loses
+   it on the opposite one. This traces a 1px gradient ring around the same
+   border box to reintroduce that falloff, and only on surfaces that already
+   establish a stacking context, so no layout can shift under it. */
+.uiGlassSurface::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(148deg, var(--glass-rim-top) 0%, transparent 34%, transparent 64%, var(--glass-rim-base) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.uiLiquidGlassEffect { position: absolute; z-index: 0; inset: 0; display: block; overflow: hidden; border-radius: inherit; pointer-events: none; opacity: 0.4; }
+.uiLiquidGlassEffect > div { width: 100%; height: 100%; border-radius: inherit; }
+.uiLiquidGlassFill { width: 100%; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--glass-tint-soft) 42%, transparent); }
 
 .uiPanelHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
 .uiPanelHeader--compact { gap: var(--space-2); }
@@ -107,7 +185,7 @@
 .uiBanner--warning { border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised)); }
 .uiBanner--error { border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row)); background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface-raised)); }
 
-.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface-raised); }
+.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: color-mix(in srgb, var(--surface-raised) 82%, var(--glass-tint-soft)); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .uiMetricTileMarker { width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--text-muted) 6%, transparent); }
 .uiMetricTile--info .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-info) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-info) 7%, transparent); }
 .uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 15%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--accent) 7%, transparent); }
@@ -168,7 +246,7 @@
 .fileTypeIcon svg { width: 22px; height: 22px; }
 
 .actionMenu { position: relative; display: inline-flex; }
-.actionMenuTrigger svg { width: var(--control-icon-size); height: var(--control-icon-size); fill: currentColor; }
+.actionMenuTrigger svg { width: var(--control-icon-size); height: var(--control-icon-size); fill: none; }
 .actionMenuPopover {
   position: absolute;
   z-index: 80;
@@ -176,10 +254,12 @@
   display: grid;
   min-width: 190px;
   overflow: hidden;
-  border: var(--border-subtle) solid var(--border-panel);
+  border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-lg);
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
 }
 .actionMenuPopover--end { right: 0; }
 .actionMenuPopover--start { left: 0; }
@@ -215,8 +295,11 @@
 }
 .actionMenuItem:hover:not(:disabled), .actionMenuItem:focus-visible { background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .actionMenuItem--active { background: color-mix(in srgb, var(--accent) 9%, var(--surface-raised)); color: var(--sentinel-accent-strong); }
-.actionMenuItem--critical { color: var(--sentinel-danger); }
-.actionMenuItem--critical:hover:not(:disabled), .actionMenuItem--critical:focus-visible { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised)); color: var(--sentinel-danger); }
+/* `--sentinel-danger` is a fill colour: it carries white on a button, but as
+   text on the dark theme's raised surface it lands near 3:1. The status
+   foreground token is the theme-aware reading of the same red. */
+.actionMenuItem--critical { color: var(--status-danger-foreground); }
+.actionMenuItem--critical:hover:not(:disabled), .actionMenuItem--critical:focus-visible { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised)); color: var(--status-danger-foreground); }
 .actionMenuItem svg { width: var(--control-icon-size); height: var(--control-icon-size); flex: 0 0 auto; }
 .visuallyHidden { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; clip-path: inset(50%) !important; white-space: nowrap !important; }
 .selectionActionMenu .actionMenuTrigger { width: var(--control-height-compact); min-width: var(--control-height-compact); height: var(--control-height-compact); min-height: var(--control-height-compact); }
@@ -276,6 +359,31 @@
   }
 }
 
+@media (prefers-reduced-transparency: reduce) {
+  .uiSurface,
+  .panel,
+  .uiGlassSurface,
+  .uiMetricTile,
+  .actionMenuPopover,
+  .scheduleTableCard,
+  .modsWorkspaceInstalled,
+  .modsResultCard,
+  .modsReviewHero,
+  .modsAdvancedOptions,
+  .modsReviewLine,
+  .modsDependencySummary,
+  .modsCompatibilityCard,
+  .nodeInstallBox,
+  .summaryTile {
+    background: var(--surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .uiLiquidGlassEffect,
+  .uiGlassSurface::after { display: none; }
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -311,6 +419,20 @@
 .uiSkeleton--button { width: 34px; height: 34px; }
 .uiSkeleton--icon { width: 38px; height: 38px; }
 
+/* A placeholder should share the radius of what it replaces. The control radius
+   is far too round on a 12px bar standing in for a line of text, which is what
+   made the terminal skeleton hand-roll its own 3px in the first place. */
+.uiSkeleton--text,
+.uiSkeleton--title,
+.authSkeletonTitle,
+.authSkeletonLabel,
+.applicationSkeletonHeading,
+.applicationSkeletonBreadcrumb,
+.serverStripLoadingTitle,
+.serverStripLoadingMeta,
+.codeSkeletonLine,
+.terminalSkeletonLine { border-radius: var(--radius-xs); }
+
 @keyframes skeletonSweep {
   from { transform: translateX(-100%); }
   to { transform: translateX(100%); }
@@ -334,7 +456,7 @@
 .activeServerStripLoadingSkeleton .serverStripLoadingBadge { width: 64px; height: 22px; border-radius: 999px; }
 .activeServerStripLoadingSkeleton .serverStripLoadingMeta { width: min(240px, 54vw); height: 11px; }
 .activeServerStripLoadingSkeleton .serverStripLoadingButton { display: block; width: 86px; height: var(--control-height); }
-.activeServerStripLoadingSkeleton .serverStripLoadingOverflow { display: block; width: var(--control-height); height: var(--control-height); }
+.activeServerStripLoadingSkeleton .serverStripLoadingIconButton { display: block; width: var(--control-height); height: var(--control-height); }
 .featurePageLoadingSkeleton { width: 100%; min-height: min(560px, calc(100vh - 238px)); align-content: stretch; }
 .applicationSkeletonSummary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-3); }
 .applicationSkeletonTile { height: 82px; }
@@ -423,7 +545,7 @@
 .codeSkeletonLine { height: 13px; }
 .terminalLoadingSkeleton { flex: 1 1 auto; min-height: 280px; overflow: hidden; padding: 18px 14px; background: var(--terminal-bg); }
 .terminalLoadingSkeleton > div { display: grid; gap: 11px; }
-.terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); display: block; height: 11px; border-radius: 3px; background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
+.terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); display: block; height: 11px; background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
 .themeDark .terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
 
 @media (max-width: 760px) {
@@ -475,14 +597,6 @@
 }
 
 /* Shared application patterns */
-.fileToolbar .uiButton,
-.selectionActions .uiButton,
-.fileEditorFooter .uiButton,
-.modalFooter .uiButton,
-.userModalFooter .uiButton {
-  white-space: nowrap;
-}
-
 @media (max-width: 980px) and (orientation: portrait) {
   .applicationOverviewTimelinePanel { display: none; }
   .applicationOverviewPanelGrid {
@@ -526,10 +640,6 @@
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-body);
-}
-
-.scheduleRowActions .uiButton {
-  min-height: var(--control-height-compact);
 }
 
 .scheduleRowActions .uiButton--critical {
@@ -589,26 +699,17 @@
 .fileBreadcrumbs button:hover:not(:disabled),
 .modsWorkspaceUpdate button:hover:not(:disabled),
 .modsWorkspaceIdentity:hover:not(:disabled),
-.modsVersionList button:hover:not(:disabled),
-.modInstallVersionRow:hover:not(:disabled) {
+.modsVersionList button:hover:not(:disabled) {
   transform: none;
 }
 
-.uiButton,
+/* `.uiButton`, `.iconButton` and `.iconOnlyButton` already clear this at the top
+   of the file; only the two shell controls need it restated here. */
 .quickActionButton,
-.runtimeControlButton,
-.iconButton,
-.iconOnlyButton {
+.runtimeControlButton {
   box-shadow: none;
 }
 
-.uiButton--primary:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--swiss-white);
-}
-
-.uiButton--secondary:hover:not(:disabled),
 .quickActionButton:hover:not(:disabled),
 .runtimeControlButton.restart:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
@@ -635,10 +736,12 @@
 .modsCompatibilityCard,
 .nodeInstallBox,
 .summaryTile {
-  border-color: var(--border-panel);
+  border-color: var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  box-shadow: none;
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
 }
 
 .panel .panel,
@@ -647,6 +750,28 @@
 .fileEditorBody .panel {
   border-color: var(--border-row);
   background: var(--surface);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Dense, data-heavy regions stay opaque so text, grids, charts, and code keep
+   their existing contrast instead of stacking translucent materials. */
+.consolePanel,
+.fileEditorModal,
+.serverTimelinePanel,
+.filesPanel,
+.fileDetailsPanel,
+.modsWorkspaceInstalled,
+.scheduleTableCard,
+.scheduledRunsCard,
+.settingsHubPanel,
+.usersSettings {
+  border-color: var(--border-panel);
+  background: var(--surface-raised);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .uiPanelHeader,
@@ -677,8 +802,6 @@
   text-transform: none;
 }
 
-.uiPanelHeader p,
-.uiPanelHeaderCopy p,
 .modsWorkspaceListHeader span,
 .modsDrawerHeader p,
 .nodeModalHeader p,
@@ -752,27 +875,11 @@
 
 .fileTableRow.selected,
 .runtimeLoaderCard.selected,
-.modInstallVersionRow.selected,
 .modsVersionList button.selected {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
-}
-
-.uiStatusBadge,
-.settingsStatus,
-.runtimeBadge,
-.roleBadge,
-.modsStatusChip {
-  min-height: 24px;
-  border-width: var(--border-subtle);
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: var(--type-badge-size);
-  font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-badge);
-  line-height: 1.1;
 }
 
 .nodeStatusDot,

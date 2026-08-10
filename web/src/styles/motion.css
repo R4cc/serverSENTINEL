@@ -1,5 +1,73 @@
 /* Lightweight motion language. Loaded last so interaction polish stays intentional. */
 
+/* Glass materials ------------------------------------------------------- */
+/* A pane of glass is an object, so it arrives and leaves like one: it grows
+   into place from just under its final size while its blur resolves, rather
+   than being switched on. Anchoring the transform to the edge the surface hangs
+   off keeps the growth reading as the pane unfolding from its trigger instead
+   of inflating from thin air. */
+/* `backwards`, never `both`: a fill-mode that leaves `transform: scale(1)`
+   applied would make each of these a containing block for any fixed-position
+   descendant for the rest of its life, which is how an entrance animation
+   quietly relocates a context menu. */
+.actionMenuPopover {
+  animation: sentinelGlassEmerge var(--motion-duration-base) var(--motion-ease-spring) backwards;
+  transform-origin: top center;
+}
+
+.actionMenuPopover--end { transform-origin: top right; }
+.actionMenuPopover--start { transform-origin: top left; }
+
+.modalBackdrop {
+  animation: sentinelScrimSettle var(--motion-duration-base) var(--motion-ease-standard) backwards;
+}
+
+.modalPanel,
+.authPanel {
+  animation: sentinelGlassEmerge var(--motion-duration-slow) var(--motion-ease-spring) backwards;
+  transform-origin: center;
+}
+
+/* Tint and rim carry the hover and press response for glass, because the shell
+   deliberately holds still -- nothing here translates or lifts. */
+.uiSurface,
+.panel,
+.uiGlassSurface,
+.uiMetricTile,
+.uiButton--secondary,
+.iconButton {
+  transition:
+    background var(--motion-duration-base) var(--motion-ease-standard),
+    border-color var(--motion-duration-base) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.uiGlassSurface::after {
+  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.restartRequirementTooltip,
+.roleTooltip {
+  transform-origin: top center;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.roleTooltip { transform: translateX(-50%) scale(0.94); }
+.roleInfoWrap:hover .roleTooltip,
+.roleInfoWrap:focus-within .roleTooltip { transform: translateX(-50%) scale(1); }
+
+@keyframes sentinelGlassEmerge {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sentinelScrimSettle {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Living server state ---------------------------------------------------- */
 .serverCommandStatusDot.running,
 .serverSwitcherStatus.running,
@@ -173,6 +241,33 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The named rules below cancel this file's own choreography, but the promise
+     has to hold for motion that arrives from a dependency, from an inline style,
+     or from a stylesheet written after this one was last read. Collapsing every
+     duration is the only version of it that cannot go stale. A duration is not
+     enough on its own -- it makes a movement instant rather than absent -- so
+     the rules that follow still clear the transforms and the looping
+     animations. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  /* The element-level hover lift in `tokens.css` is a transform, so a zero
+     duration would only make it jump rather than stop. */
+  button:hover:not(:disabled) {
+    transform: none;
+  }
+
   .serverCommandStatusDot.running::after,
   .serverSwitcherStatus.running::after,
   .serverCommandStatusDot.starting::after,
@@ -205,7 +300,33 @@
   .activeServerStrip.runtimeFeedback-restart .serverStripIcon,
   .sideNav button.active::after,
   .sonnerToast[data-type="success"],
-  .sonnerToast[data-type="success"] .toastSeverityIcon {
+  .sonnerToast[data-type="success"] .toastSeverityIcon,
+  .actionMenuPopover,
+  .modalBackdrop,
+  .modalPanel,
+  .authPanel {
     animation: none;
+  }
+
+  .sideNav button.active::after {
+    display: none;
+  }
+
+  .uiSurface,
+  .panel,
+  .uiGlassSurface,
+  .uiGlassSurface::after,
+  .uiMetricTile,
+  .uiButton--secondary,
+  .iconButton,
+  .restartRequirementTooltip,
+  .roleTooltip {
+    transition: none;
+  }
+
+  .roleTooltip,
+  .roleInfoWrap:hover .roleTooltip,
+  .roleInfoWrap:focus-within .roleTooltip {
+    transform: translateX(-50%);
   }
 }

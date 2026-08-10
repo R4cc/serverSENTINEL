@@ -62,17 +62,11 @@ button,
 .runtimeControlButton,
 .dangerTextButton,
 .fileNameCell,
-.modInstallVersionRow,
-.accountLogoutButton,
-.overflowDropdown button {
+.accountLogoutButton {
   font-size: var(--type-button-size);
   font-weight: var(--weight-button);
   letter-spacing: var(--tracking-ui);
   text-transform: none;
-}
-
-.overflowDropdown button {
-  font-size: var(--type-meta-size);
 }
 
 input,
@@ -174,23 +168,15 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
+/* Scoped to the meta row rather than every span in the strip: a blanket span
+   rule reached the badges, status dots and button labels too, and each one then
+   needed an `inherit` rule to undo it. */
 .serverStripMeta,
-.activeServerStrip span {
+.serverStripSeparator {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
   letter-spacing: 0;
-}
-
-.activeServerStrip .runtimeControlButton span,
-.activeServerStrip .quickActionButton span,
-.activeServerStrip button span {
-  color: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
 }
 
 .runtimeBadge,
@@ -262,7 +248,6 @@ textarea:not(.xterm-helper-textarea),
 .userModalForm label,
 .keyForm label,
 .fieldLabel,
-.modInstallVersionGroupHeader > strong,
 .fileDetailsContent dt {
   color: var(--text-muted);
   font-size: var(--type-form-label-size);
@@ -313,8 +298,7 @@ textarea:not(.xterm-helper-textarea),
 .usersTable th,
 .fileTableHead button,
 .fileTableHead label,
-.fileTableHead span,
-.modInstallVersionTableHeader {
+.fileTableHead span {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
@@ -332,8 +316,7 @@ textarea:not(.xterm-helper-textarea),
 .userNameCell strong,
 .fileNameCell > span:last-child,
 .fileDetailsTitle h2,
-.eventRow strong,
-.modInstallVersionRow span:first-child {
+.eventRow strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-strong);
@@ -370,17 +353,6 @@ textarea:not(.xterm-helper-textarea),
   font-weight: var(--weight-body);
   line-height: 1.45;
 }
-
-
-
-
-.modInstallVersionGroupHeader > span {
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-}
-
-
-
 .fileEditorMetaRow span {
   font-size: 12px;
   letter-spacing: normal;

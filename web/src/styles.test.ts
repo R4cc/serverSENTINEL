@@ -80,6 +80,18 @@ describe("stylesheet ownership", () => {
     expect(primitiveStyles).toContain(".uiFormField");
     expect(primitiveStyles).toContain(".uiBanner");
     expect(primitiveStyles).toContain(".uiMetricTile");
+    expect(primitiveStyles).toContain(".uiGlassSurface");
+    expect(primitiveStyles).toContain(".uiSurface--solid");
+    expect(primitiveStyles).toContain("prefers-reduced-transparency");
+  });
+
+  it("centralizes glass tokens and preserves opaque data surfaces", () => {
+    for (const token of ["--glass-tint", "--glass-edge", "--glass-blur-panel", "--glass-saturation", "--glass-shadow-panel"]) {
+      expect(tokenStyles).toContain(`${token}:`);
+    }
+    for (const surface of ["consolePanel", "fileEditorModal", "serverTimelinePanel", "filesPanel", "modsWorkspaceInstalled", "scheduleTableCard", "settingsHubContent"]) {
+      expect(Object.values(featureStyles).some((sheet) => sheet.includes(`.${surface}`))).toBe(true);
+    }
   });
 
   it("does not let feature stylesheets redefine primitives or raw colors", () => {
@@ -124,6 +136,25 @@ describe("stylesheet ownership", () => {
 
     for (const [name, sheet] of Object.entries(featureStyles)) {
       expect(`${name}: ${sheet.match(asColor)?.join(", ") ?? "none"}`).toBe(`${name}: none`);
+    }
+  });
+
+  // The CSS minifier collapses a `backdrop-filter` / `-webkit-backdrop-filter`
+  // pair down to whichever comes last, so writing the standard property first
+  // leaves a production bundle carrying only the `-webkit-` spelling -- which
+  // Chrome and Firefox reject outright. Every frosted surface in the app then
+  // renders flat, while `vite dev` (which does not minify) still looks correct,
+  // so nothing short of inspecting a built bundle catches it.
+  it("writes the prefixed backdrop filter before the standard one", () => {
+    for (const [name, sheet] of Object.entries(featureStyles)) {
+      const misordered = sheet.match(/(?<!-webkit-)backdrop-filter:[^;]+;\s*-webkit-backdrop-filter:/g);
+      expect(`${name}: ${misordered?.length ?? 0} misordered`).toBe(`${name}: 0 misordered`);
+    }
+  });
+
+  it("routes backdrop treatments through the shared glass recipes", () => {
+    for (const [name, sheet] of Object.entries(featureStyles)) {
+      expect(`${name}: ${sheet.match(/backdrop-filter:\s*(?:blur|saturate|brightness)\(/g)?.join(", ") ?? "none"}`).toBe(`${name}: none`);
     }
   });
 
@@ -192,12 +223,17 @@ describe("retired class families stay retired", () => {
     expect(featureStyles["files-console.css"]).not.toContain(retired);
   });
 
-  // These three had no markup left anywhere in web/src but were still maintained across
+  // These had no markup left anywhere in web/src but were still maintained across
   // several stylesheets -- buttonRow alone spanned four files and eight rule sites.
+  // The overflow family went with the server-strip menu whose refresh and duplicate
+  // actions were promoted onto the strip itself.
   it.each([
     "buttonRow",
     "layoutBalanced",
-    "nodeDetailsBody"
+    "nodeDetailsBody",
+    "overflowButton",
+    "overflowDropdown",
+    "overflowMenuContainer"
   ])("has no %s rules left in any stylesheet", (retired) => {
     const owners = Object.entries(featureStyles)
       .filter(([, sheet]) => sheet.includes(retired))

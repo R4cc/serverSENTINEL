@@ -88,7 +88,7 @@ export function ImportModal({
 
         {workspace.importTask && (
           <div className="exportProgress" role="status">
-            <progress value={workspace.importProgress} max={100} />
+            <progress aria-label="Import progress" value={workspace.importProgress} max={100} />
             <span>{workspace.importTask}</span>
           </div>
         )}
@@ -131,7 +131,14 @@ export function ImportModal({
 
       <footer className="modalFooter">
         <Button variant="secondary" onClick={workspace.closeImport} disabled={workspace.importBusy}>Cancel</Button>
-        <Button variant="primary" onClick={() => void workspace.runImport(onImported)} disabled={!canApply}>
+        <Button
+          variant="primary"
+          onClick={() => void workspace.runImport(onImported)}
+          disabled={!canApply}
+          title={workspace.importBusy
+            ? "Import is still running."
+            : validation ? validation.valid ? undefined : "Fix the archive issues listed above before importing." : "Choose an export archive first."}
+        >
           {workspace.importBusy ? "Importing…" : "Import"}
         </Button>
       </footer>

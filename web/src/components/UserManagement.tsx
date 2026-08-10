@@ -73,7 +73,8 @@ export function UserManagement({
             <tr key={user.id}>
               <td data-label="User">
                 <div className="userNameCell">
-                  <strong>{user.username}</strong>
+                  {/* The cell truncates a long username, so the full value stays reachable. */}
+                  <strong title={user.username}>{user.username}</strong>
                   {user.id === currentUserId && <span className="currentUserMark">Current user</span>}
                 </div>
               </td>
@@ -231,7 +232,18 @@ function UserPermissionModal({
           <div className="userModalFields">
             <label>
               Username
-              <input name="username" autoComplete="off" required minLength={3} maxLength={32} pattern={usernameInputPattern} defaultValue={user?.username ?? ""} />
+              <input
+                name="username"
+                autoComplete="off"
+                required
+                minLength={3}
+                maxLength={32}
+                pattern={usernameInputPattern}
+                defaultValue={user?.username ?? ""}
+                aria-describedby="user-modal-username-hint"
+                title="Letters, numbers, dots, dashes, and underscores."
+              />
+              <small id="user-modal-username-hint" className="fieldHint">3 to 32 characters: letters, numbers, dots, dashes, and underscores.</small>
             </label>
             {!user && (
               <label>
@@ -256,7 +268,7 @@ function UserPermissionModal({
           </div>
 
           {unknownPermissions.length > 0 && (
-            <div className="permissionWarning">
+            <div className="permissionWarning" role="status">
               This user has unknown permissions from the backend: {unknownPermissions.join(", ")}.
             </div>
           )}
@@ -265,7 +277,7 @@ function UserPermissionModal({
             <div className="permissionsHeader">
               <h3>Permissions</h3>
               {adminPermissionsLocked && <span>Admin permissions are locked.</span>}
-              {!canSave && <span>Choose at least one permission.</span>}
+              {!canSave && <span id="user-modal-permission-hint">Choose at least one permission.</span>}
             </div>
             <div className="permissionGrid">
               {PERMISSION_GROUPS.map((group) => (
@@ -303,7 +315,7 @@ function UserPermissionModal({
 
         <div className="userModalFooter">
           <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</Button>
-          <Button type="submit" disabled={busy || !canSave} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"} reserveLabel={user ? "Save changes" : "Create user"}>
+          <Button type="submit" disabled={busy || !canSave} aria-describedby={!canSave ? "user-modal-permission-hint" : undefined} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"} reserveLabel={user ? "Save changes" : "Create user"}>
             {busy ? "Saving..." : user ? "Save changes" : "Create user"}
           </Button>
         </div>

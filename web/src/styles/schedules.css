@@ -139,9 +139,13 @@
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
 }
 
+/* Both are focused programmatically when the Overview links into a schedule or a
+   run, so the ring has to show for a plain `:focus` as well. */
 .scheduleTableRow:focus,
-.scheduledRunItem:focus {
-  outline: 2px solid var(--accent);
+.scheduledRunItem:focus,
+.scheduleTableRow:focus-visible,
+.scheduledRunItem:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -763,7 +767,7 @@
   border: 0;
   border-radius: var(--radius-md);
   background: var(--surface-muted);
-  transition: box-shadow 120ms ease, opacity 120ms ease, background 120ms ease;
+  transition: box-shadow var(--control-transition), opacity var(--control-transition), background var(--control-transition);
 }
 
 .scheduleStepCard.isDragging {
@@ -898,9 +902,28 @@
   border-radius: var(--radius-md);
   background: var(--surface-raised);
   color: var(--text);
+  cursor: pointer;
   letter-spacing: 0 !important;
   text-align: left;
   text-transform: none;
+  transition: background var(--control-transition), border-color var(--control-transition);
+}
+
+/* The whole card is the hit area, so it answers to the pointer and to the
+   keyboard ring the checkbox inside it draws. */
+.scheduleOptionToggle:hover,
+.scheduleOptionToggle:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 40%, var(--surface-raised));
+}
+
+.scheduleEditFieldset:disabled .scheduleOptionToggle {
+  cursor: default;
+}
+
+.scheduleEditFieldset:disabled .scheduleOptionToggle:hover {
+  border-color: var(--border-row);
+  background: var(--surface-raised);
 }
 
 .scheduleOptionToggle input {
@@ -1245,7 +1268,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .scheduleTableRow,
-  .scheduledRunItem {
+  .scheduledRunItem,
+  .scheduleStepCard,
+  .scheduleOptionToggle,
+  .scheduleRunLogs summary .buttonIcon {
     transition-duration: .01ms !important;
   }
 }

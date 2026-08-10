@@ -1,9 +1,27 @@
-node_modules/
-dist/
+# Patterns match the whole context-relative path, so a bare `node_modules` only excludes the
+# repository root and leaves `server/node_modules`, `web/node_modules` and `shared/node_modules`
+# in the context. Those directories are COPYed in *after* the build stage runs its own `npm ci`,
+# so a host-built tree would overwrite the container's. Both forms are listed because the root
+# entry is the one that keeps the context small and must not depend on `**` semantics.
+node_modules
+**/node_modules
+
+# The build stage compiles every workspace from source and never reads a `dist` from the
+# context. `.github/workflows/dockerpush.yml` skips `npm run build` in CI on the strength of
+# this exclusion, so it has to cover the workspace outputs and not just a root `dist`.
+dist
+**/dist
+
 .git/
+# Not COPYed by any stage; `scripts/check-version-consistency.mjs` already guards for its absence.
+.github/
+.claude/
 .codex-tmp/
 .local-*/
 .tmp*/
+**/.tmp*
+# README screenshots: several MB of PNGs that no stage copies.
+docs/
 .env
 .env.*
 !.env.example

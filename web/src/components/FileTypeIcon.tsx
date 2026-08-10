@@ -1,226 +1,95 @@
 import type { FileEntry } from '../types';
 import { fileIconKind } from '../utils/files';
+import {
+  ArchiveRestore,
+  ArrowRightLeft,
+  ArrowUp,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  Download,
+  FileSliders,
+  FileUp,
+  Folder,
+  FolderPlus,
+  Gauge,
+  GripHorizontal,
+  Hourglass,
+  House,
+  MoreHorizontal,
+  MoreVertical,
+  Network,
+  Pencil,
+  Plus,
+  Puzzle,
+  RefreshCw,
+  Search,
+  Server,
+  Settings,
+  Shield,
+  SquareTerminal,
+  Trash2,
+  Type,
+  X,
+  type LucideIcon
+} from 'lucide-react';
 
-export function SidebarIcon({ name }: { name: "overview" | "console" | "files" | "mods" | "schedule" | "properties" | "settings" | "nodes" }) {
-  if (name === "nodes") {
-    return (
-      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="6" r="2.5" />
-        <circle cx="6" cy="17" r="2.5" />
-        <circle cx="18" cy="17" r="2.5" />
-        <path d="m11 8.5-4 6" />
-        <path d="m13 8.5 4 6" />
-        <path d="M8.5 17h7" />
-      </svg>
-    );
-  }
-  if (name === "overview") {
-    return (
-      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="4" y="5" width="16" height="4" rx="1.5" />
-        <rect x="4" y="10" width="16" height="4" rx="1.5" />
-        <rect x="4" y="15" width="16" height="4" rx="1.5" />
-        <circle cx="7" cy="7" r="0.8" />
-        <circle cx="7" cy="12" r="0.8" />
-        <circle cx="7" cy="17" r="0.8" />
-      </svg>
-    );
-  }
-  if (name === "console") {
-    return (
-      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M4 5h16v14H4z" />
-        <path d="m8 10 3 2-3 2" />
-        <path d="M13 15h4" />
-      </svg>
-    );
-  }
-  if (name === "files") {
-    return (
-      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 7h7l2 2h9v10H3z" />
-        <path d="M3 7V5h7l2 2" />
-      </svg>
-    );
-  }
-  if (name === "mods") {
-    return (
-      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M8 3h8v4h4v10h-4v4H8v-4H4V7h4z" />
-        <path d="M10 10h4" />
-        <path d="M10 14h4" />
-      </svg>
-    );
-  }
-  if (name === "schedule") {
-    return (
-      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="4" y="5" width="16" height="15" rx="1.5" />
-        <path d="M8 3v4" />
-        <path d="M16 3v4" />
-        <path d="M4 10h16" />
-        <path d="M9 15h3l2-2" />
-      </svg>
-    );
-  }
-  if (name === "properties") {
-    return (
-      <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M6 4h12v16H6z" />
-        <path d="M9 8h6" />
-        <path d="M9 12h6" />
-        <path d="M9 16h3" />
-      </svg>
-    );
-  }
-  return (
-    <svg className="sideIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
-      <path d="m19.4 13.5.1-1.5-.1-1.5 2-1.5-2-3.5-2.5 1a8 8 0 0 0-2.6-1.5L14 2.3h-4l-.4 2.7A8 8 0 0 0 7 6.5l-2.5-1-2 3.5 2 1.5-.1 1.5.1 1.5-2 1.5 2 3.5 2.5-1a8 8 0 0 0 2.6 1.5l.4 2.7h4l.4-2.7A8 8 0 0 0 17 17.5l2.5 1 2-3.5-2.1-1.5Z" />
-    </svg>
-  );
+type SidebarIconName = "overview" | "console" | "files" | "mods" | "schedule" | "properties" | "settings" | "nodes";
+
+const sidebarIcons: Record<SidebarIconName, LucideIcon> = {
+  nodes: Network,
+  overview: Gauge,
+  console: SquareTerminal,
+  files: Folder,
+  mods: Puzzle,
+  schedule: CalendarDays,
+  properties: FileSliders,
+  settings: Settings
+};
+
+export function SidebarIcon({ name }: { name: SidebarIconName }) {
+  const Icon = sidebarIcons[name];
+  return <Icon className="sideIcon" aria-hidden="true" />;
 }
 
-export function AppIcon({ name }: { name: "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" }) {
-  return (
-    <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {name === "chevronLeft" && <path d="m15 5-7 7 7 7" />}
-      {name === "chevronRight" && <path d="m9 5 7 7-7 7" />}
-      {name === "chevronUp" && <path d="m5 15 7-7 7 7" />}
-      {name === "chevronDown" && <path d="m5 9 7 7 7-7" />}
-      {name === "arrowUp" && (
-        <>
-          <path d="m12 5-7 7" />
-          <path d="m12 5 7 7" />
-          <path d="M12 5v14" />
-        </>
-      )}
-      {name === "home" && (
-        <>
-          <path d="m4 11 8-7 8 7" />
-          <path d="M6 10v10h12V10" />
-          <path d="M10 20v-6h4v6" />
-        </>
-      )}
-      {name === "refresh" && (
-        <>
-          <path d="M20 6v5h-5" />
-          <path d="M4 18v-5h5" />
-          <path d="M18 11a6 6 0 0 0-10-4L4 11" />
-          <path d="M6 13a6 6 0 0 0 10 4l4-4" />
-        </>
-      )}
-      {name === "switch" && (
-        <>
-          <path d="M7 7h11" />
-          <path d="m15 4 3 3-3 3" />
-          <path d="M17 17H6" />
-          <path d="m9 14-3 3 3 3" />
-        </>
-      )}
-      {name === "plus" && (
-        <>
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </>
-      )}
-      {name === "drag" && (
-        <>
-          <path d="M5 7h14" />
-          <path d="M5 12h14" />
-          <path d="M5 17h14" />
-        </>
-      )}
-      {name === "x" && (
-        <>
-          <path d="m6 6 12 12" />
-          <path d="m18 6-12 12" />
-        </>
-      )}
-      {name === "fileUp" && (
-        <>
-          <path d="M7 3h7l4 4v14H7z" />
-          <path d="M14 3v5h4" />
-          <path d="M12 17V10" />
-          <path d="m9 13 3-3 3 3" />
-        </>
-      )}
-      {name === "download" && (
-        <>
-          <path d="M12 4v11" />
-          <path d="m8 11 4 4 4-4" />
-          <path d="M5 20h14" />
-        </>
-      )}
-      {name === "extract" && (
-        <>
-          <path d="M4 5h16v5H4z" />
-          <path d="M6 10v9h12v-9" />
-          <path d="M12 12v5" />
-          <path d="m9.5 14.5 2.5 2.5 2.5-2.5" />
-        </>
-      )}
-      {name === "folderPlus" && (
-        <>
-          <path d="M3 7h7l2 2h9v10H3z" />
-          <path d="M12 14h6" />
-          <path d="M15 11v6" />
-        </>
-      )}
-      {name === "edit" && (
-        <>
-          <path d="M5 19h4l10-10-4-4L5 15z" />
-          <path d="m13 7 4 4" />
-        </>
-      )}
-      {name === "trash" && (
-        <>
-          <path d="M4 7h16" />
-          <path d="M9 7V4h6v3" />
-          <path d="M7 7l1 13h8l1-13" />
-        </>
-      )}
-      {name === "copy" && (
-        <>
-          <rect x="8" y="8" width="11" height="11" rx="1.5" />
-          <path d="M5 15H4V4h11v1" />
-        </>
-      )}
-      {name === "rename" && (
-        <>
-          <path d="M4 17h16" />
-          <path d="M9 7h6" />
-          <path d="M12 7v10" />
-        </>
-      )}
-      {name === "check" && <path d="m5 12 4 4L19 6" />}
-      {name === "search" && (
-        <>
-          <circle cx="10.5" cy="10.5" r="6" />
-          <path d="m15 15 5 5" />
-        </>
-      )}
-      {name === "shield" && <path d="M12 3 5 6v5c0 4.6 2.9 8 7 10 4.1-2 7-5.4 7-10V6z" />}
-      {name === "hourglass" && (
-        <>
-          <path d="M6 3h12" />
-          <path d="M6 21h12" />
-          <path d="M7 3c0 5 3 6 5 9-2 3-5 4-5 9" />
-          <path d="M17 3c0 5-3 6-5 9 2 3 5 4 5 9" />
-          <path d="M9 8h6" />
-          <path d="M9 18h6" />
-        </>
-      )}
-      {name === "server" && (
-        <>
-          <rect x="4" y="5" width="16" height="5" rx="1.5" />
-          <rect x="4" y="14" width="16" height="5" rx="1.5" />
-          <path d="M7 7.5h.01" />
-          <path d="M7 16.5h.01" />
-        </>
-      )}
-    </svg>
-  );
+type AppIconName = "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" | "moreHorizontal" | "moreVertical";
+
+const appIcons: Record<AppIconName, LucideIcon> = {
+  chevronLeft: ChevronLeft,
+  chevronRight: ChevronRight,
+  chevronUp: ChevronUp,
+  chevronDown: ChevronDown,
+  plus: Plus,
+  x: X,
+  fileUp: FileUp,
+  arrowUp: ArrowUp,
+  home: House,
+  refresh: RefreshCw,
+  download: Download,
+  folderPlus: FolderPlus,
+  edit: Pencil,
+  trash: Trash2,
+  copy: Copy,
+  rename: Type,
+  check: Check,
+  server: Server,
+  search: Search,
+  shield: Shield,
+  hourglass: Hourglass,
+  switch: ArrowRightLeft,
+  extract: ArchiveRestore,
+  drag: GripHorizontal,
+  moreHorizontal: MoreHorizontal,
+  moreVertical: MoreVertical
+};
+
+export function AppIcon({ name }: { name: AppIconName }) {
+  const Icon = appIcons[name];
+  return <Icon className="buttonIcon" aria-hidden="true" />;
 }
 
 export function FileTypeIcon({ entry }: { entry: FileEntry }) {

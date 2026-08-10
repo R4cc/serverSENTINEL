@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.8.1 - 2026-08-10
+
+- Improved server management workflows and interface consistency across the application.
+- Strengthened Overview support-card coverage for dense mod-update states.
+- Stabilized console copy smoke setup and softened the main-page background gradients.
+
+## 1.8.0 - 2026-08-04
+
+- Introduced a responsive liquid-glass visual system with shared surfaces, refined motion, and calmer reduced-motion states across the application.
+- Polished navigation, runtime controls, status summaries, Mods, Settings, user management, and Console presentation for clearer hierarchy and more consistent interaction feedback.
+- Simplified application workflows, removed obsolete server-strip controls, and reduced redundant client and server work.
+
 ## 1.7.3 - 2026-08-04
 
 - Stopped a console stream that ended from leaving an online node reported as offline until the browser was reloaded.

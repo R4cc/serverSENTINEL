@@ -1,9 +1,11 @@
 import type { ManagedServer, PlayerSnapshot, ServerStatus } from "../types";
+import { Box, SquareTerminal, UserRound } from "lucide-react";
 import { AppIcon } from "./FileTypeIcon";
 import { RestartRequiredBadge } from "./RestartRequiredBadge";
 import { RuntimeControls } from "./RuntimeControls";
 import { ServerRuntimeAlert } from "./ServerRuntimeAlert";
 import { Button, Spinner, StatusBadge } from "./UiPrimitives";
+import { GlassEffect } from "./GlassEffect";
 
 export type ServerStripHealth = { tone: string; message: string } | null;
 export type ServerStripAlert = { title: string; message: string } | null;
@@ -65,20 +67,17 @@ export function ActiveServerStrip({
 }) {
   const playerCount = playerCountLabel(playerSnapshot);
   return (
-    <div className={`activeServerStrip ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
+    <div className={`activeServerStrip uiGlassSurface uiGlassSurface--chrome ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
+      <GlassEffect variant="chrome" />
       <div className="serverStripPrimary">
         <div className="serverStripLeft">
           <div className="serverStripIcon">
-            <svg className="server-icon-cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-              <line x1="12" y1="22.08" x2="12" y2="12" />
-            </svg>
+            <Box className="server-icon-cube" strokeWidth={2.2} aria-hidden="true" />
           </div>
           <div className="serverStripInfo">
             <div className="serverStripTitleRow">
               <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
-              <strong>{server.displayName}</strong>
+              <strong title={server.displayName}>{server.displayName}</strong>
               <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                 {lastKnownRuntimeLabel}
               </StatusBadge>
@@ -106,11 +105,8 @@ export function ActiveServerStrip({
                   {playerCount && (
                     <>
                       <span aria-hidden="true" className="serverStripSeparator">·</span>
-                      <small className="serverStripMeta serverStripPlayers" title="Players online">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="12" cy="8" r="3" />
-                          <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
-                        </svg>
+                      <small className="serverStripMeta serverStripPlayers" title="Players online" aria-label={`Players online: ${playerCount}`}>
+                        <UserRound strokeWidth={2.2} aria-hidden="true" />
                         {playerCount}
                       </small>
                     </>
@@ -133,14 +129,12 @@ export function ActiveServerStrip({
           />
           <Button
             variant="secondary"
-            className={`quickActionButton consoleLink ${consoleActive ? "active" : ""}`}
+            className={`quickActionButton consoleLink ${consoleActive ? "active" : ""}`.trim()}
+            aria-current={consoleActive ? "page" : undefined}
             onClick={onOpenConsole}
             title="Open console"
           >
-            <svg className="buttonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="4 17 10 11 4 5" />
-              <line x1="12" y1="19" x2="20" y2="19" />
-            </svg>
+            <SquareTerminal className="buttonIcon" strokeWidth={2.5} aria-hidden="true" />
             <span>Console</span>
           </Button>
           <Button

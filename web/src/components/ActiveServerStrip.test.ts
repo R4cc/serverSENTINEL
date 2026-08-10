@@ -7,7 +7,7 @@ import { ActiveServerStrip } from "./ActiveServerStrip";
 
 const server = demoServer();
 
-function render(playerSnapshot: PlayerSnapshot | undefined) {
+function render(playerSnapshot: PlayerSnapshot | undefined, consoleActive = false) {
   return renderToStaticMarkup(
     createElement(ActiveServerStrip, {
       server,
@@ -28,7 +28,7 @@ function render(playerSnapshot: PlayerSnapshot | undefined) {
       controlsDisabled: false,
       controlsDisabledReason: "",
       onRuntimeAction: () => {},
-      consoleActive: false,
+      consoleActive,
       onOpenConsole: () => {},
       onRetryConnection: () => {},
       refreshDisabled: false,
@@ -41,6 +41,7 @@ describe("ActiveServerStrip player count", () => {
   it("shows online out of max when both are known", () => {
     const markup = render({ state: "live", online: 3, maxPlayers: 20, names: ["a", "b", "c"], sampledAt: "2026-07-25T10:00:00.000Z" });
     expect(markup).toContain("3 / 20");
+    expect(markup).toContain('aria-label="Players online: 3 / 20"');
   });
 
   it("shows only the online count when the maximum is unknown", () => {
@@ -68,5 +69,10 @@ describe("ActiveServerStrip refresh action", () => {
     expect(markup).toContain("refreshStatusButton");
     expect(markup).not.toContain("More server actions");
     expect(markup).not.toContain('aria-haspopup="menu"');
+  });
+
+  it("announces the console action as the current page", () => {
+    expect(render(undefined, true)).toContain('aria-current="page"');
+    expect(render(undefined, false)).not.toContain('aria-current="page"');
   });
 });

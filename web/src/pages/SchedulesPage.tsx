@@ -9,7 +9,7 @@ import {
 import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
-import { SortHeaderButton } from '../components/TableControls';
+import { SortHeaderButton, headerAriaSort } from '../components/TableControls';
 import { Button, EmptyState, PanelHeader, Toolbar } from '../components/UiPrimitives';
 import { DialogSurface } from '../components/DialogSurface';
 import { ActionMenu } from '../components/ActionMenu';
@@ -415,7 +415,7 @@ export function SchedulePage({
           <div className="scheduleTableFrame" role="table" aria-label="Schedules">
             <div className="scheduleTableHeader" role="row">
               {scheduleTable.getHeaderGroups()[0]?.headers.map((header) => (
-                <span key={header.id}>
+                <span key={header.id} role="columnheader" aria-sort={headerAriaSort(header)}>
                   {header.id === "actions" ? (
                     "Actions"
                   ) : (
@@ -547,13 +547,7 @@ export function SchedulePage({
                             separatorBefore: true
                           }
                         ]}
-                        trigger={
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="12" cy="5" r="1.7" />
-                            <circle cx="12" cy="12" r="1.7" />
-                            <circle cx="12" cy="19" r="1.7" />
-                          </svg>
-                        }
+                        trigger={<AppIcon name="moreVertical" />}
                       />
                     </div>
                   </div>
@@ -651,12 +645,14 @@ export function SchedulePage({
                       placeholder="0 4 * * *"
                       required
                       aria-invalid={Boolean(cronError)}
-                      aria-describedby={cronError ? "schedule-cron-error" : cronDescription ? "schedule-cron-description" : undefined}
+                      aria-describedby={cronError ? "schedule-cron-error" : "schedule-cron-description"}
                       title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
                     />
+                    {/* One feedback line in every state: the format hint holds the slot until
+                        the expression parses, so the field never changes height as it is typed. */}
                     {cronError
                       ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
-                      : cronDescription && <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription}</span>}
+                      : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
                   </label>
                 </div>
               </section>

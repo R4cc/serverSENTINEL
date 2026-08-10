@@ -155,7 +155,7 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
             </label>
             <div className="modsUpdateReviewActions">
               <Button variant="secondary" onClick={() => { setReviewingInstalledVersion(false); setInstalledReviewAcknowledged(false); }} disabled={acknowledgingInstalledReview}>Cancel</Button>
-              <Button onClick={() => void confirmInstalledReviewAcknowledgement()} disabled={reviewAcknowledgementLocked || acknowledgingInstalledReview || !installedReviewAcknowledged}>{acknowledgingInstalledReview ? "Acknowledging..." : "Mark healthy"}</Button>
+              <Button onClick={() => void confirmInstalledReviewAcknowledgement()} disabled={reviewAcknowledgementLocked || acknowledgingInstalledReview || !installedReviewAcknowledged} aria-busy={acknowledgingInstalledReview} reserveLabel="Acknowledging...">{acknowledgingInstalledReview ? "Acknowledging..." : "Mark healthy"}</Button>
             </div>
           </section>
         )}

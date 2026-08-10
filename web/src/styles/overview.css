@@ -5,7 +5,7 @@
   display: none;
 }
 
-.overviewPage.layoutDashboard {
+.overviewPage.layoutWide {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-4);
@@ -56,10 +56,12 @@
   grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
   gap: var(--space-3);
-  border-color: var(--border-panel);
+  border-color: var(--glass-edge);
   border-radius: var(--radius-md);
-  background: var(--surface-raised);
-  box-shadow: none;
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
 }
 
 .overviewCard > .uiPanelHeader,
@@ -77,6 +79,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 
@@ -91,16 +94,24 @@
   align-content: start;
 }
 
+/* Every list row in the support cards -- card states, mod updates, upcoming
+   schedules -- is an `.overviewCardRow`, so the rule owns their shared shell:
+   one border colour, one radius, one transition. Each family below only states
+   its own grid. */
 .overviewCardRow {
   min-width: 0;
   min-height: 52px;
   border: var(--border-subtle) solid transparent;
-  border-bottom-color: var(--border-row);
+  border-bottom-color: var(--border-muted);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
   font: inherit;
   text-align: left;
+  transition:
+    background var(--motion-duration-base) var(--motion-ease-standard),
+    border-color var(--motion-duration-base) var(--motion-ease-standard),
+    color var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .overviewCardStateItem {
@@ -108,10 +119,6 @@
   grid-template-columns: 36px minmax(0, 1fr) 16px;
   align-items: center;
   gap: var(--space-3);
-  border: 0;
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: transparent;
   padding: 7px 2px;
 }
 
@@ -270,11 +277,15 @@ button.overviewCardRow:focus-visible {
   white-space: nowrap;
 }
 
+/* The toggle label ("Show 14 more players") and the staleness note are both
+   unwrappable, so on a narrow card they take separate lines instead of pushing
+   the roster into a horizontal scroll. */
 .activePlayerRosterFooter {
   min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding-top: var(--space-1);
   border-top: var(--border-subtle) solid var(--border-row);
@@ -383,6 +394,11 @@ button.overviewCardRow:focus-visible {
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   overflow: hidden;
+  border-color: var(--border-panel);
+  background: var(--surface-raised);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .serverTimelinePanel .uiPanelHeader {
@@ -934,7 +950,7 @@ button.overviewCardRow:focus-visible {
   border: 2px solid var(--surface-raised);
   border-radius: 999px;
   background: var(--annotation-color, var(--accent));
-  color: white;
+  color: var(--swiss-white);
   padding: 0 5px;
   font-size: 9px;
   font-weight: var(--weight-title);
@@ -1106,11 +1122,13 @@ button.overviewCardRow:focus-visible {
   display: grid;
   gap: 5px;
   padding: 10px 12px;
-  border: var(--border-subtle) solid var(--border-panel);
+  border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  background: var(--glass-tint-menu);
   color: var(--text);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
   font-size: 12px;
 }
 
@@ -1172,12 +1190,21 @@ button.overviewCardRow:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .serverTimelinePanel * { transition: none !important; animation: none !important; }
+
+  .overviewCardRow,
+  .timelineSeriesToggle {
+    transition: none;
+  }
 }
 
-.modUpdatesRemaining {
+.modUpdatesRemaining,
+.scheduleUpcomingMore {
+  justify-self: start;
+  max-width: 100%;
   color: var(--text-muted);
   font-size: var(--type-helper-size);
   line-height: 1.45;
+  text-align: left;
 }
 
 .modUpdatesList {
@@ -1195,12 +1222,7 @@ button.overviewCardRow:focus-visible {
   grid-template-columns: 36px minmax(0, 1fr) 16px;
   align-items: center;
   gap: var(--space-3);
-  border: 0;
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: transparent;
   padding: 7px 2px;
-  transition: background-color 150ms ease;
 }
 
 .modUpdatesListItem > .buttonIcon {
@@ -1250,10 +1272,6 @@ button.overviewCardRow:focus-visible {
   text-overflow: ellipsis;
 }
 
-.modUpdatesRemaining {
-  justify-self: start;
-}
-
 .modUpdatesChevronSkeleton {
   width: 18px;
   height: 18px;
@@ -1293,8 +1311,11 @@ button.overviewCardRow:focus-visible {
 .scheduleUpcomingList {
   min-width: 0;
   display: grid;
+  gap: var(--space-2);
 }
 
+/* Radius, border and hover all come from `.overviewCardRow`, so a schedule row
+   and the mod update row beside it are the same object with a different grid. */
 .scheduleUpcomingItem {
   min-width: 0;
   min-height: 44px;
@@ -1302,55 +1323,26 @@ button.overviewCardRow:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto 16px;
   align-items: center;
   gap: var(--space-2);
-  border: 0;
-  border-bottom: var(--border-subtle) solid var(--border-muted);
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
   padding: 8px 2px;
-  font: inherit;
-  text-align: left;
   cursor: pointer;
-  transition: background-color 150ms ease, color 150ms ease;
 }
 
-.scheduleUpcomingItem:first-child {
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
-.scheduleUpcomingItem:last-child {
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-}
-
-.scheduleUpcomingItem:only-child {
-  border-radius: var(--radius-sm);
-}
-
-.scheduleUpcomingItem:hover:not(:disabled) {
-  border-color: var(--border-muted);
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
-  color: var(--text);
-  transform: none;
-}
-
-.scheduleUpcomingItem:focus-visible,
-.scheduleUpcomingMore:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
+/* Rows share the mod card's title and metadata scale for the same reason. */
 .scheduleUpcomingItem strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
   font-size: 13px;
+  font-weight: var(--weight-title);
+  line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .scheduleUpcomingItem time {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -1358,12 +1350,6 @@ button.overviewCardRow:focus-visible {
   width: 15px;
   height: 15px;
   color: var(--text-muted);
-}
-
-.scheduleUpcomingMore {
-  justify-self: start;
-  max-width: 100%;
-  text-align: left;
 }
 
 .overviewPage .consolePanel {
@@ -1829,7 +1815,7 @@ button.overviewCardRow:focus-visible {
 
   .workspacePage-overview > .workspaceHeader,
   .workspacePage-overview > .activeServerStrip,
-  .workspacePage-overview > .overviewPage.layoutDashboard {
+  .workspacePage-overview > .overviewPage.layoutWide {
     width: 100%;
     max-width: 3200px;
     margin-inline: auto;
@@ -1857,12 +1843,22 @@ button.overviewCardRow:focus-visible {
   box-shadow: none;
 }
 
+/* CPU, memory and uptime resample while the page is open. Fixed-advance digits
+   keep the six tiles from twitching against each other between samples. */
+.overviewSummary .uiMetricTileCopy > strong {
+  font-variant-numeric: tabular-nums;
+}
+
 .overviewSummary .statusTile { --status-card-color: var(--sentinel-info); }
 .overviewSummary .statusTile.running { --status-card-color: var(--sentinel-success); }
 .overviewSummary .statusTile.warning { --status-card-color: var(--sentinel-warning); }
 .overviewSummary .statusTile.stopped,
 .overviewSummary .statusTile.danger { --status-card-color: var(--sentinel-danger); }
-.overviewSummary .statusTile { background-color: color-mix(in srgb, var(--status-card-color) 7%, var(--surface-raised)); }
+.overviewSummary .summaryTile.statusTile.state {
+  border-color: color-mix(in srgb, var(--status-card-color) 62%, var(--glass-edge));
+  background: color-mix(in srgb, var(--status-card-color) 22%, var(--surface-raised));
+  box-shadow: 0 10px 28px -22px color-mix(in srgb, var(--status-card-color) 72%, transparent);
+}
 
 .overviewSummary .summaryStatusText {
   color: var(--text);
@@ -1873,13 +1869,16 @@ button.overviewCardRow:focus-visible {
   text-transform: uppercase;
 }
 
+/* The status word sits on a tile tinted with its own colour, so it takes the
+   contrast-tuned `--status-*-foreground` the warning and neutral branches below
+   already use rather than the raw brand hue. */
 .overviewSummary .summaryTile.state.running .summaryStatusText {
-  color: var(--sentinel-success);
+  color: var(--status-success-foreground);
 }
 
 .overviewSummary .summaryTile.state.stopped .summaryStatusText,
 .overviewSummary .summaryTile.state.danger .summaryStatusText {
-  color: var(--sentinel-danger);
+  color: var(--status-danger-foreground);
 }
 
 .overviewSummary .summaryTile.state.warning .summaryStatusText {
@@ -1891,12 +1890,9 @@ button.overviewCardRow:focus-visible {
 }
 
 .eventRow {
+  min-height: 40px;
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
-}
-
-.eventRow {
-  min-height: 40px;
 }
 
 .eventRow strong {
@@ -1911,17 +1907,28 @@ button.overviewCardRow:focus-visible {
   font-weight: var(--weight-meta);
 }
 
+/* One definition for the hide control: it used to be described twice, once here
+   at 32px and once as a 28px square in the nodes sheet, so its resting size and
+   its hover treatment came from different rules. */
 .eventHideButton.uiButton {
   width: var(--control-height-compact);
   min-width: var(--control-height-compact);
   height: var(--control-height-compact);
   min-height: var(--control-height-compact);
-  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-muted);
+  padding: 0;
+  box-shadow: none;
 }
 
-.eventHideButton.uiButton:hover:not(:disabled) {
+.eventHideButton.uiButton:hover:not(:disabled),
+.eventHideButton.uiButton:focus-visible {
+  border-color: transparent;
+  background: var(--surface-muted);
   color: var(--text);
+  transform: none;
 }
 
 .uiButton.runtimeControlButton,
@@ -1936,7 +1943,7 @@ button.overviewCardRow:focus-visible {
 .uiButton.runtimeControlButton.start {
   border-color: var(--sentinel-success);
   background: var(--sentinel-success);
-  color: var(--swiss-white);
+  color: var(--sentinel-success-contrast);
 }
 
 .uiButton.runtimeControlButton.start:hover:not(:disabled) {
@@ -1947,7 +1954,7 @@ button.overviewCardRow:focus-visible {
 .uiButton.runtimeControlButton.stop {
   border-color: var(--sentinel-danger);
   background: var(--sentinel-danger);
-  color: var(--swiss-white);
+  color: var(--sentinel-danger-contrast);
 }
 
 .uiButton.runtimeControlButton.restart,
@@ -2035,9 +2042,9 @@ button.overviewCardRow:focus-visible {
     text-transform: uppercase;
   }
 
-  .overviewSummary .summaryTile.state.running .summaryStatusText { color: var(--sentinel-success); }
+  .overviewSummary .summaryTile.state.running .summaryStatusText { color: var(--status-success-foreground); }
   .overviewSummary .summaryTile.state.stopped .summaryStatusText,
-  .overviewSummary .summaryTile.state.danger .summaryStatusText { color: var(--sentinel-danger); }
+  .overviewSummary .summaryTile.state.danger .summaryStatusText { color: var(--status-danger-foreground); }
 
   .serverTimelinePanel {
     padding: var(--space-4);

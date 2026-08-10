@@ -30,5 +30,6 @@ describe("interaction primitives", () => {
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('aria-labelledby="dialog-title"');
     expect(html).toContain('tabindex="-1"');
+    expect(html).toContain("uiGlassSurface--modal");
   });
 });

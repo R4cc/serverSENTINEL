@@ -17,6 +17,8 @@
   --sentinel-info: #2563c9;
   --sentinel-warning: #b7791f;
   --sentinel-danger: #dc2626;
+  --sentinel-success-contrast: var(--swiss-white);
+  --sentinel-danger-contrast: var(--swiss-white);
   --status-success-foreground: #276b59;
   --status-warning-foreground: #8a570f;
   --status-danger-foreground: #bd1f1f;
@@ -24,6 +26,7 @@
   --surface: var(--swiss-white);
   --surface-raised: var(--swiss-white);
   --surface-muted: var(--swiss-muted);
+  --app-background: #dde5f5;
   --surface-read-only: #f7f7f7;
   --surface-disabled: #eceff2;
   --sidebar-background: #09162c;
@@ -50,18 +53,95 @@
   --editor-heading: #111827;
   --editor-link: #3858e9;
   --overlay: rgb(0 0 0 / 0.48);
+  --accent-contrast: var(--swiss-white);
+  /* Liquid glass material.
+     A pane of glass is described by four things, and each has its own token
+     group so a surface never hand-rolls one of them:
+       tint       — the frosting laid over whatever shows through
+       rim        — the specular highlight the lens throws along its edges
+       shadow     — the contact shadow and the ambient drop below it
+       filter     — the backdrop treatment (blur, saturation, luminance lift)
+     Tint stays low enough that the ambient wash behind the shell is still
+     legible through the pane; the rim, not the opacity, is what makes it read
+     as a solid object. */
+  --glass-tint: rgb(255 255 255 / 0.54);
+  --glass-tint-strong: rgb(255 255 255 / 0.68);
+  --glass-tint-soft: rgb(255 255 255 / 0.4);
+  /* Menus and tooltips open over whatever happens to be underneath -- a chart, a
+     table, the dark sidebar -- and their text has to survive all of it, so they
+     take a denser tint than a panel that sits on the page wash. */
+  --glass-tint-menu: rgb(255 255 255 / 0.94);
+  --glass-border: rgb(255 255 255 / 0.82);
+  --glass-border-muted: rgb(255 255 255 / 0.5);
+  --glass-edge: color-mix(in srgb, var(--glass-border) 74%, var(--border-panel));
+  /* The rim is brightest along the top edge, where the lens catches the light,
+     falls off around the sides, and returns as a dim bounce along the bottom.
+     A single flat top highlight reads as a border; this reads as thickness. */
+  --glass-rim-top: rgb(255 255 255 / 0.92);
+  --glass-rim-side: rgb(255 255 255 / 0.46);
+  --glass-rim-base: rgb(255 255 255 / 0.3);
+  --glass-rim-bloom: rgb(255 255 255 / 0.42);
+  --glass-highlight:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 1px 0 0 var(--glass-rim-side),
+    inset -1px 0 0 var(--glass-rim-side),
+    inset 0 -1px 0 var(--glass-rim-base),
+    inset 0 8px 16px -14px var(--glass-rim-bloom);
+  /* The hairline contact ring is what separates a pane from the wash behind it
+     once the tint is low enough to see through; the wide ambient shadow alone
+     leaves the edge undefined. */
+  --glass-shadow:
+    0 0 0 0.5px rgb(34 55 92 / 0.07),
+    0 16px 40px -14px rgb(34 55 92 / 0.18),
+    0 3px 10px -4px rgb(34 55 92 / 0.09);
+  --glass-shadow-floating:
+    0 0 0 0.5px rgb(34 55 92 / 0.09),
+    0 26px 60px -18px rgb(34 55 92 / 0.3),
+    0 6px 16px -6px rgb(34 55 92 / 0.14);
+  --glass-shadow-panel: var(--glass-shadow);
+  --glass-shadow-chrome: var(--glass-shadow);
+  --glass-shadow-modal: var(--glass-shadow-floating);
+  --glass-blur: 24px;
+  --glass-blur-panel: var(--glass-blur);
+  --glass-blur-chrome: 28px;
+  --glass-blur-floating: 20px;
+  --glass-blur-modal: 32px;
+  --glass-saturation: 180%;
+  /* Blur and saturation alone leave translucent panes muddier than the surface
+     behind them. The luminance lift is what keeps a light pane reading as
+     frosted glass rather than as a dimmed hole in the page. */
+  --glass-brightness: 1.06;
+  --glass-filter-panel: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-chrome: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-floating: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-modal: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  --glass-filter-control: blur(14px) saturate(150%) brightness(var(--glass-brightness));
+  --glass-filter-scrim: blur(10px) saturate(120%);
+  --solid-control-surface: rgb(255 255 255 / 0.84);
   /* Elevation scale. `xs` lifts a control off its own track, `md` floats a
      tooltip or popover, `elevated` carries a drawer or modal. */
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.08);
   --shadow-md: 0 8px 24px rgb(0 0 0 / 0.1);
   --shadow-elevated: 0 18px 46px rgb(0 0 0 / 0.12);
   --shadow-lg: var(--shadow-elevated);
+  /* One focus treatment for the whole app. Anything that can take keyboard focus
+     draws this ring and nothing else, so the shape of "focused" never depends on
+     which stylesheet happened to reach an element first. */
   --focus-ring: var(--accent);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  /* One disabled treatment, likewise: primitives and bare elements dim by the
+     same amount instead of the 0.38/0.42 pair they used to disagree on. */
+  --disabled-opacity: 0.42;
   --surface-inset: color-mix(in srgb, var(--surface-muted) 56%, var(--surface-raised));
   --border-strong: 1px;
   --border-heavy: 2px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  /* `xs` is for placeholders and hairline fills that stand in for text rather
+     than for a surface; `sm` and up are the control and panel radii. */
+  --radius-xs: 5px;
+  --radius-sm: 11px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -72,7 +152,9 @@
   --sidebar-width: 280px;
   --sidebar-collapsed-width: 76px;
   --sidebar-rail-size: 44px;
-  --sidebar-ease: 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* The collapse is longer than a control transition because it moves the whole
+     shell, but it rides the same curve as everything else. */
+  --sidebar-ease: 110ms var(--motion-ease-standard);
   --type-brand-size: 15px;
   --type-page-title-size: clamp(25px, 2.2vw, 34px);
   --type-section-title-size: 17px;
@@ -103,13 +185,19 @@
   --control-padding-inline: 14px;
   --control-icon-size: 18px;
   --control-icon-button-size: 40px;
-  --control-transition: 150ms ease;
-  --motion-duration-fast: 120ms;
-  --motion-duration-base: 180ms;
-  --motion-duration-slow: 420ms;
+  /* Motion scale. Three durations and two curves; nothing in the app should
+     invent a fourth. `fast` is a state flip the eye should not have to follow,
+     `base` is the default for hover, tint and rim changes, `slow` is reserved
+     for something arriving or leaving. */
+  --motion-duration-fast: 60ms;
+  --motion-duration-base: 90ms;
+  --motion-duration-slow: 210ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-status-cycle: 2800ms;
+  /* Controls transition on the same duration and curve as the glass surfaces
+     around them, so a button and the pane it sits on settle together. */
+  --control-transition: var(--motion-duration-base) var(--motion-ease-standard);
   font-family: var(--font-sans);
   background: var(--surface);
   color: var(--text);
@@ -132,18 +220,24 @@
 }
 
 html {
-  background: var(--surface);
+  background: var(--app-background);
   scrollbar-gutter: stable;
 }
 
+/* The ambient wash is the only thing a glass pane has to refract. It is kept
+   deliberately uneven -- warm on one side, cool on the other -- so a pane
+   dragged across the page picks up a different colour at each corner instead of
+   looking like a flat white card on a flat white page. */
 body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.018) 1px, transparent 0) 0 0 / 20px 20px,
-    linear-gradient(rgb(0 0 0 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
-    linear-gradient(90deg, rgb(0 0 0 / 0.012) 1px, transparent 1px) 0 0 / 32px 32px,
-    var(--surface);
+    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--accent) 22%, transparent) 0, transparent 38%),
+    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--sentinel-info) 18%, transparent) 0, transparent 40%),
+    radial-gradient(circle at 66% 48%, color-mix(in srgb, var(--sentinel-warning) 7%, transparent) 0, transparent 34%),
+    radial-gradient(circle at 28% 94%, color-mix(in srgb, var(--sentinel-accent-muted) 20%, transparent) 0, transparent 46%),
+    var(--app-background);
+  background-attachment: fixed;
   color: var(--text);
 }
 
@@ -163,9 +257,9 @@ textarea {
 
 button {
   min-height: var(--control-height);
-  border: var(--border-strong) solid var(--border);
-  background: var(--text);
-  color: var(--surface);
+  border: var(--border-strong) solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
   padding: 0 var(--control-padding-inline);
   cursor: pointer;
   font-size: var(--type-button-size);
@@ -192,28 +286,34 @@ button:active:not(:disabled) {
   transform: translateY(0);
 }
 
+/* The one focus treatment. Every keyboard-reachable element in the app resolves
+   to this ring; `primitives.css` extends the same declaration to the primitives
+   that are not bare elements (a `.uiButton` anchor, a menu item inside a clipped
+   popover) rather than inventing a second look. */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+a:focus-visible,
+summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.38;
+  opacity: var(--disabled-opacity);
   transform: none;
 }
 
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.06) 0 1px, transparent 1px 10px),
-    var(--surface-muted);
+  border-color: var(--border-row);
+  background: var(--surface-muted);
   color: var(--text-soft);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -221,13 +321,14 @@ input,
 select,
 textarea {
   width: 100%;
-  border: var(--border-strong) solid var(--border);
-  background: var(--surface);
+  border: var(--border-strong) solid var(--border-muted);
+  background: var(--solid-control-surface);
   color: var(--text);
   padding: 10px 12px;
   text-transform: none;
   letter-spacing: normal;
-  transition: background 150ms linear, border-color 150ms linear, color 150ms linear;
+  box-shadow: var(--shadow-xs);
+  transition: background var(--control-transition), border-color var(--control-transition), box-shadow var(--control-transition), color var(--control-transition);
 }
 
 input:not([type="checkbox"]):not([type="radio"]),
@@ -249,24 +350,21 @@ select {
 }
 
 select:disabled {
-  background-image:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.06) 0 1px, transparent 1px 10px),
-    url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-position: 0 0, right 12px center;
-  background-size: auto, 14px;
-  background-repeat: repeat, no-repeat;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-size: 14px;
+  background-repeat: no-repeat;
 }
 
 .themeDark select:disabled {
-  background-image:
-    repeating-linear-gradient(45deg, rgb(0 0 0 / 0.06) 0 1px, transparent 1px 10px),
-    url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }
 
 input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
+  box-shadow: var(--shadow-xs), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 input[aria-invalid="true"] {

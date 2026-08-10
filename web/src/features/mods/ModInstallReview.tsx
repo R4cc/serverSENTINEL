@@ -73,13 +73,14 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
               <summary>Advanced options</summary>
               <p>Choose a channel or select a version manually. Versions outside the recommended path may require acknowledgement.</p>
               <div className="modsChannelPicker" role="group" aria-label="Release channel">
-                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant={state.channel === channel ? "primary" : "secondary"} compact onClick={() => onChannelChange(channel)} disabled={locked}>{channel}</Button>)}
+                {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant={state.channel === channel ? "primary" : "secondary"} compact aria-pressed={state.channel === channel} onClick={() => onChannelChange(channel)} disabled={locked}>{channel}</Button>)}
               </div>
               <div className="modsVersionList">
                 {[...versions, ...otherVersions].map((version) => {
                   const health = getInstallVersionHealth(version);
+                  const selected = state.selectedVersionId === version.id;
                   return (
-                    <button key={version.id} type="button" className={state.selectedVersionId === version.id ? "selected" : ""} onClick={() => onSelect(version)} disabled={locked || !version.selectable}>
+                    <button key={version.id} type="button" className={selected ? "selected" : ""} aria-pressed={selected} title={`${version.versionNumber} — ${health.label}`} onClick={() => onSelect(version)} disabled={locked || !version.selectable}>
                       <span><strong>{version.versionNumber}</strong><small>{version.minecraftVersions.join(", ")}</small></span><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>
                     </button>
                   );
@@ -104,7 +105,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
       </div>
       {state.step === 2 && (
         <div className="modsDrawerFooter">
-          <Button onClick={onInstall} disabled={locked || !canContinue || state.installing} reserveLabel={installButtonLabel.length > installingLabel.length ? installButtonLabel : installingLabel}>{state.installing ? installingLabel : installButtonLabel}</Button>
+          <Button onClick={onInstall} disabled={locked || !canContinue || state.installing} aria-busy={state.installing} reserveLabel={installButtonLabel.length > installingLabel.length ? installButtonLabel : installingLabel}>{state.installing ? installingLabel : installButtonLabel}</Button>
         </div>
       )}
     </div>

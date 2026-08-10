@@ -1,27 +1,15 @@
 import type { ServerStatus } from '../types';
+import { Play, RotateCw, Square } from 'lucide-react';
 import { Button, Spinner } from './UiPrimitives';
 
 export function RuntimeControlIcon({ action }: { action: "start" | "stop" | "restart" }) {
   if (action === "start") {
-    return (
-      <svg className="buttonIcon controlGlyphSVG controlGlyph-start" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M8 5v14l11-7z" />
-      </svg>
-    );
+    return <Play className="buttonIcon controlGlyphSVG controlGlyph-start" fill="currentColor" aria-hidden="true" />;
   }
   if (action === "stop") {
-    return (
-      <svg className="buttonIcon controlGlyphSVG controlGlyph-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M6 6h12v12H6z" />
-      </svg>
-    );
+    return <Square className="buttonIcon controlGlyphSVG controlGlyph-stop" fill="currentColor" aria-hidden="true" />;
   }
-  return (
-    <svg className="buttonIcon controlGlyphSVG controlGlyph-restart" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 2v6h-6" />
-      <path d="M21 13a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-    </svg>
-  );
+  return <RotateCw className="buttonIcon controlGlyphSVG controlGlyph-restart" strokeWidth={2.5} aria-hidden="true" />;
 }
 
 export function RuntimeControls({
@@ -53,6 +41,9 @@ export function RuntimeControls({
   return (
     <div
       className={`runtimeControls ${className}`.trim()}
+      // A plain `div` is a generic container, and assistive technology drops the
+      // accessible name off one -- so without the role the label was never read.
+      role="group"
       aria-label="Container controls"
       aria-busy={Boolean(busyAction)}
       data-busy-action={busyAction || undefined}

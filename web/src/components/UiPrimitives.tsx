@@ -1,10 +1,12 @@
-import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import { createElement, forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import { GlassEffect, type GlassVariant } from "./GlassEffect";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
 type SurfaceElement = "section" | "article" | "aside" | "div";
 type SurfaceDensity = "default" | "compact" | "flush";
 type SurfaceTone = "default" | "subtle";
+type SurfaceMaterial = "glass" | "solid";
 type BannerTone = "info" | "success" | "warning" | "error";
 type MetricTone = "neutral" | "info" | "accent" | "success" | "warning" | "danger";
 type MetricVariant = "default" | "summary";
@@ -144,25 +146,44 @@ export function LoadingLabel({ children }: { children: ReactNode }) {
   return <span className="srOnly" role="status">{children}</span>;
 }
 
-export function Surface({
-  as = "section",
-  density = "default",
-  tone = "default",
-  className,
-  children,
-  ...props
-}: HTMLAttributes<HTMLElement> & {
+export const Surface = forwardRef<HTMLElement, HTMLAttributes<HTMLElement> & {
   as?: SurfaceElement;
   density?: SurfaceDensity;
   tone?: SurfaceTone;
-}) {
+  material?: SurfaceMaterial;
+  glassVariant?: GlassVariant;
+  refractive?: boolean;
+}>(function Surface({
+  as = "section",
+  density = "default",
+  tone = "default",
+  material = "glass",
+  glassVariant = "panel",
+  refractive = false,
+  className,
+  children,
+  ...props
+}, ref) {
   const Tag = as;
-  return (
-    <Tag {...props} className={classes("uiSurface", `uiSurface--${density}`, `uiSurface--${tone}`, className)}>
-      {children}
-    </Tag>
+  return createElement(
+    Tag,
+    {
+      ...props,
+      ref,
+      className: classes(
+        "uiSurface",
+        `uiSurface--${density}`,
+        `uiSurface--${tone}`,
+        `uiSurface--${material}`,
+        material === "glass" && "uiGlassSurface",
+        material === "glass" && `uiGlassSurface--${glassVariant}`,
+        className
+      )
+    },
+    material === "glass" && refractive ? <GlassEffect variant={glassVariant} /> : null,
+    children
   );
-}
+});
 
 export function Toolbar({
   primary,

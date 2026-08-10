@@ -1317,7 +1317,10 @@ export function ServerTimeline({
                       title={markerTitle(cluster, formatDate)}
                       aria-label={markerTitle(cluster, formatDate)}
                       aria-expanded={selectedCluster?.id === cluster.id}
-                      aria-controls="server-timeline-annotation-popover"
+                      // Only the open cluster owns the popover; pointing every
+                      // marker at an id that is not in the document makes the
+                      // relationship unresolvable for assistive technology.
+                      aria-controls={selectedCluster?.id === cluster.id ? "server-timeline-annotation-popover" : undefined}
                       onClick={() => {
                         setHoverTooltip(null);
                         setSelectedCluster((current) => current?.id === cluster.id ? null : cluster);

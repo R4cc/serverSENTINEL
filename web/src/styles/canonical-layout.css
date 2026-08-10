@@ -128,10 +128,6 @@
   margin-inline: 0;
 }
 
-.layoutDashboard {
-  max-width: var(--page-max-width);
-}
-
 .layoutReadable {
   max-width: var(--content-max-width);
 }
@@ -143,8 +139,10 @@
 .activeServerStrip,
 .modalPanel {
   border-width: 1px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
+
+.modalPanel { border-radius: var(--radius-lg); }
 
 .panel {
   padding: var(--space-4);
@@ -154,9 +152,7 @@
 .userModalHeader,
 .nodeModalHeader,
 .fileEditorHeader {
-  min-height: 0;
-  padding-bottom: var(--space-3);
-  margin-bottom: var(--space-3);
+  /* min-height, padding and margin are set by the modal shell block below. */
   border-bottom: 1px solid var(--border-row);
 }
 
@@ -214,23 +210,6 @@
 .quickActionButton {
   height: var(--control-height);
   padding: 0 var(--space-3);
-}
-
-.overflowButton {
-  width: var(--control-height);
-  height: var(--control-height);
-  min-width: var(--control-height);
-  min-height: var(--control-height);
-}
-
-.overflowDropdown {
-  padding: 6px;
-  min-width: 180px;
-}
-
-.overflowDropdown button {
-  min-height: 36px;
-  padding: 8px 10px;
 }
 
 .inlineState,
@@ -343,12 +322,8 @@
 
 .fileDetailsContent dl {
   display: grid;
-  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
-  gap: var(--space-2) var(--space-3);
-}
-
-.fileDetailsContent dl {
   grid-template-columns: 1fr;
+  gap: var(--space-2) var(--space-3);
 }
 
 .fileDetailsContent dl div {
@@ -500,7 +475,6 @@
   overflow: hidden;
 }
 
-.modInstallVersionTable,
 .addNodeStatusCard {
   border-width: 1px;
   border-radius: 8px;

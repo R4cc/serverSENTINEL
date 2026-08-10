@@ -56,10 +56,17 @@ describe("AuthPanel", () => {
     expect(html).toContain(notice.message);
   });
 
+  it("names the credential group for assistive technology without showing a second heading", () => {
+    expect(renderAuthPanel()).toContain('<legend class="srOnly">Sign in to serverSENTINEL</legend>');
+    expect(renderAuthPanel({ setupRequired: true })).toContain('<legend class="srOnly">Create the first administrator account</legend>');
+  });
+
   it("uses one stable busy state for either authentication flow", () => {
     const html = renderAuthPanel({ busy: true });
 
-    expect(html).toContain('aria-busy="true"');
+    // The form and the control it submits both report the same in-flight state,
+    // so the button is not merely dimmed with no explanation.
+    expect(html.match(/aria-busy="true"/g)).toHaveLength(2);
     expect(html).toContain("disabled");
     expect(html).toContain("Checking...");
   });

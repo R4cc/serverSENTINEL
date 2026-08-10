@@ -11,6 +11,13 @@ name: ci
       - dev
   workflow_dispatch:
 
+# Superseding a pull request commit leaves the previous run doing a full install, test,
+# typecheck and Docker build for a commit nobody will merge. Push runs are never cancelled:
+# they are the ones that publish tags, so a release must always be allowed to finish.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ci:
     runs-on: ubuntu-latest
