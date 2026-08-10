@@ -197,10 +197,10 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiMetricTileCopy strong { min-width: 0; color: var(--text); font-size: var(--type-card-title-size); font-weight: var(--weight-strong); line-height: 1.2; overflow-wrap: anywhere; }
 .uiMetricTileDetail { overflow: hidden; color: var(--text-muted); font-size: var(--type-meta-size); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 
-/* A tile may name its metric with an icon. It sits with the label rather than in the marker: the
-   marker is the tone accent and reshapes per breakpoint — a 28px dot here, a 6px bar on the wide
-   overview — so it has no size an icon could rely on. Riding with the label costs no column, so the
-   value keeps its width on a phone, and it holds at every breakpoint without a second rule. */
+/* A tile may name its metric with an icon. By default it sits with the label rather than in the
+   marker: the marker is the tone accent and reshapes per breakpoint, so it has no size a small icon
+   could rely on. Riding with the label costs no column, so the value keeps its width on a phone, and
+   it holds at every breakpoint without a second rule. */
 .uiMetricTileLabel--withIcon { display: flex; align-items: center; gap: 6px; }
 .uiMetricTileIcon { display: inline-grid; flex: none; place-items: center; color: var(--text-muted); }
 .uiMetricTileIcon svg { width: 13px; height: 13px; }
@@ -209,6 +209,29 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiMetricTile--success .uiMetricTileIcon { color: var(--sentinel-success); }
 .uiMetricTile--warning .uiMetricTileIcon { color: var(--sentinel-warning); }
 .uiMetricTile--danger .uiMetricTileIcon { color: var(--sentinel-danger); }
+
+/* `iconPlacement="leading"` is the other option: the marker becomes a rounded well holding a full
+   size icon, which is what makes the tile read as a card rather than as a labelled number. The well
+   takes its size from one custom property so a caller can tighten it for a dense row without
+   restating the layout, and the glyph scales with it. It stays monochrome unless the tone carries
+   real state — a colour per metric would say something the metric does not. */
+.uiMetricTile--leadingIcon { --metric-tile-marker-size: 40px; grid-template-columns: var(--metric-tile-marker-size) minmax(0, 1fr); }
+.uiMetricTile--leadingIcon .uiMetricTileMarker {
+  width: var(--metric-tile-marker-size);
+  height: var(--metric-tile-marker-size);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: var(--text-muted);
+  box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+.uiMetricTile--leadingIcon .uiMetricTileMarker svg { width: calc(var(--metric-tile-marker-size) * 0.5); height: calc(var(--metric-tile-marker-size) * 0.5); }
+.uiMetricTile--leadingIcon.uiMetricTile--info .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-info) 14%, transparent); color: var(--sentinel-info); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-info) 32%, transparent); }
+.uiMetricTile--leadingIcon.uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--accent) 32%, transparent); }
+.uiMetricTile--leadingIcon.uiMetricTile--success .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-success) 14%, transparent); color: var(--status-success-foreground); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-success) 32%, transparent); }
+.uiMetricTile--leadingIcon.uiMetricTile--warning .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-warning) 15%, transparent); color: var(--status-warning-foreground); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-warning) 34%, transparent); }
+.uiMetricTile--leadingIcon.uiMetricTile--danger .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-danger) 14%, transparent); color: var(--status-danger-foreground); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-danger) 32%, transparent); }
 
 /* Summary variant: the wide, low count tile that heads a workspace. Owned here
    rather than per page so the Mods and Nodes summaries stay the same component

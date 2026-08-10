@@ -1707,6 +1707,9 @@ button.overviewCardRow:focus-visible {
   }
 
   .overviewDashboardGrid > .overviewSummary > .summaryTile {
+    /* Three across a tablet, so a card is wide enough for the full size well: the row is what the
+       container query measures, and it does not narrow when the column count drops. */
+    --metric-tile-marker-size: 38px;
     grid-column: auto;
   }
 }
@@ -1870,12 +1873,52 @@ button.overviewCardRow:focus-visible {
 /* Overview layout cohesion */
 /* Overview shared layout --------------------------------------------------- */
 
+/* The metric row reads as a row of cards, not a strip of numbers: an icon well on the left, then the
+   label over the value. Everything the well costs the value — its size, the gap and the padding —
+   is measured against the row itself rather than the viewport, because the sidebar can collapse
+   under a fixed viewport and the cards are what changed width. The row shares one set of sizes, so
+   the wells still line up straight down the row. */
+.overviewSummary {
+  container-type: inline-size;
+}
+
 .overviewSummary .summaryTile {
-  min-height: 64px;
+  --metric-tile-marker-size: clamp(28px, 3.1cqi, 40px);
+  min-height: 74px;
+  /* One row: the well and the copy sit side by side. The shared `.summaryTile` rule declares the
+     two rows the Nodes tile needs, and here the second one was empty — a phantom row plus a row
+     gap under the content, which pushed the well above the middle of a card stretched to the
+     tallest in the row. Centring both the row and its items is what keeps the wells on one line
+     across the row. */
+  grid-template-rows: auto;
+  align-items: center;
+  align-content: center;
+  gap: 0 clamp(7px, 0.85cqi, 12px);
+  padding: var(--space-3) clamp(8px, 1cqi, 14px);
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
   box-shadow: none;
+}
+
+/* Seven columns in a row this narrow leave the value less room than "Not running" needs, and an
+   ellipsis on a value that short reads as missing data. Below this the card stops scaling with the
+   row and hands the difference back to the value instead. */
+@container (max-width: 1080px) {
+  .overviewSummary .summaryTile {
+    --metric-tile-marker-size: 28px;
+    gap: 0 var(--space-2);
+    padding: var(--space-3) 10px;
+  }
+}
+
+.overviewSummary .summaryTile:hover {
+  border-color: color-mix(in srgb, var(--border) 44%, var(--surface) 56%);
+  background: color-mix(in srgb, var(--surface-muted) 34%, var(--surface-raised));
+}
+
+.overviewSummary .uiMetricTileCopy {
+  gap: 5px;
 }
 
 /* CPU, memory and uptime resample while the page is open. Fixed-advance digits
@@ -1914,10 +1957,17 @@ button.overviewCardRow:focus-visible {
 .overviewSummary .statusTile.warning { --status-card-color: var(--sentinel-warning); }
 .overviewSummary .statusTile.stopped,
 .overviewSummary .statusTile.danger { --status-card-color: var(--sentinel-danger); }
+/* The state carries the card, but the icon well and the status word are where it has to be read, so
+   the surface only tints far enough to separate this card from its six neutral neighbours. */
 .overviewSummary .summaryTile.statusTile.state {
-  border-color: color-mix(in srgb, var(--status-card-color) 62%, var(--glass-edge));
-  background: color-mix(in srgb, var(--status-card-color) 22%, var(--surface-raised));
-  box-shadow: 0 10px 28px -22px color-mix(in srgb, var(--status-card-color) 72%, transparent);
+  border-color: color-mix(in srgb, var(--status-card-color) 44%, var(--border-panel));
+  background: color-mix(in srgb, var(--status-card-color) 9%, var(--surface-raised));
+  box-shadow: none;
+}
+
+.overviewSummary .summaryTile.statusTile.state:hover {
+  border-color: color-mix(in srgb, var(--status-card-color) 58%, var(--border-panel));
+  background: color-mix(in srgb, var(--status-card-color) 13%, var(--surface-raised));
 }
 
 .overviewSummary .summaryStatusText {
@@ -2075,34 +2125,31 @@ button.overviewCardRow:focus-visible {
     grid-area: auto;
   }
 
-  .overviewSummary .summaryTile {
-    min-height: 72px;
-    grid-template-columns: 6px minmax(0, 1fr);
-    gap: 10px;
-    padding: var(--space-3);
-    border-color: var(--border-panel);
-    box-shadow: none;
-  }
-
-  .overviewSummary .uiMetricTileMarker {
-    width: 6px;
-    height: 28px;
-    border-radius: 999px;
-    box-shadow: none;
-  }
-
+  /* Seven cards share one row here, so the value takes the width it can afford: it grows with the
+     viewport and clips to one line rather than wrapping a card taller than its neighbours. */
   .overviewSummary .uiMetricTileCopy > strong {
     display: block;
     overflow: hidden;
     padding-bottom: 2px;
+    font-size: clamp(14px, 1.3cqi, 17px);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .overviewSummary .summaryStatusText {
     color: var(--text);
-    font-size: var(--type-card-title-size);
+    font-size: clamp(14px, 1.3cqi, 17px);
     text-transform: uppercase;
+  }
+
+  /* The narrowest the seven columns ever get. One step down the type scale is a better trade than
+     ellipsing a value as short as "Not running", which is what the whole row shows once a server
+     stops. */
+  @container (max-width: 980px) {
+    .overviewSummary .uiMetricTileCopy > strong,
+    .overviewSummary .summaryStatusText {
+      font-size: var(--type-helper-size);
+    }
   }
 
   .overviewSummary .summaryTile.state.running .summaryStatusText { color: var(--status-success-foreground); }

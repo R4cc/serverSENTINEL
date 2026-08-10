@@ -189,15 +189,17 @@ export function OverviewSummary({
         className={`summaryTile state statusTile ${summaryTone(status, dockerSocketMounted)}`}
         label="Status"
         icon={<Activity />}
+        iconPlacement="leading"
         tone={summaryMetricTone(status, dockerSocketMounted)}
         value={<span className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</span>}
       />
-      <MetricTile className="summaryTile" label="Minecraft" icon={<Blocks />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
-      <MetricTile className="summaryTile" label="Uptime" icon={<Clock />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
+      <MetricTile className="summaryTile" label="Minecraft" icon={<Blocks />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
+      <MetricTile className="summaryTile" label="Uptime" icon={<Clock />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
       <MetricTile
         className="summaryTile"
         label="World Size"
         icon={<Globe />}
+        iconPlacement="leading"
         value={loading || (storageLoading && worldSizeBytes === null)
           ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
           : worldSizeBytes === null
@@ -208,6 +210,7 @@ export function OverviewSummary({
         className="summaryTile storageRemainingTile"
         label="Free Space"
         icon={<HardDrive />}
+        iconPlacement="leading"
         tone={storageLow ? "warning" : "neutral"}
         value={loading || (storageLoading && storageAvailableBytes === null)
           ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
@@ -224,8 +227,8 @@ export function OverviewSummary({
               </span>
             )}
       />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" icon={<Cpu />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" icon={<MemoryStick />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" icon={<Cpu />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" icon={<MemoryStick />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
     </section>
   );
 }

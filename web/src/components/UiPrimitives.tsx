@@ -263,6 +263,7 @@ export function MetricTile({
   value,
   detail,
   icon,
+  iconPlacement = "label",
   tone = "neutral",
   variant = "default",
   className,
@@ -277,15 +278,23 @@ export function MetricTile({
    * it stays out of the accessibility tree.
    */
   icon?: ReactNode;
+  /**
+   * `leading` moves the icon into the marker column instead, so the marker reads as a container
+   * holding the icon. It costs the value the width the marker already took, which is why a tile
+   * that has room for a wide value keeps the default.
+   */
+  iconPlacement?: "label" | "leading";
   tone?: MetricTone;
   variant?: MetricVariant;
 }) {
+  const leadingIcon = Boolean(icon) && iconPlacement === "leading";
+
   return (
-    <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, variant !== "default" && `uiMetricTile--${variant}`, className)}>
-      <span className="uiMetricTileMarker" aria-hidden="true" />
+    <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, variant !== "default" && `uiMetricTile--${variant}`, leadingIcon && "uiMetricTile--leadingIcon", className)}>
+      <span className="uiMetricTileMarker" aria-hidden="true">{leadingIcon ? icon : null}</span>
       <div className="uiMetricTileCopy">
-        <span className={classes("uiMetricTileLabel", icon ? "uiMetricTileLabel--withIcon" : undefined)}>
-          {icon && <span className="uiMetricTileIcon" aria-hidden="true">{icon}</span>}
+        <span className={classes("uiMetricTileLabel", icon && !leadingIcon ? "uiMetricTileLabel--withIcon" : undefined)}>
+          {icon && !leadingIcon && <span className="uiMetricTileIcon" aria-hidden="true">{icon}</span>}
           {label}
         </span>
         <strong>{value}</strong>

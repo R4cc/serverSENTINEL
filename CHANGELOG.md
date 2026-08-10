@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redesigned the Overview server summary cards around a rounded icon container, with clearer label and value hierarchy and a calmer status treatment.
+
 ## 1.9.0 - 2026-08-10
 
 ## 1.8.2 - 2026-08-10
