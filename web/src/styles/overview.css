@@ -5,7 +5,7 @@
   display: none;
 }
 
-.overviewPage.layoutDashboard {
+.overviewPage.layoutWide {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-4);
@@ -1815,7 +1815,7 @@ button.overviewCardRow:focus-visible {
 
   .workspacePage-overview > .workspaceHeader,
   .workspacePage-overview > .activeServerStrip,
-  .workspacePage-overview > .overviewPage.layoutDashboard {
+  .workspacePage-overview > .overviewPage.layoutWide {
     width: 100%;
     max-width: 3200px;
     margin-inline: auto;

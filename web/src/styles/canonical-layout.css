@@ -128,10 +128,6 @@
   margin-inline: 0;
 }
 
-.layoutDashboard {
-  max-width: var(--page-max-width);
-}
-
 .layoutReadable {
   max-width: var(--content-max-width);
 }
