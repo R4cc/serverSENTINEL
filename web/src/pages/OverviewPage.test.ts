@@ -114,7 +114,7 @@ describe("overview summary", () => {
     expect(html).toContain("73.4%");
     expect(html).toContain(">World Size<");
     expect(html).toContain("7.39 GiB");
-    expect(html).toContain(">Space Remaining<");
+    expect(html).toContain(">Free Space<");
     expect(html).toContain("8 GiB");
     expect(html).toContain('aria-label="8 GiB remaining, storage almost full"');
     expect(html).toContain("lucide-triangle-alert");

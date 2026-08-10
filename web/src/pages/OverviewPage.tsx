@@ -206,7 +206,7 @@ export function OverviewSummary({
       />
       <MetricTile
         className="summaryTile storageRemainingTile"
-        label="Space Remaining"
+        label="Free Space"
         icon={<HardDrive />}
         tone={storageLow ? "warning" : "neutral"}
         value={loading || (storageLoading && storageAvailableBytes === null)

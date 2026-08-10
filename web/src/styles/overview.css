@@ -2048,15 +2048,11 @@ button.overviewCardRow:focus-visible {
       "events events events events events events events events events events events events";
   }
 
+  /* One tile per metric, all the same size. Sizing each column to its own content made the row
+     read as seven unrelated cards, and every other breakpoint — including the seven across at
+     2560px — already divides the row evenly. */
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns:
-      minmax(0, 1fr)
-      minmax(0, 1fr)
-      minmax(0, 0.8fr)
-      minmax(0, 1fr)
-      minmax(0, 1.25fr)
-      minmax(0, 0.8fr)
-      minmax(0, 0.9fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
