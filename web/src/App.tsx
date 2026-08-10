@@ -169,8 +169,6 @@ export default function App() {
   } = usePreferencesState();
   const consoleLogServerIdRef = useRef("");
   const consoleTabServerIdRef = useRef("");
-  const [consoleChunkReady, setConsoleChunkReady] = useState(false);
-  const [prewarmedConsoleServerId, setPrewarmedConsoleServerId] = useState("");
   const overviewTabServerIdRef = useRef("");
   const logsRef = useRef<ConsoleLine[]>([]);
   const pendingLogLinesRef = useRef<ConsoleLine[]>([]);
@@ -613,8 +611,7 @@ export default function App() {
   // as long as that takes. Keep the tab mounted for the rest of the server's workspace visit and
   // let it hide itself instead; the terminal then still holds the buffer it already drew.
   if (activePage === "console" && activeServer) consoleTabServerIdRef.current = activeServer.id;
-  const consoleTabMounted = Boolean(activeServer)
-    && (consoleTabServerIdRef.current === activeServer?.id || prewarmedConsoleServerId === activeServer?.id);
+  const consoleTabMounted = Boolean(activeServer) && consoleTabServerIdRef.current === activeServer?.id;
 
   // Same bargain for the overview: its timeline builds three chart instances, so rebuilding it on
   // every visit blocks the main thread for longer than the rest of the page costs in total.
@@ -648,7 +645,6 @@ export default function App() {
       void preloadActivePage(page)
         .catch(() => undefined)
         .then(() => {
-          if (!cancelled && page === "console") setConsoleChunkReady(true);
           if (!cancelled) schedule();
         });
     };
@@ -661,23 +657,7 @@ export default function App() {
       cancelled = true;
       cancelIdle?.();
     };
-  }, [applicationReady, activeServer?.id]);
-
-  // Module download is cheap to start in the first idle slot; mounting xterm is the expensive
-  // part. Require a short navigation-quiet window before doing that setup so a visitor moving
-  // through pages quickly keeps the main thread, while someone dwelling on a page receives an
-  // already-initialized console on first use.
-  useEffect(() => {
-    if (!consoleChunkReady || !activeServer || activePage === "console" || prewarmedConsoleServerId === activeServer.id) return;
-    let cancelIdle: (() => void) | null = null;
-    const quietTimer = window.setTimeout(() => {
-      cancelIdle = whenIdle(() => setPrewarmedConsoleServerId(activeServer.id));
-    }, 1_000);
-    return () => {
-      window.clearTimeout(quietTimer);
-      cancelIdle?.();
-    };
-  }, [activePage, activeServer?.id, consoleChunkReady, prewarmedConsoleServerId]);
+  }, [applicationReady]);
 
   useEffect(() => {
     return () => {

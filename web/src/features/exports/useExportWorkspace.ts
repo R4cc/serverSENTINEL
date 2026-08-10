@@ -42,6 +42,14 @@ export function exportStatePollInterval(state: ServerExportState) {
   return state.latest?.status === "queued" || state.latest?.status === "running" ? pollIntervalMs : 5_000;
 }
 
+/**
+ * The payload is small and comes back in a stable shape from the same endpoint every time, so a
+ * serialized comparison is enough to tell an unchanged poll result from a real one.
+ */
+export function sameServerExportState(left: ServerExportState, right: ServerExportState) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 async function pollOperation(operationId: string, onProgress: (operation: OperationRecord) => void) {
   for (;;) {
     const operation = await api<OperationRecord>(`/api/operations/${operationId}`);
@@ -86,19 +94,25 @@ export function useExportWorkspace(
   const estimateRequestRef = useRef(0);
   const exportStateRequestRef = useRef(0);
 
-  const refreshServerExportState = useCallback(async (serverId = activeServerId) => {
+  // `background` marks the recurring poll rather than a load someone is waiting on. A background
+  // refresh leaves the loading flag alone, because raising it announces a spinner every few
+  // seconds for a card that is already showing the answer.
+  const refreshServerExportState = useCallback(async (serverId = activeServerId, options?: { background?: boolean }) => {
     if (!enabled || !serverId) {
-      setServerExportState({ latest: null, artifact: null });
+      setServerExportState((current) => current.latest === null && current.artifact === null ? current : { latest: null, artifact: null });
       setServerExportStateError("");
       return;
     }
     const requestId = exportStateRequestRef.current + 1;
     exportStateRequestRef.current = requestId;
-    setServerExportStateLoading(true);
+    if (!options?.background) setServerExportStateLoading(true);
     try {
       const next = await api<ServerExportState>(`/api/servers/${encodeURIComponent(serverId)}/exports`);
       if (exportStateRequestRef.current === requestId) {
-        setServerExportState(next);
+        // This polls for the whole session, and `exportMutationLocked` derives from the result and
+        // feeds the guard layer the files, mods, schedules and settings workspaces read. Swapping in
+        // an equal-but-new object would recompute all of that and re-render the app for nothing.
+        setServerExportState((current) => sameServerExportState(current, next) ? current : next);
         setServerExportStateError("");
       }
     } catch (error) {
@@ -106,7 +120,7 @@ export function useExportWorkspace(
         setServerExportStateError(errorMessage(error, "Export status is temporarily unavailable."));
       }
     } finally {
-      if (exportStateRequestRef.current === requestId) setServerExportStateLoading(false);
+      if (exportStateRequestRef.current === requestId && !options?.background) setServerExportStateLoading(false);
     }
   }, [activeServerId, enabled]);
 
@@ -114,19 +128,47 @@ export function useExportWorkspace(
     void refreshServerExportState();
   }, [refreshServerExportState]);
 
+  // The poll reads its own cadence, so it cannot depend on the state it sets: doing that made each
+  // result reschedule the effect, and it also meant the loop only survived because every response
+  // arrived as a new object. Now that an unchanged payload keeps its identity, the timer has to
+  // chain itself instead.
+  const serverExportStateRef = useRef(serverExportState);
+  serverExportStateRef.current = serverExportState;
+
   useEffect(() => {
     if (!enabled || !activeServerId) return;
-    const timer = window.setTimeout(() => void refreshServerExportState(), exportStatePollInterval(serverExportState));
-    return () => window.clearTimeout(timer);
-  }, [activeServerId, enabled, refreshServerExportState, serverExportState]);
+    let timer = 0;
+    let stopped = false;
+    const scheduleNext = () => {
+      if (stopped) return;
+      timer = window.setTimeout(() => void tick(), exportStatePollInterval(serverExportStateRef.current));
+    };
+    const tick = async () => {
+      // Nobody is watching the export card in a hidden tab, and every other poll in the app already
+      // skips its work while hidden. Returning to the tab refreshes through the listeners below.
+      if (!document.hidden) await refreshServerExportState(activeServerId, { background: true });
+      scheduleNext();
+    };
+    scheduleNext();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeServerId, enabled, refreshServerExportState]);
 
   useEffect(() => {
     if (!enabled || !activeServerId) return;
     const refresh = () => void refreshServerExportState();
+    // Coming back to a hidden tab has to catch up on whatever the paused poll missed.
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refresh();
+    };
     window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     window.addEventListener(exportConflictEvent, refresh);
     return () => {
       window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       window.removeEventListener(exportConflictEvent, refresh);
     };
   }, [activeServerId, enabled, refreshServerExportState]);
