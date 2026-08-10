@@ -2065,7 +2065,7 @@ button.overviewCardRow:focus-visible {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-self: stretch;
-    align-items: start;
+    align-items: stretch;
     align-content: start;
     gap: var(--space-4);
   }
@@ -2135,11 +2135,12 @@ button.overviewCardRow:focus-visible {
 
   .activePlayerGrid { align-content: start; }
 
-  /* Support cards share row geometry but size to their own state. A dense schedule
-     list should not turn a one-row update card into a large empty surface. */
+  /* These cards are one visual pair whenever they sit side by side. The grid row
+     follows the taller capped preview and both cards fill it, regardless of which
+     card has more content. */
   .modUpdatesCard,
   .schedulePanel {
-    align-self: start;
+    align-self: stretch;
   }
 
   .modUpdatesList,

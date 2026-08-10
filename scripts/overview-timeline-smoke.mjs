@@ -585,7 +585,7 @@ async function assertSupportCardGeometry(context, viewport) {
 
     if (viewport.width >= 981) {
       assertNear(metrics.schedule.top, metrics.mods.top, 1, `Side-by-side support cards do not share a top edge at ${viewport.width}px`);
-      assert(metrics.schedule.height < metrics.mods.height, `The Schedule card stretches to the ten-update card height at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+      assertNear(metrics.schedule.height, metrics.mods.height, 1, `Side-by-side support cards do not have equal heights at ${viewport.width}px`);
     } else {
       assert(metrics.schedule.top >= metrics.mods.bottom, `Stacked support cards overlap at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     }
@@ -632,6 +632,7 @@ try {
   await mobile.page.close();
 
   for (const viewport of [
+    { width: 3840, height: 2160 },
     { width: 1440, height: 1000 },
     { width: 1180, height: 900 },
     { width: 981, height: 844 },
@@ -640,7 +641,7 @@ try {
     { width: 390, height: 844 }
   ]) await assertSupportCardGeometry(context, viewport);
 
-  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline geometry; schedule popover contrast; mobile layout; and ten-update support-card geometry.");
+  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline geometry; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();
