@@ -262,6 +262,7 @@ export function MetricTile({
   label,
   value,
   detail,
+  icon,
   tone = "neutral",
   variant = "default",
   className,
@@ -270,6 +271,12 @@ export function MetricTile({
   label: ReactNode;
   value: ReactNode;
   detail?: ReactNode;
+  /**
+   * Rides with the label rather than taking a column of its own, so naming the metric costs the
+   * value no width. The label already says what the tile measures, which makes this decoration —
+   * it stays out of the accessibility tree.
+   */
+  icon?: ReactNode;
   tone?: MetricTone;
   variant?: MetricVariant;
 }) {
@@ -277,7 +284,10 @@ export function MetricTile({
     <article {...props} className={classes("uiMetricTile", `uiMetricTile--${tone}`, variant !== "default" && `uiMetricTile--${variant}`, className)}>
       <span className="uiMetricTileMarker" aria-hidden="true" />
       <div className="uiMetricTileCopy">
-        <span className="uiMetricTileLabel">{label}</span>
+        <span className={classes("uiMetricTileLabel", icon ? "uiMetricTileLabel--withIcon" : undefined)}>
+          {icon && <span className="uiMetricTileIcon" aria-hidden="true">{icon}</span>}
+          {label}
+        </span>
         <strong>{value}</strong>
         {detail && <span className="uiMetricTileDetail">{detail}</span>}
       </div>

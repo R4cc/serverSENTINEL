@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { TriangleAlert } from 'lucide-react';
+import { Activity, Blocks, Clock, Cpu, Globe, HardDrive, MemoryStick, TriangleAlert } from 'lucide-react';
 import type {
   ManagedServer,
   ModUpdatePlan,
@@ -188,14 +188,16 @@ export function OverviewSummary({
       <MetricTile
         className={`summaryTile state statusTile ${summaryTone(status, dockerSocketMounted)}`}
         label="Status"
+        icon={<Activity />}
         tone={summaryMetricTone(status, dockerSocketMounted)}
         value={<span className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</span>}
       />
-      <MetricTile className="summaryTile" label="Minecraft" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
-      <MetricTile className="summaryTile" label="Uptime" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
+      <MetricTile className="summaryTile" label="Minecraft" icon={<Blocks />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
+      <MetricTile className="summaryTile" label="Uptime" icon={<Clock />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
       <MetricTile
         className="summaryTile"
         label="World Size"
+        icon={<Globe />}
         value={loading || (storageLoading && worldSizeBytes === null)
           ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
           : worldSizeBytes === null
@@ -205,6 +207,7 @@ export function OverviewSummary({
       <MetricTile
         className="summaryTile storageRemainingTile"
         label="Space Remaining"
+        icon={<HardDrive />}
         tone={storageLow ? "warning" : "neutral"}
         value={loading || (storageLoading && storageAvailableBytes === null)
           ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
@@ -221,8 +224,8 @@ export function OverviewSummary({
               </span>
             )}
       />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" icon={<Cpu />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" icon={<MemoryStick />} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
     </section>
   );
 }

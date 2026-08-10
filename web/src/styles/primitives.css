@@ -197,6 +197,19 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiMetricTileCopy strong { min-width: 0; color: var(--text); font-size: var(--type-card-title-size); font-weight: var(--weight-strong); line-height: 1.2; overflow-wrap: anywhere; }
 .uiMetricTileDetail { overflow: hidden; color: var(--text-muted); font-size: var(--type-meta-size); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 
+/* A tile may name its metric with an icon. It sits with the label rather than in the marker: the
+   marker is the tone accent and reshapes per breakpoint — a 28px dot here, a 6px bar on the wide
+   overview — so it has no size an icon could rely on. Riding with the label costs no column, so the
+   value keeps its width on a phone, and it holds at every breakpoint without a second rule. */
+.uiMetricTileLabel--withIcon { display: flex; align-items: center; gap: 6px; }
+.uiMetricTileIcon { display: inline-grid; flex: none; place-items: center; color: var(--text-muted); }
+.uiMetricTileIcon svg { width: 13px; height: 13px; }
+.uiMetricTile--info .uiMetricTileIcon { color: var(--sentinel-info); }
+.uiMetricTile--accent .uiMetricTileIcon { color: var(--accent); }
+.uiMetricTile--success .uiMetricTileIcon { color: var(--sentinel-success); }
+.uiMetricTile--warning .uiMetricTileIcon { color: var(--sentinel-warning); }
+.uiMetricTile--danger .uiMetricTileIcon { color: var(--sentinel-danger); }
+
 /* Summary variant: the wide, low count tile that heads a workspace. Owned here
    rather than per page so the Mods and Nodes summaries stay the same component
    instead of two lookalikes that drift apart. The marker reads as a filled dot
