@@ -1397,6 +1397,10 @@ button:disabled,
     gap: 6px;
   }
 
+  .workspaceServerPage > .activeServerStrip .serverCommandStatusDot {
+    margin-inline-start: 4px;
+  }
+
   .workspaceServerPage > .activeServerStrip .serverStripTitleRow strong {
     flex: 1 1 auto;
     font-size: 14px;

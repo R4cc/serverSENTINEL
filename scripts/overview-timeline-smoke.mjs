@@ -67,19 +67,20 @@ async function assertScenarioData(page) {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
   const renderedLabels = new Set();
-  for (let index = 0; index < 100; index += 1) {
+  for (let index = 0; index < 240; index += 1) {
     for (const label of await chart.locator("svg text").allTextContents()) {
       const value = label.trim();
       if (value) renderedLabels.add(value);
     }
-    if (["25h 0m", "54m active", "<1m"].every((label) => renderedLabels.has(label))) break;
+    if (["25h 0m", "24m", "30m", "<1m"].every((label) => renderedLabels.has(label))) break;
     await page.mouse.wheel(0, 600);
     await page.waitForTimeout(15);
   }
   const timelineLabels = [...renderedLabels];
   assert(!timelineLabels.some((label) => label.toLowerCase().includes("alex")), `A removed fixed identity is still rendered: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("25h 0m"), `The exact multi-day session label is missing: ${JSON.stringify(timelineLabels)}`);
-  assert(timelineLabels.includes("54m active"), `The grouped reconnect duration is missing: ${JSON.stringify(timelineLabels)}`);
+  assert(timelineLabels.includes("24m") && timelineLabels.includes("30m"), `Completed and current reconnect sessions are not rendered separately: ${JSON.stringify(timelineLabels)}`);
+  assert(!timelineLabels.includes("54m active"), `Completed and current reconnect sessions were merged into one state: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("<1m"), `The instant session label is missing: ${JSON.stringify(timelineLabels)}`);
   const ariaDescription = await chart.getAttribute("aria-label");
   assert(ariaDescription?.includes("Player session timeline") && ariaDescription.includes("Online now"), `Player timeline accessibility description is incomplete: ${ariaDescription}`);
@@ -93,6 +94,66 @@ async function assertScenarioData(page) {
   assert(!eventsText.toLowerCase().includes("alex"), `A removed fixed identity is still rendered in recent events: ${eventsText}`);
 }
 
+async function playerSessionSegments(page) {
+  return page.evaluate(() => {
+    const panel = document.querySelector(".serverTimelinePanel");
+    if (!panel) return [];
+    const style = getComputedStyle(panel);
+    const onlineColor = style.getPropertyValue("--timeline-join").trim().toLowerCase();
+    const offlineColor = style.getPropertyValue("--timeline-leave").trim().toLowerCase();
+    return [...document.querySelectorAll(".serverTimelinePlayerChart svg path")].flatMap((path) => {
+      const stroke = (path.getAttribute("stroke") ?? "").trim().toLowerCase();
+      if (stroke !== onlineColor && stroke !== offlineColor) return [];
+      const box = path.getBoundingClientRect();
+      if (box.width <= 20 || box.height > 2) return [];
+      return [{ tone: stroke === onlineColor ? "online" : "offline", y: box.y, width: box.width }];
+    });
+  });
+}
+
+async function assertPlayerSessionStateColors(page) {
+  const chart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
+  const box = await chart.boundingBox();
+  assert(box, "Unified player timeline is missing while checking session colors");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
+
+  let liveSegments = [];
+  let hasMixedStateLane = false;
+  for (let index = 0; index < 240; index += 1) {
+    liveSegments = await playerSessionSegments(page);
+    const completed = liveSegments.filter((segment) => segment.tone === "offline");
+    const current = liveSegments.filter((segment) => segment.tone === "online");
+    hasMixedStateLane = completed.some((ended) => current.some((online) => Math.abs(ended.y - online.y) <= 1));
+    if (hasMixedStateLane) break;
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(15);
+  }
+  assert(
+    hasMixedStateLane,
+    `A player's completed and current sessions do not render as separate offline/online states: ${JSON.stringify(liveSegments)}`
+  );
+
+  await selectRange(page, "1h");
+  await page.getByRole("button", { name: "Earlier timeline window", exact: true }).click();
+  await page.waitForFunction((now) => {
+    const players = document.querySelector(".serverTimelinePlayers");
+    const panel = document.querySelector(".serverTimelinePanel");
+    return Number(players?.getAttribute("data-viewport-to")) < now && panel?.getAttribute("aria-busy") === "false";
+  }, fixedNow.getTime());
+
+  const historicalSegments = await playerSessionSegments(page);
+  const nowLabels = await page.locator(".serverTimelinePlayerChart svg text").allTextContents();
+  assert(!nowLabels.includes("Now"), `The historical viewport still renders a current endpoint: ${JSON.stringify(nowLabels)}`);
+  assert(
+    historicalSegments.some((segment) => segment.tone === "online"),
+    `Open player sessions changed to the offline color after now left the viewport: ${JSON.stringify(historicalSegments)}`
+  );
+
+  await page.getByRole("button", { name: "Jump to now", exact: true }).click();
+  await selectRange(page, "3h");
+}
+
 // The desktop Overview replaced the Active Players card with the timeline, so the
 // roster disclosure lives on the player-activity section here and on the standalone
 // card only in the chartless mobile layout.
@@ -104,6 +165,7 @@ async function assertPlayerSectionDisclosure(page) {
 
   const toggle = section.locator(".serverTimelinePlayerToggle");
   assert.equal(await toggle.count(), 1, "The demo roster should overflow the collapsed player section");
+  assert.equal((await toggle.innerText()).replace(/\s+/g, " ").trim(), "Show more players ▾", "The collapsed player disclosure promises more than the capped expansion can show");
   const collapsedHeight = (await chart.boundingBox())?.height ?? 0;
   await toggle.click();
   await page.waitForFunction(() => document.querySelector(".serverTimelinePlayerChart")?.classList.contains("is-expanded"));
@@ -346,6 +408,7 @@ async function assertDesktop(page) {
   const panel = await waitForTimeline(page);
   assert.equal(await panel.getAttribute("aria-busy"), "false");
   await assertScenarioData(page);
+  await assertPlayerSessionStateColors(page);
   await assertPlayerSectionDisclosure(page);
   await assertSchedulePopoverIconContrast(page);
 
@@ -416,6 +479,46 @@ async function createOverviewPage(context, viewport, search = "") {
   return { page, browserErrors };
 }
 
+async function assertAllPlayersOfflineTransition(page) {
+  const section = page.locator(".serverTimelinePlayers");
+  const counts = await section.locator(".serverTimelinePlayerCount").allTextContents();
+  const online = Number.parseInt(counts.find((value) => value.includes("online")) ?? "0", 10);
+  const earlier = Number.parseInt(counts.find((value) => value.includes("earlier")) ?? "0", 10);
+  assert(online > 0, `Demo roster has no online players to stop: ${JSON.stringify(counts)}`);
+
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByRole("button", { name: "Stop server", exact: true }).click();
+  await page.getByRole("button", { name: "Start", exact: true }).waitFor();
+  await page.waitForFunction((expectedEarlier) => {
+    const section = document.querySelector(".serverTimelinePlayers");
+    const onlineCount = section?.querySelector(".serverTimelinePlayerCount:not(.tone-offline)");
+    const earlierCount = section?.querySelector(".serverTimelinePlayerCount.tone-offline")?.textContent ?? "";
+    return !onlineCount && Number.parseInt(earlierCount, 10) === expectedEarlier;
+  }, online + earlier);
+  assert.equal(await section.locator(".serverTimelinePlayerCount.tone-online").count(), 0, "Stopped demo still reports online players");
+}
+
+async function assertTimelineResponsiveGeometry(context, viewport) {
+  const { page, browserErrors } = await createOverviewPage(context, viewport);
+  try {
+    await waitForTimeline(page);
+    const section = page.locator(".serverTimelinePlayers");
+    const chart = section.locator(".serverTimelinePlayerChart");
+    const collapsedHeight = (await chart.boundingBox())?.height ?? 0;
+    assert(collapsedHeight >= 220 && collapsedHeight <= 270, `Collapsed player chart height jumps at ${viewport.width}px: ${collapsedHeight}`);
+    const toggle = section.locator(".serverTimelinePlayerToggle");
+    await toggle.click();
+    const expandedHeight = (await chart.boundingBox())?.height ?? 0;
+    assert(expandedHeight > collapsedHeight, `Player disclosure did not expand at ${viewport.width}px`);
+    assert.equal(await section.getByRole("button", { name: /Show fewer/ }).count(), 1);
+    const overflow = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
+    assert(overflow.scrollWidth <= overflow.width, `Timeline creates horizontal overflow at ${viewport.width}px: ${JSON.stringify(overflow)}`);
+  } finally {
+    assert.deepEqual(browserErrors, [], `Timeline breakpoint browser errors at ${viewport.width}px: ${browserErrors.join("\n")}`);
+    await page.close();
+  }
+}
+
 async function assertSupportCardGeometry(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport, "?mods-fixture=updates");
   try {
@@ -478,8 +581,16 @@ try {
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart .serverTimelineEChart").count(), 1, "Light-theme switch replaced the unified player chart");
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart svg").count(), 1, "Light-theme player chart did not retain SVG rendering");
   await assertSchedulePopoverIconContrast(desktop.page);
+  await assertAllPlayersOfflineTransition(desktop.page);
   assert.deepEqual(desktop.browserErrors, [], `Desktop browser errors: ${desktop.browserErrors.join("\n")}`);
   await desktop.page.close();
+
+  for (const viewport of [
+    { width: 1180, height: 900 },
+    { width: 981, height: 844 },
+    { width: 980, height: 844 },
+    { width: 844, height: 390 }
+  ]) await assertTimelineResponsiveGeometry(context, viewport);
 
   const mobile = await createOverviewPage(context, { width: 390, height: 844 });
   await assertMobile(mobile.page);
@@ -495,7 +606,7 @@ try {
     { width: 390, height: 844 }
   ]) await assertSupportCardGeometry(context, viewport);
 
-  console.log("Overview timeline smoke passed: realistic sessions, all ranges, pan, drag, zoom, scroll, schedule popover contrast, roster, mobile layout, and ten-update support-card geometry.");
+  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline geometry; schedule popover contrast; mobile layout; and ten-update support-card geometry.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

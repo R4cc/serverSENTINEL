@@ -136,6 +136,8 @@ describe("schedule workspace rendering", () => {
     expect(html).toContain("scheduleTableRow disabled");
     expect(html).toContain('aria-label="Enable Disabled maintenance"');
     expect(html).toContain('aria-label="Cancel Nightly maintenance"');
+    expect(html).toContain('title="Nightly maintenance"');
+    expect(html).toContain('title="save-all"');
   });
 
   it("renders cohesive empty states without summary metrics", () => {

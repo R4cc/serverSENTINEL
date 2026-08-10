@@ -240,7 +240,7 @@ export function NodeDetailsDrawer({
           <NodeGlyph />
           <div>
             <div className="nodeDrawerTitleLine">
-              <h2 id="node-details-title">{node.name}</h2>
+              <h2 id="node-details-title" title={node.name}>{node.name}</h2>
               <StatusBadge tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : node.status === "online" ? "success" : node.status === "offline" ? "danger" : "neutral"}>
                 {operation?.phase === "waiting" && <Spinner size="xs" />}
                 {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating" : "Restarting" : operation?.phase === "timed-out" ? "Attention" : node.status}
@@ -249,7 +249,7 @@ export function NodeDetailsDrawer({
             <p id="node-details-description">{node.isInternal ? "Internal panel node" : "Remote node"}</p>
           </div>
         </div>
-        <Button variant="secondary" iconOnly className="iconButton nodeDrawerClose" onClick={onClose} aria-label="Close node details"><AppIcon name="x" /></Button>
+        <Button variant="secondary" iconOnly className="iconButton nodeDrawerClose" onClick={onClose} aria-label="Close node details" title="Close node details"><AppIcon name="x" /></Button>
       </header>
 
       <div className="nodeDrawerBody">

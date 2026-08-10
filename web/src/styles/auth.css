@@ -1,12 +1,15 @@
 .authShell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
-  place-items: center;
+  align-items: safe center;
+  justify-items: center;
   padding: var(--space-5);
 }
 
 .authPanel {
   width: min(460px, 100%);
+  box-sizing: border-box;
   border: var(--border-subtle) solid var(--glass-edge);
   border-radius: var(--radius-lg);
   background: var(--glass-tint-strong);
@@ -16,6 +19,17 @@
   box-shadow: var(--shadow-elevated);
   -webkit-backdrop-filter: var(--glass-filter-modal);
   backdrop-filter: var(--glass-filter-modal);
+}
+
+@media (max-width: 540px) {
+  .authShell {
+    padding: var(--space-3);
+  }
+
+  .authPanel {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
 }
 
 /* The auth card is large enough that the shared rim reads as a second nested

@@ -109,6 +109,8 @@ export function FilesPage({
         : fileOperationBusy === "duplicate" ? "Duplicating file…"
           : fileOperationBusy === "delete" ? "Deleting items…"
             : "";
+  const emptyFolderVisible = !filesLoading && !filesError && sortedFileEntries.length === 0;
+  const renderedFileRowCount = (initialFilesLoading ? 8 : sortedFileEntries.length + (emptyFolderVisible ? 1 : 0)) + 1;
 
   useEffect(() => {
     breadcrumbRef.current?.querySelector<HTMLElement>(".active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -357,6 +359,7 @@ export function FilesPage({
                   type="button"
                   onClick={() => void actions.navigateFiles(crumb.path)}
                   className={`${crumb.path === listing.path ? "active" : ""} ${fileDropTargetPath === crumb.path ? "fileDropTarget" : ""}`.trim()}
+                  aria-current={crumb.path === listing.path ? "location" : undefined}
                   title={draggedFilePath ? `Move to ${crumb.path}` : crumb.path}
                   onDragOver={(event) => handleFileDragOver(event, crumb.path)}
                   onDragLeave={(event) => handleFileDragLeave(event, crumb.path)}
@@ -387,6 +390,7 @@ export function FilesPage({
           <div className="selectionActionBar" aria-label="File selection actions">
             <span className="selectionSummary" role="status" aria-live="polite">{operationLabel || selectionSummary}</span>
             <div className="selectionActions">
+              {selectedEntries.length === 0 && <span className="selectionActionsHint">Select an item to see available actions</span>}
               {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
                 <AppIcon name="edit" />
                 <span className="selectionActionLabel">Open</span>
@@ -433,7 +437,8 @@ export function FilesPage({
             />
           )}
 
-          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={(initialFilesLoading ? 8 : sortedFileEntries.length) + 1} ref={fileTableRef} tabIndex={-1} onContextMenu={handleFileTableContextMenu}>
+          {initialFilesLoading && <LoadingLabel>Loading files in {listing.path}</LoadingLabel>}
+          <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={renderedFileRowCount} ref={fileTableRef} tabIndex={-1} onContextMenu={handleFileTableContextMenu}>
             <div className="fileTableHead" role="row">
               <label className="fileCheckboxCell fileSelectAllCell" role="columnheader" aria-label={allFilesSelected ? "Clear visible selection" : "Select all visible files"}>
                 <input
@@ -462,10 +467,13 @@ export function FilesPage({
                 </button></span>
               ))}
             </div>
-            {initialFilesLoading && <LoadingLabel>Loading files in {listing.path}</LoadingLabel>}
             {initialFilesLoading && Array.from({ length: 8 }, (_, index) => <FileTableSkeletonRow key={index} />)}
-            {!filesLoading && !filesError && sortedFileEntries.length === 0 && (
-              <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
+            {emptyFolderVisible && (
+              <div className="fileTableState" role="row">
+                <div role="cell">
+                  <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
+                </div>
+              </div>
             )}
             {sortedFileEntries.map((entry) => {
               // Set membership, not a scan of the selection: selecting everything in a large folder
@@ -554,12 +562,12 @@ export function FilesPage({
             <div className="fileDetailsTitle">
               <FileTypeIcon entry={selectedEntry} />
               <div>
-                <h2>{selectedEntry.name}</h2>
+                <h2 title={selectedEntry.name}>{selectedEntry.name}</h2>
                 <span>{fileDisplayType(selectedEntry)}</span>
               </div>
             </div>
             <dl>
-              <div><dt>Location</dt><dd>{selectedEntry.path}</dd></div>
+              <div><dt>Location</dt><dd title={selectedEntry.path}>{selectedEntry.path}</dd></div>
               <div><dt>Type</dt><dd>{fileDisplayType(selectedEntry)}</dd></div>
               <div><dt>Size</dt><dd>{selectedEntry.type === "file" ? formatBytes(selectedEntry.size) : "-"}</dd></div>
               <div><dt>Modified</dt><dd>{dateTimeFormatter.format(new Date(selectedEntry.modifiedAt))}</dd></div>

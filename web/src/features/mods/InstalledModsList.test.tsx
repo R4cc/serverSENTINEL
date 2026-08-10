@@ -40,11 +40,21 @@ function renderInstalledMods(installed: InstalledMod[], updatePlan: ModUpdatePla
 }
 
 describe("InstalledModsList", () => {
+  it("gives search and truncated row values enough context", () => {
+    const html = renderInstalledMods([mod({ description: "A detailed compatibility library." })]);
+
+    expect(html).toContain("Search installed mods");
+    expect(html).toContain('placeholder="Search installed mods"');
+    expect(html).toContain('title="Fabric API"');
+    expect(html).toContain('title="A detailed compatibility library."');
+    expect(html).toContain('title="0.154.0+26.2"');
+  });
+
   it("renders the installed version once and the target inside an integrated update action", () => {
     const html = renderInstalledMods([mod()]);
     const updateAction = html.match(/<button[^>]*modsUpdateAction[^>]*>[\s\S]*?<\/button>/)?.[0];
 
-    expect(html.match(/0\.154\.0\+26\.2/g)).toHaveLength(1);
+    expect(html.match(/>0\.154\.0\+26\.2</g)).toHaveLength(1);
     expect(html).toContain("→");
     expect(html).toContain("0.155.0+26.2");
     expect(html).toContain('aria-label="Update Fabric API to 0.155.0+26.2"');

@@ -104,10 +104,11 @@
   justify-content: flex-end;
 }
 
-.filesPage .selectionActions:empty::after {
-  content: "Select an item to see available actions";
+.filesPage .selectionActionsHint {
   color: var(--text-soft);
   font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
 }
 
 .filesPage .selectionActions .uiButton--critical {
@@ -140,6 +141,23 @@
   border: 0;
   padding: 0 0 var(--space-2);
   scrollbar-gutter: stable;
+}
+
+.filesPage .fileListSurface > .inlineState {
+  flex: 0 0 auto;
+  margin: var(--space-3) var(--space-3) 0;
+}
+
+.filesPage .fileTableState {
+  display: grid;
+  min-width: 100%;
+  min-height: clamp(180px, 38vh, 320px);
+  padding: var(--space-4);
+  place-items: center;
+}
+
+.filesPage .fileTableState > [role="cell"] {
+  width: min(100%, 560px);
 }
 
 .filesPage .fileTableHead,
@@ -428,6 +446,10 @@
   .filesPage .selectionActions {
     justify-content: flex-start;
   }
+
+  .filesPage .selectionActionsHint {
+    text-align: left;
+  }
 }
 
 @media (max-width: 720px) {
@@ -500,6 +522,11 @@
 
   .filesPage .fileTable {
     padding-inline: var(--space-1);
+  }
+
+  .filesPage .fileTableState {
+    min-height: 180px;
+    padding: var(--space-3);
   }
 
   .filesPage .fileColumnHeader--modifiedAt,

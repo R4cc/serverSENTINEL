@@ -1,7 +1,7 @@
 import { serverRuntimeDefinitions } from "@serversentinel/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { createServerReviewSummary, RuntimeWizardStep } from "./ServerCreatePage";
+import { createServerReviewSummary, CreateServerStepper, RuntimeWizardStep } from "./ServerCreatePage";
 
 function renderPaperRuntime(input: { runtimeVersion?: string; noStableBuild?: boolean; loading?: boolean; minecraftLoading?: boolean } = {}) {
   const runtimeVersion = input.runtimeVersion ?? "132";
@@ -71,5 +71,18 @@ describe("server creation review", () => {
   it("describes the stopped post-creation lifecycle accurately", () => {
     expect(createServerReviewSummary).toContain("remain stopped until you start it");
     expect(createServerReviewSummary).not.toContain("launch your Minecraft server");
+  });
+});
+
+describe("CreateServerStepper", () => {
+  it("exposes ordered progress and the current step", () => {
+    const html = renderToStaticMarkup(<CreateServerStepper activeStep={2} />);
+
+    expect(html).toContain('role="list"');
+    expect(html.match(/role="listitem"/g)).toHaveLength(4);
+    expect(html).toMatch(/createWizardStep active[^>]*aria-current="step"/);
+    expect(html).toContain("Completed");
+    expect(html).toContain("Current step");
+    expect(html).toContain("Not started");
   });
 });

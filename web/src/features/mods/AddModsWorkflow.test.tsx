@@ -90,6 +90,14 @@ function installState(version: ModrinthInstallVersion, step: 1 | 2, acknowledged
 }
 
 describe("AddModsWorkflow", () => {
+  it("names search and close controls for their workflow", () => {
+    const html = renderAddWorkflow();
+
+    expect(html).toContain("Search Modrinth for mods");
+    expect(html).toContain('type="search"');
+    expect(html).toContain('title="Close add mods"');
+  });
+
   it("renders the explicit incompatible toggle and safe default copy", () => {
     const html = renderAddWorkflow();
     expect(html).toContain("Show incompatible mods");

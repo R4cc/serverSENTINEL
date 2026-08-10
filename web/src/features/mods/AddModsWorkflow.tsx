@@ -59,11 +59,11 @@ export function AddModsWorkflow(props: Props) {
     <div className="modsAddWorkflow">
       <div className="modsDrawerHeader">
         <div><small>Add {terminology.plural}</small><h2>Find a {terminology.runtimeName} {terminology.singular}</h2><p>Results are matched to this server automatically.</p></div>
-        <Button variant="secondary" iconOnly className="iconButton" onClick={props.onClose} aria-label={`Close add ${terminology.plural}`}><AppIcon name="x" /></Button>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={props.onClose} aria-label={`Close add ${terminology.plural}`} title={`Close add ${terminology.plural}`}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         <div className="modsAddSearch">
-          <label><AppIcon name="search" /><span className="srOnly">Search</span><input autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder={`Search by ${terminology.singular} name…`} disabled={!props.configured || props.versionsUnknown} /></label>
+          <label><AppIcon name="search" /><span className="srOnly">Search Modrinth for {terminology.plural}</span><input type="search" autoComplete="off" autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder={`Search by ${terminology.singular} name…`} disabled={!props.configured || props.versionsUnknown} /></label>
           <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? "Results update as you type" : ""}</span>
         </div>
         <div className={`modsSafeSearchNote ${props.showIncompatibleResults ? "warning" : ""}`}>
@@ -100,7 +100,7 @@ export function AddModsWorkflow(props: Props) {
             return (
               <article key={mod.project_id} className="modsResultCard">
                 <ModIconImage src={icon} fallback={terminology.iconFallback} />
-                <div className="modsResultContent"><div><strong>{mod.title}</strong><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
+                <div className="modsResultContent"><div><strong title={mod.title}>{mod.title}</strong><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div><p title={mod.description}>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
                 {riskNote && <span className="modsResultRiskNote">{riskNote}</span>}
                 <Button
                   variant={health.safeToRunDirectly ? "primary" : "secondary"}

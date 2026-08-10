@@ -450,14 +450,14 @@ export function SchedulePage({
                 >
                   <div className="scheduleNameCell" data-label="Name" role="cell">
                     <div className="scheduleCellValue scheduleNameValue">
-                      <strong>{schedule.name}</strong>
-                      <small>{scheduleDescription(schedule)}</small>
+                      <strong title={schedule.name}>{schedule.name}</strong>
+                      <small title={scheduleDescription(schedule)}>{scheduleDescription(schedule)}</small>
                     </div>
                   </div>
                   <div className="scheduleCell" data-label="Schedule" role="cell">
                     <div className="scheduleCellValue">
-                      <code>{schedule.cron}</code>
-                      <small>{cronSummary(schedule.cron)}</small>
+                      <code title={schedule.cron}>{schedule.cron}</code>
+                      <small title={cronSummary(schedule.cron)}>{cronSummary(schedule.cron)}</small>
                     </div>
                   </div>
                   <div className="scheduleCell" data-label="Last run" role="cell">
@@ -576,10 +576,10 @@ export function SchedulePage({
                 >
                   <span className="scheduledRunMarker" aria-hidden="true"></span>
                   <div className="scheduledRunDetails">
-                    <strong>{run.scheduleName}</strong>
+                    <strong title={run.scheduleName}>{run.scheduleName}</strong>
                     <small>{run.kind === "active" ? activeRunStatus(run) : statusLabel(run.status)}</small>
                     {run.kind === "active" && run.currentStep && (
-                      <small className="scheduledRunAction">Step {(run.currentStepIndex ?? 0) + 1} of {run.stepCount}: {run.currentStep}</small>
+                      <small className="scheduledRunAction" title={run.currentStep}>Step {(run.currentStepIndex ?? 0) + 1} of {run.stepCount}: {run.currentStep}</small>
                     )}
                   </div>
                   <div className="scheduledRunTime">
@@ -599,7 +599,7 @@ export function SchedulePage({
                   )}
                   {run.kind === "completed" && (
                     <div className="scheduledRunActions">
-                      <Button variant="secondary" compact className="scheduledRunDetailsButton" onClick={() => setSelectedRun(run)} aria-label={`View details for ${run.scheduleName}`}>
+                      <Button variant="secondary" compact className="scheduledRunDetailsButton" onClick={() => setSelectedRun(run)} aria-label={`View details for ${run.scheduleName}`} title={`View details for ${run.scheduleName}`}>
                         Details
                       </Button>
                     </div>

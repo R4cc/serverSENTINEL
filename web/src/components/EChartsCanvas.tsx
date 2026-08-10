@@ -109,6 +109,47 @@ export function createChartInteractionTracker(onStart: () => void, onFinish: () 
   };
 }
 
+export function createChartInputActivityTracker(onStart: () => void, onFinish: () => void, wheelIdleMs = 180) {
+  let pointerActive = false;
+  let wheelActive = false;
+  let active = false;
+  let wheelTimer: ReturnType<typeof setTimeout> | undefined;
+  const sync = () => {
+    const next = pointerActive || wheelActive;
+    if (next === active) return;
+    active = next;
+    if (active) onStart();
+    else onFinish();
+  };
+  return {
+    pointerStart() {
+      pointerActive = true;
+      sync();
+    },
+    pointerFinish() {
+      pointerActive = false;
+      sync();
+    },
+    wheel() {
+      wheelActive = true;
+      sync();
+      if (wheelTimer !== undefined) clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => {
+        wheelTimer = undefined;
+        wheelActive = false;
+        sync();
+      }, wheelIdleMs);
+    },
+    cancel() {
+      if (wheelTimer !== undefined) clearTimeout(wheelTimer);
+      wheelTimer = undefined;
+      pointerActive = false;
+      wheelActive = false;
+      active = false;
+    }
+  };
+}
+
 export function EChartsCanvas({
   option,
   onDataZoom,
@@ -124,7 +165,7 @@ export function EChartsCanvas({
   onPointerMove?: React.PointerEventHandler<HTMLDivElement>;
   onPointerLeave?: React.PointerEventHandler<HTMLDivElement>;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
-  onWheel?: (event: globalThis.WheelEvent) => void;
+  onWheel?: (event: globalThis.WheelEvent) => boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<EChartsType | null>(null);
@@ -143,21 +184,25 @@ export function EChartsCanvas({
     chartRef.current = chart;
     const optionScheduler = createChartOptionScheduler((next) => chart.setOption(next, timelineChartSetOptionOptions));
     optionSchedulerRef.current = optionScheduler;
-    const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
-    const handleWheel = (event: globalThis.WheelEvent) => onWheelRef.current?.(event);
-    chart.on("datazoom", handleDataZoom);
-    // Let the shared timeline wheel router claim horizontal pan and modified
-    // zoom gestures before ECharts' inside-zoom handlers see them. Unclaimed
-    // vertical wheel input continues to ECharts for player-row scrolling.
-    container.addEventListener("wheel", handleWheel, { passive: false, capture: true });
-    const renderer = chart.getZr();
-    const interactionTracker = createChartInteractionTracker(() => {
+    const inputActivity = createChartInputActivityTracker(() => {
       optionScheduler.startInteraction();
       onInteractionChangeRef.current?.(true);
     }, () => {
       optionScheduler.finishInteraction();
       onInteractionChangeRef.current?.(false);
     });
+    const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      const claimed = onWheelRef.current?.(event) ?? false;
+      if (!claimed) inputActivity.wheel();
+    };
+    chart.on("datazoom", handleDataZoom);
+    // Let the shared timeline wheel router claim horizontal pan and modified
+    // zoom gestures before ECharts' inside-zoom handlers see them. Unclaimed
+    // vertical wheel input continues to ECharts for player-row scrolling.
+    container.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    const renderer = chart.getZr();
+    const interactionTracker = createChartInteractionTracker(inputActivity.pointerStart, inputActivity.pointerFinish);
     renderer.on("mousedown", interactionTracker.pointerDown);
     renderer.on("mousemove", interactionTracker.pointerMove);
     renderer.on("mouseup", interactionTracker.pointerUp);
@@ -178,6 +223,7 @@ export function EChartsCanvas({
       chart.off("datazoom", handleDataZoom);
       container.removeEventListener("wheel", handleWheel, { capture: true });
       interactionTracker.cancel();
+      inputActivity.cancel();
       optionScheduler.cancel();
       chart.dispose();
       if (chartRef.current === chart) chartRef.current = null;

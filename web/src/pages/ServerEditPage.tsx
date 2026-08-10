@@ -605,13 +605,17 @@ export function DeleteServerPanel({
             value={confirmName}
             onChange={(event) => setConfirmName(event.target.value)}
             required
+            autoComplete="off"
+            aria-invalid={confirmName.length > 0 && !deleteConfirmed}
+            aria-describedby="delete-server-confirm-hint"
           />
+          <small id="delete-server-confirm-hint" className="fieldHint">Enter “{server.displayName}” exactly to enable deletion.</small>
         </label>
         <label className="checkLine dangerCheck">
           <input name="deleteFiles" type="checkbox" />
           Also delete this server's files from disk
         </label>
-        <Button type="submit" variant="critical" disabled={!deleteConfirmed}>Delete server</Button>
+        <Button type="submit" variant="critical" disabled={!deleteConfirmed} title={deleteConfirmed ? "Permanently delete this server" : `Enter “${server.displayName}” exactly to enable deletion`}>Delete server</Button>
         </fieldset>
       </form>
     </section>

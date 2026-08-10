@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.8.2 - 2026-08-10
+
+- Expanded the Overview workspace and refreshed the README screenshots.
+- Sped up interface animations and polished UI states.
+- Stabilized player timeline roster interactions.
+
 ## 1.8.1 - 2026-08-10
 
 - Improved server management workflows and interface consistency across the application.
