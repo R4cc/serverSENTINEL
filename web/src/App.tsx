@@ -2,7 +2,7 @@ import { FormEvent, Fragment, Suspense, useCallback, useEffect, useRef, useState
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue } from "./utils/validation";
@@ -349,6 +349,9 @@ export default function App() {
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
   const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
+  const exportWorkspace = useExportWorkspace(notify, activeServer?.id ?? "", canExportServers && Boolean(authSession?.authenticated));
+  const exportMutationLocked = exportWorkspace.exportMutationLocked;
+  const exportMutationBlockedReason = exportWorkspace.exportMutationBlockedReason;
 
   useEffect(() => {
     if (activePage === "mods" && activeServer && !supportsManagedMods) setActivePage("overview");
@@ -358,6 +361,16 @@ export default function App() {
     if (demoMode && isDemoServerId(activeServer.id)) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to, activeServer.id);
     return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`);
   }, [activeServer?.id, demoMode, demoRunning, demoSchedules, demoSessionVersion]);
+  const loadActiveStorageSummary = useCallback(async (serverId: string) => {
+    if (demoMode && isDemoServerId(serverId)) {
+      return {
+        worldSizeBytes: 7_566 * 1024 ** 2,
+        totalBytes: 100 * 1024 ** 3,
+        availableBytes: 8 * 1024 ** 3
+      };
+    }
+    return api<ServerStorageSummary>(`/api/servers/${serverId}/storage`);
+  }, [demoMode]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
@@ -395,7 +408,9 @@ export default function App() {
     lifecycleTransitionRunning,
     isProvisioning,
     activeStatus,
-    runtimeAction
+    runtimeAction,
+    exportMutationLocked,
+    exportMutationBlockedReason
   });
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
 
@@ -420,7 +435,9 @@ export default function App() {
     canDeleteServers,
     serverSettingsSaving,
     runtimeControlsDisabledReason,
-    activeStatus
+    activeStatus,
+    exportMutationLocked,
+    exportMutationBlockedReason
   });
   const settingsDataLoading = !appStateLoaded && !appLoadError;
   const {
@@ -461,7 +478,6 @@ export default function App() {
     requestConfirmation,
     refreshApp
   });
-  const exportWorkspace = useExportWorkspace(notify);
   const exportServer = effectiveAppState.servers.find((server) => server.id === exportWorkspace.exportServerId);
   const {
     modsLocked,
@@ -480,7 +496,9 @@ export default function App() {
     isAnyModJobRunning,
     modrinthApiConfigured: effectiveAppState.modrinthApiConfigured,
     runtimeControlsDisabledReason,
-    managedContent
+    managedContent,
+    exportMutationLocked,
+    exportMutationBlockedReason
   });
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
   const {
@@ -504,6 +522,8 @@ export default function App() {
     setDemoInstalledMods,
     isProvisioning,
     dockerOperationalLock,
+    serverMutationLocked: exportMutationLocked,
+    serverMutationBlockedReason: exportMutationBlockedReason,
     runtimeControlsDisabledReason,
     serverRequiresStoppedForMutableConfig,
     stoppedServerMutationMessage,
@@ -559,6 +579,8 @@ export default function App() {
     error: appLoadError,
     isProvisioning,
     dockerOperationalLock,
+    serverMutationLocked: exportMutationLocked,
+    serverMutationBlockedReason: exportMutationBlockedReason,
     runtimeControlsDisabledReason,
     canManage: canManageSchedules,
     notify,
@@ -569,6 +591,8 @@ export default function App() {
   });
   const consoleCommandDisabledReason = isProvisioning
       ? "Server setup is still running."
+      : exportMutationLocked
+        ? exportMutationBlockedReason
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
         : !canExpanded
@@ -577,6 +601,7 @@ export default function App() {
             ? activeStatus?.commandInputMessage || "Console command input is unavailable."
             : "";
   const canSendConsoleCommands = !isProvisioning
+    && !exportMutationLocked
     && !dockerOperationalLock
     && canExpanded
     && Boolean(activeStatus?.commandInputAvailable);
@@ -2070,7 +2095,7 @@ export default function App() {
           onRetryAppLoad={() => void refreshApp()}
         />
 
-        {activePage === "create" && (
+        {applicationReady && activePage === "create" && (
           <ServerCreateTab
             provisionOperation={currentProvisionOperation}
             provisioningError={provisioningError}
@@ -2196,7 +2221,7 @@ export default function App() {
               nodeOffline={confirmedNodeOffline}
               status={activeStatus}
               controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
-              controlsDisabled={isProvisioning || !canBasic || dockerOperationalLock}
+              controlsDisabled={isProvisioning || !canBasic || dockerOperationalLock || exportMutationLocked}
               controlsDisabledReason={runtimeControlsDisabledReason}
               onRuntimeAction={runContainerAction}
               consoleActive={activePage === "console"}
@@ -2221,6 +2246,7 @@ export default function App() {
                 timelineLatestSample={timelineLatestSample}
                 onTimelineLatestSample={setTimelineLatestSample}
                 loadTimeline={loadActiveTimeline}
+                loadStorageSummary={loadActiveStorageSummary}
                 playerSnapshot={playerSnapshots[activeServer.id]}
                 playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
                 modUpdatePlan={modsWorkspace.data.updatePlan}
@@ -2268,6 +2294,7 @@ export default function App() {
                   permissionUser={permissionUser}
                   isProvisioning={isProvisioning}
                   dockerOperationalLock={dockerOperationalLock}
+                  serverMutationLocked={exportMutationLocked}
                   dateTimeFormatter={dateTimeFormatter}
                   onCopyText={(text) => void copyText(text)}
                 />
@@ -2337,6 +2364,11 @@ export default function App() {
                       <ExportServerPanel
                         server={activeServer}
                         onExport={() => exportWorkspace.openExport(activeServer.id)}
+                        onCancel={(operationId) => void exportWorkspace.cancelExport(operationId)}
+                        state={exportWorkspace.serverExportState}
+                        loading={exportWorkspace.serverExportStateLoading}
+                        error={exportWorkspace.serverExportStateError}
+                        formatDate={formatDisplayDate}
                         disabled={serverSettingsSaving}
                       />
                     ) : undefined}

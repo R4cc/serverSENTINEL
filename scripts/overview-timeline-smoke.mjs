@@ -449,6 +449,38 @@ async function assertMobile(page) {
   assert(mobileMetrics.rosterTargetHeight >= 44, `Mobile roster disclosure is smaller than 44px: ${JSON.stringify(mobileMetrics)}`);
 }
 
+async function assertStorageSummary(page, expectedVisibleTiles) {
+  const worldSize = page.locator(".overviewSummary .uiMetricTile").filter({ hasText: "World Size" });
+  const spaceRemaining = page.locator(".overviewSummary .storageRemainingTile");
+  await worldSize.getByText("7.39 GiB", { exact: true }).waitFor();
+  await spaceRemaining.getByText("8 GiB", { exact: true }).waitFor();
+  assert.equal(await spaceRemaining.locator(".lucide-triangle-alert").count(), 1, "The demo's near-full storage card is missing its warning icon");
+  assert(await spaceRemaining.evaluate((tile) => tile.classList.contains("uiMetricTile--warning")), "The demo's near-full storage card is missing its warning tone");
+  assert.equal(await page.locator(".overviewSummary .uiMetricTile").filter({ hasText: "Fabric" }).count(), 0, "The runtime card still occupies an Overview summary slot");
+  assert.equal(await page.locator(".overviewSummary .uiMetricTile:visible").count(), expectedVisibleTiles, "The Overview summary has an unexpected visible card count");
+  for (const [name, tile] of [["World Size", worldSize], ["Space Remaining", spaceRemaining]]) {
+    const typography = await tile.evaluate((element) => {
+      const label = element.querySelector(".uiMetricTileLabel");
+      const strong = element.querySelector(".uiMetricTileCopy > strong");
+      const value = element.querySelector(".summaryByteValue");
+      const labelStyle = label ? getComputedStyle(label) : null;
+      return {
+        labelHeight: label?.getBoundingClientRect().height ?? 0,
+        labelLineHeight: Number.parseFloat(labelStyle?.lineHeight ?? "0"),
+        strongFontSize: Number.parseFloat(strong ? getComputedStyle(strong).fontSize : "0"),
+        valueFontSize: Number.parseFloat(value ? getComputedStyle(value).fontSize : "0")
+      };
+    });
+    assert(Math.abs(typography.valueFontSize - typography.strongFontSize) < 0.1, `${name} value does not use the summary metric type size: ${JSON.stringify(typography)}`);
+    assert(typography.labelHeight <= typography.labelLineHeight + 0.5, `${name} label wraps unexpectedly: ${JSON.stringify(typography)}`);
+  }
+  const geometry = await page.locator(".overviewSummary").evaluate((summary) => ({
+    clientWidth: summary.clientWidth,
+    scrollWidth: summary.scrollWidth
+  }));
+  assert(geometry.scrollWidth <= geometry.clientWidth, `The World Size card causes summary overflow: ${JSON.stringify(geometry)}`);
+}
+
 async function createOverviewPage(context, viewport, search = "") {
   const page = await context.newPage();
   await page.setViewportSize(viewport);
@@ -553,7 +585,7 @@ async function assertSupportCardGeometry(context, viewport) {
 
     if (viewport.width >= 981) {
       assertNear(metrics.schedule.top, metrics.mods.top, 1, `Side-by-side support cards do not share a top edge at ${viewport.width}px`);
-      assert(metrics.schedule.height < metrics.mods.height, `The Schedule card stretches to the ten-update card height at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+      assertNear(metrics.schedule.height, metrics.mods.height, 1, `Side-by-side support cards do not have equal heights at ${viewport.width}px`);
     } else {
       assert(metrics.schedule.top >= metrics.mods.bottom, `Stacked support cards overlap at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     }
@@ -574,6 +606,7 @@ try {
   await signInThroughApi(context, baseUrl);
 
   const desktop = await createOverviewPage(context, { width: 1440, height: 1000 });
+  await assertStorageSummary(desktop.page, 7);
   await assertDesktop(desktop.page);
   assert(await desktop.page.locator(".appShell").evaluate((element) => element.classList.contains("themeDark")), "Desktop timeline did not start in the requested dark theme");
   await desktop.page.emulateMedia({ colorScheme: "light" });
@@ -593,11 +626,13 @@ try {
   ]) await assertTimelineResponsiveGeometry(context, viewport);
 
   const mobile = await createOverviewPage(context, { width: 390, height: 844 });
+  await assertStorageSummary(mobile.page, 5);
   await assertMobile(mobile.page);
   assert.deepEqual(mobile.browserErrors, [], `Mobile browser errors: ${mobile.browserErrors.join("\n")}`);
   await mobile.page.close();
 
   for (const viewport of [
+    { width: 3840, height: 2160 },
     { width: 1440, height: 1000 },
     { width: 1180, height: 900 },
     { width: 981, height: 844 },
@@ -606,7 +641,7 @@ try {
     { width: 390, height: 844 }
   ]) await assertSupportCardGeometry(context, viewport);
 
-  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline geometry; schedule popover contrast; mobile layout; and ten-update support-card geometry.");
+  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline geometry; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

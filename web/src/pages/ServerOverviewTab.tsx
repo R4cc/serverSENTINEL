@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 import { lazyPage } from "../app/lazyPage";
-import type { ManagedServer, PlayerSnapshot, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerTimelineResourcePoint, ServerTimelineResponse } from "../types";
+import type { ManagedServer, PlayerSnapshot, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse } from "../types";
 import type { ModUpdatePlan } from "../types";
 import type { RequestConfirmation } from "../components/ConfirmationModal";
 import { InlineState } from "../components/InlineState";
 import { ServerTimelineLoadingSkeleton } from "../components/LoadingSkeletons";
 import type { ManagedContentTerminology } from "../features/mods/contentTerminology";
+import { useServerStorageSummary } from "../features/overview/useServerStorageSummary";
 import { ActivePlayersPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./OverviewPage";
 
 const { Component: ServerTimeline, preload: loadServerTimeline } = lazyPage(
@@ -33,6 +34,7 @@ export function ServerOverviewTab({
   timelineLatestSample,
   onTimelineLatestSample,
   loadTimeline,
+  loadStorageSummary,
   playerSnapshot,
   playerHeadsEnabled,
   modUpdatePlan,
@@ -63,6 +65,7 @@ export function ServerOverviewTab({
   timelineLatestSample: ServerTimelineResourcePoint | undefined;
   onTimelineLatestSample: (sample?: ServerTimelineResourcePoint) => void;
   loadTimeline: (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
+  loadStorageSummary: (serverId: string) => Promise<ServerStorageSummary>;
   playerSnapshot: PlayerSnapshot | undefined;
   playerHeadsEnabled: boolean;
   modUpdatePlan: ModUpdatePlan | null;
@@ -80,6 +83,8 @@ export function ServerOverviewTab({
   formatTime: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
 }) {
+  const storageSummary = useServerStorageSummary(server.id, active, loadStorageSummary);
+
   return (
     <section className="tabPage overviewPage layoutWide" hidden={!active}>
       {overviewError && (
@@ -99,6 +104,10 @@ export function ServerOverviewTab({
           dockerSocketMounted={dockerSocketMounted}
           activity={overviewData.activity}
           latestResourceSample={timelineVisible ? timelineLatestSample : undefined}
+          worldSizeBytes={storageSummary.worldSizeBytes}
+          storageAvailableBytes={storageSummary.availableBytes}
+          storageTotalBytes={storageSummary.totalBytes}
+          storageLoading={storageSummary.loading}
           loading={overviewInitialLoading}
         />
 

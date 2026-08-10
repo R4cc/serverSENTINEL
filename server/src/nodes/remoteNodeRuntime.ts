@@ -154,6 +154,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return this.command(server, "server.inspect");
   }
 
+  serverStorage(server: ManagedServer) {
+    return this.command(server, "server.storage");
+  }
+
   async lifecycle(server: ManagedServer, action: RuntimeAction) {
     const command = action === "start" ? "server.start" : action === "stop" ? "server.stop" : "server.restart";
     this.invalidateObservations(server, ["status", "stats", "players", "logs"]);

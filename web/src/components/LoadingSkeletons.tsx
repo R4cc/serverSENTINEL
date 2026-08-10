@@ -112,6 +112,26 @@ function ApplicationSkeletonContent({ page }: { page: ActivePage }) {
     );
   }
 
+  if (page === "create") {
+    return (
+      <div className="applicationCreateSkeleton" aria-hidden="true">
+        <div className="applicationCreateStepper">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div className="applicationCreateStep" key={index}>
+              <SkeletonBlock className="applicationCreateStepNumber" />
+              <div>
+                <SkeletonBlock className="applicationCreateStepTitle" />
+                <SkeletonBlock className="applicationCreateStepSubtitle" />
+              </div>
+              {index < 3 && <SkeletonBlock className="applicationCreateStepLine" />}
+            </div>
+          ))}
+        </div>
+        <SkeletonPanel className="applicationCreateCard" rows={5} />
+      </div>
+    );
+  }
+
   return <SkeletonPanel className="applicationFormSkeleton" rows={6} />;
 }
 

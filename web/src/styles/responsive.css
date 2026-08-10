@@ -2668,16 +2668,15 @@ textarea:hover:not(:disabled),
     gap: var(--space-2);
   }
 
+  /* Two cards to a phone row, so the well shrinks to the smallest size that still reads as a
+     container rather than being dropped: the icon named the metric here before the redesign too,
+     and keeping it costs less than the row losing the anatomy it has at every other width. */
   .overviewDashboardGrid > .overviewSummary > .summaryTile {
+    --metric-tile-marker-size: 28px;
     grid-column: auto;
-    min-height: 54px;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+    min-height: 56px;
+    gap: 0 var(--space-2);
     padding: var(--space-2) 10px;
-  }
-
-  .overviewSummary > .summaryTile .uiMetricTileMarker {
-    display: none;
   }
 
   .overviewSummary > .summaryTile .uiMetricTileCopy {

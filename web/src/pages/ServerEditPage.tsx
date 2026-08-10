@@ -5,6 +5,7 @@ import { dockerContainerNameInputPattern, runtimeJarFilenameInputPattern } from 
 import type { ManagedServer, RuntimeVersion } from "../types";
 import {
   defaultDockerImageForMinecraftVersion,
+  formatAdaptiveBytes,
   isValidServerPort,
   maxServerPort,
   memoryArgs,
@@ -17,7 +18,8 @@ import {
   versionValue
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, FormField, PanelHeader, Toolbar } from "../components/UiPrimitives";
+import { Banner, Button, FormField, PanelHeader, StatusBadge, Toolbar } from "../components/UiPrimitives";
+import type { ServerExportState } from "../features/exports/useExportWorkspace";
 import {
   clampNumber,
   fallbackFabricRuntimeVersions,
@@ -362,7 +364,6 @@ export function ServerEditForm({
           <section className="propertiesSettingsSurface">
             <section className="propertiesSection propertiesSectionGeneral">
               <PanelHeader
-                headingLevel={3}
                 title="General"
                 description="Identity, versions, and startup behavior."
               />
@@ -410,7 +411,6 @@ export function ServerEditForm({
 
             <section className="propertiesSection propertiesSectionResources">
               <PanelHeader
-                headingLevel={3}
                 title="Resources"
                 description="Memory reserved for the Minecraft runtime."
               />
@@ -456,7 +456,6 @@ export function ServerEditForm({
 
             <section className="propertiesSection propertiesSectionNetwork">
               <PanelHeader
-                headingLevel={3}
                 title="Network"
                 description="Ports used by players and server status queries."
               />
@@ -552,22 +551,105 @@ export function ServerEditForm({
 export function ExportServerPanel({
   server,
   onExport,
+  onCancel,
+  state,
+  loading = false,
+  error = "",
+  formatDate = (value) => new Date(value).toLocaleString(),
   disabled = false
 }: {
   server: ManagedServer;
   onExport: () => void;
+  onCancel?: (operationId: string) => void;
+  state?: ServerExportState;
+  loading?: boolean;
+  error?: string;
+  formatDate?: (value: string | number | Date) => string;
   disabled?: boolean;
 }) {
+  const latest = state?.latest ?? null;
+  const artifact = state?.artifact ?? null;
+  const active = latest?.status === "queued" || latest?.status === "running";
+  const cancelling = active && latest.task === "Cancelling export";
+  const statusLabel = latest?.status === "succeeded"
+    ? "Ready"
+    : latest?.status === "failed"
+      ? "Failed"
+      : latest?.status === "cancelled"
+        ? "Cancelled"
+        : cancelling ? "Cancelling" : active ? "Running" : "No exports";
+  const statusTone = latest?.status === "succeeded"
+    ? "success"
+    : latest?.status === "failed"
+      ? "danger"
+      : latest?.status === "cancelled"
+        ? "warning"
+        : active ? "accent" : "neutral";
+  const retainedIsPrevious = Boolean(artifact && latest && artifact.operationId !== latest.id);
+
   return (
     <section className="propertiesSideCard exportPanel">
       <PanelHeader
-        headingLevel={3}
-        title="Export"
+        title="Exports"
         description={`Download ${server.displayName} as a ZIP archive you can import back into this panel or another one.`}
+        actions={<StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>}
       />
-      <Button variant="secondary" onClick={onExport} disabled={disabled}>
-        <AppIcon name="download" /> Export server
-      </Button>
+      {latest ? (
+        <div className="exportTaskSummary" role={active ? "status" : undefined}>
+          <div className="exportTaskCopy">
+            <strong>{latest.task || statusLabel}</strong>
+            <small>{formatDate(latest.finishedAt ?? latest.startedAt ?? latest.createdAt)}</small>
+          </div>
+          {active && (
+            <div className="exportTaskProgress">
+              <progress aria-label="Export progress" value={latest.progress} max={100} />
+              <span>{latest.progress}%</span>
+            </div>
+          )}
+          {(latest.status === "failed" || latest.status === "cancelled") && latest.errorMessage && (
+            <p className="exportTaskError">{latest.errorMessage}</p>
+          )}
+          {active && !latest.canCancel && latest.task !== "Finalizing export" && !latest.startedByRequester && (
+            <small>This export was started by another user.</small>
+          )}
+        </div>
+      ) : (
+        <p className="exportTaskEmpty">{loading ? "Loading export status…" : error || "No export has been created yet."}</p>
+      )}
+
+      {artifact && (
+        <div className="exportArtifactRow">
+          <div>
+            <strong>{retainedIsPrevious ? "Last successful export" : artifact.filename}</strong>
+            <small>
+              {retainedIsPrevious ? `${artifact.filename} · ` : ""}
+              {artifact.size !== undefined && (
+                <span className="exportSizeValue" title={`${artifact.size.toLocaleString()} ${artifact.size === 1 ? "byte" : "bytes"}`}>
+                  {formatAdaptiveBytes(artifact.size)}
+                </span>
+              )}
+              {` · ${formatDate(artifact.createdAt)}`}
+            </small>
+          </div>
+          {artifact.downloadUrl ? (
+            <a className="uiButton uiButton--secondary uiButton--compact" href={artifact.downloadUrl} download>
+              <AppIcon name="download" /> Download
+            </a>
+          ) : <small>Download available to the user who created it.</small>}
+        </div>
+      )}
+
+      {error && latest && <p className="exportTaskError">{error}</p>}
+      <div className="exportPanelActions">
+        <Button variant="secondary" onClick={onExport} disabled={disabled || active}>
+          <AppIcon name="download" /> {latest ? "New export" : "Export server"}
+        </Button>
+        {active && latest.canCancel && (
+          <Button variant="critical" onClick={() => onCancel?.(latest.id)} disabled={cancelling}>
+            <AppIcon name="x" /> {cancelling ? "Cancelling…" : "Abort"}
+          </Button>
+        )}
+      </div>
     </section>
   );
 }
@@ -591,7 +673,6 @@ export function DeleteServerPanel({
   return (
     <section className="propertiesSideCard dangerPanel">
       <PanelHeader
-        headingLevel={3}
         title="Danger zone"
         description="Deleting a server is permanent and cannot be undone."
       />

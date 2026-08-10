@@ -22,6 +22,7 @@ export const nodeCapabilities = [
   "server.restart",
   "server.inspect",
   "server.stats",
+  "server.storage",
   "server.players.read",
   "server.logs.recent",
   "server.observe",

@@ -11,6 +11,7 @@ import { config, maxServerPort, minServerPort } from "../config.js";
 import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
 import { planServerUpdate } from "../servers/serverUpdatePlan.js";
+import { storageSpaceForPath } from "../servers/storageSpace.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
@@ -1442,6 +1443,7 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     return runtimeStatus(server);
   }
   if (command === "server.stats") return resourceStats(server);
+  if (command === "server.storage") return storageSpaceForPath(await serverRoot(server));
   if (command === "server.logs.recent") {
     const lineLimit = payload?.limit === undefined ? undefined : consoleLogLineLimit(payload.limit);
     return readRecentServerLogs(server, lineLimit);

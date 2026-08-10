@@ -265,6 +265,11 @@ export async function collectServerCategories(
   return results;
 }
 
+export async function measureWorldSize(runtime: NodeRuntime, server: ManagedServer) {
+  const [world] = await collectServerCategories(runtime, server, ["world"]);
+  return world?.totalBytes ?? 0;
+}
+
 export function archiveEntriesForFiles(prefix: string, files: readonly CollectedFile[]): FileArchiveEntry[] {
   return files.map((file) => ({
     sourcePath: file.sourcePath,

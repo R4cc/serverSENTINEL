@@ -8,10 +8,10 @@ describe("page prefetch", () => {
     );
   });
 
-  // The console chunk carries the terminal and dwarfs the rest, so fetching it first would hold
-  // the cheap pages behind it for as long as it takes to arrive.
-  it("leaves the heaviest chunk until the cheap pages are covered", () => {
-    expect(pagePrefetchOrder.at(-1)).toBe("console");
+  // Lighthouse's all-page flow showed that first-use xterm setup dominates the Console transition,
+  // so it gets the first idle slot and the cheaper pages follow immediately afterwards.
+  it("warms the expensive console before the first interaction", () => {
+    expect(pagePrefetchOrder.at(0)).toBe("console");
   });
 
   it("stands down on connections where speculative bytes cost the visitor", () => {

@@ -20,6 +20,8 @@ export class ApiError extends Error {
   }
 }
 
+export const exportConflictEvent = "serversentinel:export-conflict";
+
 function payloadError(payload: ApiPayload) {
   return payload && typeof payload.error === "object" && payload.error !== null ? payload.error : undefined;
 }
@@ -56,7 +58,14 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("Could not reach the serverSENTINEL backend. Check that the panel is running and try again.");
   }
   if (!response.ok) {
-    throw await apiErrorFromResponse(response);
+    const error = await apiErrorFromResponse(response);
+    if (
+      typeof window !== "undefined"
+      && ["EXPORT_IN_PROGRESS", "EXPORT_ALREADY_RUNNING", "SERVER_MUTATION_IN_PROGRESS"].includes(error.code ?? "")
+    ) {
+      window.dispatchEvent(new Event(exportConflictEvent));
+    }
+    throw error;
   }
   const payload = await response.json().catch(() => ({}));
   return payload as T;

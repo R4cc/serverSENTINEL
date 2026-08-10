@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Activity, Blocks, Clock, Cpu, Globe, HardDrive, MemoryStick, TriangleAlert } from 'lucide-react';
 import type {
   ManagedServer,
   ModUpdatePlan,
@@ -10,8 +11,7 @@ import type {
   ServerStatus
 } from '../types';
 import { formatUptime } from '../utils/resourceFormatting';
-import { serverRuntimeDefinition } from '@serversentinel/contracts';
-import { formatRelativeTimestamp, minecraftVersionInfo, runtimeVersionInfo, versionValue } from '../utils/format';
+import { formatAdaptiveBytes, formatRelativeTimestamp, minecraftVersionInfo, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
 import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon, SidebarIcon } from '../components/FileTypeIcon';
@@ -61,6 +61,16 @@ function summaryMetricTone(status: ServerStatus | null, dockerSocketMounted: boo
   if (tone === "warning") return "warning" as const;
   if (tone === "danger" || tone === "stopped") return "danger" as const;
   return "neutral" as const;
+}
+
+export function storageRemainingIsLow(availableBytes: number | null, totalBytes: number | null) {
+  return availableBytes !== null
+    && totalBytes !== null
+    && Number.isFinite(availableBytes)
+    && Number.isFinite(totalBytes)
+    && availableBytes >= 0
+    && totalBytes > 0
+    && availableBytes / totalBytes <= 0.1;
 }
 
 function OverviewCard({
@@ -125,6 +135,10 @@ export function OverviewSummary({
   dockerSocketMounted,
   activity,
   latestResourceSample,
+  worldSizeBytes = null,
+  storageAvailableBytes = null,
+  storageTotalBytes = null,
+  storageLoading = false,
   loading = false
 }: {
   server: ManagedServer;
@@ -140,13 +154,15 @@ export function OverviewSummary({
     memoryUsageBytes: number | null;
     memoryUtilizationPercent?: number | null;
   };
+  worldSizeBytes?: number | null;
+  storageAvailableBytes?: number | null;
+  storageTotalBytes?: number | null;
+  storageLoading?: boolean;
   loading?: boolean;
 }) {
   const running = Boolean(status?.docker.running);
   const state = dockerStateLabel(status, dockerSocketMounted);
   const minecraftVersion = minecraftVersionInfo(server);
-  const runtimeVersion = runtimeVersionInfo(server);
-  const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
   const hasResourceStats = Boolean(latestResourceSample?.available && latestResourceSample.running);
   const resourceFallback = running ? "Collecting" : "Not running";
   const normalizedCpu = latestResourceSample?.cpuUtilizationPercent
@@ -157,6 +173,14 @@ export function OverviewSummary({
   const memory = hasResourceStats && latestResourceSample?.memoryUtilizationPercent != null
     ? `${latestResourceSample.memoryUtilizationPercent.toFixed(1)}%`
     : resourceFallback;
+  const storageLow = storageRemainingIsLow(storageAvailableBytes, storageTotalBytes);
+  const storagePercent = storageAvailableBytes !== null && storageTotalBytes !== null && storageTotalBytes > 0
+    ? Math.max(0, Math.min(100, storageAvailableBytes / storageTotalBytes * 100))
+    : null;
+  const storageValue = storageAvailableBytes === null ? "Unavailable" : formatAdaptiveBytes(storageAvailableBytes);
+  const storageTitle = storageAvailableBytes !== null && storageTotalBytes !== null
+    ? `${storageValue} available of ${formatAdaptiveBytes(storageTotalBytes)}${storagePercent === null ? "" : ` (${storagePercent.toFixed(1)}% remaining)`}`
+    : undefined;
 
   return (
     <section className="overviewSummary" aria-busy={loading}>
@@ -164,14 +188,47 @@ export function OverviewSummary({
       <MetricTile
         className={`summaryTile state statusTile ${summaryTone(status, dockerSocketMounted)}`}
         label="Status"
+        icon={<Activity />}
+        iconPlacement="leading"
         tone={summaryMetricTone(status, dockerSocketMounted)}
         value={<span className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</span>}
       />
-      <MetricTile className="summaryTile" label="Minecraft" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
-      <MetricTile className="summaryTile" label={runtime.displayName} value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(runtimeVersion)} />
-      <MetricTile className="summaryTile" label="Uptime" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
+      <MetricTile className="summaryTile" label="Minecraft" icon={<Blocks />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
+      <MetricTile className="summaryTile" label="Uptime" icon={<Clock />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
+      <MetricTile
+        className="summaryTile"
+        label="World Size"
+        icon={<Globe />}
+        iconPlacement="leading"
+        value={loading || (storageLoading && worldSizeBytes === null)
+          ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
+          : worldSizeBytes === null
+            ? "Unavailable"
+            : <span className="summaryByteValue" title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
+      />
+      <MetricTile
+        className="summaryTile storageRemainingTile"
+        label="Free Space"
+        icon={<HardDrive />}
+        iconPlacement="leading"
+        tone={storageLow ? "warning" : "neutral"}
+        value={loading || (storageLoading && storageAvailableBytes === null)
+          ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
+          : storageAvailableBytes === null
+            ? "Unavailable"
+            : (
+              <span
+                className={`summaryByteValue summaryStorageValue${storageLow ? " summaryStorageValue--warning" : ""}`}
+                title={storageTitle}
+                aria-label={`${storageValue} remaining${storageLow ? ", storage almost full" : ""}`}
+              >
+                {storageLow && <TriangleAlert aria-hidden="true" />}
+                <span>{storageValue}</span>
+              </span>
+            )}
+      />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" icon={<Cpu />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" icon={<MemoryStick />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
     </section>
   );
 }
@@ -359,7 +416,7 @@ export function ModHealthPanel({
             className="overviewCardRow modUpdatesListItem"
             key={entry.filename}
             onClick={onOpenMods}
-            aria-label={`Open ${entry.displayName} update in ${contentPluralTitle}`}
+            title={`Open ${entry.displayName} update in ${contentPluralTitle}`}
           >
             <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
             <span className="modUpdatesListCopy">
@@ -520,7 +577,7 @@ export function SchedulePanel({
                   type="button"
                   className="overviewCardRow scheduleUpcomingItem"
                   onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
-                  aria-label={`Open ${schedule.name}, next run ${nextTime}`}
+                  title={`Open ${schedule.name}, next run ${nextTime}`}
                 >
                   <strong title={schedule.name}>{schedule.name}</strong>
                   <time dateTime={nextRunAt} title={formatDate(nextRunAt)}>{nextTime}</time>

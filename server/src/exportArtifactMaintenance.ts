@@ -40,6 +40,17 @@ export function exportOperationResult(operation: OperationRecord): ExportOperati
   return objectValue(operation.result) as ExportOperationResult | undefined ?? {};
 }
 
+export function exportOperationServerIds(operation: OperationRecord) {
+  const serverIds = exportOperationResult(operation).serverIds;
+  return Array.isArray(serverIds)
+    ? serverIds.filter((serverId): serverId is string => typeof serverId === "string")
+    : operation.serverId ? [operation.serverId] : [];
+}
+
+function overlapsServerIds(operation: OperationRecord, serverIds: ReadonlySet<string>) {
+  return exportOperationServerIds(operation).some((serverId) => serverIds.has(serverId));
+}
+
 export function exportArtifactExpiresAt(operation: OperationRecord, retentionMs: number) {
   const artifact = objectValue(exportOperationResult(operation).artifact) as ExportArtifactMetadata | undefined;
   const explicit = artifact?.expiresAt ? Date.parse(artifact.expiresAt) : Number.NaN;
@@ -79,6 +90,8 @@ export class ExportArtifactMaintenance {
     };
     const referenced = new Set<string>();
     const activePrefixes: string[] = [];
+    const retainedServerIds = new Set<string>();
+    const supersededSuccessIds: string[] = [];
 
     // One directory read for the whole pass. Every export operation used to trigger its own
     // `readdir` of this directory to find leftover `.tmp` siblings, so a fleet with a few hundred
@@ -106,17 +119,22 @@ export class ExportArtifactMaintenance {
         report.abandonedArtifacts += cleanup.removed;
         continue;
       }
-      const expiresAt = exportArtifactExpiresAt(operation, this.retentionMs);
-      if (expiresAt !== undefined && expiresAt <= now) {
-        const artifact = objectValue(exportOperationResult(operation).artifact) as ExportArtifactMetadata | undefined;
-        const wasExpired = Boolean(artifact?.expiredAt && !exportOperationResult(operation).artifactPath);
-        if (await this.expireOperation(operation, now, report, fileNames)) {
-          if (!wasExpired) report.expiredArtifacts += 1;
-        } else this.referenceOperationFiles(operation, referenced);
-      } else {
-        this.ensureExplicitExpiry(operation, expiresAt);
-        this.referenceOperationFiles(operation, referenced);
+      // The newest successful artifact is retained until another successful export replaces it.
+      // `retentionMs` remains accepted in configuration for backwards compatibility, but no longer
+      // expires the only available download merely because time passed.
+      const serverIds = exportOperationServerIds(operation);
+      if (
+        typeof exportOperationResult(operation).artifactPath === "string"
+        && serverIds.some((serverId) => retainedServerIds.has(serverId))
+      ) {
+        const cleanup = await this.removeOperationFiles(operation, report, fileNames);
+        if (cleanup.success) {
+          supersededSuccessIds.push(operation.id);
+          continue;
+        }
       }
+      this.referenceOperationFiles(operation, referenced);
+      for (const serverId of serverIds) retainedServerIds.add(serverId);
     }
 
     if (directoryError !== undefined) {
@@ -140,17 +158,56 @@ export class ExportArtifactMaintenance {
     ].map((operation) => [operation.id, operation]));
     const deletable: string[] = [];
     for (const operation of candidates.values()) {
+      const retainedExport = operation.type === "export.run"
+        && operation.status === "succeeded"
+        && typeof exportOperationResult(operation).artifactPath === "string";
+      if (retainedExport) continue;
       if (operation.type !== "export.run" || (await this.removeOperationFiles(operation, report, fileNames)).success) {
         deletable.push(operation.id);
       }
     }
-    report.prunedOperations = this.operations.deleteFinished(deletable);
+    report.prunedOperations = this.operations.deleteFinished([...supersededSuccessIds, ...deletable]);
     return report;
   }
 
   async cleanupSettledOperation(operation: OperationRecord) {
     if (operation.type !== "export.run" || operation.status === "succeeded") return true;
     return (await this.removeOperationFiles(operation)).success;
+  }
+
+  async cleanupOperationArtifacts(operation: OperationRecord) {
+    return (await this.removeOperationFiles(operation)).success;
+  }
+
+  async prepareNewExport(serverIds: readonly string[]) {
+    const scope = new Set(serverIds);
+    const obsolete = this.operations.listExportOperations().filter((operation) => (
+      operation.status !== "queued"
+      && operation.status !== "running"
+      && overlapsServerIds(operation, scope)
+      && !(operation.status === "succeeded" && typeof exportOperationResult(operation).artifactPath === "string")
+    ));
+    const deletable: string[] = [];
+    for (const operation of obsolete) {
+      if ((await this.removeOperationFiles(operation)).success) deletable.push(operation.id);
+    }
+    this.operations.deleteFinished(deletable);
+  }
+
+  async replacePreviousSuccessfulExports(operationId: string, serverIds: readonly string[]) {
+    const scope = new Set(serverIds);
+    const previous = this.operations.listExportOperations().filter((operation) => (
+      operation.id !== operationId
+      && operation.status === "succeeded"
+      && overlapsServerIds(operation, scope)
+    ));
+    const deletable: string[] = [];
+    for (const operation of previous) {
+      const cleanup = await this.removeOperationFiles(operation);
+      if (!cleanup.success) throw new Error("The previous export could not be removed; retry the export after checking panel storage permissions");
+      deletable.push(operation.id);
+    }
+    this.operations.deleteFinished(deletable);
   }
 
   async expireOperation(operation: OperationRecord, now = Date.now(), report?: ExportMaintenanceReport, directoryFileNames?: string[]) {
@@ -186,17 +243,6 @@ export class ExportArtifactMaintenance {
     referenced.add(this.canonicalPath(operation.id));
     const storedPath = this.storedPath(operation);
     if (storedPath) referenced.add(storedPath);
-  }
-
-  private ensureExplicitExpiry(operation: OperationRecord, expiresAt: number | undefined) {
-    if (expiresAt === undefined) return;
-    const result = exportOperationResult(operation);
-    const artifact = objectValue(result.artifact) as ExportArtifactMetadata | undefined ?? {};
-    if (artifact.expiresAt && Number.isFinite(Date.parse(artifact.expiresAt))) return;
-    this.operations.replaceResult(operation.id, {
-      ...result,
-      artifact: { ...artifact, expiresAt: new Date(expiresAt).toISOString() }
-    });
   }
 
   /**

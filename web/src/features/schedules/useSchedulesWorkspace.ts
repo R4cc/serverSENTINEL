@@ -26,6 +26,8 @@ type SchedulesWorkspaceInputs = {
   error: string;
   isProvisioning: boolean;
   dockerOperationalLock: boolean;
+  serverMutationLocked?: boolean;
+  serverMutationBlockedReason?: string;
   runtimeControlsDisabledReason: string;
   canManage: boolean;
   notify: Notify;
@@ -46,6 +48,8 @@ export function useSchedulesWorkspace({
   error,
   isProvisioning,
   dockerOperationalLock,
+  serverMutationLocked = false,
+  serverMutationBlockedReason = "",
   runtimeControlsDisabledReason,
   canManage,
   notify,
@@ -56,7 +60,7 @@ export function useSchedulesWorkspace({
 }: SchedulesWorkspaceInputs) {
   const [busy, setBusy] = useState(false);
   const demoRunControllersRef = useRef(new Map<string, AbortController>());
-  const locked = isProvisioning || busy || dockerOperationalLock || !canManage || !activeServer;
+  const locked = isProvisioning || busy || dockerOperationalLock || serverMutationLocked || !canManage || !activeServer;
 
   async function createSchedule(patch: SchedulePatch) {
     if (locked || !activeServer) return false;
@@ -329,13 +333,13 @@ export function useSchedulesWorkspace({
     loading,
     error,
     busy,
-    disabled: busy || isProvisioning || !canManage || dockerOperationalLock,
+    disabled: busy || isProvisioning || !canManage || dockerOperationalLock || serverMutationLocked,
     disabledReason: scheduleDisabledReason({
       busy,
       isProvisioning,
       canManage,
-      runtimeLocked: dockerOperationalLock,
-      runtimeLockedReason: runtimeControlsDisabledReason
+      runtimeLocked: dockerOperationalLock || serverMutationLocked,
+      runtimeLockedReason: serverMutationLocked ? serverMutationBlockedReason : runtimeControlsDisabledReason
     }),
     actions: {
       create: createSchedule,

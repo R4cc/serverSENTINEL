@@ -7,6 +7,7 @@ import type { RemoteObservationCoordinator } from "./nodes/observationCoordinato
 import type { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
 import type { OperationService } from "./operations/operationService.js";
 import type { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
+import type { ExportCoordinator } from "./exportCoordinator.js";
 import type { PlayerHeadService } from "./playerHeadService.js";
 import type { PlayerSnapshotCoordinator } from "./playerSnapshots.js";
 import type { ResourceStatsCollector } from "./resourceStatsCollector.js";
@@ -44,6 +45,7 @@ export interface AppServices {
   operationsRepository: OperationsRepository;
   operationService: OperationService;
   exportArtifactMaintenance: ExportArtifactMaintenance;
+  exportCoordinator: ExportCoordinator;
   storageDatabase: StorageDatabase;
   modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
   resourceStatsRepository: ResourceStatsRepository;

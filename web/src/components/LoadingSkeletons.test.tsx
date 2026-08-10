@@ -38,6 +38,7 @@ describe("loading skeletons", () => {
     const mods = renderToStaticMarkup(<ApplicationLoadingSkeleton page="mods" />);
     const schedules = renderToStaticMarkup(<FeaturePageLoadingSkeleton page="schedule" label="Loading schedules" />);
     const consolePage = renderToStaticMarkup(<FeaturePageLoadingSkeleton page="console" label="Loading console" />);
+    const createPage = renderToStaticMarkup(<FeaturePageLoadingSkeleton page="create" label="Loading server form" />);
     const timeline = renderToStaticMarkup(<ServerTimelineLoadingSkeleton />);
 
     expect(files).toContain("applicationFilesSkeleton");
@@ -46,6 +47,8 @@ describe("loading skeletons", () => {
     expect(mods.match(/applicationModsMetric"/g)).toHaveLength(3);
     expect(schedules).toContain("applicationScheduleGrid");
     expect(consolePage).toContain("applicationConsoleSkeleton");
+    expect(createPage).toContain("applicationCreateStepper");
+    expect(createPage.match(/applicationCreateStep"/g)).toHaveLength(4);
     expect(timeline).toContain("serverTimelineLoadingSkeleton");
     expect(timeline).toContain("serverTimelineSkeletonChart");
     expect(timeline).not.toContain("resourcePanel");

@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ManagedServer } from "./types.js";
 
 const originalEnv = { ...process.env };
 const temporaryDirectories: string[] = [];
@@ -89,7 +90,7 @@ describe("Fastify application factory", () => {
         headers: { cookie, "x-requested-with": "XMLHttpRequest" },
         payload: { selection: { categories: ["serverConfig"], contentStrategy: "lockfile" } }
       });
-      expect(started.statusCode, started.body).toBe(200);
+      expect(started.statusCode, started.body).toBe(202);
       const operationId = started.json().id as string;
 
       await vi.waitFor(async () => {
@@ -163,7 +164,7 @@ describe("Fastify application factory", () => {
           selection: { categories: ["world"], contentStrategy: "jars" }
         }
       });
-      expect(started.statusCode, started.body).toBe(200);
+      expect(started.statusCode, started.body).toBe(202);
       const operationId = started.json().id as string;
 
       await vi.waitFor(async () => {
@@ -183,7 +184,7 @@ describe("Fastify application factory", () => {
     }
   });
 
-  it("refuses downloads after an export artifact expires", async () => {
+  it("retains downloads after the legacy export retention window", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-expired-export-"));
     temporaryDirectories.push(dataDir);
     process.env = {
@@ -221,7 +222,7 @@ describe("Fastify application factory", () => {
         headers: { cookie, "x-requested-with": "XMLHttpRequest" },
         payload: { selection: { categories: ["serverConfig"], contentStrategy: "lockfile" } }
       });
-      expect(started.statusCode, started.body).toBe(200);
+      expect(started.statusCode, started.body).toBe(202);
       const operationId = started.json().id as string;
 
       await vi.waitFor(async () => {
@@ -241,16 +242,13 @@ describe("Fastify application factory", () => {
       expect(available.statusCode).toBe(200);
 
       now += 60 * 60 * 1000 + 1;
-      const expired = await app.inject({
+      const retained = await app.inject({
         method: "GET",
         url: `/api/exports/${operationId}/download`,
         headers: { cookie, "x-requested-with": "XMLHttpRequest" }
       });
-      expect(expired.statusCode).toBe(410);
-      expect(expired.json()).toEqual({
-        error: { code: "EXPORT_EXPIRED", message: "Export artifact has expired", details: {} }
-      });
-      expect(existsSync(join(dataDir, "exports", `serversentinel-export-${operationId}.zip`))).toBe(false);
+      expect(retained.statusCode).toBe(200);
+      expect(existsSync(join(dataDir, "exports", `serversentinel-export-${operationId}.zip`))).toBe(true);
     } finally {
       await app.close();
     }
@@ -484,7 +482,7 @@ describe("Fastify application factory", () => {
         headers: { ...csrf, cookie: managerCookie },
         payload: { selection }
       });
-      expect(managerExport.statusCode, managerExport.body).toBe(200);
+      expect(managerExport.statusCode, managerExport.body).toBe(202);
       const managerOperationId = managerExport.json().id as string;
 
       await vi.waitFor(async () => {
@@ -525,7 +523,7 @@ describe("Fastify application factory", () => {
         headers: { ...csrf, cookie: adminCookie },
         payload: { selection: { categories: ["serverConfig", "panelSettings"], contentStrategy: "lockfile" } }
       });
-      expect(adminExport.statusCode, adminExport.body).toBe(200);
+      expect(adminExport.statusCode, adminExport.body).toBe(202);
       const adminOperationId = adminExport.json().id as string;
 
       await vi.waitFor(async () => {
@@ -627,6 +625,169 @@ describe("Fastify application factory", () => {
     }
   });
 
+  it("shows an active export per server and blocks only server mutations", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-export-locks-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "all-in-one",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18091",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    const app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const serverDir = join(dataDir, "servers", "server-1");
+    await mkdir(serverDir, { recursive: true });
+    const now = "2026-01-01T00:00:00.000Z";
+    const server: ManagedServer = {
+      id: "11111111-1111-4111-8111-111111111111",
+      nodeId: "local",
+      displayName: "Survival",
+      serverDir,
+      storageName: "11111111-1111-4111-8111-111111111111",
+      runtimeProfile: {
+        minecraftVersion: "1.21.4",
+        runtimeType: "fabric",
+        runtimeVersion: "0.16.10",
+        javaMajorVersion: 21,
+        jarProvider: "mcjars",
+        jarArtifact: { filename: "fabric-server-launch.jar" },
+        compatibilityStatus: "compatible",
+        resolvedAt: now
+      },
+      dockerContainer: "survival",
+      dockerPorts: "25565:25565/tcp",
+      javaArgs: "-Xms2G -Xmx4G",
+      startOnNodeStart: false,
+      runtimeIntent: "stopped",
+      schedules: [{
+        id: "22222222-2222-4222-8222-222222222222",
+        name: "Hourly notice",
+        cron: "0 * * * *",
+        steps: [{ type: "command", command: "say hello", delaySeconds: 0 }],
+        onlyWhenNoPlayers: false,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+        recentRuns: []
+      }],
+      createdAt: now,
+      updatedAt: now
+    };
+    services.serversRepository.create(server);
+
+    let releaseExport!: () => void;
+    let lockedExport: Promise<void> | undefined;
+    let operationId = "";
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const cookie = sessionCookieFrom(registered);
+      const admin = services.usersRepository.list().find((user) => user.username === "admin")!;
+      const managerCreated = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { ...csrf, cookie },
+        payload: { username: "manager", password: "password123", rolePreset: "manager" }
+      });
+      expect(managerCreated.statusCode, managerCreated.body).toBe(200);
+      const managerLogin = await app.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        headers: csrf,
+        payload: { username: "manager", password: "password123" }
+      });
+      expect(managerLogin.statusCode, managerLogin.body).toBe(200);
+      const managerCookie = sessionCookieFrom(managerLogin);
+
+      const retained = services.operationsRepository.create({ type: "export.run", createdBy: admin.id, task: "Export ready", progress: 100 });
+      const retainedPath = join(dataDir, "exports", `serversentinel-export-${retained.id}.zip`);
+      await mkdir(join(dataDir, "exports"), { recursive: true });
+      await writeFile(retainedPath, "retained export");
+      services.operationsRepository.start(retained.id);
+      services.operationsRepository.succeed(retained.id, {
+        task: "Export ready",
+        progress: 100,
+        result: {
+          serverIds: [server.id],
+          selection: { categories: ["serverConfig"], contentStrategy: "lockfile" },
+          artifactPath: retainedPath,
+          artifact: { filename: `serversentinel-export-${retained.id}.zip`, size: 15, downloadUrl: `/api/exports/${retained.id}/download` }
+        }
+      });
+      const operation = services.operationsRepository.create({ type: "export.run", createdBy: admin.id, task: "Compressing world", progress: 42 });
+      operationId = operation.id;
+      services.operationsRepository.start(operation.id, { task: "Compressing world", progress: 42 });
+      services.operationsRepository.replaceResult(operation.id, {
+        serverIds: [server.id],
+        selection: { categories: ["world"], contentStrategy: "lockfile" }
+      });
+      lockedExport = services.exportCoordinator.run(operation.id, [server.id], () => new Promise<void>((resolve) => { releaseExport = resolve; }));
+
+      const state = await app.inject({ method: "GET", url: `/api/servers/${server.id}/exports`, headers: { ...csrf, cookie } });
+      expect(state.statusCode, state.body).toBe(200);
+      expect(state.json()).toMatchObject({
+        latest: { id: operation.id, status: "running", progress: 42, task: "Compressing world", canCancel: true },
+        artifact: { operationId: retained.id, downloadUrl: `/api/exports/${retained.id}/download` }
+      });
+      const sharedState = await app.inject({ method: "GET", url: `/api/servers/${server.id}/exports`, headers: { ...csrf, cookie: managerCookie } });
+      expect(sharedState.statusCode, sharedState.body).toBe(200);
+      expect(sharedState.json()).toMatchObject({
+        latest: { id: operation.id, status: "running", progress: 42, canCancel: false },
+        artifact: { operationId: retained.id }
+      });
+      expect(sharedState.json().artifact).not.toHaveProperty("downloadUrl");
+
+      for (const request of [
+        { method: "PUT", url: `/api/servers/${server.id}`, payload: { displayName: "Renamed" } },
+        { method: "DELETE", url: `/api/servers/${server.id}`, payload: { confirmName: server.displayName, deleteFiles: false } },
+        { method: "POST", url: `/api/servers/${server.id}/start`, payload: {} },
+        { method: "POST", url: `/api/servers/${server.id}/command`, payload: { command: "say hello" } },
+        { method: "POST", url: `/api/servers/${server.id}/folder`, payload: { path: ".", name: "blocked" } },
+        { method: "POST", url: `/api/servers/${server.id}/files/archive/extract`, payload: { path: "missing.zip", destinationPath: ".", conflictPolicy: "replace" } },
+        { method: "PATCH", url: `/api/servers/${server.id}/mods`, payload: { filename: "example.jar", enabled: false } },
+        { method: "POST", url: `/api/servers/${server.id}/schedules`, payload: { name: "Blocked", cron: "0 * * * *", steps: [{ type: "command", command: "say blocked", delaySeconds: 0 }], enabled: true } },
+        { method: "POST", url: `/api/servers/${server.id}/schedules/22222222-2222-4222-8222-222222222222/run`, payload: {} }
+      ] as const) {
+        const response = await app.inject({ ...request, headers: { ...csrf, cookie } });
+        expect(response.statusCode, `${request.method} ${request.url}: ${response.body}`).toBe(409);
+        expect(response.json().error.code).toBe("EXPORT_IN_PROGRESS");
+      }
+
+      const overlapping = await app.inject({
+        method: "POST",
+        url: "/api/exports",
+        headers: { ...csrf, cookie },
+        payload: { serverIds: [server.id], selection: { categories: ["serverConfig"], contentStrategy: "lockfile" } }
+      });
+      expect(overlapping.statusCode, overlapping.body).toBe(409);
+      expect(overlapping.json().error.code).toBe("EXPORT_ALREADY_RUNNING");
+
+      const files = await app.inject({ method: "GET", url: `/api/servers/${server.id}/files?path=.`, headers: { ...csrf, cookie } });
+      const schedules = await app.inject({ method: "GET", url: `/api/servers/${server.id}/schedules`, headers: { ...csrf, cookie } });
+      expect(files.statusCode, files.body).toBe(200);
+      expect(schedules.statusCode, schedules.body).toBe(200);
+    } finally {
+      releaseExport?.();
+      await lockedExport;
+      if (operationId) services.operationsRepository.cancel(operationId, "Test complete");
+      await app.close();
+    }
+  });
+
   it("compresses JSON replies but leaves the export artifact download intact", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-compression-"));
     temporaryDirectories.push(dataDir);
@@ -690,7 +851,7 @@ describe("Fastify application factory", () => {
         headers: { ...csrf, cookie },
         payload: { selection: { categories: ["serverConfig"], contentStrategy: "lockfile" } }
       });
-      expect(started.statusCode, started.body).toBe(200);
+      expect(started.statusCode, started.body).toBe(202);
       const operationId = started.json().id as string;
       await vi.waitFor(async () => {
         const operation = await app.inject({ method: "GET", url: `/api/operations/${operationId}`, headers: { ...csrf, cookie } });

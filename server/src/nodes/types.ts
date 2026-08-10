@@ -34,6 +34,7 @@ export type NodeRuntime = {
   serverLogs(server: ManagedServer, lineLimit?: number): Promise<unknown>;
   readPlayerObservation(server: ManagedServer): Promise<PlayerObservation>;
   serverStats(server: ManagedServer): Promise<unknown>;
+  serverStorage(server: ManagedServer): Promise<unknown>;
   serverOverview(server: ManagedServer): Promise<unknown>;
   resolveExistingPath(server: ManagedServer, path: string): Promise<string>;
   resolveWritablePath(server: ManagedServer, path: string): Promise<string>;

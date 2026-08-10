@@ -271,7 +271,7 @@ export class OperationsRepository {
     return this.storage.connection.prepare<[], OperationRow>(`
       SELECT * FROM operations
       WHERE type = 'export.run'
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, rowid DESC
     `).all().map(operationFromRow);
   }
 

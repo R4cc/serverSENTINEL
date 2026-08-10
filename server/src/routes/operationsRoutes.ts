@@ -20,6 +20,7 @@ export type OperationsRoutesContext = {
     find(id: string): OperationRecord | undefined;
     cancel(id: string, message: string): OperationRecord | undefined;
   };
+  cancelOperation?: (operation: OperationRecord, message: string) => OperationRecord | undefined | Promise<OperationRecord | undefined>;
 };
 
 function optionalOperationStatus(value: unknown): OperationStatus | undefined {
@@ -67,16 +68,19 @@ export function registerOperationsRoutes(app: FastifyInstance, context: Operatio
    * no recorded creator are system-initiated and stay administrator-only.
    */
   app.post<{ Params: { id: string } }>("/api/operations/:id/cancel", context.destructiveRateLimit, async (request, reply) => {
-    const user = await context.requireRequestPermission(request, "servers.editSettings");
     const operationId = validateOperationId(request.params.id);
     const existing = context.operations.find(operationId);
     if (!existing) {
+      await context.requireRequestPermission(request, "servers.editSettings");
       return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
     }
+    const user = await context.requireRequestPermission(request, existing.type === "export.run" ? "servers.export" : "servers.editSettings");
     if (!context.mayCancelOperation(user, existing)) {
       return reply.code(403).send(apiErrorResponse("PERMISSION_DENIED", "Only the user who started this operation can cancel it"));
     }
-    const operation = context.operations.cancel(operationId, "Operation cancelled by user");
+    const operation = context.cancelOperation
+      ? await context.cancelOperation(existing, "Operation cancelled by user")
+      : context.operations.cancel(operationId, "Operation cancelled by user");
     if (!operation) {
       return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
     }

@@ -13,5 +13,8 @@ export function ModIconImage({ src, fallback }: Props) {
     return <span className="modsWorkspaceFallback">{fallback}</span>;
   }
 
-  return <img src={activeSrc} alt="" onError={() => setFailedSrc(activeSrc)} />;
+  // A search result or a full mod list renders dozens of these at once, each proxied through the
+  // panel's own origin — so without deferring they contend with the API calls the page is waiting
+  // on. The stylesheet fixes the box, so nothing shifts when one arrives late.
+  return <img src={activeSrc} alt="" loading="lazy" decoding="async" onError={() => setFailedSrc(activeSrc)} />;
 }

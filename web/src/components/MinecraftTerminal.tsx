@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { WebglAddon } from "@xterm/addon-webgl";
+import type { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { terminalPreferenceOptions, type ConsoleFontSize, type ConsoleScrollback } from "../features/settings/settingsPreferences";
@@ -91,17 +91,28 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       webglAddon?.dispose();
       webglAddon = null;
     };
-    const contextLoss: { dispose(): void } | undefined = (() => {
+    let contextLoss: { dispose(): void } | undefined;
+    let terminalDisposed = false;
+    const activateWebgl = async () => {
       try {
+        // The addon is a quarter of the console chunk and is useless on every device that cannot
+        // run it, so it is fetched here rather than imported at module scope. By this point the
+        // terminal has already painted, so the download is off the interaction path entirely.
+        const { WebglAddon } = await import("@xterm/addon-webgl");
+        // The import can settle after a fast navigation away; loading an addon into a disposed
+        // terminal throws, and constructing one would take a GPU context nothing would release.
+        if (terminalDisposed) return;
         webglAddon = new WebglAddon();
-        const listener = webglAddon.onContextLoss(disposeWebgl);
+        contextLoss = webglAddon.onContextLoss(disposeWebgl);
         terminal.loadAddon(webglAddon);
-        return listener;
       } catch {
         disposeWebgl();
-        return undefined;
       }
-    })();
+    };
+    // Opening, fitting and painting xterm already costs the first console frame. Let the DOM
+    // renderer produce that frame, then upgrade to WebGL after the interaction has settled so GPU
+    // setup and shader compilation cannot turn the page switch into one long blocking task.
+    const webglStartTimer = window.setTimeout(() => void activateWebgl(), 1_000);
 
     const selectionChange = terminal.onSelectionChange(() => {
       selectionListenerRef.current?.({
@@ -208,6 +219,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       container.removeEventListener("touchcancel", handleTouchEnd);
       visualViewport?.removeEventListener("resize", scheduleFit);
       window.removeEventListener("resize", scheduleFit);
+      window.clearTimeout(webglStartTimer);
       contextLoss?.dispose();
       selectionChange.dispose();
       // Nothing is selected in a terminal that no longer exists, and the page must not be left
@@ -219,25 +231,43 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       initialRenderCompleteRef.current = false;
       // Release the GPU context before the terminal goes away; navigating between servers
       // remounts this component and browsers cap how many live WebGL contexts a page may hold.
+      terminalDisposed = true;
       disposeWebgl();
       terminal.dispose();
     };
   }, []);
 
-  // The palette lives in CSS variables, so there is no prop to depend on and this has to
-  // re-read the computed style after every render. Assigning `options.theme` is compared by
-  // reference inside xterm, so handing it a fresh object rebuilds the colour set and forces a
-  // full repaint of every row — at streaming log rates that reads as flicker. Only assign when
-  // the resolved colours actually changed.
+  // The palette lives in CSS variables, so there is no prop to depend on. Reading it means
+  // `getComputedStyle` plus four `getPropertyValue` calls, which force the browser to flush
+  // pending style recalculation — so this must not run per render. Every log flush is a render,
+  // and at streaming rates that is up to sixty forced recalcs a second.
+  //
+  // The trigger is enumerable instead: the palette only moves when the theme class changes, and
+  // App writes that class onto both the document element and the app shell (including when the
+  // system scheme flips, which it folds into the same class). Watch those and read on demand.
+  //
+  // Assigning `options.theme` is compared by reference inside xterm, so handing it a fresh object
+  // rebuilds the colour set and forces a full repaint of every row — at streaming log rates that
+  // reads as flicker. Only assign when the resolved colours actually changed.
   useEffect(() => {
     const container = containerRef.current;
-    const terminal = terminalRef.current;
-    if (!container || !terminal) return;
-    const nextTheme = terminalTheme(window.getComputedStyle(container));
-    if (appliedThemeRef.current && sameTerminalTheme(appliedThemeRef.current, nextTheme)) return;
-    appliedThemeRef.current = nextTheme;
-    terminal.options.theme = nextTheme;
-  });
+    if (!container) return;
+    const applyTheme = () => {
+      const terminal = terminalRef.current;
+      if (!terminal) return;
+      const nextTheme = terminalTheme(window.getComputedStyle(container));
+      if (appliedThemeRef.current && sameTerminalTheme(appliedThemeRef.current, nextTheme)) return;
+      appliedThemeRef.current = nextTheme;
+      terminal.options.theme = nextTheme;
+    };
+
+    const observer = new MutationObserver(applyTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    const shell = container.closest(".appShell");
+    if (shell) observer.observe(shell, { attributes: true, attributeFilter: ["class"] });
+    applyTheme();
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -287,7 +317,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     if (wasAtBottom) terminal.scrollToBottom();
   }
 
-  return <div ref={containerRef} className="minecraftTerminal initializing" aria-label="Minecraft server console" />;
+  return <div ref={containerRef} className="minecraftTerminal initializing" role="region" aria-label="Minecraft server console" />;
 }
 
 function cssVar(styles: CSSStyleDeclaration, name: string, fallback: string) {

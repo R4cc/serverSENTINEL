@@ -677,6 +677,12 @@ export type ServerTimelineResourcePoint = {
   networkTxBytesPerSecond: number | null;
 };
 
+export type ServerStorageSummary = {
+  worldSizeBytes: number | null;
+  totalBytes: number | null;
+  availableBytes: number | null;
+};
+
 export type ServerTimelineEvent = ServerEvent & {
   occurredAt: number;
 };

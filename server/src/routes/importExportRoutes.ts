@@ -18,14 +18,15 @@ import {
   validateImportArchiveFile
 } from "../operations/importExportService.js";
 import { selectedExportServerIdsOrAll } from "../exportAuthorization.js";
-import { exportArtifactExpiresAt, exportOperationResult } from "../exportArtifactMaintenance.js";
+import { exportOperationResult, exportOperationServerIds } from "../exportArtifactMaintenance.js";
 import { exportArtifactFilename, exportDownloadStream } from "../importExport.js";
 import { normalizeExportSelection } from "../servers/exportSelection.js";
 import { validateOperationId } from "../http/validation.js";
 import { apiErrorResponse } from "../http/errors.js";
 import { isInsideServersDirectory } from "../storage/serverIdentity.js";
 import { services } from "../appServices.js";
-import { detailedErrorMessage, logWarn } from "../logging.js";
+import { isFullAccessUser } from "../permissions.js";
+import { getServer } from "../servers/store.js";
 
 /** Uploaded archives live here until an import operation consumes them. */
 function importStagingPath(importId: string) {
@@ -65,14 +66,54 @@ app.post<{ Body: { serverIds?: unknown; selection?: unknown } }>("/api/exports/e
   return estimateExport(serverIds, selection);
 });
 
-app.post<{ Body: { serverIds?: unknown; selection?: unknown } }>("/api/exports", destructiveRateLimit, async (request) => {
+app.post<{ Body: { serverIds?: unknown; selection?: unknown } }>("/api/exports", destructiveRateLimit, async (request, reply) => {
   const user = await requireRequestPermission(request, "servers.export");
   const selection = normalizeExportSelection(request.body?.selection);
   const serverIds = selectedExportServerIdsOrAll(selectedExportServerIds(request.body?.serverIds));
   // Server-state, file-selection, size-limit, and disk-space checks run inside the queued operation.
   // Walking a multi-gigabyte world here duplicates the modal's estimate and can hold this request
   // open past a reverse proxy timeout before the browser receives an operation id to poll.
-  return startExportOperation({ serverIds, selection }, user.id);
+  const operation = await startExportOperation({ serverIds, selection }, user.id);
+  return reply.code(202).send(operation);
+});
+
+app.get<{ Params: { id: string } }>("/api/servers/:id/exports", async (request) => {
+  const user = await requireRequestPermission(request, "servers.export");
+  const server = await getServer(request.params.id);
+  const exports = services.operationsRepository.listExportOperations()
+    .filter((operation) => exportOperationServerIds(operation).includes(server.id));
+  const latest = exports[0];
+  const retained = exports.find((operation) => (
+    operation.status === "succeeded"
+    && typeof exportOperationResult(operation).artifactPath === "string"
+  ));
+  const active = latest && (latest.status === "queued" || latest.status === "running");
+  const retainedArtifact = retained ? exportOperationResult(retained).artifact : undefined;
+  return {
+    latest: latest ? {
+      id: latest.id,
+      status: latest.status,
+      progress: latest.progress,
+      task: latest.task,
+      createdAt: latest.createdAt,
+      startedAt: latest.startedAt,
+      finishedAt: latest.finishedAt,
+      errorMessage: latest.errorMessage,
+      startedByRequester: latest.createdBy === user.id,
+      canCancel: Boolean(
+        active
+        && services.exportCoordinator.isCancellationAvailable(latest.id)
+        && (latest.createdBy === user.id || isFullAccessUser(user))
+      )
+    } : null,
+    artifact: retained && retainedArtifact ? {
+      operationId: retained.id,
+      filename: retainedArtifact.filename,
+      size: retainedArtifact.size,
+      createdAt: retained.finishedAt ?? retained.createdAt,
+      downloadUrl: retained.createdBy === user.id ? retainedArtifact.downloadUrl : undefined
+    } : null
+  };
 });
 
 // The artifact is a ZIP, so global compression would only re-encode it and drop the Content-Length
@@ -85,13 +126,6 @@ app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download
   }
   if (operation.status !== "succeeded") {
     throw new Error("Export is not ready for download");
-  }
-  const expiresAt = exportArtifactExpiresAt(operation, config.exportRetentionMs);
-  if (expiresAt !== undefined && expiresAt <= Date.now()) {
-    await services.exportArtifactMaintenance.expireOperation(operation).catch((error) => {
-      logWarn({ operationId: operation.id, errorDetails: detailedErrorMessage(error) }, "Could not remove an expired export artifact during download");
-    });
-    return reply.code(410).send(apiErrorResponse("EXPORT_EXPIRED", "Export artifact has expired"));
   }
   const result = exportOperationResult(operation);
   if (!Array.isArray(result.serverIds) || !result.selection) {

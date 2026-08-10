@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useMemo, useRef, type RefObject } from "react";
 import { ChevronDown, CircleUserRound, LogOut } from "lucide-react";
 import { demoServerId } from "../demoRuntime";
 import type { ActivePage, ManagedServer } from "../types";
@@ -51,6 +51,35 @@ export function AppSidebar({
   accountName: string | undefined;
   onLogout: () => void;
 }) {
+  // The switcher menu only mounts its items once it is open, but the array below — one JSX label
+  // per managed server — was being rebuilt on every render of the shell, which includes every
+  // console log flush. Held through a ref so the callback identity cannot invalidate the memo.
+  const selectServerRef = useRef(onSelectServer);
+  selectServerRef.current = onSelectServer;
+  const serverSwitcherItems = useMemo(() => servers.map((server) => {
+    const selected = server.id === activeServer?.id;
+    const lockedByDemo = demoMode && server.id !== demoServerId;
+    const minecraftVersion = versionValue(minecraftVersionInfo(server));
+    const statusTone = selected ? serverCommandTone : server.runtimeIntent === "running" ? "running" : server.runtimeIntent === "restarting" ? "starting" : server.runtimeIntent === "stopped" ? "stopped" : "unknown";
+    return {
+      id: server.id,
+      active: selected,
+      disabled: lockedByDemo,
+      title: lockedByDemo ? "Exit demo mode to access this server." : `Switch to ${server.displayName}`,
+      onSelect: () => selectServerRef.current(server.id),
+      label: (
+        <span className="serverSwitcherOption">
+          <span className={`serverSwitcherOptionDot ${statusTone}`} aria-hidden="true" />
+          <span className="serverSwitcherOptionCopy">
+            <strong>{server.displayName}</strong>
+            <small>{server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
+          </span>
+          {selected && <span className="serverSwitcherCurrent">Current</span>}
+        </span>
+      )
+    };
+  }), [servers, activeServer?.id, serverCommandTone, demoMode]);
+
   // Pointing at or tabbing to a navigation item is a reliable signal that the page is about to
   // open, and the chunk behind it takes longer to arrive than the pause before the click. Starting
   // it here is what turns a first visit into the same instant switch a repeat visit already is.
@@ -103,29 +132,7 @@ export function AppSidebar({
               menuClassName="serverSwitcherMenu"
               align="start"
               disabled={isProvisioning || servers.length === 0}
-              items={servers.map((server) => {
-                const selected = server.id === activeServer?.id;
-                const lockedByDemo = demoMode && server.id !== demoServerId;
-                const minecraftVersion = versionValue(minecraftVersionInfo(server));
-                const statusTone = selected ? serverCommandTone : server.runtimeIntent === "running" ? "running" : server.runtimeIntent === "restarting" ? "starting" : server.runtimeIntent === "stopped" ? "stopped" : "unknown";
-                return {
-                  id: server.id,
-                  active: selected,
-                  disabled: lockedByDemo,
-                  title: lockedByDemo ? "Exit demo mode to access this server." : `Switch to ${server.displayName}`,
-                  onSelect: () => onSelectServer(server.id),
-                  label: (
-                    <span className="serverSwitcherOption">
-                      <span className={`serverSwitcherOptionDot ${statusTone}`} aria-hidden="true" />
-                      <span className="serverSwitcherOptionCopy">
-                        <strong>{server.displayName}</strong>
-                        <small>{server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
-                      </span>
-                      {selected && <span className="serverSwitcherCurrent">Current</span>}
-                    </span>
-                  )
-                };
-              })}
+              items={serverSwitcherItems}
               trigger={(
                 <>
                   <span className={`serverSwitcherStatus ${activeServer ? serverCommandTone : "unknown"}`} aria-hidden="true" />

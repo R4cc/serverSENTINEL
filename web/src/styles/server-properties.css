@@ -364,7 +364,72 @@
   line-height: 1.4;
 }
 
-.exportPanel .uiButton {
+.exportTaskSummary,
+.exportArtifactRow {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--surface-inset);
+}
+
+.exportTaskCopy,
+.exportArtifactRow > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.exportTaskCopy strong,
+.exportArtifactRow strong {
+  overflow-wrap: anywhere;
+}
+
+.exportTaskCopy small,
+.exportTaskSummary > small,
+.exportArtifactRow small,
+.exportTaskEmpty {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.4;
+}
+
+.exportTaskEmpty,
+.exportTaskError {
+  margin: 0;
+}
+
+.exportTaskError {
+  color: var(--sentinel-danger);
+  font-size: var(--type-helper-size);
+}
+
+.exportTaskProgress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.exportTaskProgress progress {
+  width: 100%;
+}
+
+.exportArtifactRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.exportPanelActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.exportPanelActions .uiButton {
   justify-self: start;
 }
 
@@ -422,9 +487,19 @@
 
   /* Stacked side cards read as one column, so their single action fills the
      card the way the danger panel's already does. */
-  .exportPanel .uiButton {
+  .exportPanelActions .uiButton,
+  .exportArtifactRow .uiButton {
     width: 100%;
     justify-self: stretch;
+  }
+
+  .exportArtifactRow {
+    grid-template-columns: 1fr;
+  }
+
+  .exportPanelActions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }
 

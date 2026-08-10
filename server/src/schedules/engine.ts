@@ -254,9 +254,10 @@ export async function executeMatchedSchedule(server: ManagedServer, schedule: Sc
 export function startScheduleExecution(server: ManagedServer, schedule: ScheduledExecution) {
   const key = scheduleExecutionKey(server.id, schedule.id);
   if (runningSchedules.has(key)) return undefined;
+  services.exportCoordinator.assertMutationAllowed(server.id);
 
   runningSchedules.add(key);
-  void executeMatchedSchedule(server, schedule)
+  void services.exportCoordinator.withMutation(server.id, () => executeMatchedSchedule(server, schedule))
     .catch((error) => {
       logError({ ...serverLogFields(server), scheduleId: schedule.id, ...errorLogFields(error) }, "Schedule run could not be recorded");
     })
@@ -278,6 +279,7 @@ export async function tickSchedules() {
         ? timeZoneMinuteKey(lastRun, config.timeZone) === runKey
         : false;
       if (runningSchedules.has(key) || alreadyRanThisWallMinute) continue;
+      if (services.exportCoordinator.activeOperationId(server.id)) continue;
       try {
         if (!cronMatches(schedule.cron, now)) continue;
       } catch {

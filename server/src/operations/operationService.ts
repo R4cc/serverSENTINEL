@@ -27,6 +27,8 @@ export type QueuedOperationInput<T> = BaseOperationInput<T> & {
   onStarted?: (operation: OperationRecord) => void;
   onError?: (error: unknown, operation: OperationRecord) => void;
   onSettled?: (operation: OperationRecord) => void | Promise<void>;
+  isCancellationError?: (error: unknown) => boolean;
+  cancellationMessage?: string;
 };
 
 type OperationServiceContext = {
@@ -70,6 +72,10 @@ export class OperationService {
     void action(operation, (progress, task) => this.operations.update(operation.id, { progress, task }))
       .then((value) => this.succeed(operation, input, value))
       .catch((error: unknown) => {
+        if (input.isCancellationError?.(error)) {
+          this.operations.cancel(operation.id, input.cancellationMessage ?? "Operation cancelled by user");
+          return;
+        }
         input.onError?.(error, operation);
         this.fail(operation, error, input.failureTask, input.failureFallback);
       })

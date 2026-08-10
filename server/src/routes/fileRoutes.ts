@@ -21,6 +21,7 @@ import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer, Permission } from "../types.js";
 
 export function registerFileRoutes(app: FastifyInstance) {
+const withFileMutation = <T>(server: ManagedServer, action: () => Promise<T>) => services.exportCoordinator.withMutation(server.id, action);
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
@@ -80,6 +81,7 @@ async function requireArchiveExtractionPermissions(
 
 app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string; conflictPolicy?: string } }>("/api/servers/:id/files/archive/extract", destructiveRateLimit, async (request, reply) => {
   const server = await getServer(request.params.id);
+  services.exportCoordinator.assertMutationAllowed(server.id);
   const runtime = runtimeForServer(server);
   const archive = await resolveZipArchive(runtime, server, request.body.path);
   await requireFilePathPermission(request, server, archive, "files.view");
@@ -103,16 +105,14 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   services.operationsRepository.update(operation.id, {
     result: { archivePath: runtime.publicPath(server, archive), destinationPath: runtime.publicPath(server, destination) }
   });
-  queueMicrotask(() => {
-    services.operationsRepository.start(operation.id, { progress: 5, task: `Validating ${basename(archive)}` });
-    const extract = () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
-      services.operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
-    });
-    void (touchesMods ? withTrackedModMutation(server, extract) : extract()).then(async (result) => {
-      services.operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
-    }).catch((error) => {
-      services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
-    });
+  services.operationsRepository.start(operation.id, { progress: 5, task: `Validating ${basename(archive)}` });
+  const extract = () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
+    services.operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
+  });
+  void (touchesMods ? withTrackedModMutation(server, extract) : withFileMutation(server, extract)).then(async (result) => {
+    services.operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
+  }).catch((error) => {
+    services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
   });
   return reply.code(202).send(services.operationsRepository.find(operation.id)!);
 });
@@ -262,7 +262,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   const lease = services.fileEditLeasesRepository.requireOwned(request.body.leaseId, server.id, path, owner);
   const current = await readFileWithRevision(runtime, server, target);
   assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
-  const result = await runtime.writeFile(server, target, request.body.content) as Record<string, unknown>;
+  const result = await withFileMutation(server, () => runtime.writeFile(server, target, request.body.content)) as Record<string, unknown>;
   services.fileEditLeasesRepository.release(lease.leaseId, owner);
   return { ...result, revision: fileContentRevision(request.body.content ?? "") };
 });
@@ -273,11 +273,12 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const runtime = runtimeForServer(server);
   const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
   await requireFilePathPermission(request, server, parent, "files.upload");
-  return runtime.createFolder(server, parent, request.body.name);
+  return withFileMutation(server, () => runtime.createFolder(server, parent, request.body.name));
 });
 
 app.post<{ Params: { id: string } }>("/api/servers/:id/files/upload", destructiveRateLimit, async (request) => {
   const server = await getServer(request.params.id);
+  services.exportCoordinator.assertMutationAllowed(server.id);
   requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   if (!request.isMultipart()) throw new Error("File uploads require multipart form data");
@@ -300,7 +301,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/files/upload", destructiv
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const touchesMods = runtime.isModsPath(server, target);
   const upload = () => runtime.uploadFile(server, parent, filename, uploadRequest.content);
-  return touchesMods ? withTrackedModMutation(server, upload) : upload();
+  return touchesMods ? withTrackedModMutation(server, upload) : withFileMutation(server, upload);
 });
 
 app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -318,7 +319,7 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
   const renameEntry = () => runtime.renameFile(server, source, targetName);
-  return touchesMods ? withTrackedModMutation(server, renameEntry) : renameEntry();
+  return touchesMods ? withTrackedModMutation(server, renameEntry) : withFileMutation(server, renameEntry);
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string } }>("/api/servers/:id/file/move", destructiveRateLimit, async (request) => {
@@ -336,7 +337,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
   const moveEntry = () => runtime.moveFile(server, source, destination);
-  return touchesMods ? withTrackedModMutation(server, moveEntry) : moveEntry();
+  return touchesMods ? withTrackedModMutation(server, moveEntry) : withFileMutation(server, moveEntry);
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
@@ -348,7 +349,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const touchesMods = runtime.isModsPath(server, source);
   if (runtime.isServerSettingsFile(server, source)) await requireServerStoppedForMutableConfiguration(server);
   const duplicate = () => runtime.duplicateFile(server, source, request.body.name);
-  return touchesMods ? withTrackedModMutation(server, duplicate) : duplicate();
+  return touchesMods ? withTrackedModMutation(server, duplicate) : withFileMutation(server, duplicate);
 });
 
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -360,7 +361,7 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   const touchesMods = runtime.isModsPath(server, target);
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const deleteEntry = () => runtime.deleteFile(server, target, request.query.recursive);
-  return touchesMods ? withTrackedModMutation(server, deleteEntry) : deleteEntry();
+  return touchesMods ? withTrackedModMutation(server, deleteEntry) : withFileMutation(server, deleteEntry);
 });
 
 }

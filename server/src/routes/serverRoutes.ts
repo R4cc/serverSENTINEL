@@ -17,6 +17,7 @@ import { publicServerStatus } from "../servers/publicViews.js";
 import { serverJarProvider, startProvisionOperation } from "../servers/provisioning.js";
 import { type CreateServerInput } from "../servers/ports.js";
 import { lifecycleWithIntent, recordOperation, requireServerStoppedForMutableConfiguration, runtimeResultRunning, sendConsoleCommandWithIntent } from "../servers/lifecycle.js";
+import { measureWorldSize } from "../servers/exportSelection.js";
 import { startConsoleHeartbeat, timelineHistoryWindow as timelineHistoryWindowMs, type Client } from "../servers/overview.js";
 import { createConsoleSender } from "../servers/consoleBackpressure.js";
 import { consoleHub, type ConsoleCursor } from "../servers/consoleService.js";
@@ -36,6 +37,10 @@ function consoleCursor(params: URLSearchParams): ConsoleCursor | undefined {
   const since = Number(params.get("since"));
   if (!epoch || !Number.isInteger(since) || since < 0) return undefined;
   return { since, epoch };
+}
+
+function storageByteValue(value: unknown) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
 export function registerServerRoutes(app: FastifyInstance) {
@@ -108,7 +113,7 @@ app.put<{
     assertUniqueDockerHostPorts(dockerPorts);
     assertNodePortsAvailable(servers, server.nodeId, dockerPorts, { ignoreServerId: server.id });
   }
-  const updatedServer = await runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) });
+  const updatedServer = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) }));
   return runtimeForServer(updatedServer).publicServer(updatedServer);
 });
 
@@ -151,7 +156,7 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
     runtimeProfile: nextProfile,
     updatedAt: new Date().toISOString()
   };
-  services.serversRepository.replaceMetadata(updatedServer);
+  await services.exportCoordinator.withMutation(server.id, async () => { services.serversRepository.replaceMetadata(updatedServer); });
   return {
     serverId: server.id,
     runtimeProfile: nextProfile,
@@ -169,7 +174,7 @@ app.delete<{
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.delete");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).deleteServer(server, request.body);
+  return services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
@@ -375,6 +380,22 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) =
   await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
   return runtimeForServer(server).serverOverview(server);
+});
+
+app.get<{ Params: { id: string } }>("/api/servers/:id/storage", async (request) => {
+  await requireRequestPermission(request, "servers.view");
+  const server = await getServer(request.params.id);
+  const runtime = runtimeForServer(server);
+  const [worldSize, storage] = await Promise.allSettled([
+    measureWorldSize(runtime, server),
+    runtime.serverStorage(server) as Promise<{ totalBytes: number; availableBytes: number }>
+  ]);
+  const storageValue = storage.status === "fulfilled" ? storage.value : undefined;
+  return {
+    worldSizeBytes: worldSize.status === "fulfilled" ? worldSize.value : null,
+    totalBytes: storageByteValue(storageValue?.totalBytes),
+    availableBytes: storageByteValue(storageValue?.availableBytes)
+  };
 });
 
 app.get("/api/player-snapshots", async (request) => {

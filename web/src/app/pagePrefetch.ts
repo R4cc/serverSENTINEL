@@ -6,18 +6,18 @@ import type { ActivePage } from "../types";
  * the time. Pulling those chunks in while the browser is idle makes the first visit cost the same
  * as the second.
  *
- * The order is cheapest-first so the small pages are all covered within a frame or two of idle
- * time; the console chunk carries the terminal and is an order of magnitude larger than the rest,
- * so it trails the queue rather than holding it up.
+ * Console goes first because its one-time module evaluation and xterm setup dominate the first
+ * page switch; starting them in the first idle slot keeps that work out of the interaction. The
+ * remaining, smaller chunks follow cheapest-first.
  */
 export const pagePrefetchOrder: ActivePage[] = [
+  "console",
   "files",
   "nodes",
   "mods",
   "schedule",
   "properties",
-  "settings",
-  "console"
+  "settings"
 ];
 
 type NetworkInformation = {

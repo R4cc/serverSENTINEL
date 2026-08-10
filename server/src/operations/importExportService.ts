@@ -5,6 +5,7 @@ import { services, runtimeForServer } from "../appServices.js";
 import { appVersion } from "../buildInfo.js";
 import { config } from "../config.js";
 import { detailedErrorMessage, errorLogFields, logError, logWarn } from "../logging.js";
+import { ExportCancelledError } from "../exportCoordinator.js";
 import { validateServerId } from "../http/validation.js";
 import { asArray } from "../storage/valueValidation.js";
 import { listManagedServers } from "../servers/store.js";
@@ -133,7 +134,12 @@ export async function assertExportDiskSpace(estimatedBytes: number) {
   }
 }
 
-export function startExportOperation(input: { serverIds?: string[]; selection: ExportSelection }, createdBy: string) {
+export async function startExportOperation(input: { serverIds?: string[]; selection: ExportSelection }, createdBy: string) {
+  // Explicit ids are durable scope even when preflight later discovers a missing server. This keeps
+  // expensive traversal and deterministic preflight failures in the background operation while an
+  // all-server export snapshots the current ids before it is accepted.
+  const serverIds = input.serverIds ?? (await resolveExportServers(undefined)).map((server) => server.id);
+  services.exportCoordinator.assertCanStart(serverIds);
   return services.operationService.enqueue<{
     written: Awaited<ReturnType<typeof writeExportArchive>>;
     plan: Awaited<ReturnType<typeof createExportPlan>>;
@@ -146,13 +152,19 @@ export function startExportOperation(input: { serverIds?: string[]; selection: E
     successTask: "Export ready",
     failureTask: "Export failed",
     failureFallback: "Export failed",
+    onStarted: (operation) => {
+      services.operationsRepository.update(operation.id, {
+        result: { serverIds, selection: input.selection }
+      });
+    },
+    isCancellationError: (error) => error instanceof ExportCancelledError,
+    cancellationMessage: "Export cancelled by user",
     result: ({ written, plan, operationId }) => ({
       artifact: {
         filename: written.filename,
         size: written.size,
         sha256: written.sha256,
-        downloadUrl: `/api/exports/${operationId}/download`,
-        expiresAt: new Date(Date.now() + config.exportRetentionMs).toISOString()
+        downloadUrl: `/api/exports/${operationId}/download`
       },
       artifactPath: written.path,
       serverIds: plan.manifest.servers.map((entry) => entry.server.id),
@@ -170,23 +182,32 @@ export function startExportOperation(input: { serverIds?: string[]; selection: E
         logWarn({ operationId: operation.id, status: operation.status }, "Could not clean up an incomplete export artifact; periodic maintenance will retry");
       }
     }
-  }, async (operation, report) => {
-    const servers = await resolveExportServers(input.serverIds);
-    // Re-checked inside the operation: the request may have queued behind other work, and a server
-    // that was stopped when the operator clicked export can be running by the time it runs.
-    await assertServersStopped(servers);
-    const plan = await createExportPlan({
-      appVersion,
-      servers,
-      selection: input.selection,
-      runtimeForServer,
-      modPreferencesForServer: (serverId) => services.modPreferencesRepository.list(serverId),
-      report
-    });
-    await assertExportDiskSpace(plan.totalBytes);
-    const written = await writeExportArchive(join(config.exportsDir, exportArtifactFilename(operation.id)), plan, report);
-    return { written, plan, operationId: operation.id };
-  });
+  }, async (operation, report) => services.exportCoordinator.run(operation.id, serverIds, async (signal, beginCommit) => {
+    try {
+      await services.exportArtifactMaintenance.prepareNewExport(serverIds);
+      const servers = await resolveExportServers(serverIds);
+      // Re-checked inside the operation: the request may have queued behind other work, and a server
+      // that was stopped when the operator clicked export can be running by the time it runs.
+      await assertServersStopped(servers);
+      const plan = await createExportPlan({
+        appVersion,
+        servers,
+        selection: input.selection,
+        runtimeForServer,
+        modPreferencesForServer: (serverId) => services.modPreferencesRepository.list(serverId),
+        report,
+        signal
+      });
+      await assertExportDiskSpace(plan.totalBytes);
+      const written = await writeExportArchive(join(config.exportsDir, exportArtifactFilename(operation.id)), plan, report, signal);
+      beginCommit();
+      await services.exportArtifactMaintenance.replacePreviousSuccessfulExports(operation.id, serverIds);
+      return { written, plan, operationId: operation.id };
+    } catch (error) {
+      await services.exportArtifactMaintenance.cleanupOperationArtifacts(operation);
+      throw error;
+    }
+  }));
 }
 
 export async function validateImportArchiveFile(archivePath: string, targetNodeId: string) {

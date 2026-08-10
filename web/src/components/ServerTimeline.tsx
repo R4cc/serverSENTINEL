@@ -610,10 +610,13 @@ function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) 
       const next = readTimelinePalette(panel);
       setPalette((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
     };
+    // Only the theme classes move these colours. Watching `style` as well meant every write of
+    // --visual-viewport-height on :root — one per visual-viewport scroll frame on mobile — ran a
+    // full palette read plus two JSON.stringify calls for the equality check below.
     const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     const shell = panel.closest(".appShell");
-    if (shell) observer.observe(shell, { attributes: true, attributeFilter: ["class", "style"] });
+    if (shell) observer.observe(shell, { attributes: true, attributeFilter: ["class"] });
     update();
     return () => observer.disconnect();
   }, [panelRef]);

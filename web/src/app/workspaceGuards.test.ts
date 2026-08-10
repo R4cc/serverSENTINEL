@@ -159,6 +159,14 @@ describe("resolveRuntimeGuards", () => {
     expect(resolveRuntimeGuards({ ...runtimeDefaults, activeStatus: status }).serverRequiresStoppedForMutableConfig).toBe(false);
   });
 
+  it("uses the export lock reason for runtime controls", () => {
+    expect(resolveRuntimeGuards({
+      ...runtimeDefaults,
+      exportMutationLocked: true,
+      exportMutationBlockedReason: "Export in progress."
+    }).runtimeControlsDisabledReason).toBe("Export in progress.");
+  });
+
   it("allows edits when an available Docker reports the container does not exist", () => {
     const status = serverStatus({ docker: { state: "unknown", available: true, message: "configured container does not exist" } });
     expect(resolveRuntimeGuards({ ...runtimeDefaults, activeStatus: status }).serverRequiresStoppedForMutableConfig).toBe(false);
@@ -206,6 +214,18 @@ describe("resolveServerSettingsGuards", () => {
     const guards = resolveServerSettingsGuards({ ...settingsDefaults, activeStatus: serverStatus({ docker: { running: true, state: "running" } }) });
     expect(guards.deleteServerLocked).toBe(true);
   });
+
+  it("locks settings and deletion during an export", () => {
+    expect(resolveServerSettingsGuards({
+      ...settingsDefaults,
+      exportMutationLocked: true,
+      exportMutationBlockedReason: "Export in progress."
+    })).toMatchObject({
+      serverSettingsLocked: true,
+      deleteServerLocked: true,
+      serverSettingsLockedReason: "Export in progress."
+    });
+  });
 });
 
 const modDefaults = {
@@ -249,5 +269,22 @@ describe("resolveModGuards", () => {
     const guards = resolveModGuards({ ...modDefaults, activeStatus: null });
     expect(guards).toMatchObject({ modsLocked: true, modToggleLocked: true, uploadModDisabled: true, addModFromModrinthDisabled: true });
     expect(guards.uploadModDisabledReason).toBe("Server status is still loading.");
+  });
+
+  it("locks every managed-content mutation during an export", () => {
+    const guards = resolveModGuards({
+      ...modDefaults,
+      exportMutationLocked: true,
+      exportMutationBlockedReason: "Export in progress."
+    });
+    expect(guards).toMatchObject({
+      modsLocked: true,
+      modReviewAcknowledgementLocked: true,
+      modToggleLocked: true,
+      uploadModDisabled: true,
+      addModFromModrinthDisabled: true,
+      uploadModDisabledReason: "Export in progress.",
+      addModFromModrinthDisabledReason: "Export in progress."
+    });
   });
 });
