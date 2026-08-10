@@ -362,7 +362,6 @@ export function ServerEditForm({
           <section className="propertiesSettingsSurface">
             <section className="propertiesSection propertiesSectionGeneral">
               <PanelHeader
-                headingLevel={3}
                 title="General"
                 description="Identity, versions, and startup behavior."
               />
@@ -410,7 +409,6 @@ export function ServerEditForm({
 
             <section className="propertiesSection propertiesSectionResources">
               <PanelHeader
-                headingLevel={3}
                 title="Resources"
                 description="Memory reserved for the Minecraft runtime."
               />
@@ -456,7 +454,6 @@ export function ServerEditForm({
 
             <section className="propertiesSection propertiesSectionNetwork">
               <PanelHeader
-                headingLevel={3}
                 title="Network"
                 description="Ports used by players and server status queries."
               />
@@ -561,7 +558,6 @@ export function ExportServerPanel({
   return (
     <section className="propertiesSideCard exportPanel">
       <PanelHeader
-        headingLevel={3}
         title="Export"
         description={`Download ${server.displayName} as a ZIP archive you can import back into this panel or another one.`}
       />
@@ -591,7 +587,6 @@ export function DeleteServerPanel({
   return (
     <section className="propertiesSideCard dangerPanel">
       <PanelHeader
-        headingLevel={3}
         title="Danger zone"
         description="Deleting a server is permanent and cannot be undone."
       />

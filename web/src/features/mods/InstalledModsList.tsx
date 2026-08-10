@@ -71,7 +71,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
     <section className="modsWorkspaceInstalled" aria-labelledby="installed-mods-title">
       <div className="modsWorkspaceListHeader">
         <div>
-          <h3 id="installed-mods-title">Installed {terminology.plural}</h3>
+          <h2 id="installed-mods-title">Installed {terminology.plural}</h2>
           <span>{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : `${mods.length} total`}</span>
         </div>
         <label className="modsWorkspaceSearch">
@@ -111,7 +111,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
               key={mod.filename}
               className={`modsWorkspaceRow ${mod.enabled ? "" : "isDisabled"}`}
             >
-              <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} aria-label={`Open details for ${mod.displayName}`}>
+              <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} title={`Open details for ${mod.displayName}`}>
                 <ModIconImage src={icon} fallback="JAR" />
                 <span><strong title={mod.displayName}>{mod.displayName}</strong>{mod.description && <small title={mod.description}>{mod.description}</small>}</span>
                 <AppIcon name="chevronRight" />
@@ -125,12 +125,13 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
                   </Button>
                 )}
                 {plannedUpdate?.status === "safe_update" && (
-                  <Button variant="secondary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} aria-label={`Update ${mod.displayName}${targetVersion ? ` to ${targetVersion}` : ""}`} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
-                    <span className="modsUpdateTransition" aria-hidden="true">
+                  <Button variant="secondary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
+                    <span className="modsUpdateTransition">
                       <span className="modsUpdateArrow">→</span>
                       <strong title={targetVersion || "Update available"}>{targetVersion || "Available"}</strong>
                     </span>
                     <span className="modsUpdateActionLabel">Update</span>
+                    <span className="srOnly"> {mod.displayName}</span>
                   </Button>
                 )}
                 {plannedUpdate?.status === "needs_review" && (

@@ -498,7 +498,8 @@ describe("mod health", () => {
     expect(html).toContain("/api/modrinth/icons/lithium.png");
     expect(html).toContain("0.14.8");
     expect(html).toContain("0.15.0");
-    expect(html).toContain('aria-label="Open Lithium update in Mods"');
+    expect(html).toContain('title="Open Lithium update in Mods"');
+    expect(html).not.toContain('aria-label="Open Lithium update in Mods"');
     expect(html).not.toContain("modUpdatesListItem--placeholder");
     expect(html.match(/modUpdatesListItem/g)).toHaveLength(1);
   });

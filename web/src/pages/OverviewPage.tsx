@@ -359,7 +359,7 @@ export function ModHealthPanel({
             className="overviewCardRow modUpdatesListItem"
             key={entry.filename}
             onClick={onOpenMods}
-            aria-label={`Open ${entry.displayName} update in ${contentPluralTitle}`}
+            title={`Open ${entry.displayName} update in ${contentPluralTitle}`}
           >
             <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
             <span className="modUpdatesListCopy">
@@ -520,7 +520,7 @@ export function SchedulePanel({
                   type="button"
                   className="overviewCardRow scheduleUpcomingItem"
                   onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
-                  aria-label={`Open ${schedule.name}, next run ${nextTime}`}
+                  title={`Open ${schedule.name}, next run ${nextTime}`}
                 >
                   <strong title={schedule.name}>{schedule.name}</strong>
                   <time dateTime={nextRunAt} title={formatDate(nextRunAt)}>{nextTime}</time>

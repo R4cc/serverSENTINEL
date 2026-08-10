@@ -91,17 +91,20 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       webglAddon?.dispose();
       webglAddon = null;
     };
-    const contextLoss: { dispose(): void } | undefined = (() => {
+    let contextLoss: { dispose(): void } | undefined;
+    const activateWebgl = () => {
       try {
         webglAddon = new WebglAddon();
-        const listener = webglAddon.onContextLoss(disposeWebgl);
+        contextLoss = webglAddon.onContextLoss(disposeWebgl);
         terminal.loadAddon(webglAddon);
-        return listener;
       } catch {
         disposeWebgl();
-        return undefined;
       }
-    })();
+    };
+    // Opening, fitting and painting xterm already costs the first console frame. Let the DOM
+    // renderer produce that frame, then upgrade to WebGL after the interaction has settled so GPU
+    // setup and shader compilation cannot turn the page switch into one long blocking task.
+    const webglStartTimer = window.setTimeout(activateWebgl, 1_000);
 
     const selectionChange = terminal.onSelectionChange(() => {
       selectionListenerRef.current?.({
@@ -208,6 +211,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       container.removeEventListener("touchcancel", handleTouchEnd);
       visualViewport?.removeEventListener("resize", scheduleFit);
       window.removeEventListener("resize", scheduleFit);
+      window.clearTimeout(webglStartTimer);
       contextLoss?.dispose();
       selectionChange.dispose();
       // Nothing is selected in a terminal that no longer exists, and the page must not be left
@@ -287,7 +291,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     if (wasAtBottom) terminal.scrollToBottom();
   }
 
-  return <div ref={containerRef} className="minecraftTerminal initializing" aria-label="Minecraft server console" />;
+  return <div ref={containerRef} className="minecraftTerminal initializing" role="region" aria-label="Minecraft server console" />;
 }
 
 function cssVar(styles: CSSStyleDeclaration, name: string, fallback: string) {
