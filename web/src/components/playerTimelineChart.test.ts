@@ -82,10 +82,10 @@ describe("player timeline chart items", () => {
 
   it("uses a continuation cue instead of an open endpoint when now is outside a historical viewport", () => {
     const items = playerTimelineChartItems(rows().slice(0, 1), { from: 10_000, to: 30_000 }, 60_000, formatShortTime);
-    expect(items[0]).toMatchObject({ visibleEnd: 30_000, open: false, endClipped: true, endLabel: null });
+    expect(items[0]).toMatchObject({ online: true, visibleEnd: 30_000, open: false, endClipped: true, endLabel: null });
   });
 
-  it("collapses quick leave and join bursts into one range with reconnect markers", () => {
+  it("keeps completed reconnect history separate from the current online session", () => {
     const minute = 60_000;
     const items = playerTimelineChartItems([{
       player: "Alex",
@@ -97,20 +97,28 @@ describe("player timeline chart items", () => {
       ]
     }], { from: 0, to: 30 * minute }, 20 * minute, formatShortTime);
 
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(2);
     expect(items[0]).toMatchObject({
-      id: "one+two+three",
+      id: "one+two",
+      online: false,
       visibleStart: 0,
-      visibleEnd: 20 * minute,
-      durationLabel: "16m active",
+      visibleEnd: 9 * minute,
+      durationLabel: "8m active",
       startLabel: "0s",
-      endLabel: "Now",
       reconnects: [
-        { at: 5 * minute, offlineMs: minute },
-        { at: 12 * minute, offlineMs: 3 * minute }
+        { at: 5 * minute, offlineMs: minute }
       ]
     });
-    expect(items[0].accessibleLabel).toContain("2 reconnects");
+    expect(items[0].accessibleLabel).toContain("1 reconnect");
+    expect(items[1]).toMatchObject({
+      id: "three",
+      online: true,
+      visibleStart: 12 * minute,
+      visibleEnd: 20 * minute,
+      durationLabel: "8m",
+      endLabel: "Now",
+      reconnects: []
+    });
   });
 
   it("keeps gaps over 15 minutes and server-stop boundaries separate", () => {

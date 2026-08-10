@@ -576,7 +576,7 @@ export function NodesPage({
     <Button
       onClick={onOpenAddNode}
       disabled={busy || !canManageNodes}
-      title={!canManageNodes ? "Manage users permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}
+      title={!canManageNodes ? "Manage nodes permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}
     >
       Add node
     </Button>

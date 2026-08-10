@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { ManagedServer } from "../types";
-import { ExportServerPanel, ServerEditForm } from "./ServerEditPage";
+import { DeleteServerPanel, ExportServerPanel, ServerEditForm } from "./ServerEditPage";
 
 const server: ManagedServer = {
   id: "server-1",
@@ -148,5 +148,16 @@ describe("ServerEditForm", () => {
     expect(html).toContain("1.21.4-232");
     expect(html).not.toContain("Fabric Loader version");
     expect(html).not.toContain("0.16.10");
+  });
+});
+
+describe("DeleteServerPanel", () => {
+  it("makes the exact-name confirmation requirement explicit", () => {
+    const html = renderToStaticMarkup(<DeleteServerPanel server={server} onSubmit={vi.fn()} />);
+
+    expect(html).toContain('aria-describedby="delete-server-confirm-hint"');
+    expect(html).toContain("Enter “Survival” exactly to enable deletion.");
+    expect(html).toContain('autoComplete="off"');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="Enter “Survival” exactly to enable deletion"/);
   });
 });

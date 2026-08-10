@@ -190,6 +190,7 @@ export function ActivePlayersPanel({
   playerHeadsEnabled?: boolean;
 }) {
   const [playersExpanded, setPlayersExpanded] = useState(false);
+  useEffect(() => setPlayersExpanded(false), [serverId]);
   const available = snapshot?.state === "live" || snapshot?.state === "stale" ? snapshot : undefined;
   const online = available?.online;
   const countLabel = available
@@ -293,7 +294,7 @@ function ActivePlayerRow({
           <span className="activePlayerHeadStatus" />
         </span>
       ) : <span className="activePlayerDot" aria-hidden="true" />}
-      <strong>{playerName}</strong>
+      <strong title={playerName}>{playerName}</strong>
     </div>
   );
 }
@@ -362,7 +363,7 @@ export function ModHealthPanel({
           >
             <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
             <span className="modUpdatesListCopy">
-              <strong>{entry.displayName}</strong>
+              <strong title={entry.displayName}>{entry.displayName}</strong>
               <small>
                 {entry.currentVersion && <span>{entry.currentVersion}</span>}
                 {entry.currentVersion && entry.targetVersion && <span aria-hidden="true">→</span>}
@@ -521,8 +522,8 @@ export function SchedulePanel({
                   onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
                   aria-label={`Open ${schedule.name}, next run ${nextTime}`}
                 >
-                  <strong>{schedule.name}</strong>
-                  <time dateTime={nextRunAt} title={relativeTimestamps ? formatDate(nextRunAt) : undefined}>{nextTime}</time>
+                  <strong title={schedule.name}>{schedule.name}</strong>
+                  <time dateTime={nextRunAt} title={formatDate(nextRunAt)}>{nextTime}</time>
                   <AppIcon name="chevronRight" />
                 </button>
               );
@@ -835,11 +836,11 @@ export function RecentEventsPanel({
                     </RecentEventMarker>
                     <div className="eventCopy">
                       <strong>{presentation.title}</strong>
-                      {presentation.subject && <span className="eventSubject">{presentation.subject}</span>}
+                      {presentation.subject && <span className="eventSubject" title={presentation.subject}>{presentation.subject}</span>}
                       {occurrenceCount > 0 && <span className="srOnly">{occurrenceCount} occurrences</span>}
                       {(presentation.details || relatedLabel) && (
                         <span className="eventDetailLine">
-                          {presentation.details && <span>{presentation.details}</span>}
+                          {presentation.details && <span title={presentation.details}>{presentation.details}</span>}
                           {relatedLabel && <span className="eventCount">{relatedLabel}</span>}
                         </span>
                       )}

@@ -479,6 +479,21 @@ describe("server timeline player sessions", () => {
       .toEqual([["HistoricalPlayer", false]]);
   });
 
+  it("keeps a visible open session online when now is outside the viewport", () => {
+    const value = response();
+    value.playerActivity = {
+      snapshotState: "live",
+      onlineNames: ["Alex"],
+      sessions: [
+        { id: "alex-open", player: "Alex", startedAt: 10_000, endedAt: null, startBoundary: "join", endBoundary: "online" }
+      ]
+    };
+
+    expect(timelinePlayerRows(value, { from: 20_000, to: 40_000 }, 100_000)).toMatchObject([
+      { player: "Alex", online: true, sessions: [{ id: "alex-open", endBoundary: "online" }] }
+    ]);
+  });
+
   it("clips incomplete sessions and reports lower-bound durations", () => {
     const geometry = timelineSessionGeometry({
       id: "clipped",

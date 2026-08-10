@@ -26,7 +26,8 @@ describe("ConfirmationModal", () => {
     expect(labelledBy).toBeTruthy();
     expect(describedBy).toBeTruthy();
     expect(html).toContain(`id="${labelledBy}"`);
-    expect(html).toContain(`id="${describedBy}"`);
+    for (const id of describedBy?.split(" ") ?? []) expect(html).toContain(`id="${id}"`);
+    expect(describedBy?.split(" ")).toHaveLength(2);
     expect(html).toContain("Delete Example?");
     expect(html).toContain("example-user");
     expect(html).toContain("This action cannot be undone.");

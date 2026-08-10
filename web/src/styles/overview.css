@@ -1211,7 +1211,7 @@ button.overviewCardRow:focus-visible {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-auto-rows: 52px;
+  grid-auto-rows: minmax(52px, auto);
   align-content: start;
   gap: var(--space-2);
 }
@@ -1265,7 +1265,23 @@ button.overviewCardRow:focus-visible {
   white-space: nowrap;
 }
 
+.modUpdatesListCopy > small > span {
+  min-width: 0;
+}
+
+.modUpdatesListCopy > small > span:first-child:not(:last-child) {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modUpdatesListCopy > small > span[aria-hidden="true"] {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 .modUpdatesListCopy > small > span:last-child {
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--sentinel-warning);
   font-weight: var(--weight-title);
@@ -1340,9 +1356,13 @@ button.overviewCardRow:focus-visible {
 }
 
 .scheduleUpcomingItem time {
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1644,6 +1664,21 @@ button.overviewCardRow:focus-visible {
     height: 44px;
     min-height: 44px;
     justify-self: end;
+  }
+}
+
+@media (max-width: 540px) {
+  .overviewCardStateItem {
+    padding-block: var(--space-2);
+  }
+
+  .overviewCardStateCopy > small {
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.35;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 }
 

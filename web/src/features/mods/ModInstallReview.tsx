@@ -53,7 +53,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
     <div className="modsInstallReview">
       <div className="modsDrawerHeader">
         <div><Button variant="ghost" compact onClick={state.step === 2 ? onBack : onClose}><AppIcon name="chevronLeft" /> {state.step === 2 ? "Back" : switchMode ? `Installed ${terminology.plural}` : "Search"}</Button><h2>{state.step === 2 ? switchMode ? "Review switch" : "Review installation" : "Choose a version"}</h2></div>
-        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} disabled={state.installing} aria-label="Close install review"><AppIcon name="x" /></Button>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} disabled={state.installing} aria-label="Close install review" title={state.installing ? "Installation is still in progress." : "Close install review"}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         <div className="modsReviewHero">

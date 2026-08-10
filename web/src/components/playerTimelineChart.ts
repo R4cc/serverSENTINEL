@@ -304,6 +304,7 @@ export function playerTimelineChartItems(
           : session.startedAt - previous.endedAt;
         const isQuickReconnect = previous?.endBoundary === "leave"
           && session.startBoundary === "join"
+          && session.endBoundary !== "online"
           && gap >= 0
           && gap <= playerTimelineReconnectWindowMs;
         if (current && isQuickReconnect) current.push(session);
@@ -360,7 +361,7 @@ export function playerTimelineChartItems(
       return [{
         id: displaySession.id,
         player: row.player,
-        online: row.online,
+        online: displaySession.endBoundary === "online",
         rowIndex,
         laneKey: playerTimelineLaneKey(row),
         startedAt: displaySession.startedAt,

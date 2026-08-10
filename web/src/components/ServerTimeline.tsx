@@ -274,7 +274,7 @@ export function timelinePlayerRows(data: ServerTimelineResponse | null, viewport
     const sessionEnd = session.endedAt ?? now;
     if (session.startedAt > viewport.to || sessionEnd < viewport.from) continue;
     const key = session.player.toLocaleLowerCase();
-    const row = rows.get(key) ?? { player: online.get(key) ?? session.player, online: includesNow && online.has(key), sessions: [] };
+    const row = rows.get(key) ?? { player: online.get(key) ?? session.player, online: online.has(key), sessions: [] };
     row.sessions.push(session);
     rows.set(key, row);
   }

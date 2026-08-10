@@ -383,7 +383,7 @@ export function ManagedServerForm({
             <div className="createWizardFields">
               <div className="createWizardField">
                 <label htmlFor="create-node-select">Node</label>
-                <span className="fieldHint">Select the node where this server will be created.</span>
+                <span id="create-node-hint" className="fieldHint">Select the node where this server will be created.</span>
                 <div className="nodeSelectRow">
                   <select
                     id="create-node-select"
@@ -392,6 +392,8 @@ export function ManagedServerForm({
                     onChange={(event) => setSelectedNodeId(event.target.value)}
                     disabled={provisioning || nodes.length === 0}
                     required
+                    aria-invalid={placementBlocked}
+                    aria-describedby={`create-node-hint${placementBlocked ? " create-node-error" : ""}`}
                   >
                     <option value="">{nodes.length === 0 ? "No nodes available" : "Choose a node"}</option>
                     {nodes.map((node) => {
@@ -418,13 +420,13 @@ export function ManagedServerForm({
                   </Button>
                 </div>
                 {placementBlocked && nodes.length > 0 && (
-                  <p className="fieldError">{placementBlockedReason} If none are ready, open Nodes to see what needs attention.</p>
+                  <p id="create-node-error" className="fieldError">{placementBlockedReason} If none are ready, open Nodes to see what needs attention.</p>
                 )}
               </div>
 
               <div className="createWizardField">
                 <label htmlFor="create-display-name">Display name</label>
-                <span className="fieldHint">This is how your server will be displayed in the panel.</span>
+                <span id="create-display-name-hint" className="fieldHint">This is how your server will be displayed in the panel.</span>
                 <input
                   id="create-display-name"
                   name="displayName"
@@ -434,8 +436,9 @@ export function ManagedServerForm({
                   required
                   maxLength={80}
                   aria-invalid={Boolean(displayNameError)}
+                  aria-describedby={`create-display-name-hint${displayNameError ? " create-display-name-error" : ""}`}
                 />
-                {displayNameError && <span className="fieldError">{displayNameError}</span>}
+                {displayNameError && <span id="create-display-name-error" className="fieldError">{displayNameError}</span>}
               </div>
 
               <NodeOverviewCard node={selectedNode} fallbackMemory={totalMemory} />
@@ -1430,19 +1433,20 @@ const createWizardSteps = [
   { title: "Review & Create", subtitle: "Confirm and create" }
 ];
 
-function CreateServerStepper({ activeStep }: { activeStep: number }) {
+export function CreateServerStepper({ activeStep }: { activeStep: number }) {
   return (
-    <div className="createWizardStepper" aria-label="Create server progress">
+    <div className="createWizardStepper" aria-label="Create server progress" role="list">
       {createWizardSteps.map((step, index) => {
         const stepNumber = index + 1;
         const completed = stepNumber < activeStep;
         const active = stepNumber === activeStep;
         return (
-          <div key={step.title} className={`createWizardStep ${active ? "active" : ""} ${completed ? "completed" : ""}`}>
+          <div key={step.title} className={`createWizardStep ${active ? "active" : ""} ${completed ? "completed" : ""}`} role="listitem" aria-current={active ? "step" : undefined}>
             <span>{completed ? <AppIcon name="check" /> : stepNumber}</span>
             <div>
               <strong>{step.title}</strong>
               <small>{step.subtitle}</small>
+              <span className="srOnly">{active ? "Current step" : completed ? "Completed" : "Not started"}</span>
             </div>
             {index < createWizardSteps.length - 1 && <i aria-hidden="true" />}
           </div>

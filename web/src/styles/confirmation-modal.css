@@ -11,6 +11,11 @@
   margin: 0;
 }
 
+.confirmationModal .confirmContent blockquote {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .confirmationWarning {
   margin: 0;
   border-radius: var(--radius-sm);

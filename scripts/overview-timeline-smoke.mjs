@@ -72,14 +72,15 @@ async function assertScenarioData(page) {
       const value = label.trim();
       if (value) renderedLabels.add(value);
     }
-    if (["25h 0m", "54m active", "<1m"].every((label) => renderedLabels.has(label))) break;
+    if (["25h 0m", "24m", "30m", "<1m"].every((label) => renderedLabels.has(label))) break;
     await page.mouse.wheel(0, 600);
     await page.waitForTimeout(15);
   }
   const timelineLabels = [...renderedLabels];
   assert(!timelineLabels.some((label) => label.toLowerCase().includes("alex")), `A removed fixed identity is still rendered: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("25h 0m"), `The exact multi-day session label is missing: ${JSON.stringify(timelineLabels)}`);
-  assert(timelineLabels.includes("54m active"), `The grouped reconnect duration is missing: ${JSON.stringify(timelineLabels)}`);
+  assert(timelineLabels.includes("24m") && timelineLabels.includes("30m"), `Completed and current reconnect sessions are not rendered separately: ${JSON.stringify(timelineLabels)}`);
+  assert(!timelineLabels.includes("54m active"), `Completed and current reconnect sessions were merged into one state: ${JSON.stringify(timelineLabels)}`);
   assert(timelineLabels.includes("<1m"), `The instant session label is missing: ${JSON.stringify(timelineLabels)}`);
   const ariaDescription = await chart.getAttribute("aria-label");
   assert(ariaDescription?.includes("Player session timeline") && ariaDescription.includes("Online now"), `Player timeline accessibility description is incomplete: ${ariaDescription}`);
@@ -91,6 +92,66 @@ async function assertScenarioData(page) {
   const leftSubjects = await page.locator(".eventsPanel .eventKind--player_left .eventSubject").allTextContents();
   assert(joinedSubjects.some((subject) => leftSubjects.includes(subject)), "The instant join/leave events do not share a generated player identity");
   assert(!eventsText.toLowerCase().includes("alex"), `A removed fixed identity is still rendered in recent events: ${eventsText}`);
+}
+
+async function playerSessionSegments(page) {
+  return page.evaluate(() => {
+    const panel = document.querySelector(".serverTimelinePanel");
+    if (!panel) return [];
+    const style = getComputedStyle(panel);
+    const onlineColor = style.getPropertyValue("--timeline-join").trim().toLowerCase();
+    const offlineColor = style.getPropertyValue("--timeline-leave").trim().toLowerCase();
+    return [...document.querySelectorAll(".serverTimelinePlayerChart svg path")].flatMap((path) => {
+      const stroke = (path.getAttribute("stroke") ?? "").trim().toLowerCase();
+      if (stroke !== onlineColor && stroke !== offlineColor) return [];
+      const box = path.getBoundingClientRect();
+      if (box.width <= 20 || box.height > 2) return [];
+      return [{ tone: stroke === onlineColor ? "online" : "offline", y: box.y, width: box.width }];
+    });
+  });
+}
+
+async function assertPlayerSessionStateColors(page) {
+  const chart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
+  const box = await chart.boundingBox();
+  assert(box, "Unified player timeline is missing while checking session colors");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
+
+  let liveSegments = [];
+  let hasMixedStateLane = false;
+  for (let index = 0; index < 100; index += 1) {
+    liveSegments = await playerSessionSegments(page);
+    const completed = liveSegments.filter((segment) => segment.tone === "offline");
+    const current = liveSegments.filter((segment) => segment.tone === "online");
+    hasMixedStateLane = completed.some((ended) => current.some((online) => Math.abs(ended.y - online.y) <= 1));
+    if (hasMixedStateLane) break;
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(15);
+  }
+  assert(
+    hasMixedStateLane,
+    `A player's completed and current sessions do not render as separate offline/online states: ${JSON.stringify(liveSegments)}`
+  );
+
+  await selectRange(page, "1h");
+  await page.getByRole("button", { name: "Earlier timeline window", exact: true }).click();
+  await page.waitForFunction((now) => {
+    const players = document.querySelector(".serverTimelinePlayers");
+    const panel = document.querySelector(".serverTimelinePanel");
+    return Number(players?.getAttribute("data-viewport-to")) < now && panel?.getAttribute("aria-busy") === "false";
+  }, fixedNow.getTime());
+
+  const historicalSegments = await playerSessionSegments(page);
+  const nowLabels = await page.locator(".serverTimelinePlayerChart svg text").allTextContents();
+  assert(!nowLabels.includes("Now"), `The historical viewport still renders a current endpoint: ${JSON.stringify(nowLabels)}`);
+  assert(
+    historicalSegments.some((segment) => segment.tone === "online"),
+    `Open player sessions changed to the offline color after now left the viewport: ${JSON.stringify(historicalSegments)}`
+  );
+
+  await page.getByRole("button", { name: "Jump to now", exact: true }).click();
+  await selectRange(page, "3h");
 }
 
 // The desktop Overview replaced the Active Players card with the timeline, so the
@@ -346,6 +407,7 @@ async function assertDesktop(page) {
   const panel = await waitForTimeline(page);
   assert.equal(await panel.getAttribute("aria-busy"), "false");
   await assertScenarioData(page);
+  await assertPlayerSessionStateColors(page);
   await assertPlayerSectionDisclosure(page);
   await assertSchedulePopoverIconContrast(page);
 
@@ -495,7 +557,7 @@ try {
     { width: 390, height: 844 }
   ]) await assertSupportCardGeometry(context, viewport);
 
-  console.log("Overview timeline smoke passed: realistic sessions, all ranges, pan, drag, zoom, scroll, schedule popover contrast, roster, mobile layout, and ten-update support-card geometry.");
+  console.log("Overview timeline smoke passed: realistic sessions, per-session online/offline colors, all ranges, pan, drag, zoom, scroll, schedule popover contrast, roster, mobile layout, and ten-update support-card geometry.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

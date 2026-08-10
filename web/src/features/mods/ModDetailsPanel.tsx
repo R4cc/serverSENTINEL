@@ -89,7 +89,7 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
           <ModIconImage src={icon} fallback="JAR" />
           <div><h2 id="mod-details-title">{mod.displayName}</h2><span>{mod.enabled ? "Enabled" : "Disabled"}</span></div>
         </div>
-        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label={`Close ${terminology.singular} details`}><AppIcon name="x" /></Button>
+        <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label={`Close ${terminology.singular} details`} title={`Close ${terminology.singular} details`}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}

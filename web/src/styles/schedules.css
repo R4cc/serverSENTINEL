@@ -134,7 +134,8 @@
   border-bottom: 0;
 }
 
-.scheduleTableRow:hover {
+.scheduleTableRow:hover,
+.scheduleTableRow:focus-within {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
 }
@@ -302,7 +303,8 @@
   transition: background var(--control-transition), border-color var(--control-transition);
 }
 
-.scheduledRunItem:hover {
+.scheduledRunItem:hover,
+.scheduledRunItem:focus-within {
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 36%, var(--surface));
 }

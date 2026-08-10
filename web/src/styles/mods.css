@@ -623,6 +623,16 @@
     grid-column: 1 / -1;
   }
 
+  /* Pair both update actions at phone widths; when only the update check is
+     available it uses the full toolbar row instead of leaving an empty cell. */
+  .modsWorkspaceUpdateActions .modsWorkspaceBatchAction {
+    grid-column: auto;
+  }
+
+  .modsWorkspaceUpdateActions .uiButton:only-child {
+    grid-column: 1 / -1;
+  }
+
   .modsWorkspaceLastChecked {
     display: block;
     padding-inline: var(--space-1);

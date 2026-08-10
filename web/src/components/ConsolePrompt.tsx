@@ -80,7 +80,7 @@ export function ConsolePrompt({ canSendCommands, disabledReason, commandHistory,
 
   if (!canSendCommands) {
     return (
-      <div className="consolePromptStatus">
+      <div className="consolePromptStatus" role="status" aria-live="polite">
         {disabledReason || "Console command input is unavailable."}
       </div>
     );

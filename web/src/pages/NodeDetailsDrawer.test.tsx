@@ -93,6 +93,8 @@ describe("NodeDetailsDrawer", () => {
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain("mc-node-01");
+    expect(html).toContain('title="mc-node-01"');
+    expect(html).toContain('title="Close node details"');
     expect(html).toContain("Node online");
     expect(html).toContain("Health and runtime");
     expect(html).toContain("Agent version");

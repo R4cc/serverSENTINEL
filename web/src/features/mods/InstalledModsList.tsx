@@ -76,8 +76,8 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
         </div>
         <label className="modsWorkspaceSearch">
           <AppIcon name="search" />
-          <span className="srOnly">Search</span>
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search" disabled={initialLoading} />
+          <span className="srOnly">Search installed {terminology.plural}</span>
+          <input type="search" autoComplete="off" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={`Search installed ${terminology.plural}`} disabled={initialLoading} />
         </label>
       </div>
 
@@ -113,11 +113,11 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
             >
               <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} aria-label={`Open details for ${mod.displayName}`}>
                 <ModIconImage src={icon} fallback="JAR" />
-                <span><strong>{mod.displayName}</strong>{mod.description && <small>{mod.description}</small>}</span>
+                <span><strong title={mod.displayName}>{mod.displayName}</strong>{mod.description && <small title={mod.description}>{mod.description}</small>}</span>
                 <AppIcon name="chevronRight" />
               </button>
               <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
-              <div className="modsWorkspaceVersion">{modVersion(mod)}</div>
+              <div className="modsWorkspaceVersion" title={modVersion(mod)}>{modVersion(mod)}</div>
               <div className="modsWorkspaceUpdate">
                 {health.key === "missing_dependencies" && (
                   <Button variant="secondary" compact className="modsReviewAction" onClick={() => onInstallDependencies?.(mod)} disabled={dependencyInstallLocked} title={health.detailDescription}>
@@ -128,7 +128,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
                   <Button variant="secondary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} aria-label={`Update ${mod.displayName}${targetVersion ? ` to ${targetVersion}` : ""}`} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
                     <span className="modsUpdateTransition" aria-hidden="true">
                       <span className="modsUpdateArrow">→</span>
-                      <strong>{targetVersion || "Available"}</strong>
+                      <strong title={targetVersion || "Update available"}>{targetVersion || "Available"}</strong>
                     </span>
                     <span className="modsUpdateActionLabel">Update</span>
                   </Button>
@@ -185,7 +185,7 @@ function ModUpdateCell({
     <div className={`modsUpdateCell ${actionTone}`}>
       <div className="modsUpdateVersions">
         <span className="modsUpdateArrow" aria-hidden="true">→</span>
-        <strong>{targetVersion || "Update available"}</strong>
+        <strong title={targetVersion || "Update available"}>{targetVersion || "Update available"}</strong>
       </div>
       {children}
     </div>

@@ -62,6 +62,7 @@ export function ConfirmationModal({
 }) {
   const titleId = useId();
   const descriptionId = useId();
+  const warningId = useId();
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,7 +70,7 @@ export function ConfirmationModal({
   }
 
   return (
-    <DialogSurface backdrop="confirmationBackdrop" className="modalPanel confirmModalPanel confirmationModal" labelledBy={titleId} describedBy={descriptionId} onClose={onCancel}>
+    <DialogSurface backdrop="confirmationBackdrop" className="modalPanel confirmModalPanel confirmationModal" labelledBy={titleId} describedBy={`${descriptionId}${options.warning ? ` ${warningId}` : ""}`} onClose={onCancel}>
       <form onSubmit={submit}>
         <header className="modalHeader">
           <h2 id={titleId}>{options.title}</h2>
@@ -80,7 +81,7 @@ export function ConfirmationModal({
         <div className="modalBody confirmContent">
           <p id={descriptionId}>{options.description}</p>
           {options.details ? <blockquote>{options.details}</blockquote> : null}
-          {options.warning ? <p className={`confirmationWarning confirmationWarning--${options.warningTone ?? (options.variant === "primary" ? "warning" : "danger")}`}>{options.warning}</p> : null}
+          {options.warning ? <p id={warningId} className={`confirmationWarning confirmationWarning--${options.warningTone ?? (options.variant === "primary" ? "warning" : "danger")}`}>{options.warning}</p> : null}
         </div>
         <footer className="modalFooter">
           <Button variant="secondary" onClick={onCancel}>{options.cancelLabel ?? "Cancel"}</Button>

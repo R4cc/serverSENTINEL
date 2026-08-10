@@ -100,7 +100,7 @@ function denseNode(nodeIndex: number, serverCount = 12): ContextNode {
   };
 }
 
-function renderDenseNodesPage(nodes: ContextNode[]) {
+function renderDenseNodesPage(nodes: ContextNode[], overrides: Partial<ComponentProps<typeof NodesPage>> = {}) {
   const props: ComponentProps<typeof NodesPage> = {
     nodes,
     panelVersion: "1.7.0",
@@ -139,7 +139,8 @@ function renderDenseNodesPage(nodes: ContextNode[]) {
     onCopy: vi.fn(),
     serverStateLabel: (serverId) => serverId.endsWith("1") ? "RUNNING" : "STOPPED",
     playerSnapshots: {},
-    formatDate: (value) => String(value)
+    formatDate: (value) => String(value),
+    ...overrides
   };
   return renderToStaticMarkup(<NodesPage {...props} />);
 }
@@ -168,5 +169,12 @@ describe("dense node fleets", () => {
     expect(toolbar).toContain("Refresh");
     expect(toolbar).toContain("Add node");
     expect(toolbar).not.toContain("uiButton--compact");
+  });
+
+  it("names the permission required to add a node", () => {
+    const html = renderDenseNodesPage([], { canManageNodes: false });
+
+    expect(html).toContain('title="Manage nodes permission is required"');
+    expect(html).not.toContain("Manage users permission is required");
   });
 });
