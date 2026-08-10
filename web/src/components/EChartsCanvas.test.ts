@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { EChartsCoreOption } from "echarts/core";
-import { createChartInteractionTracker, createChartOptionScheduler, timelineChartInitOptions, timelineChartSetOptionOptions } from "./EChartsCanvas";
+import { createChartInputActivityTracker, createChartInteractionTracker, createChartOptionScheduler, timelineChartInitOptions, timelineChartSetOptionOptions } from "./EChartsCanvas";
 
 describe("timeline chart option application", () => {
   it("atomically replaces chart components while preserving their stable identities", () => {
@@ -68,5 +68,41 @@ describe("timeline chart interaction tracking", () => {
     tracker.pointerOut();
     expect(start).toHaveBeenCalledOnce();
     expect(finish).toHaveBeenCalledOnce();
+  });
+
+  it("keeps wheel bursts active until input settles", () => {
+    vi.useFakeTimers();
+    const start = vi.fn();
+    const finish = vi.fn();
+    const tracker = createChartInputActivityTracker(start, finish, 180);
+
+    tracker.wheel();
+    vi.advanceTimersByTime(120);
+    tracker.wheel();
+    vi.advanceTimersByTime(179);
+    expect(start).toHaveBeenCalledOnce();
+    expect(finish).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(finish).toHaveBeenCalledOnce();
+    tracker.cancel();
+    vi.useRealTimers();
+  });
+
+  it("does not finish wheel activity while a pointer drag is still active", () => {
+    vi.useFakeTimers();
+    const start = vi.fn();
+    const finish = vi.fn();
+    const tracker = createChartInputActivityTracker(start, finish, 50);
+
+    tracker.pointerStart();
+    tracker.wheel();
+    vi.advanceTimersByTime(50);
+    expect(finish).not.toHaveBeenCalled();
+    tracker.pointerFinish();
+    expect(start).toHaveBeenCalledOnce();
+    expect(finish).toHaveBeenCalledOnce();
+    tracker.cancel();
+    vi.useRealTimers();
   });
 });

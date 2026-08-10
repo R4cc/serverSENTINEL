@@ -650,7 +650,7 @@ function PlayerSessionSection({
   onDataZoom: (event: TimelineDataZoomEvent) => void;
   onInteractionChange: (interacting: boolean) => void;
   onPointerEnter: React.PointerEventHandler<HTMLElement>;
-  onWheel: (event: globalThis.WheelEvent) => void;
+  onWheel: (event: globalThis.WheelEvent) => boolean;
 }) {
   const stableRowsRef = useRef(rows);
   if (!interacting) stableRowsRef.current = rows;
@@ -719,7 +719,7 @@ function PlayerSessionSection({
                 aria-expanded={expanded}
                 onClick={() => setExpanded((current) => !current)}
               >
-                {expanded ? "Show fewer" : `Show all ${displayRows.length}`}
+                {expanded ? "Show fewer" : "Show more players"}
                 <span className="serverTimelinePlayerToggleGlyph" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
               </Button>
             )}
@@ -1160,7 +1160,7 @@ export function ServerTimeline({
   const handleTimelineWheel = useCallback((event: globalThis.WheelEvent) => {
     const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
     const plotWidth = rect.width - metricGrid.left - metricGrid.right;
-    if (plotWidth <= 0) return;
+    if (plotWidth <= 0) return false;
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -1177,10 +1177,10 @@ export function ServerTimeline({
         const currentQuery = currentData ? { from: currentData.from, to: currentData.to } : timelineQueryWindow(next, false);
         if (timelineNeedsRefill(next, currentQuery, now)) void loadWindow(next, false);
       }, 250);
-      return;
+      return true;
     }
     const horizontalPixels = timelineHorizontalWheelPixels(event, plotWidth);
-    if (!horizontalPixels) return;
+    if (!horizontalPixels) return false;
     event.preventDefault();
     event.stopImmediatePropagation();
     const current = viewportRef.current;
@@ -1195,6 +1195,7 @@ export function ServerTimeline({
       const currentQuery = currentData ? { from: currentData.from, to: currentData.to } : timelineQueryWindow(next, false);
       if (timelineNeedsRefill(next, currentQuery, now)) void loadWindow(next, false);
     }, 250);
+    return true;
   }, [loadWindow, metricGrid, setLiveMode, setViewport]);
 
   const metricOptions = useMemo(() => new Map(metricBands.map((band) => [band.key, buildTimelineChartOption({
@@ -1390,7 +1391,7 @@ export function ServerTimeline({
             onWheel={handleTimelineWheel}
           />
         )}
-        {annotationEnabled.player && data?.playerActivity?.snapshotState === "unavailable" && (
+        {annotationEnabled.player && data && (data.playerActivity?.snapshotState ?? "unavailable") === "unavailable" && (
           <div className="serverTimelinePlayerStatusNotice">Current player status is unavailable; retained sessions are shown as offline.</div>
         )}
         <div className="serverTimelineMetricBands">

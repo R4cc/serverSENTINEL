@@ -208,7 +208,7 @@ describe("player timeline lanes", () => {
     });
   });
 
-  it("grows to the whole roster when expanded instead of scrolling inside the card", () => {
+  it("shows the whole roster when it fits and caps dense expanded rosters", () => {
     expect(playerTimelineLaneWindowSize(9)).toBe(6);
     expect(playerTimelineLaneWindowSize(9, true)).toBe(9);
     expect(playerTimelineLaneWindowSize(24, true)).toBe(16);
@@ -286,6 +286,45 @@ describe("player timeline lanes", () => {
     const next = previous.filter((lane) => lane.key !== "player:sam");
     expect(preservePlayerTimelineLanePosition(previous, next, { startKey: "player:sam", startIndex: 3 }))
       .toEqual({ startKey: "player:taylor", startIndex: 3 });
+  });
+
+  it("keeps the same top player through simultaneous joins, leaves, and group changes", () => {
+    const previous = playerTimelineLanes([
+      { player: "Bob", online: true, sessions: [] },
+      { player: "Maya", online: false, sessions: [] },
+      { player: "Nora", online: false, sessions: [] },
+      { player: "Uma", online: false, sessions: [] },
+      { player: "Victor", online: false, sessions: [] },
+      { player: "Wanda", online: false, sessions: [] },
+      { player: "Zoe", online: false, sessions: [] }
+    ]);
+    const next = playerTimelineLanes([
+      { player: "Aaron", online: true, sessions: [] },
+      { player: "Bob", online: false, sessions: [] },
+      { player: "Nora", online: false, sessions: [] },
+      { player: "Uma", online: false, sessions: [] },
+      { player: "Victor", online: false, sessions: [] },
+      { player: "Wanda", online: false, sessions: [] },
+      { player: "Zoe", online: false, sessions: [] }
+    ]);
+
+    expect(preservePlayerTimelineLanePosition(previous, next, { startKey: "player:nora", startIndex: 4 }, 3))
+      .toEqual({ startKey: "player:nora", startIndex: 4 });
+  });
+
+  it("uses the next surviving player when an online group and its anchored player disappear", () => {
+    const previous = playerTimelineLanes([
+      { player: "Alex", online: true, sessions: [] },
+      { player: "Maya", online: false, sessions: [] },
+      { player: "Nora", online: false, sessions: [] }
+    ]);
+    const next = playerTimelineLanes([
+      { player: "Maya", online: false, sessions: [] },
+      { player: "Nora", online: false, sessions: [] }
+    ]);
+
+    expect(preservePlayerTimelineLanePosition(previous, next, { startKey: "group:online", startIndex: 0 }, 3))
+      .toEqual({ startKey: "group:offline", startIndex: 0 });
   });
 });
 

@@ -107,6 +107,19 @@ describe("demo session generation", () => {
     expect(blink?.endedAt! - blink?.startedAt!).toBe(5_000);
   });
 
+  it("retains the former online roster as completed sessions after the demo server stops", () => {
+    const now = Date.now();
+    const live = demoTimelineData(true, initialDemoSchedules, now - 60 * 60_000, now);
+    const stopped = demoTimelineData(false, initialDemoSchedules, now - 60 * 60_000, now);
+    const liveNames = new Set(live.playerActivity?.onlineNames ?? []);
+    const stoppedSessions = stopped.playerActivity?.sessions ?? [];
+
+    expect(stopped.playerActivity?.onlineNames).toEqual([]);
+    expect([...liveNames].filter((player) => !stoppedSessions.some((session) => (
+      session.player === player && session.endedAt !== null && session.endBoundary === "server-end"
+    )))).toEqual([]);
+  });
+
   it("uses only the active randomized roster in demo console messages", () => {
     const names = demoPlayerSnapshot(true).names;
     const messages = demoConsoleMessages().join("\n");

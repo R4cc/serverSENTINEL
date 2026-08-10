@@ -106,9 +106,29 @@ export function timelinePlayerActivity(input: {
     seenPlayers.add(key);
   }
 
-  const onlineNames = input.snapshot?.state === "live" || input.snapshot?.state === "stale"
-    ? input.snapshot.names.map((name) => rememberName(name).player)
-    : [];
+  const currentSnapshot = input.snapshot?.state === "live" || input.snapshot?.state === "stale" ? input.snapshot : undefined;
+  const onlineByKey = new Map<string, string>();
+  if (currentSnapshot) {
+    for (const name of currentSnapshot.names) {
+      const remembered = rememberName(name);
+      onlineByKey.set(remembered.key, remembered.player);
+    }
+    const sampledAt = Date.parse(currentSnapshot.sampledAt);
+    if (Number.isFinite(sampledAt)) {
+      for (const event of events) {
+        if (event.occurredAt <= sampledAt) continue;
+        if (event.eventType === "server_started" || event.eventType === "server_stopped" || event.eventType === "server_crashed") {
+          onlineByKey.clear();
+          continue;
+        }
+        if ((event.eventType !== "player_joined" && event.eventType !== "player_left") || !event.subject?.trim()) continue;
+        const remembered = rememberName(event.subject);
+        if (event.eventType === "player_joined") onlineByKey.set(remembered.key, remembered.player);
+        else onlineByKey.delete(remembered.key);
+      }
+    }
+  }
+  const onlineNames = [...onlineByKey.values()];
   const onlineKeys = new Set(onlineNames.map(playerKey));
   const lastSessionEndByKey = new Map<string, number | null>();
   for (const session of sessions) lastSessionEndByKey.set(playerKey(session.player), session.endedAt);

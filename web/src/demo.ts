@@ -776,18 +776,20 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
   const eventFixtures = session.events.filter((event) => event.occurredAt >= from && event.occurredAt <= to);
   const demoOnlineNames = running ? session.onlinePlayerNames : [];
   const scenarioPlayers = session.timelineScenarioPlayers;
-  const regularOnlineNames = demoOnlineNames.filter((player) => (
+  const regularOnlineNames = session.onlinePlayerNames.filter((player) => (
     player !== scenarioPlayers.marathon && player !== scenarioPlayers.reconnect
   ));
   const regularOfflineNames = session.offlinePlayerNames.filter((player) => player !== scenarioPlayers.blink);
+  const currentSessionEnd = running ? null : now;
+  const currentSessionEndBoundary = running ? "online" as const : "server-end" as const;
   const playerSessions = [
-    ...(running ? [{
+    {
       id: "demo-online:marathon",
       player: scenarioPlayers.marathon,
       startedAt: now - 25 * 60 * 60_000,
-      endedAt: null,
+      endedAt: currentSessionEnd,
       startBoundary: "join" as const,
-      endBoundary: "online" as const
+      endBoundary: currentSessionEndBoundary
     }, {
       id: "demo-online:rejoin-before",
       player: scenarioPlayers.reconnect,
@@ -799,17 +801,17 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
       id: "demo-online:rejoin-after",
       player: scenarioPlayers.reconnect,
       startedAt: now - 30 * 60_000,
-      endedAt: null,
+      endedAt: currentSessionEnd,
       startBoundary: "join" as const,
-      endBoundary: "online" as const
-    }] : []),
+      endBoundary: currentSessionEndBoundary
+    },
     ...regularOnlineNames.map((player, index) => ({
       id: `demo-online:${player.toLowerCase()}`,
       player,
-      startedAt: now - (50 - index * 2) * 60_000,
-      endedAt: null,
+      startedAt: now - Math.max(4, 50 - index * 2) * 60_000,
+      endedAt: currentSessionEnd,
       startBoundary: "join" as const,
-      endBoundary: "online" as const
+      endBoundary: currentSessionEndBoundary
     })),
     {
       id: "demo-offline:blink",

@@ -286,4 +286,67 @@ describe("server timeline player activity", () => {
       endBoundary: "online"
     }]);
   });
+
+  it("replays player changes that happened after a stale snapshot", () => {
+    const result = timelinePlayerActivity({
+      contextFrom: 0,
+      from: 0,
+      to: 100,
+      now: 100,
+      events: [
+        playerEvent("robin-left", "player_left", "Robin", 60),
+        playerEvent("alex-joined", "player_joined", "Alex", 70)
+      ],
+      snapshot: {
+        state: "stale",
+        online: 1,
+        maxPlayers: 20,
+        names: ["Robin"],
+        sampledAt: new Date(50).toISOString(),
+        lastAttemptAt: new Date(100).toISOString(),
+        code: "QUERY_TIMEOUT",
+        message: "Timed out"
+      }
+    });
+
+    expect(result.onlineNames).toEqual(["Alex"]);
+    expect(result.sessions).toMatchObject([
+      { player: "Robin", endedAt: 60, endBoundary: "leave" },
+      { player: "Alex", startedAt: 70, endedAt: null, endBoundary: "online" }
+    ]);
+  });
+
+  it("clears a stale roster after a newer server stop", () => {
+    const stopped: ServerTimelineEvent = {
+      id: "stopped",
+      eventType: "server_stopped",
+      type: "info",
+      severity: "info",
+      text: "Server stopped",
+      message: "Server stopped",
+      signature: "server_stopped",
+      source: "docker",
+      occurredAt: 60
+    };
+    const result = timelinePlayerActivity({
+      contextFrom: 0,
+      from: 0,
+      to: 100,
+      now: 100,
+      events: [playerEvent("join", "player_joined", "Robin", 10), stopped],
+      snapshot: {
+        state: "stale",
+        online: 1,
+        maxPlayers: 20,
+        names: ["Robin"],
+        sampledAt: new Date(50).toISOString(),
+        lastAttemptAt: new Date(100).toISOString(),
+        code: "QUERY_TIMEOUT",
+        message: "Timed out"
+      }
+    });
+
+    expect(result.onlineNames).toEqual([]);
+    expect(result.sessions).toMatchObject([{ player: "Robin", endedAt: 60, endBoundary: "server-end" }]);
+  });
 });
