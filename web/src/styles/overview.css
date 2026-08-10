@@ -1884,6 +1884,17 @@ button.overviewCardRow:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Typography gives generic summary spans the compact metadata size. Byte
+   values are metric content, so keep their wrappers at the value size. */
+.overviewSummary .summaryByteValue,
+.overviewSummary .summaryByteValue > span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
 .overviewSummary .summaryStorageValue {
   min-width: 0;
   display: inline-flex;
@@ -2038,7 +2049,14 @@ button.overviewCardRow:focus-visible {
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(0, 1fr)
+      minmax(0, 0.8fr)
+      minmax(0, 1fr)
+      minmax(0, 1.25fr)
+      minmax(0, 0.8fr)
+      minmax(0, 0.9fr);
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {

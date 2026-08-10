@@ -200,7 +200,7 @@ export function OverviewSummary({
           ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
           : worldSizeBytes === null
             ? "Unavailable"
-            : <span title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
+            : <span className="summaryByteValue" title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
       />
       <MetricTile
         className="summaryTile storageRemainingTile"
@@ -212,7 +212,7 @@ export function OverviewSummary({
             ? "Unavailable"
             : (
               <span
-                className={`summaryStorageValue${storageLow ? " summaryStorageValue--warning" : ""}`}
+                className={`summaryByteValue summaryStorageValue${storageLow ? " summaryStorageValue--warning" : ""}`}
                 title={storageTitle}
                 aria-label={`${storageValue} remaining${storageLow ? ", storage almost full" : ""}`}
               >

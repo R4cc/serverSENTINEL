@@ -458,6 +458,22 @@ async function assertStorageSummary(page, expectedVisibleTiles) {
   assert(await spaceRemaining.evaluate((tile) => tile.classList.contains("uiMetricTile--warning")), "The demo's near-full storage card is missing its warning tone");
   assert.equal(await page.locator(".overviewSummary .uiMetricTile").filter({ hasText: "Fabric" }).count(), 0, "The runtime card still occupies an Overview summary slot");
   assert.equal(await page.locator(".overviewSummary .uiMetricTile:visible").count(), expectedVisibleTiles, "The Overview summary has an unexpected visible card count");
+  for (const [name, tile] of [["World Size", worldSize], ["Space Remaining", spaceRemaining]]) {
+    const typography = await tile.evaluate((element) => {
+      const label = element.querySelector(".uiMetricTileLabel");
+      const strong = element.querySelector(".uiMetricTileCopy > strong");
+      const value = element.querySelector(".summaryByteValue");
+      const labelStyle = label ? getComputedStyle(label) : null;
+      return {
+        labelHeight: label?.getBoundingClientRect().height ?? 0,
+        labelLineHeight: Number.parseFloat(labelStyle?.lineHeight ?? "0"),
+        strongFontSize: Number.parseFloat(strong ? getComputedStyle(strong).fontSize : "0"),
+        valueFontSize: Number.parseFloat(value ? getComputedStyle(value).fontSize : "0")
+      };
+    });
+    assert(Math.abs(typography.valueFontSize - typography.strongFontSize) < 0.1, `${name} value does not use the summary metric type size: ${JSON.stringify(typography)}`);
+    assert(typography.labelHeight <= typography.labelLineHeight + 0.5, `${name} label wraps unexpectedly: ${JSON.stringify(typography)}`);
+  }
   const geometry = await page.locator(".overviewSummary").evaluate((summary) => ({
     clientWidth: summary.clientWidth,
     scrollWidth: summary.scrollWidth
