@@ -30,7 +30,7 @@
   opacity: 1;
   max-width: 180px;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -172,14 +172,14 @@ button .buttonIcon {
 .sideNav button {
   justify-content: flex-start;
   overflow: hidden;
-  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), background-color 0.2s, border-color 0.2s, color 0.2s;
+  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), background-color 100ms, border-color 100ms, color 100ms;
 }
 
 .navLabel {
   opacity: 1;
   max-width: 180px;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.4;
@@ -920,7 +920,7 @@ button .buttonIcon {
   min-height: 46px;
   min-width: 0;
   width: 100%;
-  transition: gap 0.18s cubic-bezier(0.4, 0, 0.2, 1), padding 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: gap 90ms cubic-bezier(0.4, 0, 0.2, 1), padding 90ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .accountIcon {
@@ -955,7 +955,7 @@ button .buttonIcon {
   opacity: 1;
   max-width: 150px;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
 }
 
 .accountLogoutButton {
@@ -972,7 +972,7 @@ button .buttonIcon {
   color: var(--text);
   opacity: 1;
   visibility: visible;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 160ms ease, padding var(--sidebar-ease), margin var(--sidebar-ease), border-width var(--sidebar-ease);
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 80ms ease, padding var(--sidebar-ease), margin var(--sidebar-ease), border-width var(--sidebar-ease);
 }
 
 .sideNav .accountLogoutButton {
@@ -983,7 +983,7 @@ button .buttonIcon {
   display: flex;
   justify-content: center;
   align-items: center;
-  transition: opacity 160ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 160ms ease;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 80ms ease;
 }
 
 .settingsNavLabel {

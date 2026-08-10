@@ -154,7 +154,7 @@
   --sidebar-rail-size: 44px;
   /* The collapse is longer than a control transition because it moves the whole
      shell, but it rides the same curve as everything else. */
-  --sidebar-ease: 220ms var(--motion-ease-standard);
+  --sidebar-ease: 110ms var(--motion-ease-standard);
   --type-brand-size: 15px;
   --type-page-title-size: clamp(25px, 2.2vw, 34px);
   --type-section-title-size: 17px;
@@ -189,9 +189,9 @@
      invent a fourth. `fast` is a state flip the eye should not have to follow,
      `base` is the default for hover, tint and rim changes, `slow` is reserved
      for something arriving or leaving. */
-  --motion-duration-fast: 120ms;
-  --motion-duration-base: 180ms;
-  --motion-duration-slow: 420ms;
+  --motion-duration-fast: 60ms;
+  --motion-duration-base: 90ms;
+  --motion-duration-slow: 210ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-status-cycle: 2800ms;

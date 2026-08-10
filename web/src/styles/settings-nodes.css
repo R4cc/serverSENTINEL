@@ -2057,7 +2057,7 @@
   background: var(--overlay);
   -webkit-backdrop-filter: var(--glass-filter-scrim);
   backdrop-filter: var(--glass-filter-scrim);
-  animation: nodeDrawerFadeIn 150ms ease-out;
+  animation: nodeDrawerFadeIn 75ms ease-out;
 }
 
 .nodeDetailsDrawer {
@@ -2071,7 +2071,7 @@
   box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
   -webkit-backdrop-filter: var(--glass-filter-modal);
   backdrop-filter: var(--glass-filter-modal);
-  animation: nodeDrawerSlideIn 200ms ease-out;
+  animation: nodeDrawerSlideIn 100ms ease-out;
 }
 
 .nodeDetailsDrawer:focus {
