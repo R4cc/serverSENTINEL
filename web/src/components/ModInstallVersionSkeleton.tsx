@@ -1,41 +1,26 @@
 import { SkeletonBlock } from "./UiPrimitives";
 
+/**
+ * Stands in for the version step while Modrinth is being asked what it has.
+ *
+ * It mirrors the two blocks that step actually renders — the recommended release and
+ * the advanced-options disclosure — rather than a shape of its own, so the panel does
+ * not jump when the answer lands.
+ */
 export function ModInstallVersionSkeleton() {
-  const rowKeys = ["one", "two", "three"];
   return (
-    <div className="modInstallVersionGroups modInstallVersionSkeleton" aria-hidden="true">
-      <section className="modInstallVersionGroup">
-        <div className="modInstallVersionGroupHeader">
-          <strong>Compatible versions</strong>
-          <SkeletonBlock className="skeletonCount" />
+    <div className="modInstallVersionSkeleton" aria-hidden="true">
+      <div className="modsRecommendedVersion">
+        <div>
+          <SkeletonBlock className="modInstallSkeletonEyebrow" />
+          <SkeletonBlock className="modInstallSkeletonVersion" />
+          <SkeletonBlock className="modInstallSkeletonNote" />
         </div>
-        <div className="modInstallVersionTable">
-          <div className="modInstallVersionTableHeader">
-            <span>Version</span>
-            <span>Minecraft</span>
-            <span>Release type</span>
-            <span>Published</span>
-            <span>Size</span>
-            <span>Status</span>
-          </div>
-          {rowKeys.map((key) => (
-            <div key={key} className="modInstallVersionRow">
-              <span><SkeletonBlock className="skeletonRadio" /><SkeletonBlock /></span>
-              <span><SkeletonBlock /></span>
-              <span><SkeletonBlock /></span>
-              <span><SkeletonBlock /></span>
-              <span><SkeletonBlock /></span>
-              <span><SkeletonBlock className="skeletonBadge" /></span>
-            </div>
-          ))}
-        </div>
-      </section>
-      <section className="modInstallVersionGroup">
-        <div className="modInstallVersionGroupHeader">
-          <strong>Other available versions</strong>
-          <SkeletonBlock className="skeletonToggle" />
-        </div>
-      </section>
+        <SkeletonBlock className="modInstallSkeletonButton" />
+      </div>
+      <div className="modsAdvancedOptions">
+        <SkeletonBlock className="modInstallSkeletonSummary" />
+      </div>
     </div>
   );
 }

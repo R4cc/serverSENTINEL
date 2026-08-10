@@ -20,6 +20,12 @@
   gap: 10px;
 }
 
+/* Counts refresh in place; fixed-advance digits stop the three tiles from
+   twitching against one another between polls. */
+.nodesFleetSummary .uiMetricTileCopy > strong {
+  font-variant-numeric: tabular-nums;
+}
+
 .nodesToolbar {
   min-height: 57px;
 }
@@ -159,10 +165,13 @@
   text-transform: uppercase;
 }
 
+/* Fleet counts change while the page is open, so the digits hold a fixed advance
+   and the two stat columns stay aligned with each other. */
 .nodeListStat strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 
@@ -232,6 +241,15 @@
   font-weight: var(--weight-meta);
 }
 
+/* "12 servers on this node" sits next to an Add server button that never
+   shrinks, so the count truncates rather than widening the row. */
+.nodeServersHeader span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .nodeServersHeader .uiButton {
   flex: 0 0 auto;
 }
@@ -271,6 +289,19 @@
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
   transform: none;
+}
+
+.nodeServerRow:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-inset));
+  color: var(--sentinel-accent-strong);
+  transform: none;
+}
+
+/* The rows run edge to edge inside a rounded, clipped panel, so the shared
+   2px outward focus ring is sliced off on three sides. Draw it inside instead. */
+.nodeServerRow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .nodeServerRowIcon {
@@ -329,6 +360,7 @@
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

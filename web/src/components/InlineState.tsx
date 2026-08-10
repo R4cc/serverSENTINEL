@@ -23,7 +23,7 @@ export function InlineState({
         <span>{message}</span>
       </div>
       {onAction && actionLabel && (
-        <Button variant="secondary" compact onClick={onAction} disabled={busy} reserveLabel={actionLabel.length > "Working...".length ? actionLabel : "Working..."}>
+        <Button variant="secondary" compact onClick={onAction} disabled={busy} aria-busy={busy} reserveLabel={actionLabel.length > "Working...".length ? actionLabel : "Working..."}>
           {busy ? "Working..." : actionLabel}
         </Button>
       )}

@@ -3,7 +3,6 @@ import { Banner, Button, FormField } from './UiPrimitives';
 import { BrandLogo } from './BrandLogo';
 import { usernameInputPattern } from '../utils/inputPatterns';
 import type { AuthField } from '../utils/authValidation';
-import { GlassEffect } from './GlassEffect';
 
 export type AuthNotice = {
   tone: "error" | "warning";
@@ -30,8 +29,11 @@ export function AuthPanel({
 }) {
   return (
     <main className="authShell">
+      {/* No `GlassEffect` here on purpose: `auth.css` hides the refractive inset
+          and the shared rim on this panel, because at card size they read as a
+          second nested surface. Mounting the layer anyway only pulled the
+          liquid-glass chunk on the first screen of the app to render nothing. */}
       <section className="authPanel uiGlassSurface uiGlassSurface--modal">
-        <GlassEffect variant="modal" />
         <div className="brandLockup">
           <BrandLogo />
           <div>
@@ -55,6 +57,7 @@ export function AuthPanel({
           noValidate
         >
           <fieldset>
+            <legend className="srOnly">{setupRequired ? "Create the first administrator account" : "Sign in to serverSENTINEL"}</legend>
             {setupRequired && (
               <FormField htmlFor="auth-setup-token" label="Setup token" error={fieldErrors.setupToken} required>
                 <input
@@ -119,7 +122,7 @@ export function AuthPanel({
                 />
               </FormField>
             )}
-            <Button type="submit" disabled={busy} reserveLabel={setupRequired ? "Create admin" : "Checking..."}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</Button>
+            <Button type="submit" disabled={busy} aria-busy={busy} reserveLabel={setupRequired ? "Create admin" : "Checking..."}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</Button>
           </fieldset>
         </form>
       </section>

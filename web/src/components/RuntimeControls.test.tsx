@@ -26,6 +26,7 @@ describe("RuntimeControls", () => {
       />
     );
 
+    expect(html).toContain('role="group"');
     expect(html).toContain('aria-label="Container controls"');
     expect(html).toContain('aria-busy="false"');
     expect(html).toContain('data-action="start"');

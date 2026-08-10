@@ -568,7 +568,7 @@ button:disabled,
 .themeDark .eventEmpty,
 .themeDark .fileDetailsEmpty {
   background:
-    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.022) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--text) 2%, transparent) 0 1px, transparent 1px 10px),
     var(--surface-muted);
 }
 
@@ -1054,15 +1054,35 @@ button:disabled,
 
 .sidebar::after {
   /* The rail meets the workspace on one edge only, so it lights that edge
-     instead of tracing a ring that its own overflow would clip. */
+     instead of tracing a ring that its own overflow would clip. Note this
+     replaces the gradient but not the geometry: the ring in `primitives.css` is
+     made by `padding: 1px` plus `mask-composite: exclude`, so the band still
+     runs the full perimeter and this only decides how brightly it paints. */
   background: linear-gradient(180deg, var(--glass-rim-top) 0%, transparent 42%);
 }
 
+/* Above the compact breakpoint the rail is the app's one navy pane
+   (`--sidebar-background` stays at its token value; only the compact shell
+   below re-points it at `--surface`). The shared rim is tuned for white glass
+   -- `--glass-rim-top` is 92% white in the light theme -- so on navy that
+   perimeter band stops reading as a specular edge and reads as a hard white
+   border. Both the ring and the inset highlight are therefore restated from the
+   rail's own foreground at rim strength: the pane keeps its lit top edge and
+   its bloom, and loses the outline. The compact shell keeps the shared values,
+   where they sit on a light surface and behave as designed. */
 @media (min-width: 1101px) {
+  .sidebar::after {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--sidebar-foreground) 14%, transparent) 0%, transparent 42%);
+  }
+
   .sidebar {
-    /* Cover the viewport exposed above the sticky rail during elastic overscroll,
-       without dropping the rim and ambient shadow the chrome material sets. */
-    box-shadow: var(--glass-highlight), var(--glass-shadow-chrome), 0 -100vh 0 var(--sidebar-background);
+    /* The last layer covers the viewport exposed above the sticky rail during
+       elastic overscroll. */
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 16%, transparent),
+      inset 0 8px 16px -14px color-mix(in srgb, var(--sidebar-foreground) 24%, transparent),
+      var(--glass-shadow-chrome),
+      0 -100vh 0 var(--sidebar-background);
   }
 }
 
@@ -1588,11 +1608,11 @@ button:disabled,
   padding: 10px 11px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 20%, transparent);
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--sidebar-foreground) 7%, transparent);
   color: var(--sidebar-foreground);
   text-align: left;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
 }
 
 .sidebar .serverSwitcherTrigger:hover:not(:disabled),
@@ -1601,6 +1621,18 @@ button:disabled,
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--sidebar-foreground);
   transform: none;
+}
+
+/* Disabled here means "no server exists yet", which is a state the visitor is
+   meant to read, not squint at. The shared 38% dim leaves "Select a server"
+   barely legible on the navy rail, so the trigger keeps its contrast and
+   signals unavailability with a dashed rim instead. */
+.sidebar .serverSwitcherTrigger:disabled {
+  opacity: 1;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+  color: var(--sidebar-foreground-muted);
 }
 
 .serverSwitcherStatus,
@@ -1640,7 +1672,7 @@ button:disabled,
 }
 
 .serverSwitcherCopy small {
-  color: color-mix(in srgb, var(--sidebar-foreground) 60%, transparent);
+  color: color-mix(in srgb, var(--sidebar-foreground) 74%, transparent);
   font-size: 9px;
   font-weight: var(--weight-title);
   letter-spacing: 0.09em;
@@ -1673,7 +1705,7 @@ button:disabled,
   width: 18px !important;
   height: 18px !important;
   fill: none !important;
-  transition: transform 150ms ease;
+  transition: transform var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .serverSwitcherTrigger[aria-expanded="true"] .serverSwitcherChevron {
@@ -2760,5 +2792,28 @@ textarea:hover:not(:disabled),
 
   .modsWorkspaceBatchAction {
     grid-column: auto;
+  }
+}
+
+/* Navigation press feedback. The rail cancels the shell's lift on hover, which
+   also removed the only press response these buttons had, so the tint deepens
+   on the way down instead. */
+.sideNav button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-raised));
+}
+
+.sidebar .sideNav button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
+}
+
+.sidebar .sideNav button.active:active {
+  background: color-mix(in srgb, var(--accent) 78%, var(--text));
+}
+
+/* The server switcher's chevron is the one shell transition declared in this
+   file rather than in `motion.css`, so it is switched off here too. */
+@media (prefers-reduced-motion: reduce) {
+  .serverSwitcherChevron {
+    transition: none;
   }
 }

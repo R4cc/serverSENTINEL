@@ -34,7 +34,7 @@ export function NoManagedServersEmptyState({
         <Button
           onClick={onAddNode}
           disabled={addNodeDisabled}
-          title={addNodeDisabledReason}
+          title={addNodeDisabled ? addNodeDisabledReason : "Add a node to host managed servers"}
         >
           Add node
         </Button>

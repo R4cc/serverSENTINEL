@@ -128,12 +128,25 @@ function MinecraftPortsSection({
   queryPortValid: boolean;
   portConflict: boolean;
 }) {
+  // Each range error sits under the field it belongs to; the conflict is about the
+  // pair, so it stays one message that both inputs point at.
+  const conflictId = portConflict ? "properties-port-conflict" : undefined;
+  const describedBy = (hintId: string, errorId?: string) => [hintId, errorId, conflictId].filter(Boolean).join(" ");
+  const serverPortError = serverPortValid ? undefined : `Use a server port from ${minServerPort} to ${maxServerPort}.`;
+  const queryPortError = queryPortValid ? undefined : `Use a Query port from ${minServerPort} to ${maxServerPort}.`;
+
   return (
     <section className="minecraftPortsSection" aria-label="Minecraft network ports">
       <div className="minecraftPortsGrid">
-        <label>
-          Server port
+        <FormField
+          label="Server port"
+          htmlFor="properties-server-port"
+          required
+          description={<span id="properties-server-port-hint">TCP port used by Minecraft clients.</span>}
+          error={serverPortError && <span id="properties-server-port-error">{serverPortError}</span>}
+        >
           <input
+            id="properties-server-port"
             name="serverPort"
             type="number"
             min={minServerPort}
@@ -141,13 +154,19 @@ function MinecraftPortsSection({
             value={serverPort}
             onChange={(event) => onServerPortChange(event.target.value)}
             aria-invalid={!serverPortValid || portConflict}
+            aria-describedby={describedBy("properties-server-port-hint", serverPortError && "properties-server-port-error")}
             required
           />
-          <span className="fieldHint">TCP port used by Minecraft clients.</span>
-        </label>
-        <label>
-          Query port
+        </FormField>
+        <FormField
+          label="Query port"
+          htmlFor="properties-query-port"
+          required
+          description={<span id="properties-query-port-hint">UDP port used by serverSENTINEL for quiet player metrics.</span>}
+          error={queryPortError && <span id="properties-query-port-error">{queryPortError}</span>}
+        >
           <input
+            id="properties-query-port"
             name="queryPort"
             type="number"
             min={minServerPort}
@@ -155,14 +174,14 @@ function MinecraftPortsSection({
             value={queryPort}
             onChange={(event) => onQueryPortChange(event.target.value)}
             aria-invalid={!queryPortValid || portConflict}
+            aria-describedby={describedBy("properties-query-port-hint", queryPortError && "properties-query-port-error")}
             required
           />
-          <span className="fieldHint">UDP port used by serverSENTINEL for quiet player metrics.</span>
-        </label>
+        </FormField>
       </div>
-      {!serverPortValid && <span className="fieldError">Use a server port from {minServerPort} to {maxServerPort}.</span>}
-      {!queryPortValid && <span className="fieldError">Use a Query port from {minServerPort} to {maxServerPort}.</span>}
-      {portConflict && <span className="fieldError">Server port and Query port must be different.</span>}
+      {portConflict && (
+        <span className="uiFormFieldError" id="properties-port-conflict" role="alert">Server port and Query port must be different.</span>
+      )}
     </section>
   );
 }
@@ -428,7 +447,9 @@ export function ServerEditForm({
                   <span>Recommended: {memoryBounds.recommendedMin} GB - {memoryBounds.recommendedMax} GB</span>
                   <span>Total available: {memoryBounds.max} GB</span>
                 </div>
-                {memoryWarning && <span className="fieldError">Leave some RAM for the host. Using nearly all memory may cause instability.</span>}
+                {memoryWarning && (
+                  <span className="propertiesMemoryWarning">Leave some RAM for the host. Using nearly all memory may cause instability.</span>
+                )}
                 <input type="hidden" name="javaArgs" value={javaArgs} />
               </section>
             </section>
@@ -458,31 +479,49 @@ export function ServerEditForm({
                 </span>
               </summary>
               <div className="advancedResourceBody propertiesAdvancedBody">
+                {/* The same field primitive the General section uses, so a label,
+                    its help text and its control line up the same way everywhere. */}
                 <div className="propertiesFieldGrid two">
-                  <label>
-                    Docker runtime image
-                    <select name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)}>
+                  <FormField
+                    label="Docker runtime image"
+                    htmlFor="edit-docker-image"
+                    description={<span id="edit-docker-image-description">Java runtime image used for the server container.</span>}
+                  >
+                    <select id="edit-docker-image" name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)} aria-describedby="edit-docker-image-description">
                       <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
                       <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
                       <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
                     </select>
-                  </label>
-                  <label>
-                    Server jar filename
-                    <input name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern={runtimeJarFilenameInputPattern} title="Use a local .jar filename, not a path." />
-                  </label>
-                  <label className="propertiesFieldWide">
-                    Docker container name
+                  </FormField>
+                  <FormField
+                    label="Server jar filename"
+                    htmlFor="edit-server-jar"
+                    description={<span id="edit-server-jar-description">A local .jar filename, not a path.</span>}
+                  >
+                    <input id="edit-server-jar" name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern={runtimeJarFilenameInputPattern} title="Use a local .jar filename, not a path." aria-describedby="edit-server-jar-description" />
+                  </FormField>
+                  <FormField
+                    className="propertiesFieldWide"
+                    label="Docker container name"
+                    htmlFor="edit-docker-container"
+                    description={<span id="edit-docker-container-description">Letters, numbers, dots, dashes, and underscores.</span>}
+                  >
                     <input
+                      id="edit-docker-container"
                       name="dockerContainer"
                       value={dockerContainer}
                       onChange={(event) => setDockerContainer(event.target.value)}
                       pattern={dockerContainerNameInputPattern}
                       title="Use letters, numbers, dots, dashes, and underscores."
+                      aria-describedby="edit-docker-container-description"
                     />
-                  </label>
-                  <label className="propertiesFieldWide" htmlFor="edit-java-args">
-                    Java arguments
+                  </FormField>
+                  <FormField
+                    className="propertiesFieldWide"
+                    label="Java arguments"
+                    htmlFor="edit-java-args"
+                    description={<span id="edit-java-args-description">Launch flags used by the Minecraft runtime. Memory flags follow the heap sliders above.</span>}
+                  >
                     <textarea
                       id="edit-java-args"
                       className="javaArgsInput"
@@ -490,8 +529,9 @@ export function ServerEditForm({
                       onChange={(event) => updateJavaArgs(event.target.value)}
                       rows={4}
                       spellCheck={false}
+                      aria-describedby="edit-java-args-description"
                     />
-                  </label>
+                  </FormField>
                 </div>
                 <div className="propertiesAdvancedPorts">
                   <AdditionalPortBindingsEditor key={`${server.id}-${resetVersion}`} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />

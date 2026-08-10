@@ -152,6 +152,8 @@ describe("dense node fleets", () => {
     expect(html.match(/class="nodeServerRow"/g)).toHaveLength(8 * 6);
     expect(html.match(/Show all 12 servers/g)).toHaveLength(8);
     expect(html).toContain('role="list"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-controls="node-servers-10000000-0000-4000-8000-000000000001"');
     expect(html).not.toContain('class="nodeTile"');
     expect(html).not.toContain("nodeServerTile");
   });

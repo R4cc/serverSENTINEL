@@ -77,7 +77,7 @@ export function ActiveServerStrip({
           <div className="serverStripInfo">
             <div className="serverStripTitleRow">
               <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
-              <strong>{server.displayName}</strong>
+              <strong title={server.displayName}>{server.displayName}</strong>
               <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                 {lastKnownRuntimeLabel}
               </StatusBadge>
@@ -105,7 +105,7 @@ export function ActiveServerStrip({
                   {playerCount && (
                     <>
                       <span aria-hidden="true" className="serverStripSeparator">·</span>
-                      <small className="serverStripMeta serverStripPlayers" title="Players online">
+                      <small className="serverStripMeta serverStripPlayers" title="Players online" aria-label={`Players online: ${playerCount}`}>
                         <UserRound strokeWidth={2.2} aria-hidden="true" />
                         {playerCount}
                       </small>
@@ -129,7 +129,8 @@ export function ActiveServerStrip({
           />
           <Button
             variant="secondary"
-            className={`quickActionButton consoleLink ${consoleActive ? "active" : ""}`}
+            className={`quickActionButton consoleLink ${consoleActive ? "active" : ""}`.trim()}
+            aria-current={consoleActive ? "page" : undefined}
             onClick={onOpenConsole}
             title="Open console"
           >

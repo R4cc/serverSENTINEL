@@ -102,7 +102,18 @@ export function AddModsWorkflow(props: Props) {
                 <ModIconImage src={icon} fallback={terminology.iconFallback} />
                 <div className="modsResultContent"><div><strong>{mod.title}</strong><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge></div><p>{mod.description}</p><small>{props.formatNumber(mod.downloads)} downloads{mod.date_modified ? ` · Updated ${props.formatDate(mod.date_modified)}` : ""}</small></div>
                 {riskNote && <span className="modsResultRiskNote">{riskNote}</span>}
-                <Button variant={health.safeToRunDirectly ? "primary" : "secondary"} compact onClick={() => props.onChoose(mod)} disabled={installed || props.locked}>{installed ? "Installed" : health.primaryActionLabel}</Button>
+                <Button
+                  variant={health.safeToRunDirectly ? "primary" : "secondary"}
+                  compact
+                  onClick={() => props.onChoose(mod)}
+                  disabled={installed || props.locked}
+                  // Every card in the list carries the same word, so the label has to name the
+                  // result it belongs to for anyone who reaches it out of its visual context.
+                  aria-label={installed ? `${mod.title} is already installed` : `${health.primaryActionLabel}: ${mod.title}`}
+                  title={installed ? `${mod.title} is already installed` : `${health.primaryActionLabel}: ${mod.title}`}
+                >
+                  {installed ? "Installed" : health.primaryActionLabel}
+                </Button>
               </article>
             );
           })}

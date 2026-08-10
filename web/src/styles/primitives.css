@@ -28,7 +28,7 @@
 }
 
 .uiButton--primary { border-color: color-mix(in srgb, var(--accent) 84%, var(--glass-edge)); background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-xs); }
-.uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 78%, var(--text)); background: color-mix(in srgb, var(--accent) 88%, var(--text)); transform: none; }
+.uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 78%, var(--text)); background: color-mix(in srgb, var(--accent) 88%, var(--text)); color: var(--accent-contrast); transform: none; }
 .uiButton--secondary { border-color: var(--glass-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: var(--glass-filter-control); backdrop-filter: var(--glass-filter-control); }
 .uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .uiButton--ghost,
@@ -44,9 +44,42 @@
 .uiButton:active:not(:disabled),
 .iconButton:active:not(:disabled),
 .iconOnlyButton:active:not(:disabled) { transform: none; }
+/* One disabled treatment across every control shape. `aria-disabled` is listed
+   alongside `:disabled` because a `.uiButton` rendered as an anchor -- the
+   download link in the export flow is the live case -- cannot carry the
+   attribute the pseudo-class matches, and would otherwise stay fully lit and
+   clickable while reading as unavailable. */
 .uiButton:disabled,
+.uiButton[aria-disabled="true"],
 .iconButton:disabled,
-.iconOnlyButton:disabled { opacity: 0.42; box-shadow: none; }
+.iconOnlyButton:disabled {
+  cursor: not-allowed;
+  opacity: var(--disabled-opacity);
+  box-shadow: none;
+  transform: none;
+}
+
+a.uiButton[aria-disabled="true"] { pointer-events: none; }
+
+/* Busy is not disabled: the control keeps its label, its size and its focus,
+   and only says that a request is in flight. */
+.uiButton[aria-busy="true"]:not(:disabled) { cursor: progress; }
+
+/* Focus. `tokens.css` rings every bare element; this reaches the two cases it
+   cannot. A `.uiButton` anchor is not a `<button>`, and a menu item sits flush
+   inside a popover that clips overflow, so an outward offset would be sliced
+   off on all four sides -- it is drawn inside the item instead. */
+.uiButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.actionMenuItem:focus-visible,
+.uiSortHeaderButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
 .uiButton--reserved { justify-content: center; }
 .uiButtonStableContent { display: grid; grid-template-areas: "content"; align-items: center; justify-items: center; min-width: 0; }
 .uiButtonReserveContent,
@@ -262,8 +295,11 @@
 }
 .actionMenuItem:hover:not(:disabled), .actionMenuItem:focus-visible { background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .actionMenuItem--active { background: color-mix(in srgb, var(--accent) 9%, var(--surface-raised)); color: var(--sentinel-accent-strong); }
-.actionMenuItem--critical { color: var(--sentinel-danger); }
-.actionMenuItem--critical:hover:not(:disabled), .actionMenuItem--critical:focus-visible { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised)); color: var(--sentinel-danger); }
+/* `--sentinel-danger` is a fill colour: it carries white on a button, but as
+   text on the dark theme's raised surface it lands near 3:1. The status
+   foreground token is the theme-aware reading of the same red. */
+.actionMenuItem--critical { color: var(--status-danger-foreground); }
+.actionMenuItem--critical:hover:not(:disabled), .actionMenuItem--critical:focus-visible { background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised)); color: var(--status-danger-foreground); }
 .actionMenuItem svg { width: var(--control-icon-size); height: var(--control-icon-size); flex: 0 0 auto; }
 .visuallyHidden { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; clip-path: inset(50%) !important; white-space: nowrap !important; }
 .selectionActionMenu .actionMenuTrigger { width: var(--control-height-compact); min-width: var(--control-height-compact); height: var(--control-height-compact); min-height: var(--control-height-compact); }
@@ -383,6 +419,20 @@
 .uiSkeleton--button { width: 34px; height: 34px; }
 .uiSkeleton--icon { width: 38px; height: 38px; }
 
+/* A placeholder should share the radius of what it replaces. The control radius
+   is far too round on a 12px bar standing in for a line of text, which is what
+   made the terminal skeleton hand-roll its own 3px in the first place. */
+.uiSkeleton--text,
+.uiSkeleton--title,
+.authSkeletonTitle,
+.authSkeletonLabel,
+.applicationSkeletonHeading,
+.applicationSkeletonBreadcrumb,
+.serverStripLoadingTitle,
+.serverStripLoadingMeta,
+.codeSkeletonLine,
+.terminalSkeletonLine { border-radius: var(--radius-xs); }
+
 @keyframes skeletonSweep {
   from { transform: translateX(-100%); }
   to { transform: translateX(100%); }
@@ -495,7 +545,7 @@
 .codeSkeletonLine { height: 13px; }
 .terminalLoadingSkeleton { flex: 1 1 auto; min-height: 280px; overflow: hidden; padding: 18px 14px; background: var(--terminal-bg); }
 .terminalLoadingSkeleton > div { display: grid; gap: 11px; }
-.terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); display: block; height: 11px; border-radius: 3px; background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
+.terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); display: block; height: 11px; background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
 .themeDark .terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
 
 @media (max-width: 760px) {
@@ -649,8 +699,7 @@
 .fileBreadcrumbs button:hover:not(:disabled),
 .modsWorkspaceUpdate button:hover:not(:disabled),
 .modsWorkspaceIdentity:hover:not(:disabled),
-.modsVersionList button:hover:not(:disabled),
-.modInstallVersionRow:hover:not(:disabled) {
+.modsVersionList button:hover:not(:disabled) {
   transform: none;
 }
 
@@ -659,12 +708,6 @@
 .quickActionButton,
 .runtimeControlButton {
   box-shadow: none;
-}
-
-.uiButton--primary:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 78%, var(--text));
-  background: color-mix(in srgb, var(--accent) 88%, var(--text));
-  color: var(--accent-contrast);
 }
 
 .quickActionButton:hover:not(:disabled),
@@ -832,7 +875,6 @@
 
 .fileTableRow.selected,
 .runtimeLoaderCard.selected,
-.modInstallVersionRow.selected,
 .modsVersionList button.selected {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
   background: var(--sentinel-accent-soft);

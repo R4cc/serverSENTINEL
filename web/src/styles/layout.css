@@ -68,8 +68,10 @@
   background: var(--swiss-white);
 }
 
+/* Deliberately not `.activeServerStrip span`: the strip's spans are badges,
+   status dots and button labels, each of which owns its own type. A blanket
+   rule here only forced every one of them to be undone again further down. */
 .brandBlock p,
-.activeServerStrip span,
 .muted {
   color: var(--text-muted);
   font-size: 13px;
@@ -179,6 +181,7 @@ button .buttonIcon {
   visibility: visible;
   transition: opacity 160ms ease, max-width var(--sidebar-ease), visibility 160ms ease;
   overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.4;
   padding-block: 1px;
   white-space: nowrap;
@@ -309,24 +312,8 @@ button .buttonIcon {
   margin-top: 1px;
 }
 
-.activeServerStrip strong {
-  font-size: 20px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-tight);
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .runtimeBadge {
   line-height: 1.2;
-}
-
-.serverStripMeta {
-  font-size: 12px;
-  color: var(--text-soft);
-  font-weight: 600;
 }
 
 .serverStripRight {
@@ -387,16 +374,6 @@ button .buttonIcon {
   background: var(--surface);
   color: var(--text-soft);
   border-color: var(--border-muted);
-}
-
-/* Prevent activeServerStrip span from overriding button text styling and colors */
-.activeServerStrip .runtimeControlButton span,
-.activeServerStrip .quickActionButton.consoleLink span {
-  color: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-  letter-spacing: inherit;
 }
 
 .quickActionButton.active {
@@ -609,11 +586,13 @@ button .buttonIcon {
   font-weight: var(--weight-heading);
 }
 
+/* No bottom margin: the workspace is a grid and already spaces its children, so
+   a margin here made this the one notice in the stack that sat further from the
+   page than the `uiBanner` notices beside it. */
 .systemBanner {
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-4);
   display: grid;
   grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
   gap: var(--space-4);
@@ -687,7 +666,7 @@ button .buttonIcon {
 .inlineState-loading {
   border-color: var(--accent);
   background:
-    repeating-linear-gradient(45deg, rgb(56 88 233 / 0.08) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 8%, transparent) 0 1px, transparent 1px 10px),
     var(--surface);
 }
 
@@ -695,6 +674,12 @@ button .buttonIcon {
   border-color: var(--sentinel-danger);
   color: var(--sentinel-danger);
   background: color-mix(in srgb, var(--surface) 86%, var(--sentinel-danger) 14%);
+}
+
+/* Third child of the two-column banner grid, so without this it lands back in
+   the narrow title column and the failure log scrolls inside ~180px. */
+.systemBanner > .failureDetails {
+  grid-column: 1 / -1;
 }
 
 .failureDetails {
@@ -812,7 +797,7 @@ button .buttonIcon {
   display: block;
   width: 28px;
   height: 28px;
-  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.12));
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--overlay) 25%, transparent));
 }
 
 /* Custom styling for Sonner toast close button to place it in the top right, non-colored */
@@ -840,7 +825,7 @@ button .buttonIcon {
   color: var(--text-muted) !important;
   box-shadow: none !important;
   border-radius: 50% !important;
-  transition: background 150ms linear, color 150ms linear !important;
+  transition: background var(--motion-duration-base) var(--motion-ease-standard), color var(--motion-duration-base) var(--motion-ease-standard) !important;
 }
 
 .sonnerToast [data-close-button]:hover {
@@ -1620,6 +1605,13 @@ button .buttonIcon {
   text-transform: none;
 }
 
+/* The badge is a `span` carrying `tabindex`, so the global focus ring -- which
+   only reaches buttons and form controls -- never applied to it, leaving the one
+   keyboard-reachable element on the strip with no visible focus. */
+.restartRequirementBadge:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
 .restartRequirementTooltip {
   position: absolute;
   z-index: 60;
@@ -1907,6 +1899,24 @@ button .buttonIcon {
   backdrop-filter: var(--glass-filter-control);
 }
 
+/* The strip restates the base colours of these buttons, which also outranks the
+   `uiButton--secondary` and `uiButton--primary` hover states -- so without the
+   rules below Start, Restart and Console are the only buttons in the app that
+   look identical under the pointer. The values match the primitives they shadow
+   so the strip responds like every other control. */
+.activeServerStrip .uiButton.runtimeControlButton.restart:hover:not(:disabled),
+.activeServerStrip .uiButton.quickActionButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.activeServerStrip .uiButton.runtimeControlButton.start:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 78%, var(--text));
+  background: color-mix(in srgb, var(--sentinel-success) 86%, var(--text));
+  color: var(--sentinel-success-contrast);
+}
+
 .activeServerStrip .uiButton.runtimeControlButton.restart:disabled {
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
   color: var(--text-soft);
@@ -1917,6 +1927,12 @@ button .buttonIcon {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-row));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
+}
+
+/* The console button is already tinted while its page is open, so hovering it
+   deepens the same tint rather than repeating the neutral-to-accent move. */
+.activeServerStrip .quickActionButton.consoleLink.active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 74%, var(--surface-raised));
 }
 
 .activeServerStrip .refreshStatusButton {
@@ -1965,5 +1981,23 @@ button .buttonIcon {
 
   .serverRuntimeAlert {
     padding: var(--space-3);
+  }
+}
+
+/* The sidebar collapse animates width, padding and label opacity from this
+   file, so it is also where those transitions have to be switched off --
+   `motion.css` loads later but never named them, which left collapsing the rail
+   as the one motion in the shell a reduced-motion visitor still saw. */
+@media (prefers-reduced-motion: reduce) {
+  .brandBlock,
+  .brandLockup,
+  .brandLockup > div,
+  .sideNav button,
+  .navLabel,
+  .accountChip,
+  .accountName,
+  .accountLogoutButton,
+  .sideNav .accountLogoutButton {
+    transition: none;
   }
 }

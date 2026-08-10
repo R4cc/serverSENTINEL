@@ -1,18 +1,20 @@
 /* Cohesive Mods workspace */
-.modsWorkspacePage { display: flex; flex-direction: column; gap: 14px; height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
-.modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.modsWorkspacePage { display: flex; flex-direction: column; gap: var(--space-3); height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
+.modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 /* The metric tiles are the shared uiMetricTile--summary variant; this file only
    owns how they are arranged. */
-.modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-.modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.modsWorkspacePrimaryActions, .modsWorkspaceUpdateActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+.modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.modsWorkspacePrimaryActions, .modsWorkspaceUpdateActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .modsWorkspaceUpdateActions { justify-content: flex-end; }
 .modsWorkspaceLastChecked { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
 .modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); }
-.modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 17px; border-bottom: 1px solid var(--border); }
-.modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: 8px; }
+/* Inline padding matches the table head and rows below, so the heading starts on
+   the same edge as the mod icons rather than one pixel off it. */
+.modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: var(--space-2); }
 .modsWorkspaceListHeader h3 { margin: 0; }
-.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: 8px; min-width: 250px; padding: 0 11px; border: 1px solid var(--border-muted); }
+.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: var(--space-2); min-width: 250px; padding: 0 var(--space-3); border: 1px solid var(--border-muted); }
 .modsWorkspaceSearch { width: clamp(280px, 34vw, 440px); }
 .modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: var(--shadow-xs), 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
@@ -21,16 +23,18 @@
 .modsWorkspaceTable.isDragTarget { outline: 2px solid var(--sentinel-accent); outline-offset: -2px; }
 .modsWorkspaceDropOverlay { position: absolute; z-index: 5; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; min-height: 150px; color: var(--text); background: color-mix(in srgb, var(--surface-raised) 88%, transparent); pointer-events: none; }
 .modsWorkspaceDropOverlay svg { width: 28px; height: 28px; color: var(--sentinel-accent); }
-.modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(125px, 180px) minmax(120px, 170px) minmax(150px, 220px) 72px 40px; align-items: center; gap: 14px; }
-.modsWorkspaceTableHead { position: sticky; z-index: 2; top: 0; min-height: 38px; padding: 0 16px; background: var(--surface-muted); }
-.modsWorkspaceRow { min-height: 68px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--border); }
+.modsWorkspaceTableHead, .modsWorkspaceRow { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(125px, 180px) minmax(120px, 170px) minmax(150px, 220px) 72px 40px; align-items: center; gap: var(--space-3); }
+.modsWorkspaceTableHead { position: sticky; z-index: 2; top: 0; min-height: 38px; padding: 0 var(--space-4); background: var(--surface-muted); }
+.modsWorkspaceRow { min-height: 68px; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4); border-top: 1px solid var(--border); }
 .modsWorkspaceTableHead + .modsWorkspaceRow { border-top: 0; }
 .modsWorkspaceRow.isDisabled { opacity: .62; }
-.modsWorkspaceIdentity { display: flex; align-items: center; justify-content: flex-start; gap: 11px; width: 100%; min-width: 0; padding: 0; border: 0; color: inherit; background: none; text-align: left; box-shadow: none; }
+.modsWorkspaceIdentity { display: flex; align-items: center; justify-content: flex-start; gap: var(--space-3); width: 100%; min-width: 0; padding: 0; border: 0; color: inherit; background: none; text-align: left; box-shadow: none; }
 .modsWorkspaceIdentity:hover:not(:disabled) { transform: none; background: none; color: inherit; }
-.modsWorkspaceIdentity img, .modsDetailsTitle img, .modsReviewHero img, .modsResultCard > img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: 9px; object-fit: cover; }
-.modsWorkspaceIdentity img { border: 1px solid var(--border-panel); border-radius: 6px; }
-.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border-panel); border-radius: 6px; color: var(--text-muted); background: var(--surface); font-size: .66rem; font-weight: var(--weight-heading); }
+/* A project icon and the lettered fallback occupy the same slot, so they share one
+   box and one radius wherever a mod is shown. */
+.modsWorkspaceIdentity img, .modsDetailsTitle img, .modsReviewHero img, .modsResultCard > img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: var(--radius-sm); object-fit: cover; }
+.modsWorkspaceIdentity img { border: 1px solid var(--border-panel); }
+.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border-panel); border-radius: var(--radius-sm); color: var(--text-muted); background: var(--surface); font-size: .66rem; font-weight: var(--weight-heading); }
 .modsWorkspaceIdentity > span { display: grid; min-width: 0; gap: 3px; text-align: left; }
 .modsWorkspaceIdentity > svg { width: 18px; height: 18px; flex: 0 0 auto; margin-left: auto; color: var(--text-muted); }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -74,31 +78,32 @@
 .modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: var(--border-subtle) solid var(--border-row); box-shadow: var(--shadow-elevated); animation: modsSlideIn .2s ease-out; }
 .modsDetailsDrawer { width: min(440px, 96vw); }
 .modsAddWorkflow { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; }
-.modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 24px; border-bottom: 1px solid var(--border); }
+.modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-5); border-bottom: 1px solid var(--border); }
 .modsDrawerHeader h2 { margin: 2px 0 0; }
-.modsDrawerHeader p { margin: 4px 0 0; }
-.modsDrawerBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 24px; }
-.modsDrawerFooter { display: flex; flex-wrap: wrap; gap: 9px; padding: 16px 24px; border-top: 1px solid var(--border); }
+.modsDrawerHeader p { margin: var(--space-1) 0 0; }
+.modsDrawerBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-5); }
+.modsDrawerFooter { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border); }
 .modsDrawerFooter > button:first-child { flex: 1; }
-.modsAddSearch { display: grid; gap: 6px; }
+.modsAddSearch { display: grid; gap: var(--space-1); }
 .modsAddSearch label { width: 100%; min-width: 0; }
 .modsSearchActivity { min-height: 1em; text-align: right; }
-.modsSafeSearchNote { display: flex; align-items: center; margin: 8px 0 18px; }
+.modsSafeSearchNote { display: flex; align-items: center; margin: var(--space-2) 0 var(--space-4); }
 .modsSafeSearchNote svg { width: 15px; color: var(--sentinel-success); }
 .modsSafeSearchNote.warning svg { color: var(--sentinel-warning); }
-.modsCompatibilityToggle { display: flex; align-items: flex-start; gap: 9px; margin: -8px 0 18px; color: var(--text-muted); font-size: .78rem; }
+.modsCompatibilityToggle { display: flex; align-items: flex-start; gap: var(--space-2); margin: calc(var(--space-2) * -1) 0 var(--space-4); color: var(--text-muted); font-size: .78rem; }
 .modsCompatibilityToggle input { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; }
 .modsCompatibilityToggle span { display: grid; gap: 2px; min-width: 0; }
 .modsCompatibilityToggle strong { color: var(--text); font-size: .8rem; }
 .modsCompatibilityToggle small { color: var(--text-muted); font-size: .75rem; line-height: 1.35; }
-.modsDrawerBody > .inlineState { align-items: flex-start; margin: 0 0 16px; padding: 13px 14px; }
+.modsDrawerBody > .inlineState { align-items: flex-start; margin: 0 0 var(--space-4); padding: var(--space-3); }
 .modsDrawerBody > .inlineState .uiButton { flex: 0 0 auto; }
-.modsSearchResults { display: grid; gap: 9px; }
-.modsResultCard { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 94px; border: 1px solid var(--border); }
+.modsSearchResults { display: grid; gap: var(--space-2); }
+.modsResultCard { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); min-height: 94px; border: 1px solid var(--border); }
 .modsResultContent { min-width: 0; }
-.modsResultContent > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.modsResultContent p { display: -webkit-box; overflow: hidden; margin: 5px 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.modsResultRiskNote { grid-column: 2 / 3; display: block; min-width: 0; margin-top: -10px; color: var(--status-warning-foreground); font-size: .74rem; line-height: 1.35; }
+.modsResultContent > div { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
+.modsResultContent > div > strong { min-width: 0; overflow-wrap: anywhere; }
+.modsResultContent p { display: -webkit-box; overflow: hidden; margin: 5px 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.modsResultRiskNote { grid-column: 2 / 3; display: block; min-width: 0; margin-top: calc(var(--space-3) * -1); color: var(--status-warning-foreground); font-size: .74rem; line-height: 1.35; overflow-wrap: anywhere; }
 .modsResultCard.isSkeleton { min-height: 94px; background: var(--surface); pointer-events: none; }
 .modsResultCard.isSkeleton .uiSkeleton--icon { width: 42px; height: 42px; }
 .modsResultTitleSkeleton { width: min(190px, 64%); height: 15px; }
@@ -106,11 +111,12 @@
 .modsResultMetaSkeleton { width: 112px; height: 10px; margin-top: 8px; }
 .modsResultButtonSkeleton { width: 82px; height: 32px; }
 .modsSearchSentinel { height: 1px; }
-.modsDetailsTitle, .modsReviewHero { display: flex; align-items: center; gap: 12px; }
-.modsDetailsTitle h2 { margin: 0 0 6px; }
+.modsDetailsTitle, .modsReviewHero { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.modsDetailsTitle > div, .modsReviewHero > div { min-width: 0; }
+.modsDetailsTitle h2 { margin: 0 0 var(--space-1); overflow-wrap: anywhere; }
 .modsDetailsTitle h2 + span { color: var(--text-muted); font-size: .76rem; }
-.modsDetailsDescription { margin: 0 0 20px; }
-.modsHealthReasonBanner { display: grid; gap: 4px; margin: 0 0 16px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.modsDetailsDescription { margin: 0 0 var(--space-4); }
+.modsHealthReasonBanner { display: grid; gap: var(--space-1); margin: 0 0 var(--space-4); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .modsHealthReasonBanner strong { font-size: .86rem; }
 .modsHealthReasonBanner span { color: var(--text-muted); font-size: .82rem; line-height: 1.45; }
 .modsHealthReasonBanner.ready { border-color: color-mix(in srgb, var(--sentinel-success) 32%, var(--border)); background: color-mix(in srgb, var(--sentinel-success) 8%, var(--surface-raised)); }
@@ -120,19 +126,24 @@
 .modsHealthReasonBanner.not-recommended { border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border)); background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface-raised)); }
 .modsHealthReasonBanner.not-recommended strong { color: var(--status-danger-foreground); }
 .modsDetailsFacts { display: grid; gap: 0; margin: 0; }
-.modsDetailsFacts > div { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(0, 1.25fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.modsDetailsFacts > div { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(0, 1.25fr); gap: var(--space-4); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.modsDetailsFacts > div:last-child { border-bottom: 0; }
 .modsDetailsFacts dt { color: var(--text-muted); font-size: .78rem; font-weight: var(--weight-strong); }
 .modsDetailsFacts dd { overflow-wrap: anywhere; margin: 0; font-size: .82rem; }
-.modsCompatibilityCard { margin-top: 20px; padding: 15px; border: 1px solid var(--border); }
+.modsCompatibilityCard { margin-top: var(--space-4); padding: var(--space-3); border: 1px solid var(--border); }
 .modsCompatibilityCard.update { border-color: color-mix(in srgb, var(--sentinel-warning) 28%, var(--border)); background: color-mix(in srgb, var(--sentinel-warning) 6%, var(--surface-raised)); }
 .modsCompatibilityCard.review { border-color: color-mix(in srgb, var(--sentinel-accent) 28%, var(--border)); }
 .modsCompatibilityCard.not-recommended { border-color: color-mix(in srgb, var(--sentinel-danger) 28%, var(--border)); }
 .modsCompatibilityCard p { margin: 5px 0 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
-.modsCompatibilityCard details, .modsTechnicalDetails, .modsAdvancedOptions, .modsDependencySummary { margin-top: 14px; }
+.modsCompatibilityCard details, .modsTechnicalDetails, .modsAdvancedOptions, .modsDependencySummary { margin-top: var(--space-4); }
 .modsCompatibilityCard summary, .modsTechnicalDetails summary, .modsAdvancedOptions summary, .modsDependencySummary summary { cursor: pointer; color: var(--text-muted); font-size: .8rem; font-weight: var(--weight-strong); }
-.modsCompatibilityCard details[open] > summary { margin-bottom: 12px; color: var(--text); }
-.modsCompatibilityFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--border); }
-.modsCompatibilityFacts > div { min-width: 0; padding: 11px 12px; background: var(--surface-raised); }
+/* `summary` is keyboard-reachable, and a disclosure that only reacts to the mouse
+   reads as inert to anyone driving the drawer from the keyboard. */
+.modsCompatibilityCard summary:hover, .modsTechnicalDetails summary:hover, .modsAdvancedOptions summary:hover, .modsDependencySummary summary:hover { color: var(--text); }
+.modsCompatibilityCard summary:focus-visible, .modsTechnicalDetails summary:focus-visible, .modsAdvancedOptions summary:focus-visible, .modsDependencySummary summary:focus-visible { border-radius: var(--radius-sm); outline-offset: 3px; }
+.modsCompatibilityCard details[open] > summary { margin-bottom: var(--space-3); color: var(--text); }
+.modsCompatibilityFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--border); }
+.modsCompatibilityFacts > div { min-width: 0; padding: var(--space-3); background: var(--surface-raised); }
 .modsCompatibilityFacts > .modsCompatibilityReason { grid-column: 1 / -1; }
 .modsCompatibilityFacts > div:last-child:nth-child(even) { grid-column: 1 / -1; }
 .modsCompatibilityFacts dt { margin-bottom: 6px; color: var(--text-muted); font-size: .69rem; font-weight: var(--weight-heading); letter-spacing: .04em; text-transform: uppercase; }
@@ -145,45 +156,70 @@
 .modsCompatibilityFacts dd > .tone-incompatible { border-color: color-mix(in srgb, var(--sentinel-danger) 45%, var(--border)); color: var(--status-danger-foreground); background: color-mix(in srgb, var(--sentinel-danger) 11%, var(--surface)); }
 .modsCompatibilityFacts dd > .tone-unknown { border-color: color-mix(in srgb, var(--text-muted) 38%, var(--border)); color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 7%, var(--surface)); }
 .modsCompatibilityFacts .modsCompatibilityReason dd { color: var(--text-muted); }
-.modsTechnicalDetails { padding-top: 14px; border-top: 1px solid var(--border); }
-.modsTechnicalDetails code { display: block; overflow-wrap: anywhere; margin-top: 8px; color: var(--text-muted); font-size: .7rem; }
-.modsTechnicalDetails a { display: inline-block; margin-top: 14px; }
-.modsReviewHero { padding: 14px; border: 1px solid var(--border); }
+.modsTechnicalDetails { padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.modsTechnicalDetails code { display: block; overflow-wrap: anywhere; margin-top: var(--space-2); color: var(--text-muted); font-size: .7rem; }
+.modsTechnicalDetails a { display: inline-block; margin-top: var(--space-4); }
+.modsReviewHero { padding: var(--space-3); border: 1px solid var(--border); }
 .modsReviewHero > div { display: grid; gap: 3px; }
+.modsReviewHero strong { overflow-wrap: anywhere; }
 .modsReviewHero span { color: var(--text-muted); font-size: .8rem; }
-.modsRecommendedVersion { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 18px; border: 1px solid color-mix(in srgb, var(--sentinel-success) 30%, var(--border)); border-radius: var(--radius-md); }
-.modsRecommendedVersion > div { display: grid; gap: 3px; }
+.modsRecommendedVersion { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-4); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--sentinel-success) 30%, var(--border)); border-radius: var(--radius-md); }
+.modsRecommendedVersion > div { display: grid; gap: 3px; min-width: 0; }
 .modsRecommendedVersion small, .modsRecommendedVersion span { color: var(--text-muted); font-size: .76rem; }
-.modsRecommendedVersion strong { font-size: 1.08rem; }
-.modsAdvancedOptions { padding: 14px; border: 1px solid var(--border); }
+.modsRecommendedVersion strong { font-size: 1.08rem; overflow-wrap: anywhere; }
+.modsAdvancedOptions { padding: var(--space-3); border: 1px solid var(--border); }
 .modsAdvancedOptions > p { color: var(--text-muted); font-size: .8rem; }
-.modsChannelPicker { display: flex; gap: 5px; margin: 12px 0; }
-.modsChannelPicker button { padding: 6px 10px; color: var(--text-muted); background: transparent; }
-.modsChannelPicker button.active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.modsVersionList { display: grid; max-height: 270px; overflow: auto; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; }
-.modsVersionList button { display: flex; justify-content: space-between; gap: 12px; padding: 10px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; color: inherit; background: transparent; box-shadow: none; text-align: left; }
+.modsChannelPicker { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-3) 0; }
+.modsChannelPicker button { padding: 6px 10px; color: var(--text-muted); background: transparent; text-transform: capitalize; }
+/* The picked channel is the only state this control has, so it has to survive the
+   flattening the rule above applies to every button in the group. */
+.modsChannelPicker button[aria-pressed="true"] { border-color: var(--accent); color: var(--sentinel-accent-strong); background: var(--sentinel-accent-soft); }
+.modsVersionList { display: grid; max-height: 270px; overflow: auto; margin-bottom: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.modsVersionList button { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 0; border-bottom: 1px solid var(--border); border-radius: 0; color: inherit; background: transparent; box-shadow: none; text-align: left; }
 .modsVersionList button:last-child { border-bottom: 0; }
-.modsVersionList button:hover:not(:disabled), .modsVersionList button.selected { transform: none; color: inherit; background: color-mix(in srgb, var(--accent) 7%, transparent); }
-.modsVersionList button span:first-child { display: grid; gap: 2px; }
-.modsVersionList small { color: var(--text-muted); }
-.modsRiskAcknowledgement { display: flex; align-items: flex-start; justify-content: flex-start; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid color-mix(in srgb, var(--sentinel-warning) 32%, var(--border)); }
+.modsVersionList button:hover:not(:disabled) { transform: none; color: inherit; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+/* The list scrolls inside a rounded frame, so an outset ring is clipped at the
+   first and last row. Inset it instead of losing it. */
+.modsVersionList button:focus-visible { outline-offset: -2px; }
+.modsVersionList button[aria-pressed="true"] { color: var(--sentinel-accent-strong); background: var(--sentinel-accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.modsVersionList button span:first-child { display: grid; gap: 2px; min-width: 0; }
+.modsVersionList button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modsVersionList small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.modsRiskAcknowledgement { display: flex; align-items: flex-start; justify-content: flex-start; gap: var(--space-2); margin-top: var(--space-4); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--sentinel-warning) 32%, var(--border)); }
 .modsRiskAcknowledgement input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; }
 .modsRiskAcknowledgement > span { display: block; flex: 1 1 auto; min-width: 0; color: var(--text-muted); font-size: .8rem; line-height: 1.45; }
 .modsRiskAcknowledgement > span strong { margin-right: 4px; color: var(--text); }
-.modsReviewSection { margin-top: 18px; }
-.modsReviewSection h3 { margin: 0 0 8px; font-size: .88rem; }
-.modsReviewLine { display: flex; justify-content: space-between; gap: 18px; padding: 14px; border: 1px solid var(--border); }
-.modsReviewLine span { color: var(--text-muted); font-size: .82rem; text-align: right; }
-.modsDependencySummary { padding: 13px; border: 1px solid var(--border); }
-.modsDependencySummary > div { padding: 8px 0 0 18px; font-size: .82rem; }
-.modsReviewWarning { display: grid; gap: 4px; margin-top: 16px; padding: 13px; border: 1px solid color-mix(in srgb, var(--sentinel-warning) 30%, var(--border)); }
+.modsReviewSection { margin-top: var(--space-4); }
+.modsReviewSection h3 { margin: 0 0 var(--space-2); font-size: .88rem; }
+.modsReviewLine { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); padding: var(--space-3); border: 1px solid var(--border); }
+.modsReviewLine strong { min-width: 0; overflow-wrap: anywhere; }
+.modsReviewLine span { min-width: 0; color: var(--text-muted); font-size: .82rem; text-align: right; overflow-wrap: anywhere; }
+.modsDependencySummary { padding: var(--space-3); border: 1px solid var(--border); }
+.modsDependencySummary > div { padding: var(--space-2) 0 0 var(--space-4); font-size: .82rem; overflow-wrap: anywhere; }
+.modsReviewWarning { display: grid; gap: var(--space-1); margin-top: var(--space-4); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--sentinel-warning) 30%, var(--border)); }
 .modsReviewWarning span { color: var(--text-muted); font-size: .8rem; }
-.modsUpdateReview { display: grid; gap: 8px; margin-top: 16px; padding: 15px; border: 1px solid color-mix(in srgb, var(--sentinel-accent) 30%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sentinel-accent) 6%, var(--surface-raised)); }
+.modsUpdateReview { display: grid; gap: var(--space-2); margin-top: var(--space-4); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--sentinel-accent) 30%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sentinel-accent) 6%, var(--surface-raised)); }
 .modsUpdateReview > p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
-.modsUpdateReview .modsRiskAcknowledgement { margin-top: 4px; }
-.modsUpdateReviewActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.modsUpdateReview .modsRiskAcknowledgement { margin-top: var(--space-1); }
+.modsUpdateReviewActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-1); }
 @keyframes modsFadeIn { from { opacity: 0; } }
 @keyframes modsSlideIn { from { transform: translateX(24px); opacity: .8; } }
+
+/* The drawer arrives from the edge of the screen, which is exactly the motion
+   vestibular sensitivity reacts to. The panel still has to appear, so the entrance
+   is dropped rather than slowed. */
+@media (prefers-reduced-motion: reduce) {
+  .modsDrawerBackdrop,
+  .modsWorkflowDrawer,
+  .modsDetailsDrawer {
+    animation: none;
+  }
+
+  .modsWorkspaceRow {
+    transition: none;
+  }
+}
+
 @media (max-width: 1100px) {
   .modsWorkspaceSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .modsWorkspaceTableHead { display: none; }
@@ -408,7 +444,11 @@
   transition: background var(--control-transition), opacity var(--control-transition);
 }
 
-.modsWorkspaceRow:hover {
+/* Keyboard focus lands on a control inside the row, so the row has to answer for it
+   the same way it answers a pointer — otherwise tabbing through the list moves an
+   outline across an otherwise inert table. */
+.modsWorkspaceRow:hover,
+.modsWorkspaceRow:focus-within {
   background: var(--sentinel-accent-soft);
 }
 
@@ -448,16 +488,19 @@
   color: var(--accent);
 }
 
+/* Chip text is badge-sized, uppercase and tracked out, which is the hardest thing
+   on a page to read at low contrast. The status foreground tokens are the readable
+   pair for a tinted status surface; the raw signal colors are for fills and strokes. */
 .modsStatusChip.ready {
   border-color: color-mix(in srgb, var(--sentinel-success) 34%, transparent);
   background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface));
-  color: var(--sentinel-success);
+  color: var(--status-success-foreground);
 }
 
 .modsStatusChip.update {
   border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent);
   background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
-  color: var(--sentinel-warning);
+  color: var(--status-warning-foreground);
 }
 
 .modsStatusChip.review {
@@ -469,13 +512,13 @@
 .modsStatusChip.not-recommended {
   border-color: color-mix(in srgb, var(--sentinel-danger) 34%, transparent);
   background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--surface));
-  color: var(--sentinel-danger);
+  color: var(--status-danger-foreground);
 }
 
 .modsStatusChip.unknown {
   border-color: var(--border-muted);
   background: var(--surface-muted);
-  color: var(--text-muted);
+  color: var(--status-neutral-foreground);
 }
 
 .modsWorkspaceEmpty.uiEmptyState {
@@ -490,7 +533,8 @@
   padding: var(--space-3);
 }
 
-.modsResultCard:hover:not(.isSkeleton) {
+.modsResultCard:hover:not(.isSkeleton),
+.modsResultCard:focus-within:not(.isSkeleton) {
   border-color: color-mix(in srgb, var(--accent) 32%, var(--border-row));
   background: color-mix(in srgb, var(--accent) 3%, var(--surface-raised));
 }
@@ -534,7 +578,6 @@
   min-height: var(--control-height-compact);
 }
 
-.modsChannelPicker .uiButton.active,
 .installTabs .uiButton.active {
   border-color: var(--accent);
   background: var(--sentinel-accent-soft);

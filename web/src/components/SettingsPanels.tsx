@@ -57,8 +57,12 @@ export function ModrinthKeyForm({
             name="modrinthApiKey"
             type="password"
             autoComplete="off"
+            spellCheck={false}
             placeholder="Paste API key"
             required
+            // Only ever true after "Replace key" mounted this form, so the page
+            // itself never opens with the caret in a credential field.
+            autoFocus={editing}
           />
         </label>
         <div className="keyFormActions">

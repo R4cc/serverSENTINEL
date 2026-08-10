@@ -54,10 +54,22 @@ export function AppSidebar({
   // Pointing at or tabbing to a navigation item is a reliable signal that the page is about to
   // open, and the chunk behind it takes longer to arrive than the pause before the click. Starting
   // it here is what turns a first visit into the same instant switch a repeat visit already is.
-  const prefetchOnIntent = (page: ActivePage) => ({
+  //
+  // Every navigation entry goes through this so the active page is announced (`aria-current`) and
+  // not only tinted, and so no entry can drift away from the others as items are added.
+  const navItem = (page: ActivePage, disabled: boolean, disabledReason: string, label: string) => ({
+    type: "button" as const,
+    className: activePage === page ? "active" : "",
+    "aria-current": activePage === page ? ("page" as const) : undefined,
+    onClick: () => onNavigate(page),
     onPointerEnter: () => onPrefetch(page),
-    onFocus: () => onPrefetch(page)
+    onFocus: () => onPrefetch(page),
+    disabled,
+    title: disabled ? disabledReason : label
   });
+
+  const shellNavItem = (page: ActivePage, label: string) => navItem(page, isProvisioning, provisioningNavigationReason, label);
+  const serverNavItem = (page: ActivePage, label: string) => navItem(page, isProvisioning || !activeServer, serverPageDisabledReason, label);
 
   return (
     <aside className="sidebar uiGlassSurface uiGlassSurface--chrome" id="application-sidebar">
@@ -77,7 +89,7 @@ export function AppSidebar({
         </Button>
       </div>
       <nav className="sideNav" id="primary-navigation" aria-label="Infrastructure navigation">
-        <button className={activePage === "nodes" ? "active" : ""} onClick={() => onNavigate("nodes")} {...prefetchOnIntent("nodes")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open nodes"}>
+        <button {...shellNavItem("nodes", "Open nodes")}>
           <SidebarIcon name="nodes" />
           <span className="navLabel">Nodes</span>
         </button>
@@ -128,29 +140,29 @@ export function AppSidebar({
             />
           </div>
           <div className="serverSubNav">
-            <button className={activePage === "overview" ? "active" : ""} onClick={() => onNavigate("overview")} {...prefetchOnIntent("overview")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open overview"}>
+            <button {...serverNavItem("overview", "Open overview")}>
               <SidebarIcon name="overview" />
               <span className="navLabel">Overview</span>
             </button>
-            <button className={activePage === "console" ? "active" : ""} onClick={() => onNavigate("console")} {...prefetchOnIntent("console")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open console"}>
+            <button {...serverNavItem("console", "Open console")}>
               <SidebarIcon name="console" />
               <span className="navLabel">Console</span>
             </button>
-            <button className={activePage === "files" ? "active" : ""} onClick={() => onNavigate("files")} {...prefetchOnIntent("files")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open files"}>
+            <button {...serverNavItem("files", "Open files")}>
               <SidebarIcon name="files" />
               <span className="navLabel">Files</span>
             </button>
             {supportsManagedMods && (
-              <button className={activePage === "mods" ? "active" : ""} onClick={() => onNavigate("mods")} {...prefetchOnIntent("mods")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : `Open ${managedContent.plural}`}>
+              <button {...serverNavItem("mods", `Open ${managedContent.plural}`)}>
                 <SidebarIcon name="mods" />
                 <span className="navLabel">{managedContent.pluralTitle}</span>
               </button>
             )}
-            <button className={activePage === "schedule" ? "active" : ""} onClick={() => onNavigate("schedule")} {...prefetchOnIntent("schedule")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open schedules"}>
+            <button {...serverNavItem("schedule", "Open schedules")}>
               <SidebarIcon name="schedule" />
               <span className="navLabel">Schedules</span>
             </button>
-            <button className={activePage === "properties" ? "active" : ""} onClick={() => onNavigate("properties")} {...prefetchOnIntent("properties")} disabled={isProvisioning || !activeServer} title={isProvisioning || !activeServer ? serverPageDisabledReason : "Open properties"}>
+            <button {...serverNavItem("properties", "Open properties")}>
               <SidebarIcon name="properties" />
               <span className="navLabel">Properties</span>
             </button>
@@ -158,7 +170,7 @@ export function AppSidebar({
         </div>
       </nav>
       <nav className="sideNav sideNavBottom" id="account-navigation" aria-label="Account and settings navigation">
-        <button className={activePage === "settings" ? "active" : ""} onClick={() => onNavigate("settings")} {...prefetchOnIntent("settings")} disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : "Open settings"}>
+        <button {...shellNavItem("settings", "Open settings")}>
           <SidebarIcon name="settings" />
           <span className="navLabel settingsNavLabel">
             <span>Settings</span>
@@ -169,7 +181,7 @@ export function AppSidebar({
           <span className="accountIcon" aria-hidden="true">
             <CircleUserRound />
           </span>
-          <span className="accountName">{demoMode ? "Demo" : accountName}</span>
+          <span className="accountName" title={demoMode ? "Demo" : accountName}>{demoMode ? "Demo" : accountName ?? "Account"}</span>
           <Button variant="ghost" iconOnly className="accountLogoutButton" onClick={onLogout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"} title={isProvisioning ? provisioningNavigationReason : demoMode ? "Exit demo" : "Log out"}>
             <LogOut aria-hidden="true" />
           </Button>

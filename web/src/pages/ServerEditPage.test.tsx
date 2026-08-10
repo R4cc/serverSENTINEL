@@ -94,6 +94,27 @@ describe("ServerEditForm", () => {
     expect(html.indexOf("propertiesExportZone")).toBeGreaterThan(formEnd);
   });
 
+  it("links network and advanced help text to the controls it describes", () => {
+    const html = renderForm();
+
+    expect(html).toMatch(/id="properties-server-port"[^>]*aria-describedby="properties-server-port-hint"/);
+    expect(html).toMatch(/id="properties-query-port"[^>]*aria-describedby="properties-query-port-hint"/);
+    expect(html).toMatch(/id="edit-docker-image"[^>]*aria-describedby="edit-docker-image-description"/);
+    expect(html).toMatch(/id="edit-server-jar"[^>]*aria-describedby="edit-server-jar-description"/);
+    expect(html).toMatch(/id="edit-docker-container"[^>]*aria-describedby="edit-docker-container-description"/);
+    expect(html).toMatch(/id="edit-java-args"[^>]*aria-describedby="edit-java-args-description"/);
+  });
+
+  it("presents high memory allocation as advice rather than a validation error", () => {
+    const html = renderToStaticMarkup(
+      <ServerEditForm server={server} totalMemory={4 * 1024 * 1024 * 1024} onSubmit={vi.fn()} />
+    );
+
+    expect(html).toContain("propertiesMemoryWarning");
+    expect(html).toContain("Leave some RAM for the host");
+    expect(html).not.toMatch(/class="fieldError"[^>]*>Leave some RAM for the host/);
+  });
+
   it("keeps configuration inspectable while disabling mutations", () => {
     const reason = "Stop the server before changing mods or server properties.";
     const html = renderForm(true, reason);

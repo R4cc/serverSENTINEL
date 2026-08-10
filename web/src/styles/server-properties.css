@@ -120,13 +120,13 @@
 
 .propertiesStartupToggle strong {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--type-helper-size);
   font-weight: var(--weight-title);
 }
 
 .propertiesStartupToggle small {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
   line-height: 1.35;
 }
@@ -226,7 +226,7 @@
 }
 
 .propertiesDisclosure summary strong {
-  font-size: 14px;
+  font-size: var(--type-row-title-size);
 }
 
 .propertiesDisclosureCopy {
@@ -261,8 +261,24 @@
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--sentinel-warning) 9%, var(--surface-raised));
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--type-helper-size);
   font-weight: var(--weight-strong);
+}
+
+/* Over-allocating memory is advice, not a rejected value, so it carries the
+   warning tone instead of borrowing the red `fieldError` treatment. */
+.propertiesMemoryWarning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-strong) solid color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+  color: var(--status-warning-foreground);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  line-height: 1.4;
 }
 
 .propertiesLockBanner svg {
@@ -339,7 +355,13 @@
 
 .dangerCheck {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--type-helper-size);
+}
+
+.dangerPanel .fieldHint {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.4;
 }
 
 .exportPanel .uiButton {
@@ -396,6 +418,13 @@
   .propertiesActionButtons .uiButton {
     flex: 1 1 0;
     min-width: 0;
+  }
+
+  /* Stacked side cards read as one column, so their single action fills the
+     card the way the danger panel's already does. */
+  .exportPanel .uiButton {
+    width: 100%;
+    justify-self: stretch;
   }
 }
 

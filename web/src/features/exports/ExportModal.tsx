@@ -27,7 +27,13 @@ export function ExportModal({
   const running = workspace.estimate?.servers.some((entry) => entry.running) ?? false;
   const contentSelected = workspace.categories.includes("content");
   const worldSelected = workspace.categories.includes("world");
-  const canSubmit = workspace.categories.length > 0 && !workspace.exportBusy && !running;
+  const nothingSelected = workspace.categories.length === 0;
+  const canSubmit = !nothingSelected && !workspace.exportBusy && !running;
+  const submitBlockedReason = running
+    ? `Stop ${server.displayName} before exporting.`
+    : nothingSelected
+      ? "Choose at least one thing to include."
+      : "";
 
   return (
     <DialogSurface
@@ -89,6 +95,9 @@ export function ExportModal({
               </label>
             );
           })}
+          {nothingSelected && (
+            <small id="export-selection-hint" className="exportSelectionHint">Choose at least one thing to include.</small>
+          )}
         </fieldset>
 
         {contentSelected && (
@@ -141,7 +150,7 @@ export function ExportModal({
 
         {workspace.exportBusy && (
           <div className="exportProgress" role="status">
-            <progress value={workspace.exportProgress} max={100} />
+            <progress aria-label="Export progress" value={workspace.exportProgress} max={100} />
             <span>{workspace.exportTask || "Working…"}</span>
           </div>
         )}
@@ -170,7 +179,13 @@ export function ExportModal({
         <Button variant="secondary" onClick={workspace.closeExport} disabled={workspace.exportBusy}>
           {workspace.artifact ? "Done" : "Cancel"}
         </Button>
-        <Button variant="primary" onClick={() => void workspace.runExport()} disabled={!canSubmit}>
+        <Button
+          variant="primary"
+          onClick={() => void workspace.runExport()}
+          disabled={!canSubmit}
+          title={submitBlockedReason || undefined}
+          aria-describedby={nothingSelected ? "export-selection-hint" : undefined}
+        >
           {workspace.exportBusy ? "Exporting…" : workspace.artifact ? "Export again" : "Export"}
         </Button>
       </footer>

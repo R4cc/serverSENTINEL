@@ -96,7 +96,7 @@
 
 .settingsHubCategories strong {
   color: inherit;
-  font-size: 13px;
+  font-size: var(--type-helper-size);
   font-weight: var(--weight-title);
 }
 
@@ -150,14 +150,14 @@
 .settingsHubSectionHeader h3 {
   margin: 0;
   color: var(--text);
-  font-size: 18px;
+  font-size: var(--type-section-title-size);
   line-height: 1.2;
 }
 
 .settingsHubSectionHeader p {
   margin: 4px 0 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-meta-size);
   line-height: 1.4;
 }
 
@@ -196,7 +196,10 @@
   border-top: 1px solid var(--border-row);
 }
 
-.settingsHubRow:hover {
+/* The keyboard equivalent of the hover wash: a row that holds focus reads the
+   same as the row under the pointer. */
+.settingsHubRow:hover,
+.settingsHubRow:focus-within {
   background: color-mix(in srgb, var(--surface-muted) 38%, transparent);
 }
 
@@ -208,13 +211,13 @@
 
 .settingsHubRowCopy strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--type-row-title-size);
   font-weight: var(--weight-title);
 }
 
 .settingsHubRowCopy span {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-meta-size);
   line-height: 1.45;
 }
 
@@ -259,6 +262,12 @@
   justify-content: flex-end;
   gap: var(--space-3);
   cursor: pointer;
+}
+
+/* A toggle whose input is disabled must not keep advertising itself as clickable. */
+.settingsHubToggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .settingsHubToggle input {
@@ -308,7 +317,7 @@
 .settingsHubToggle > span:last-child {
   min-width: 105px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-meta-size);
   font-weight: var(--weight-title);
 }
 
@@ -402,6 +411,12 @@
   background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
 }
 
+/* A long username truncates rather than stretching the row past the panel; the
+   cell caps its own width so the fixed cap cannot push the actions column out. */
+.settingsHubUsers .userNameCell strong {
+  max-width: 100%;
+}
+
 .settingsHubSystemOverview {
   display: grid;
   gap: var(--space-4);
@@ -455,14 +470,14 @@
 .settingsHubPrivacyNote strong,
 .settingsHubDemoCallout strong {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--type-helper-size);
 }
 
 .settingsHubHealth span,
 .settingsHubPrivacyNote span,
 .settingsHubDemoCallout span {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-meta-size);
   line-height: 1.45;
 }
 
@@ -500,7 +515,7 @@
 
 .settingsHubFacts dd strong {
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--type-card-title-size);
   overflow-wrap: anywhere;
 }
 
@@ -540,7 +555,7 @@
 .settingsHubTechnical span,
 .settingsHubTechnical code {
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--type-meta-size);
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -763,6 +778,8 @@
   gap: var(--space-2);
 }
 
+/* Reads as a filled-in field, so it takes the same frame as the input it stands
+   in for; `border-color` alone never painted one. */
 .secretPreview {
   min-width: 0;
   min-height: var(--control-height);
@@ -771,7 +788,8 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: 0 var(--space-3);
-  border-color: var(--border-row);
+  border: var(--border-strong) solid var(--border-row);
+  border-radius: var(--radius-sm);
   background: var(--surface);
 }
 
@@ -802,34 +820,25 @@
   padding: var(--space-3) var(--space-4) var(--space-4);
 }
 
-@media (max-width: 1100px) {
+/* The reset-password dialog shows which account it is about in a read-only
+   field; without its own surface it reads as something you can type into. */
+.userModalForm input[readonly] {
+  border-color: var(--border-row);
+  background: var(--surface-read-only);
+  color: var(--text-muted);
+  cursor: default;
 }
 
-@media (max-width: 760px) {
-  .keyForm fieldset,
-.keyFormConfigured {
-    grid-template-columns: 1fr;
-  }
-
-  .keyFormActions {
-    justify-content: stretch;
-  }
-
-  .keyFormActions .uiButton,
-  .keyFormConfigured .uiButton {
-    flex: 1 1 auto;
-  }
-
-  .secretPreview {
-    align-items: flex-start;
-    flex-direction: column;
-    justify-content: center;
-    padding-block: var(--space-3);
-  }
-
-  .usersSettings {
-    padding: var(--space-3);
-  }
+/* Field help inside the user dialogs. Without this a `small` inside the label
+   would compute against the label's own reduced size and come out unreadable. */
+.userModalForm .fieldHint {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-transform: none;
 }
 
 .systemBanner,
@@ -841,8 +850,6 @@
   line-height: 1.45;
 }
 
-
-/* Responsive settings layout */
 /* Responsive settings layout keeps labels, helpers, and controls readable on phones. */
 @media (max-width: 860px) {
   .keyForm fieldset,
@@ -862,6 +869,9 @@
   }
 
   .secretPreview {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
     flex-wrap: wrap;
     min-height: 0;
     padding: var(--space-3);

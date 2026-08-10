@@ -114,6 +114,40 @@ describe("AddModsWorkflow", () => {
     expect(html).toContain("Not recommended");
     expect(html).toContain("Not available for Minecraft 1.21.4");
     expect(html).toContain("Review risk");
+    expect(html).toContain('aria-label="Review risk: Clumps"');
+  });
+
+  it("names installed-result actions for the result they belong to", () => {
+    const installed: ModrinthHit = {
+      project_id: "clumps",
+      title: "Clumps",
+      description: "Groups XP orbs.",
+      downloads: 31
+    };
+    const html = renderAddWorkflow({
+      results: [installed],
+      total: 1,
+      installedMods: [{
+        filename: "clumps.jar",
+        displayName: "Clumps",
+        enabled: true,
+        size: 1,
+        modifiedAt: "2026-01-01T00:00:00.000Z",
+        modrinth: {
+          projectId: "clumps",
+          versionId: "release",
+          filename: "clumps.jar",
+          versionNumber: "1.0.0",
+          gameVersions: ["1.21.4"],
+          loaders: ["fabric"],
+          installedAt: "2026-01-01T00:00:00.000Z",
+          installedWithForceIncompatible: false
+        }
+      }]
+    });
+
+    expect(html).toContain('aria-label="Clumps is already installed"');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Installed<\/button>/);
   });
 
   it("uses empty-state copy that reflects the toggle state", () => {
@@ -153,6 +187,58 @@ describe("AddModsWorkflow", () => {
 });
 
 describe("ModInstallReview", () => {
+  it("mirrors the version-review layout while versions are loading", () => {
+    const version = incompatibleVersion();
+    const html = renderToStaticMarkup(
+      <ModInstallReview
+        state={{ ...installState(version, 1, false), loading: true, data: null }}
+        selected={null}
+        requiredDependencies={[]}
+        canContinue={false}
+        formatDate={() => "Jan 1, 2026"}
+        onClose={noop}
+        onChannelChange={noop}
+        onRetry={noop}
+        onSelect={noop}
+        onToggleAdvanced={noop}
+        onAcknowledge={noop}
+        onContinue={noop}
+        onBack={noop}
+        onInstall={noop}
+      />
+    );
+
+    expect(html).toContain("modInstallVersionSkeleton");
+    expect(html).toContain("modsRecommendedVersion");
+    expect(html).toContain("modsAdvancedOptions");
+    expect(html).not.toContain("modInstallVersionTable");
+  });
+
+  it("exposes the selected release channel and version to assistive technology", () => {
+    const version = incompatibleVersion();
+    const html = renderToStaticMarkup(
+      <ModInstallReview
+        state={installState(version, 1, false)}
+        selected={version}
+        requiredDependencies={[]}
+        canContinue={false}
+        formatDate={() => "Jan 1, 2026"}
+        onClose={noop}
+        onChannelChange={noop}
+        onRetry={noop}
+        onSelect={noop}
+        onToggleAdvanced={noop}
+        onAcknowledge={noop}
+        onContinue={noop}
+        onBack={noop}
+        onInstall={noop}
+      />
+    );
+
+    expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*>release<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*title="0\.9\.0/);
+  });
+
   it("does not replace installation progress with a stop-server warning", () => {
     const version = { ...incompatibleVersion(), compatible: true, requiresMinecraftAcknowledgement: false };
     const html = renderToStaticMarkup(
@@ -176,6 +262,7 @@ describe("ModInstallReview", () => {
     );
 
     expect(html).toContain("Installing...");
+    expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain("Stop the server to install");
   });
 

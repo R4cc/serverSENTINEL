@@ -241,6 +241,33 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The named rules below cancel this file's own choreography, but the promise
+     has to hold for motion that arrives from a dependency, from an inline style,
+     or from a stylesheet written after this one was last read. Collapsing every
+     duration is the only version of it that cannot go stale. A duration is not
+     enough on its own -- it makes a movement instant rather than absent -- so
+     the rules that follow still clear the transforms and the looping
+     animations. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  /* The element-level hover lift in `tokens.css` is a transform, so a zero
+     duration would only make it jump rather than stop. */
+  button:hover:not(:disabled) {
+    transform: none;
+  }
+
   .serverCommandStatusDot.running::after,
   .serverSwitcherStatus.running::after,
   .serverCommandStatusDot.starting::after,

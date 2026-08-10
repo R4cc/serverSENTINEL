@@ -18,10 +18,10 @@
   backdrop-filter: var(--glass-filter-modal);
 }
 
-/* The auth card is large enough that the shared rim and refractive inset read
-   as a second nested panel. Keep a single border and the frosted CSS surface. */
-.authPanel::after,
-.authPanel > .uiLiquidGlassEffect {
+/* The auth card is large enough that the shared rim reads as a second nested
+   panel. Keep a single border and the frosted CSS surface. The refractive layer
+   is not suppressed here any more -- `AuthPanel` no longer mounts one. */
+.authPanel::after {
   display: none;
 }
 

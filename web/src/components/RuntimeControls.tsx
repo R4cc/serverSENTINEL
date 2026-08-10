@@ -41,6 +41,9 @@ export function RuntimeControls({
   return (
     <div
       className={`runtimeControls ${className}`.trim()}
+      // A plain `div` is a generic container, and assistive technology drops the
+      // accessible name off one -- so without the role the label was never read.
+      role="group"
       aria-label="Container controls"
       aria-busy={Boolean(busyAction)}
       data-busy-action={busyAction || undefined}
