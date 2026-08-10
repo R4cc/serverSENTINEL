@@ -27,6 +27,7 @@ type FilesPageProps = {
   permissionUser: PublicUser | null;
   isProvisioning: boolean;
   dockerOperationalLock: boolean;
+  serverMutationLocked?: boolean;
   dateTimeFormatter: Intl.DateTimeFormat;
   onCopyText: (text: string) => void;
 };
@@ -37,9 +38,11 @@ export function FilesPage({
   permissionUser,
   isProvisioning,
   dockerOperationalLock,
+  serverMutationLocked = false,
   dateTimeFormatter,
   onCopyText
 }: FilesPageProps) {
+  const fileMutationLocked = isProvisioning || dockerOperationalLock || serverMutationLocked;
   const { data, state, refs, actions } = workspace;
   const {
     listing,
@@ -311,7 +314,7 @@ export function FilesPage({
       label: "Upload file",
       icon: <AppIcon name="fileUp" />,
       onSelect: () => refs.fileUploadRef.current?.click(),
-      disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
+      disabled: fileMutationLocked || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
       title: fileActionBlockedReason || "Upload a file to this folder"
     },
     {
@@ -319,7 +322,7 @@ export function FilesPage({
       label: "New folder",
       icon: <AppIcon name="folderPlus" />,
       onSelect: actions.openCreateFolderDialog,
-      disabled: isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
+      disabled: fileMutationLocked || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId),
       title: fileActionBlockedReason || "Create a folder here"
     }
   ];
@@ -371,11 +374,11 @@ export function FilesPage({
             </div>
             <div className="fileToolbar uiToolbarSecondary">
               <input ref={refs.fileUploadRef} className="hiddenInput" type="file" onChange={actions.uploadFile} />
-              <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
+              <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={fileMutationLocked || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
                 <AppIcon name="fileUp" />
                 <span className="fileToolbarLabel">Upload</span>
               </Button>
-              <Button variant="secondary" compact aria-label="New folder" onClick={actions.openCreateFolderDialog} disabled={isProvisioning || dockerOperationalLock || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
+              <Button variant="secondary" compact aria-label="New folder" onClick={actions.openCreateFolderDialog} disabled={fileMutationLocked || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Create a folder here")}>
                 <AppIcon name="folderPlus" />
                 <span className="fileToolbarLabel">New folder</span>
               </Button>
@@ -653,10 +656,10 @@ export function FilesPage({
         editing={fileEditMode}
         editBusy={fileLeaseBusy}
         editMessage={fileLeaseMessage}
-        editDisabled={isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+        editDisabled={fileMutationLocked || !canEditSelectedPath || !selectedPath || fileOpenFailed}
         editDisabledReason={editDisabledReason}
-        editorDisabled={!fileEditMode || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || fileOpenFailed}
-        saveDisabled={!fileEditMode || fileSaving || isProvisioning || dockerOperationalLock || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
+        editorDisabled={!fileEditMode || fileMutationLocked || !canEditSelectedPath || !selectedPath || fileOpenFailed}
+        saveDisabled={!fileEditMode || fileSaving || fileMutationLocked || !canEditSelectedPath || !selectedPath || !dirty || fileOpening || fileOpenFailed}
         discardRequestOpen={Boolean(discardEditorRequest)}
         onTextChange={(nextText) => {
           actions.setEditorText(nextText);

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { formatRelativeTimestamp, formatTimestampForFilename, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
+import { formatAdaptiveBytes, formatRelativeTimestamp, formatTimestampForFilename, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
+
+describe("adaptive byte formatting", () => {
+  it("selects a readable unit without losing useful precision", () => {
+    expect(formatAdaptiveBytes(640)).toBe("640 B");
+    expect(formatAdaptiveBytes(1.5 * 1024)).toBe("1.5 KiB");
+    expect(formatAdaptiveBytes(748.46 * 1024 * 1024)).toBe("748.46 MiB");
+    expect(formatAdaptiveBytes(7.4846 * 1024 * 1024 * 1024)).toBe("7.48 GiB");
+    expect(formatAdaptiveBytes(2.25 * 1024 * 1024 * 1024 * 1024)).toBe("2.25 TiB");
+  });
+});
 
 describe("theme preference", () => {
   it("defaults to the system theme while preserving a saved choice", () => {

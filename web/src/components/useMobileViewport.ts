@@ -23,10 +23,24 @@ export function useMobileViewport() {
   useEffect(() => {
     const phoneLayoutMedia = window.matchMedia(phoneLayoutQuery);
     const visualViewport = window.visualViewport;
+    // Writing a custom property on :root invalidates style for everything that inherits it, which
+    // is the whole document. `scroll` fires every frame the visual viewport moves, and most of
+    // those frames resolve to the height and offset already written — so compare first and only
+    // pay for the invalidation when the value genuinely changed.
+    let writtenHeight: number | null = null;
+    let writtenOffsetTop: number | null = null;
     const synchronizeViewport = () => {
       setPhoneLayout(phoneLayoutMedia.matches);
-      document.documentElement.style.setProperty("--visual-viewport-height", `${viewportHeight()}px`);
-      document.documentElement.style.setProperty("--visual-viewport-offset-top", `${viewportOffsetTop()}px`);
+      const height = viewportHeight();
+      const offsetTop = viewportOffsetTop();
+      if (height !== writtenHeight) {
+        writtenHeight = height;
+        document.documentElement.style.setProperty("--visual-viewport-height", `${height}px`);
+      }
+      if (offsetTop !== writtenOffsetTop) {
+        writtenOffsetTop = offsetTop;
+        document.documentElement.style.setProperty("--visual-viewport-offset-top", `${offsetTop}px`);
+      }
     };
 
     synchronizeViewport();

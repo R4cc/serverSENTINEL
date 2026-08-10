@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   EXPORT_DEFAULT_CATEGORIES,
   type ExportCategory,
@@ -6,20 +6,28 @@ import {
   type ExportSizeEstimate,
   type ImportValidationResult
 } from "@serversentinel/contracts";
-import { api, ApiError } from "../../api";
+import { api, ApiError, exportConflictEvent } from "../../api";
 import { errorMessage } from "../../utils/appHelpers";
 import type { OperationRecord } from "../../types";
 
-export type ExportArtifactResult = {
+export type ServerExportArtifact = {
+  operationId: string;
   filename: string;
-  size: number;
-  downloadUrl: string;
-  expiresAt: string;
+  size?: number;
+  createdAt: string;
+  downloadUrl?: string;
 };
 
-type ExportOperationResult = {
-  artifact?: ExportArtifactResult;
-  warnings?: string[];
+export type ServerExportTask = Pick<OperationRecord,
+  "id" | "status" | "progress" | "task" | "createdAt" | "startedAt" | "finishedAt" | "errorMessage"
+> & {
+  canCancel: boolean;
+  startedByRequester?: boolean;
+};
+
+export type ServerExportState = {
+  latest: ServerExportTask | null;
+  artifact: ServerExportArtifact | null;
 };
 
 type ImportOperationResult = {
@@ -29,6 +37,10 @@ type ImportOperationResult = {
 };
 
 const pollIntervalMs = 1000;
+
+export function exportStatePollInterval(state: ServerExportState) {
+  return state.latest?.status === "queued" || state.latest?.status === "running" ? pollIntervalMs : 5_000;
+}
 
 async function pollOperation(operationId: string, onProgress: (operation: OperationRecord) => void) {
   for (;;) {
@@ -42,7 +54,11 @@ async function pollOperation(operationId: string, onProgress: (operation: Operat
   }
 }
 
-export function useExportWorkspace(notify: (tone: "success" | "error" | "info", text: string) => void) {
+export function useExportWorkspace(
+  notify: (tone: "success" | "error" | "info", text: string) => void,
+  activeServerId = "",
+  enabled = true
+) {
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -53,11 +69,10 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
   const [estimate, setEstimate] = useState<ExportSizeEstimate | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
-  const [exportTask, setExportTask] = useState("");
-  const [exportProgress, setExportProgress] = useState(0);
-  const [artifact, setArtifact] = useState<ExportArtifactResult | null>(null);
-  const [exportWarnings, setExportWarnings] = useState<string[]>([]);
   const [exportError, setExportError] = useState("");
+  const [serverExportState, setServerExportState] = useState<ServerExportState>({ latest: null, artifact: null });
+  const [serverExportStateLoading, setServerExportStateLoading] = useState(false);
+  const [serverExportStateError, setServerExportStateError] = useState("");
 
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importId, setImportId] = useState("");
@@ -69,6 +84,52 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
   const [importError, setImportError] = useState("");
 
   const estimateRequestRef = useRef(0);
+  const exportStateRequestRef = useRef(0);
+
+  const refreshServerExportState = useCallback(async (serverId = activeServerId) => {
+    if (!enabled || !serverId) {
+      setServerExportState({ latest: null, artifact: null });
+      setServerExportStateError("");
+      return;
+    }
+    const requestId = exportStateRequestRef.current + 1;
+    exportStateRequestRef.current = requestId;
+    setServerExportStateLoading(true);
+    try {
+      const next = await api<ServerExportState>(`/api/servers/${encodeURIComponent(serverId)}/exports`);
+      if (exportStateRequestRef.current === requestId) {
+        setServerExportState(next);
+        setServerExportStateError("");
+      }
+    } catch (error) {
+      if (exportStateRequestRef.current === requestId) {
+        setServerExportStateError(errorMessage(error, "Export status is temporarily unavailable."));
+      }
+    } finally {
+      if (exportStateRequestRef.current === requestId) setServerExportStateLoading(false);
+    }
+  }, [activeServerId, enabled]);
+
+  useEffect(() => {
+    void refreshServerExportState();
+  }, [refreshServerExportState]);
+
+  useEffect(() => {
+    if (!enabled || !activeServerId) return;
+    const timer = window.setTimeout(() => void refreshServerExportState(), exportStatePollInterval(serverExportState));
+    return () => window.clearTimeout(timer);
+  }, [activeServerId, enabled, refreshServerExportState, serverExportState]);
+
+  useEffect(() => {
+    if (!enabled || !activeServerId) return;
+    const refresh = () => void refreshServerExportState();
+    window.addEventListener("focus", refresh);
+    window.addEventListener(exportConflictEvent, refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(exportConflictEvent, refresh);
+    };
+  }, [activeServerId, enabled, refreshServerExportState]);
 
   // Every input is passed in rather than read from state: the callers below refresh in the same tick
   // as the setState that changed the selection, so a value read here would still be the previous one
@@ -107,11 +168,7 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
 
   const openExport = useCallback((serverId: string) => {
     setExportServerId(serverId);
-    setArtifact(null);
-    setExportWarnings([]);
     setExportError("");
-    setExportProgress(0);
-    setExportTask("");
     setExportOpen(true);
     void refreshEstimate(categories, serverId, contentStrategy);
   }, [categories, contentStrategy, refreshEstimate]);
@@ -124,9 +181,6 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
   const runExport = useCallback(async () => {
     setExportBusy(true);
     setExportError("");
-    setArtifact(null);
-    setExportProgress(0);
-    setExportTask("Queued export");
     try {
       const operation = await api<OperationRecord>("/api/exports", {
         method: "POST",
@@ -135,21 +189,44 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
           selection: { categories, contentStrategy }
         })
       });
-      const finished = await pollOperation(operation.id, (current) => {
-        setExportProgress(current.progress ?? 0);
-        setExportTask(current.task ?? "");
-      });
-      const result = (finished.result ?? {}) as ExportOperationResult;
-      setExportWarnings(result.warnings ?? []);
-      if (!result.artifact) throw new Error("The export finished without producing a download.");
-      setArtifact(result.artifact);
-      notify("success", "Export ready to download.");
+      setServerExportState((current) => ({
+        ...current,
+        latest: {
+          id: operation.id,
+          status: operation.status,
+          progress: operation.progress,
+          task: operation.task,
+          createdAt: operation.createdAt,
+          startedAt: operation.startedAt,
+          finishedAt: operation.finishedAt,
+          errorMessage: operation.errorMessage,
+          startedByRequester: true,
+          canCancel: true
+        }
+      }));
+      setExportOpen(false);
+      setCategories([...EXPORT_DEFAULT_CATEGORIES]);
+      setContentStrategy("lockfile");
+      setEstimate(null);
+      notify("info", "Export started in the background.");
+      void refreshServerExportState(exportServerId);
     } catch (error) {
-      setExportError(errorMessage(error, "The export failed."));
+      setExportError(errorMessage(error, "The export could not be started."));
     } finally {
       setExportBusy(false);
     }
-  }, [categories, contentStrategy, exportServerId, notify]);
+  }, [categories, contentStrategy, exportServerId, notify, refreshServerExportState]);
+
+  const cancelExport = useCallback(async (operationId: string) => {
+    try {
+      await api<OperationRecord>(`/api/operations/${operationId}/cancel`, { method: "POST" });
+      notify("info", "Cancelling export…");
+    } catch (error) {
+      notify("error", errorMessage(error, "The export could not be cancelled."));
+    } finally {
+      await refreshServerExportState();
+    }
+  }, [notify, refreshServerExportState]);
 
   const openImport = useCallback((defaultNodeId: string) => {
     setImportFile(null);
@@ -242,11 +319,12 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     estimate,
     estimating,
     exportBusy,
-    exportTask,
-    exportProgress,
-    artifact,
-    exportWarnings,
     exportError,
+    serverExportState,
+    serverExportStateLoading,
+    serverExportStateError,
+    exportMutationLocked: serverExportState.latest?.status === "queued" || serverExportState.latest?.status === "running",
+    exportMutationBlockedReason: "An export is in progress. Abort it or wait for it to finish before changing this server.",
     importFile,
     importId,
     importTargetNodeId,
@@ -258,6 +336,8 @@ export function useExportWorkspace(notify: (tone: "success" | "error" | "info", 
     openExport,
     closeExport,
     runExport,
+    cancelExport,
+    refreshServerExportState,
     openImport,
     closeImport,
     uploadAndValidate,

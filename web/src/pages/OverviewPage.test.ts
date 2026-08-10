@@ -16,7 +16,8 @@ import {
   OverviewSummary,
   RecentEventsPanel,
   recentEventPresentation,
-  SchedulePanel
+  SchedulePanel,
+  storageRemainingIsLow
 } from "./OverviewPage";
 
 const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
@@ -82,7 +83,7 @@ describe("recent event timestamps", () => {
 });
 
 describe("overview summary", () => {
-  it("omits the duplicate player count and reports CPU and memory percentages on the wide layout", () => {
+  it("shows world and remaining storage alongside the resource percentages", () => {
     const server = demoServer();
     const html = renderToStaticMarkup(createElement(OverviewSummary, {
       server,
@@ -96,11 +97,14 @@ describe("overview summary", () => {
         cpuUtilizationPercent: 5.2,
         memoryUsageBytes: 18_185_000_000,
         memoryUtilizationPercent: 73.4
-      }
+      },
+      worldSizeBytes: 7_566 * 1024 ** 2,
+      storageAvailableBytes: 8 * 1024 ** 3,
+      storageTotalBytes: 100 * 1024 ** 3
     }));
 
-    expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(6);
-    expect((html.match(/class="uiMetricTile /g) ?? []).length).toBe(6);
+    expect((html.match(/class="[^"]*summaryTile/g) ?? []).length).toBe(7);
+    expect((html.match(/class="uiMetricTile /g) ?? []).length).toBe(7);
     expect((html.match(/overviewWideSummaryTile/g) ?? []).length).toBe(2);
     expect(html).not.toContain(">Mod updates<");
     expect(html).not.toContain(">Players<");
@@ -108,6 +112,14 @@ describe("overview summary", () => {
     expect(html).toContain("5.2%");
     expect(html).toContain(">Memory<");
     expect(html).toContain("73.4%");
+    expect(html).toContain(">World Size<");
+    expect(html).toContain("7.39 GiB");
+    expect(html).toContain(">Space Remaining<");
+    expect(html).toContain("8 GiB");
+    expect(html).toContain('aria-label="8 GiB remaining, storage almost full"');
+    expect(html).toContain("lucide-triangle-alert");
+    expect(html).toContain("uiMetricTile--warning");
+    expect(html).not.toContain(">Fabric<");
     expect(html).not.toContain(">Container<");
     expect(html).not.toContain("Server Activity &amp; Health");
   });
@@ -122,7 +134,7 @@ describe("overview summary", () => {
       loading: true
     }));
 
-    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(6);
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(7);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading server summary");
   });
@@ -155,6 +167,13 @@ describe("overview summary", () => {
     expect(html).toContain(`statusTile ${stateClass}`);
     expect(html).toContain(`uiMetricTile--${metricTone}`);
     expect(html).toContain(`>${label}</span>`);
+  });
+
+  it("warns at ten percent remaining without treating unknown storage as full", () => {
+    expect(storageRemainingIsLow(10, 100)).toBe(true);
+    expect(storageRemainingIsLow(10.01, 100)).toBe(false);
+    expect(storageRemainingIsLow(null, 100)).toBe(false);
+    expect(storageRemainingIsLow(10, null)).toBe(false);
   });
 });
 

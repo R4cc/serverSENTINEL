@@ -91,7 +91,12 @@ type ExportInput = {
   runtimeForServer: (server: ManagedServer) => NodeRuntime;
   modPreferencesForServer: (serverId: string) => Record<string, ModPreference>;
   report?: (progress: number, task: string) => void;
+  signal?: AbortSignal;
 };
+
+function throwIfExportAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("Export cancelled");
+}
 
 type ImportContext = {
   targetNodeId?: string;
@@ -176,11 +181,13 @@ export async function createExportPlan(input: ExportInput): Promise<ExportPlan> 
   let totalBytes = 0;
 
   for (const [index, server] of input.servers.entries()) {
+    throwIfExportAborted(input.signal);
     const progress = 10 + Math.floor((index / Math.max(input.servers.length, 1)) * 70);
     input.report?.(progress, `Collecting ${server.displayName}`);
     const key = serverArchiveKey(index, server);
     const runtime = input.runtimeForServer(server);
     const collected = await collectServerCategories(runtime, server, input.selection.categories);
+    throwIfExportAborted(input.signal);
 
     let lockfile: ExportLockfileEntry[] = [];
     let shipped: Set<string> | undefined;
@@ -199,7 +206,15 @@ export async function createExportPlan(input: ExportInput): Promise<ExportPlan> 
       throw new Error(`Export exceeds the ${Math.floor(config.exportMaxBytes / 1024 / 1024 / 1024)} GiB limit. Deselect the world or export fewer servers.`);
     }
     entries.push(...archiveEntriesForFiles(`servers/${key}`, files));
-    openers.set(`servers/${key}`, async (sourcePath) => (await runtime.downloadFile(server, sourcePath)).stream);
+    openers.set(`servers/${key}`, async (sourcePath) => {
+      throwIfExportAborted(input.signal);
+      const downloaded = await runtime.downloadFile(server, sourcePath);
+      if (input.signal?.aborted) {
+        downloaded.stream.destroy(input.signal.reason instanceof Error ? input.signal.reason : undefined);
+        throwIfExportAborted(input.signal);
+      }
+      return downloaded.stream;
+    });
     manifestServers.push({
       key,
       server: exportableServerRecord(server, includePanelSettings),
@@ -267,7 +282,7 @@ function filesForServer(
   return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-export async function writeExportArchive(path: string, plan: ExportPlan, report?: (progress: number, task: string) => void) {
+export async function writeExportArchive(path: string, plan: ExportPlan, report?: (progress: number, task: string) => void, signal?: AbortSignal) {
   const temporaryPath = `${path}.${randomUUID()}.tmp`;
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await chmod(dirname(path), 0o700);
@@ -279,6 +294,7 @@ export async function writeExportArchive(path: string, plan: ExportPlan, report?
     }
   });
   try {
+    throwIfExportAborted(signal);
     report?.(88, "Compressing export archive");
     const archive = createZipArchiveStream(
       plan.entries,
@@ -292,7 +308,8 @@ export async function writeExportArchive(path: string, plan: ExportPlan, report?
       },
       { compress: true }
     );
-    await pipeline(archive, digest, createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }));
+    await pipeline(archive, digest, createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }), { signal });
+    throwIfExportAborted(signal);
     await rename(temporaryPath, path);
     await chmod(path, 0o600);
   } catch (error) {

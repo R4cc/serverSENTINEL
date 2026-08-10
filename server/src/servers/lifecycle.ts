@@ -24,6 +24,7 @@ export function blockingRuntimeOperations(serverId: string) {
 }
 
 export async function requireServerStoppedForMutableConfiguration(server: ManagedServer) {
+  services.exportCoordinator.assertMutationAllowed(server.id);
   const status = await runtimeForServer(server).serverStatus(server);
   const reason = mutableServerConfigurationBlockedReason(status, blockingRuntimeOperations(server.id));
   if (reason) throw new Error(reason);
@@ -57,13 +58,15 @@ export function setRuntimeLifecycle(server: ManagedServer, patch: Partial<Pick<M
 }
 
 export async function withLifecycleLock<T>(server: ManagedServer, operation: () => Promise<T>) {
-  if (activeLifecycleActions.has(server.id)) throw new Error("Another lifecycle action is already running for this server");
-  activeLifecycleActions.add(server.id);
-  try {
-    return await operation();
-  } finally {
-    activeLifecycleActions.delete(server.id);
-  }
+  return services.exportCoordinator.withMutation(server.id, async () => {
+    if (activeLifecycleActions.has(server.id)) throw new Error("Another lifecycle action is already running for this server");
+    activeLifecycleActions.add(server.id);
+    try {
+      return await operation();
+    } finally {
+      activeLifecycleActions.delete(server.id);
+    }
+  });
 }
 
 export async function waitForRuntimeState(server: ManagedServer, running: boolean, timeoutMs: number) {
@@ -171,18 +174,20 @@ export function isMinecraftStopCommand(command: unknown) {
 }
 
 export async function sendConsoleCommandWithIntent(server: ManagedServer, command: unknown) {
-  if (!isMinecraftStopCommand(command)) return runtimeForServer(server).sendConsoleCommand(server, command);
-  if (activeLifecycleActions.has(server.id)) throw new Error("A lifecycle action is already running for this server");
-  const previous = server.runtimeIntent ?? "running";
-  setRuntimeLifecycle(server, { runtimeIntent: "stopped", restartPhase: undefined, crashAttemptTimestamps: [], crashNextRetryAt: undefined, crashLoopSince: undefined, crashStableSince: undefined });
-  services.runtimeStateCoordinator?.noteStopped(server.id);
-  try {
-    return await runtimeForServer(server).sendConsoleCommand(server, command);
-  } catch (error) {
-    const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
-    const fallback = observed === true ? "running" : observed === false ? "stopped" : previous;
-    setRuntimeLifecycle(server, { runtimeIntent: fallback === "restarting" ? "running" : fallback });
-    if (fallback !== "stopped") services.runtimeStateCoordinator?.noteRunning(server.id);
-    throw error;
-  }
+  return services.exportCoordinator.withMutation(server.id, async () => {
+    if (!isMinecraftStopCommand(command)) return runtimeForServer(server).sendConsoleCommand(server, command);
+    if (activeLifecycleActions.has(server.id)) throw new Error("A lifecycle action is already running for this server");
+    const previous = server.runtimeIntent ?? "running";
+    setRuntimeLifecycle(server, { runtimeIntent: "stopped", restartPhase: undefined, crashAttemptTimestamps: [], crashNextRetryAt: undefined, crashLoopSince: undefined, crashStableSince: undefined });
+    services.runtimeStateCoordinator?.noteStopped(server.id);
+    try {
+      return await runtimeForServer(server).sendConsoleCommand(server, command);
+    } catch (error) {
+      const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
+      const fallback = observed === true ? "running" : observed === false ? "stopped" : previous;
+      setRuntimeLifecycle(server, { runtimeIntent: fallback === "restarting" ? "running" : fallback });
+      if (fallback !== "stopped") services.runtimeStateCoordinator?.noteRunning(server.id);
+      throw error;
+    }
+  });
 }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.9.0 - 2026-08-10
+
 ## 1.8.2 - 2026-08-10
 
 - Expanded the Overview workspace and refreshed the README screenshots.

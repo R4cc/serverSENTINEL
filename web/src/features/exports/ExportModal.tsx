@@ -3,7 +3,7 @@ import { EXPORT_CATEGORY_DESCRIPTORS, type ExportCategory } from "@serversentine
 import { AppIcon } from "../../components/FileTypeIcon";
 import { Banner, Button, Spinner } from "../../components/UiPrimitives";
 import { DialogSurface } from "../../components/DialogSurface";
-import { formatBytes } from "../../utils/format";
+import { formatAdaptiveBytes } from "../../utils/format";
 import type { ManagedServer } from "../../types";
 import type { ExportWorkspace } from "./useExportWorkspace";
 
@@ -13,6 +13,15 @@ function categoryBytes(workspace: ExportWorkspace, category: ExportCategory) {
     const match = server.categories.find((entry) => entry.category === category);
     return total + (match?.bytes ?? 0);
   }, 0);
+}
+
+function ExportSize({ bytes, className }: { bytes: number; className?: string }) {
+  const exactSize = `${bytes.toLocaleString()} ${bytes === 1 ? "byte" : "bytes"}`;
+  return (
+    <span className={["exportSizeValue", className].filter(Boolean).join(" ")} title={exactSize}>
+      {formatAdaptiveBytes(bytes)}
+    </span>
+  );
 }
 
 export function ExportModal({
@@ -89,9 +98,9 @@ export function ExportModal({
                   <strong>{descriptor.label}</strong>
                   <small>{descriptor.description}</small>
                 </span>
-                <span className="exportCategorySize">
-                  {workspace.categories.includes(descriptor.key) && bytes !== undefined ? formatBytes(bytes) : ""}
-                </span>
+                {workspace.categories.includes(descriptor.key) && bytes !== undefined
+                  ? <ExportSize className="exportCategorySize" bytes={bytes} />
+                  : <span className="exportCategorySize" />}
               </label>
             );
           })}
@@ -137,9 +146,9 @@ export function ExportModal({
             <span className="exportEstimateLine"><Spinner /> Measuring selection…</span>
           ) : workspace.estimate ? (
             <span className="exportEstimateLine">
-              <strong>{formatBytes(workspace.estimate.totalBytes)}</strong> before compression
+              <strong><ExportSize bytes={workspace.estimate.totalBytes} /></strong> before compression
               {workspace.estimate.availableBytes !== undefined && (
-                <> · {formatBytes(workspace.estimate.availableBytes)} free on the panel</>
+                <> · <ExportSize bytes={workspace.estimate.availableBytes} /> free on the panel</>
               )}
             </span>
           ) : null}
@@ -148,36 +157,12 @@ export function ExportModal({
           )}
         </div>
 
-        {workspace.exportBusy && (
-          <div className="exportProgress" role="status">
-            <progress aria-label="Export progress" value={workspace.exportProgress} max={100} />
-            <span>{workspace.exportTask || "Working…"}</span>
-          </div>
-        )}
-
-        {workspace.exportWarnings.length > 0 && (
-          <Banner
-            tone="info"
-            title="Finished with notes"
-            message={workspace.exportWarnings.join(" ")}
-          />
-        )}
-
-        {workspace.artifact && (
-          <Banner
-            tone="success"
-            title="Export ready"
-            message={`${workspace.artifact.filename} · ${formatBytes(workspace.artifact.size)}`}
-            action={<a className="uiButton uiButton--primary" href={workspace.artifact.downloadUrl} download>Download</a>}
-          />
-        )}
-
         {workspace.exportError && <Banner tone="error" title="Export failed" message={workspace.exportError} />}
       </div>
 
       <footer className="modalFooter">
         <Button variant="secondary" onClick={workspace.closeExport} disabled={workspace.exportBusy}>
-          {workspace.artifact ? "Done" : "Cancel"}
+          Cancel
         </Button>
         <Button
           variant="primary"
@@ -186,7 +171,7 @@ export function ExportModal({
           title={submitBlockedReason || undefined}
           aria-describedby={nothingSelected ? "export-selection-hint" : undefined}
         >
-          {workspace.exportBusy ? "Exporting…" : workspace.artifact ? "Export again" : "Export"}
+          {workspace.exportBusy ? "Starting…" : "Export"}
         </Button>
       </footer>
     </DialogSurface>

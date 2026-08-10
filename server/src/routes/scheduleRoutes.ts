@@ -26,9 +26,11 @@ export type ScheduleRoutesContext = {
   cancelActiveScheduleRun(serverId: string, scheduleId: string, runId: string): ScheduledActiveRun | null | undefined;
   serverLogFields(server: ManagedServer): Record<string, unknown>;
   logInfo(fields: Record<string, unknown>, message: string): void;
+  withServerMutation?<T>(serverId: string, action: () => Promise<T>): Promise<T>;
 };
 
 export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRoutesContext) {
+  const withServerMutation = <T>(serverId: string, action: () => Promise<T>) => context.withServerMutation?.(serverId, action) ?? action();
   app.get<{ Params: { id: string } }>("/api/servers/:id/schedules", async (request) => {
     await context.requireRequestPermission(request, "schedules.view");
     const server = await context.getServer(request.params.id);
@@ -39,7 +41,7 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     await context.requireRequestPermission(request, "schedules.manage");
     const server = await context.getServer(request.params.id);
     const createdSchedule = context.parseSchedule(request.body);
-    context.createSchedule(server.id, createdSchedule, createdSchedule.updatedAt);
+    await withServerMutation(server.id, async () => { context.createSchedule(server.id, createdSchedule, createdSchedule.updatedAt); });
     context.logInfo({ ...context.serverLogFields(server), scheduleId: createdSchedule.id, enabled: createdSchedule.enabled, action: "create_schedule" }, "Schedule created");
     return context.publicSchedule(server.id, createdSchedule);
   });
@@ -51,7 +53,7 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     const existing = server.schedules?.find((candidate) => candidate.id === scheduleId);
     if (!existing) throw new Error("Schedule not found");
     const updatedSchedule = context.parseSchedule(request.body, existing);
-    context.updateSchedule(server.id, updatedSchedule, updatedSchedule.updatedAt);
+    await withServerMutation(server.id, async () => { context.updateSchedule(server.id, updatedSchedule, updatedSchedule.updatedAt); });
     context.logInfo({ ...context.serverLogFields(server), scheduleId: updatedSchedule.id, enabled: updatedSchedule.enabled, action: "update_schedule" }, "Schedule updated");
     // Projected rather than echoed: the parsed schedule carries the retained run history forward
     // from the existing record, captured logs included.
@@ -62,7 +64,7 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     await context.requireRequestPermission(request, "schedules.manage");
     const server = await context.getServer(request.params.id);
     const scheduleId = validateScheduleId(request.params.scheduleId);
-    context.deleteSchedule(server.id, scheduleId, new Date().toISOString());
+    await withServerMutation(server.id, async () => { context.deleteSchedule(server.id, scheduleId, new Date().toISOString()); });
     context.logInfo({ ...context.serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
     return { ok: true };
   });

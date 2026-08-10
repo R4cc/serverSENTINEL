@@ -254,7 +254,6 @@ export function SettingsPage(props: SettingsPageProps) {
               </span>
               <Button
                 variant="secondary"
-                compact
                 onClick={props.onClearPlayerHeadCache}
                 disabled={!props.canManageIntegrations || props.playerHeadsBusy || props.playerHeads.cacheEntries === 0}
                 title={!props.canManageIntegrations ? "Manage integrations permission is required" : "Clear cached player heads"}

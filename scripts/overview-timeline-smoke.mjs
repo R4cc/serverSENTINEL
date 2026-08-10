@@ -449,6 +449,22 @@ async function assertMobile(page) {
   assert(mobileMetrics.rosterTargetHeight >= 44, `Mobile roster disclosure is smaller than 44px: ${JSON.stringify(mobileMetrics)}`);
 }
 
+async function assertStorageSummary(page, expectedVisibleTiles) {
+  const worldSize = page.locator(".overviewSummary .uiMetricTile").filter({ hasText: "World Size" });
+  const spaceRemaining = page.locator(".overviewSummary .storageRemainingTile");
+  await worldSize.getByText("7.39 GiB", { exact: true }).waitFor();
+  await spaceRemaining.getByText("8 GiB", { exact: true }).waitFor();
+  assert.equal(await spaceRemaining.locator(".lucide-triangle-alert").count(), 1, "The demo's near-full storage card is missing its warning icon");
+  assert(await spaceRemaining.evaluate((tile) => tile.classList.contains("uiMetricTile--warning")), "The demo's near-full storage card is missing its warning tone");
+  assert.equal(await page.locator(".overviewSummary .uiMetricTile").filter({ hasText: "Fabric" }).count(), 0, "The runtime card still occupies an Overview summary slot");
+  assert.equal(await page.locator(".overviewSummary .uiMetricTile:visible").count(), expectedVisibleTiles, "The Overview summary has an unexpected visible card count");
+  const geometry = await page.locator(".overviewSummary").evaluate((summary) => ({
+    clientWidth: summary.clientWidth,
+    scrollWidth: summary.scrollWidth
+  }));
+  assert(geometry.scrollWidth <= geometry.clientWidth, `The World Size card causes summary overflow: ${JSON.stringify(geometry)}`);
+}
+
 async function createOverviewPage(context, viewport, search = "") {
   const page = await context.newPage();
   await page.setViewportSize(viewport);
@@ -574,6 +590,7 @@ try {
   await signInThroughApi(context, baseUrl);
 
   const desktop = await createOverviewPage(context, { width: 1440, height: 1000 });
+  await assertStorageSummary(desktop.page, 7);
   await assertDesktop(desktop.page);
   assert(await desktop.page.locator(".appShell").evaluate((element) => element.classList.contains("themeDark")), "Desktop timeline did not start in the requested dark theme");
   await desktop.page.emulateMedia({ colorScheme: "light" });
@@ -593,6 +610,7 @@ try {
   ]) await assertTimelineResponsiveGeometry(context, viewport);
 
   const mobile = await createOverviewPage(context, { width: 390, height: 844 });
+  await assertStorageSummary(mobile.page, 5);
   await assertMobile(mobile.page);
   assert.deepEqual(mobile.browserErrors, [], `Mobile browser errors: ${mobile.browserErrors.join("\n")}`);
   await mobile.page.close();

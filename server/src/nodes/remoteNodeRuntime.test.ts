@@ -126,6 +126,16 @@ async function drain(stream: Readable) {
   }
 }
 
+describe("RemoteNodeRuntime storage", () => {
+  it("queries storage on the node that hosts the server", async () => {
+    const result = { totalBytes: 100 * 1024 ** 3, availableBytes: 8 * 1024 ** 3 };
+    const { runtime, calls } = runtimeWithRecorder(result);
+
+    await expect(runtime.serverStorage(testServer())).resolves.toEqual(result);
+    expect(calls).toEqual([{ command: "server.storage", timeoutMs: 15_000 }]);
+  });
+});
+
 describe("RemoteNodeRuntime payload projection", () => {
   function bookkeepingServer(): ManagedServer {
     return {

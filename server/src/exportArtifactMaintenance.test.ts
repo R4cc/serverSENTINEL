@@ -39,7 +39,7 @@ function artifactPath(exportsDir: string, operationId: string) {
 }
 
 describe("export artifact maintenance", () => {
-  it("expires successful exports and retains explicit expiry metadata", async () => {
+  it("retains the latest successful export indefinitely and ignores legacy expiry metadata", async () => {
     const { exportsDir, operations, maintenance } = await harness();
     const operation = operations.create({
       id: "00000000-0000-4000-8000-000000000001",
@@ -61,25 +61,22 @@ describe("export artifact maintenance", () => {
 
     const report = await maintenance.maintain(Date.parse("2026-01-01T01:00:01.000Z"));
 
-    expect(report.expiredArtifacts).toBe(1);
-    expect(existsSync(path)).toBe(false);
+    expect(report.expiredArtifacts).toBe(0);
+    expect(existsSync(path)).toBe(true);
     expect(operations.find(operation.id)).toMatchObject({
       status: "succeeded",
       result: {
+        artifactPath: path,
         artifact: {
-          expiresAt: "2026-01-01T01:00:00.000Z",
-          expiredAt: "2026-01-01T01:00:01.000Z"
+          downloadUrl: `/api/exports/${operation.id}/download`,
+          expiresAt: "2026-01-01T01:00:00.000Z"
         }
       }
     });
-    expect(operations.find(operation.id)?.result).not.toHaveProperty("artifactPath");
-    expect((operations.find(operation.id)?.result as { artifact: object }).artifact).not.toHaveProperty("downloadUrl");
 
     const secondReport = await maintenance.maintain(Date.parse("2026-01-01T02:00:00.000Z"));
     expect(secondReport.expiredArtifacts).toBe(0);
-    expect(operations.find(operation.id)).toMatchObject({
-      result: { artifact: { expiredAt: "2026-01-01T01:00:01.000Z" } }
-    });
+    expect(existsSync(path)).toBe(true);
   });
 
   it.each(["failed", "cancelled"] as const)("cleans partial files for %s exports", async (status) => {
@@ -122,11 +119,12 @@ describe("export artifact maintenance", () => {
     expect(existsSync(partial)).toBe(true);
   });
 
-  it("removes an export artifact before pruning its operation record", async () => {
+  it("replaces the previous successful artifact only after a new export succeeds", async () => {
     const { exportsDir, operations, maintenance } = await harness();
     const operation = operations.create({
       id: "00000000-0000-4000-8000-000000000002",
       type: "export.run",
+      serverId: "server-1",
       createdAt: "2026-01-01T00:00:00.000Z"
     });
     const path = artifactPath(exportsDir, operation.id);
@@ -135,10 +133,64 @@ describe("export artifact maintenance", () => {
       result: { artifactPath: path, artifact: { expiresAt: "2026-12-01T00:00:00.000Z" } }
     }, "2026-01-01T00:00:01.000Z");
 
-    const report = await maintenance.maintain(Date.parse("2026-02-15T00:00:00.000Z"));
+    const failed = operations.create({
+      id: "00000000-0000-4000-8000-000000000003",
+      type: "export.run",
+      createdAt: "2026-02-01T00:00:00.000Z",
+      serverId: "server-1"
+    });
+    operations.start(failed.id);
+    operations.replaceResult(failed.id, { serverIds: ["server-1"] });
+    operations.fail(failed.id, "Export failed");
 
-    expect(report.prunedOperations).toBe(1);
+    await maintenance.prepareNewExport(["server-1"]);
+
+    expect(existsSync(path)).toBe(true);
+    expect(operations.find(operation.id)).toBeDefined();
+    expect(operations.find(failed.id)).toBeUndefined();
+
+    const replacement = operations.create({
+      id: "00000000-0000-4000-8000-000000000004",
+      type: "export.run",
+      createdAt: "2026-02-02T00:00:00.000Z",
+      serverId: "server-1"
+    });
+    operations.start(replacement.id);
+    operations.replaceResult(replacement.id, { serverIds: ["server-1"] });
+    await maintenance.replacePreviousSuccessfulExports(replacement.id, ["server-1"]);
+
     expect(existsSync(path)).toBe(false);
     expect(operations.find(operation.id)).toBeUndefined();
+    expect(operations.find(replacement.id)).toBeDefined();
+  });
+
+  it("prunes legacy duplicate successful ZIPs while keeping the newest per server", async () => {
+    const { exportsDir, operations, maintenance } = await harness();
+    const older = operations.create({
+      id: "00000000-0000-4000-8000-000000000005",
+      type: "export.run",
+      serverId: "server-1",
+      createdAt: "2026-01-01T00:00:00.000Z"
+    });
+    const newer = operations.create({
+      id: "00000000-0000-4000-8000-000000000006",
+      type: "export.run",
+      serverId: "server-1",
+      createdAt: "2026-01-02T00:00:00.000Z"
+    });
+    const olderPath = artifactPath(exportsDir, older.id);
+    const newerPath = artifactPath(exportsDir, newer.id);
+    await writeFile(olderPath, "older export");
+    await writeFile(newerPath, "newer export");
+    operations.succeed(older.id, { result: { artifactPath: olderPath, serverIds: ["server-1"] } }, "2026-01-01T00:00:01.000Z");
+    operations.succeed(newer.id, { result: { artifactPath: newerPath, serverIds: ["server-1"] } }, "2026-01-02T00:00:01.000Z");
+
+    const report = await maintenance.maintain(Date.parse("2026-03-01T00:00:00.000Z"));
+
+    expect(report.prunedOperations).toBe(1);
+    expect(existsSync(olderPath)).toBe(false);
+    expect(operations.find(older.id)).toBeUndefined();
+    expect(existsSync(newerPath)).toBe(true);
+    expect(operations.find(newer.id)).toBeDefined();
   });
 });

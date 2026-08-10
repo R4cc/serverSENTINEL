@@ -74,11 +74,13 @@ export function resolveRuntimeGuards(input: {
   isProvisioning: boolean;
   activeStatus: ServerStatus | null;
   runtimeAction: "start" | "stop" | "restart" | null;
+  exportMutationLocked?: boolean;
+  exportMutationBlockedReason?: string;
 }) {
   const {
     authOperationalLock, canBasic, activeNodeRuntimeBlocked, nodeOfflineDetected, activeNodeBlockMessage,
     activeNodeName, activeServerUsesInternalNode, dockerSocketMounted, lifecycleTransitionRunning,
-    isProvisioning, activeStatus, runtimeAction
+    isProvisioning, activeStatus, runtimeAction, exportMutationLocked = false, exportMutationBlockedReason = ""
   } = input;
 
   const runtimeControlsDisabledReason = authOperationalLock
@@ -94,6 +96,8 @@ export function resolveRuntimeGuards(input: {
             ? activeStatus?.lifecycle.message || "A server restart is already in progress."
           : isProvisioning
             ? "Server setup is still running."
+            : exportMutationLocked
+              ? exportMutationBlockedReason
             : "";
 
   const activeDockerState = activeStatus?.docker.state;
@@ -123,19 +127,24 @@ export function resolveServerSettingsGuards(input: {
   serverSettingsSaving: boolean;
   runtimeControlsDisabledReason: string;
   activeStatus: ServerStatus | null;
+  exportMutationLocked?: boolean;
+  exportMutationBlockedReason?: string;
 }) {
   const {
     isProvisioning, dockerOperationalLock, serverRequiresStoppedForMutableConfig, canEditServerSettings,
-    canDeleteServers, serverSettingsSaving, runtimeControlsDisabledReason, activeStatus
+    canDeleteServers, serverSettingsSaving, runtimeControlsDisabledReason, activeStatus,
+    exportMutationLocked = false, exportMutationBlockedReason = ""
   } = input;
 
   return {
-    serverSettingsLocked: isProvisioning || dockerOperationalLock || serverRequiresStoppedForMutableConfig || !canEditServerSettings,
-    deleteServerLocked: isProvisioning || dockerOperationalLock || !canDeleteServers || Boolean(activeStatus?.docker.running),
+    serverSettingsLocked: isProvisioning || dockerOperationalLock || exportMutationLocked || serverRequiresStoppedForMutableConfig || !canEditServerSettings,
+    deleteServerLocked: isProvisioning || dockerOperationalLock || exportMutationLocked || !canDeleteServers || Boolean(activeStatus?.docker.running),
     serverSettingsLockedReason: isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server settings are unavailable until the runtime reconnects."
+        : exportMutationLocked
+          ? exportMutationBlockedReason
         : serverRequiresStoppedForMutableConfig
           ? stoppedServerMutationMessage
           : !canEditServerSettings
@@ -157,24 +166,29 @@ export function resolveModGuards(input: {
   modrinthApiConfigured: boolean;
   runtimeControlsDisabledReason: string;
   managedContent: ManagedContentTerminology;
+  exportMutationLocked?: boolean;
+  exportMutationBlockedReason?: string;
 }) {
   const {
     isProvisioning, dockerOperationalLock, canManageMods, canInstallMods, activeStatus,
-    isAnyModJobRunning, modrinthApiConfigured, runtimeControlsDisabledReason, managedContent
+    isAnyModJobRunning, modrinthApiConfigured, runtimeControlsDisabledReason, managedContent,
+    exportMutationLocked = false, exportMutationBlockedReason = ""
   } = input;
 
-  const modsLocked = isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning;
+  const modsLocked = isProvisioning || dockerOperationalLock || exportMutationLocked || !canManageMods || !activeStatus || isAnyModJobRunning;
 
   return {
     modsLocked,
-    modReviewAcknowledgementLocked: isProvisioning || dockerOperationalLock || !canManageMods || !activeStatus || isAnyModJobRunning,
+    modReviewAcknowledgementLocked: isProvisioning || dockerOperationalLock || exportMutationLocked || !canManageMods || !activeStatus || isAnyModJobRunning,
     modToggleLocked: modsLocked,
-    addModFromModrinthDisabled: isProvisioning || dockerOperationalLock || !activeStatus || isAnyModJobRunning || !canInstallMods || !modrinthApiConfigured,
+    addModFromModrinthDisabled: isProvisioning || dockerOperationalLock || exportMutationLocked || !activeStatus || isAnyModJobRunning || !canInstallMods || !modrinthApiConfigured,
     uploadModDisabled: modsLocked,
     addModFromModrinthDisabledReason: isProvisioning
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
+        : exportMutationLocked
+          ? exportMutationBlockedReason
         : !activeStatus
           ? "Server status is still loading."
           : isAnyModJobRunning
@@ -188,6 +202,8 @@ export function resolveModGuards(input: {
       ? "Server setup is still running."
       : dockerOperationalLock
         ? runtimeControlsDisabledReason || "Server runtime is unavailable."
+        : exportMutationLocked
+          ? exportMutationBlockedReason
         : !canManageMods
           ? "Server management permission is required."
           : !activeStatus

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { ManagedServer } from "../types";
+import type { ServerExportState } from "../features/exports/useExportWorkspace";
 import { DeleteServerPanel, ExportServerPanel, ServerEditForm } from "./ServerEditPage";
 
 const server: ManagedServer = {
@@ -148,6 +149,123 @@ describe("ServerEditForm", () => {
     expect(html).toContain("1.21.4-232");
     expect(html).not.toContain("Fabric Loader version");
     expect(html).not.toContain("0.16.10");
+  });
+});
+
+describe("ExportServerPanel", () => {
+  const task = (overrides: Partial<NonNullable<ServerExportState["latest"]>> = {}): ServerExportState["latest"] => ({
+    id: "export-2",
+    status: "running",
+    progress: 37,
+    task: "Compressing world files",
+    createdAt: "2026-01-02T00:00:00.000Z",
+    canCancel: true,
+    ...overrides
+  });
+
+  it("renders the empty, succeeded, and cancelled states", () => {
+    const empty = renderToStaticMarkup(<ExportServerPanel server={server} onExport={vi.fn()} />);
+    const succeeded = renderToStaticMarkup(
+      <ExportServerPanel server={server} onExport={vi.fn()} state={{ latest: task({ status: "succeeded", progress: 100, task: "Export ready" }), artifact: null }} />
+    );
+    const cancelled = renderToStaticMarkup(
+      <ExportServerPanel server={server} onExport={vi.fn()} state={{ latest: task({ status: "cancelled", task: "Export cancelled by user", errorMessage: "Export cancelled by user" }), artifact: null }} />
+    );
+
+    expect(empty).toContain("No export has been created yet.");
+    expect(empty).toContain("No exports");
+    expect(succeeded).toContain("Ready");
+    expect(succeeded).toContain("Export ready");
+    expect(cancelled).toContain("Cancelled");
+    expect(cancelled).toContain("Export cancelled by user");
+  });
+
+  it("shows exact progress and the owner abort control while running", () => {
+    const html = renderToStaticMarkup(
+      <ExportServerPanel
+        server={server}
+        onExport={vi.fn()}
+        onCancel={vi.fn()}
+        state={{ latest: task(), artifact: null }}
+        formatDate={() => "Jan 2"}
+      />
+    );
+
+    expect(html).toContain("Compressing world files");
+    expect(html).toContain("37%");
+    expect(html).toMatch(/<progress[^>]*value="37"/);
+    expect(html).toContain(" Abort</button>");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*New export/s);
+  });
+
+  it("shows cancelling without allowing another abort", () => {
+    const html = renderToStaticMarkup(
+      <ExportServerPanel server={server} onExport={vi.fn()} state={{ latest: task({ task: "Cancelling export" }), artifact: null }} />
+    );
+
+    expect(html).toContain("Cancelling");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Cancelling/s);
+  });
+
+  it("shows owner finalization without offering abort or misidentifying the user", () => {
+    const html = renderToStaticMarkup(
+      <ExportServerPanel
+        server={server}
+        onExport={vi.fn()}
+        state={{ latest: task({ task: "Finalizing export", progress: 99, canCancel: false, startedByRequester: true }), artifact: null }}
+      />
+    );
+
+    expect(html).toContain("Finalizing export");
+    expect(html).toContain("99%");
+    expect(html).not.toContain(" Abort</button>");
+    expect(html).not.toContain("started by another user");
+  });
+
+  it("keeps the previous private download visible after a failed replacement", () => {
+    const artifactBytes = Math.round(7.4846 * 1024 * 1024 * 1024);
+    const html = renderToStaticMarkup(
+      <ExportServerPanel
+        server={server}
+        onExport={vi.fn()}
+        state={{
+          latest: task({ status: "failed", progress: 88, task: "Export failed", errorMessage: "A very long remote stream error", finishedAt: "2026-01-03T00:00:00.000Z" }),
+          artifact: {
+            operationId: "export-1",
+            filename: "survival.zip",
+            size: artifactBytes,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            downloadUrl: "/api/exports/export-1/download"
+          }
+        }}
+        formatDate={() => "Jan 3"}
+      />
+    );
+
+    expect(html).toContain("Failed");
+    expect(html).toContain("A very long remote stream error");
+    expect(html).toContain("Last successful export");
+    expect(html).toContain("7.48 GiB");
+    expect(html).toContain(`title="${artifactBytes.toLocaleString()} bytes"`);
+    expect(html).toContain('href="/api/exports/export-1/download"');
+  });
+
+  it("shares another user's progress but keeps its controls and download private", () => {
+    const html = renderToStaticMarkup(
+      <ExportServerPanel
+        server={server}
+        onExport={vi.fn()}
+        state={{
+          latest: task({ canCancel: false }),
+          artifact: { operationId: "export-1", filename: "survival.zip", createdAt: "2026-01-01T00:00:00.000Z" }
+        }}
+      />
+    );
+
+    expect(html).toContain("This export was started by another user.");
+    expect(html).toContain("Download available to the user who created it.");
+    expect(html).not.toContain(" Abort</button>");
+    expect(html).not.toContain('href="/api/exports/export-1/download"');
   });
 });
 

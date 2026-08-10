@@ -329,6 +329,20 @@
   align-items: start;
 }
 
+/* The player-heads row explains a third-party service at length but carries only
+   a toggle and a small action, so its copy takes the wider column instead of
+   wrapping into a narrow one beside an under-filled control column. */
+.settingsHubIntegrationRow:has(.playerHeadsSettingsControl) {
+  grid-template-columns: minmax(260px, 1.25fr) minmax(240px, 0.75fr);
+}
+
+/* The key row is the other way round: its copy is one line, while the stored key,
+   its badge, and the action need 382px to share one. Tilting the split keeps them
+   on that line down to the widths where the shell itself runs out of room. */
+.settingsHubIntegrationRow:has(.keyForm) {
+  grid-template-columns: minmax(200px, 0.78fr) minmax(300px, 1.22fr);
+}
+
 .settingsHubIntegrationRow .settingsHubRowCopy {
   padding-top: 6px;
 }
@@ -337,12 +351,19 @@
   color: var(--accent);
 }
 
+/* The stack is a grid, so its rows stretch by default: without this the action
+   spans the full control width and reads as a banner rather than a button. It
+   ends flush with the toggle above it instead. */
 .playerHeadsSettingsControl {
-  align-items: flex-end;
+  justify-items: end;
 }
 
 .playerHeadsSettingsControl .settingsHubPreferenceExample {
   text-align: right;
+}
+
+.playerHeadsSettingsControl > .uiButton {
+  margin-top: var(--space-1);
 }
 
 .playerHeadsOnboardingBackdrop {
@@ -383,6 +404,13 @@
 .settingsHubControl .keyForm fieldset,
 .settingsHubControl .keyFormConfigured {
   width: 100%;
+}
+
+/* The shared responsive layer stretches this action bar below 1100px. Inside a
+   settings row that forces the wrap even where the row could seat the action
+   beside the stored key, so the wrap stays a question of available width. */
+.settingsHubControl .keyFormActions {
+  width: auto;
 }
 
 .settingsHubUsers {
@@ -684,6 +712,13 @@
     padding: var(--space-4);
   }
 
+  /* The integration rows tilt their two-column split by class, which outranks the
+     rule above, so they have to give it up here by name. */
+  .settingsHubIntegrationRow:has(.playerHeadsSettingsControl),
+  .settingsHubIntegrationRow:has(.keyForm) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .settingsHubControl {
     justify-content: stretch;
   }
@@ -698,8 +733,14 @@
     max-width: none;
   }
 
-  .settingsHubPreferenceExample {
+  .settingsHubPreferenceExample,
+  .playerHeadsSettingsControl .settingsHubPreferenceExample {
     text-align: left;
+  }
+
+  /* Phones give every control the full row, so the stack stretches again. */
+  .playerHeadsSettingsControl {
+    justify-items: stretch;
   }
 
   .settingsHubToggle {
@@ -747,18 +788,48 @@
 
 
 /* Settings layout cohesion */
-.keyForm fieldset,
-.keyFormConfigured {
+.keyForm {
+  display: block;
+  width: 100%;
+}
+
+.keyForm fieldset {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  /* The input sits under its own label, so the action lines up with the input
+     rather than centring against the taller label-plus-input stack. */
   align-items: end;
   gap: var(--space-3);
   width: 100%;
 }
 
-.keyForm {
-  display: block;
+/* Both classes land on the same element, so the configured variant has to carry
+   both: a lone `.keyFormConfigured` ties with `.keyForm` on specificity and lost
+   to whichever was written last, which stranded the action on its own line under
+   the stored key at every width.
+   It wraps instead of using a fixed two-column grid because the masked key and
+   its badge need 268px together: where the control column cannot seat both them
+   and the action, the action drops to a second line rather than the key
+   ellipsising into `**** *…`. */
+.keyForm.keyFormConfigured {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  /* Stated rather than inherited: the shared responsive layer turns `.keyForm`
+     into a column below 1100px, which would stack this pair while the row still
+     has width for both. The stacking it wants happens at 860px below. */
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   width: 100%;
+}
+
+.keyForm.keyFormConfigured .secretPreview {
+  flex: 1 1 268px;
+}
+
+.keyForm.keyFormConfigured .keyFormActions {
+  flex: 0 0 auto;
 }
 
 .keyForm fieldset {
@@ -852,10 +923,20 @@
 
 /* Responsive settings layout keeps labels, helpers, and controls readable on phones. */
 @media (max-width: 860px) {
-  .keyForm fieldset,
-  .keyFormConfigured {
+  .keyForm fieldset {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+  }
+
+  .keyForm.keyFormConfigured {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  /* Column direction turns the wrap basis into a height, which stretched the
+     stored key into a 268px-tall block. */
+  .keyForm.keyFormConfigured .secretPreview {
+    flex: 0 0 auto;
   }
 
   .keyFormActions {

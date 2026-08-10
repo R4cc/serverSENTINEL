@@ -87,6 +87,12 @@
   white-space: nowrap;
 }
 
+.exportSizeValue {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 .exportEstimate {
   display: grid;
   gap: var(--space-1);

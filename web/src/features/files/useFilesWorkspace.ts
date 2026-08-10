@@ -42,6 +42,8 @@ type UseFilesWorkspaceOptions = {
   setDemoInstalledMods: (updater: InstalledMod[] | ((current: InstalledMod[]) => InstalledMod[])) => void;
   isProvisioning: boolean;
   dockerOperationalLock: boolean;
+  serverMutationLocked?: boolean;
+  serverMutationBlockedReason?: string;
   runtimeControlsDisabledReason: string;
   serverRequiresStoppedForMutableConfig: boolean;
   stoppedServerMutationMessage: string;
@@ -71,6 +73,8 @@ export function useFilesWorkspace({
   setDemoInstalledMods,
   isProvisioning,
   dockerOperationalLock,
+  serverMutationLocked = false,
+  serverMutationBlockedReason = "",
   runtimeControlsDisabledReason,
   serverRequiresStoppedForMutableConfig,
   stoppedServerMutationMessage,
@@ -142,6 +146,8 @@ export function useFilesWorkspace({
     demoInstalledMods,
     isProvisioning,
     dockerOperationalLock,
+    serverMutationLocked,
+    serverMutationBlockedReason,
     runtimeControlsDisabledReason,
     serverRequiresStoppedForMutableConfig,
     stoppedServerMutationMessage,
@@ -207,15 +213,16 @@ export function useFilesWorkspace({
     ? "No selection"
     : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
+  const fileMutationLocked = fileRuntimeLocked || serverMutationLocked;
   const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
-  const canExtractSelectedZip = Boolean(selectedZipEntry && !activeServerIsDemo && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && hasFileManagerPermission(permissionUser, selectedZipEntry.path, "view"));
+  const canExtractSelectedZip = Boolean(selectedZipEntry && !activeServerIsDemo && !fileMutationLocked && !fileOperationBusy && !zipOperationId && hasFileManagerPermission(permissionUser, selectedZipEntry.path, "view"));
   const canDownloadSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "download")) && !fileRuntimeLocked && !fileOperationBusy);
-  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
-  const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
-  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileRuntimeLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings));
+  const canDuplicateSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "duplicate")) && !fileMutationLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
+  const canRenameSelectedItem = Boolean(selectedEntry && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "rename")) && !fileMutationLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedEntryTouchesServerSettings));
+  const canDeleteSelectedItems = Boolean(selectedEntries.length > 0 && selectedEntries.every((entry) => activeServerIsDemo || hasFileManagerPermission(permissionUser, entry.path, "delete")) && !fileMutationLocked && !fileOperationBusy && !zipOperationId && !(serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings));
 
   function canDragFileEntry(entry: FileEntry) {
-    return !fileRuntimeLocked
+    return !fileMutationLocked
       && !fileOperationBusy
       && !zipOperationId
       && !(serverRequiresStoppedForMutableConfig && isServerPropertiesPath(entry.path))
@@ -232,6 +239,8 @@ export function useFilesWorkspace({
     ? "Server setup is still running."
     : dockerOperationalLock
       ? runtimeControlsDisabledReason || "Server files are unavailable until the runtime reconnects."
+      : serverMutationLocked
+        ? serverMutationBlockedReason
       : serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings
         ? stoppedServerMutationMessage
       : fileOperationBusy
@@ -438,7 +447,7 @@ export function useFilesWorkspace({
   }
 
   function openCreateFolderDialog() {
-    if (fileRuntimeLocked || !canUploadToCurrentPath || fileOperationBusy) return;
+    if (fileMutationLocked || !canUploadToCurrentPath || fileOperationBusy) return;
     setFileActionDialog({ kind: "create", value: "", error: "" });
   }
 
@@ -483,7 +492,7 @@ export function useFilesWorkspace({
 
   async function deleteSelectedFiles(entries = selectedEntries) {
     if (!activeServer || entries.length === 0 || fileOperationBusy) return;
-    if (isProvisioning || dockerOperationalLock || !canDeleteSelectedItems) return;
+    if (fileMutationLocked || !canDeleteSelectedItems) return;
     const invalidPath = entries.map((entry) => validateSafePath(entry.path)).find(Boolean);
     if (invalidPath) {
       setNotice(invalidPath);
@@ -553,7 +562,7 @@ export function useFilesWorkspace({
 
   async function createFolder(name: string) {
     if (!activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
+    if (fileMutationLocked || !canUploadToCurrentPath) return;
     const nameError = fileNameValidation(name);
     if (nameError) {
       notify("error", nameError);
@@ -592,7 +601,7 @@ export function useFilesWorkspace({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeServer || fileOperationBusy) return;
-    if (fileRuntimeLocked || !canUploadToCurrentPath) return;
+    if (fileMutationLocked || !canUploadToCurrentPath) return;
     const nameError = fileNameValidation(file.name);
     if (nameError) {
       notify("error", nameError);

@@ -64,6 +64,7 @@ import { OperationsRepository } from "./storage/operationsRepository.js";
 import { PlayerHeadService } from "./playerHeadService.js";
 import { OperationService } from "./operations/operationService.js";
 import { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
+import { ExportCoordinator } from "./exportCoordinator.js";
 import { errorStatusCode, publicApiError, throwHttp } from "./http/errors.js";
 import { authRateLimit, destructiveRateLimit } from "./http/rateLimits.js";
 import { registerResponseCompression } from "./http/responseCompression.js";
@@ -71,6 +72,7 @@ import { ensureWritableResolvedInsideServer } from "./core.js";
 import { activeLifecycleActions, blockingRuntimeOperations, recordOperation, restartServerGracefully, runtimeResultRunning, setRuntimeLifecycle, stopServerWithIntent, withLifecycleLock } from "./servers/lifecycle.js";
 import { activeModMutations } from "./mods/managedContent.js";
 import { readLocalPlayerObservation, resourceStatsHistoryWindow, serverOverviewData, timelineHistoryWindow } from "./servers/overview.js";
+import { localServerStorage } from "./servers/storageSpace.js";
 import { createManagedServer } from "./servers/provisioning.js";
 import { localCreateFolder, localDeleteFile, localDeleteServer, localDownloadArchive, localDownloadFile, localDuplicateFile, localExtractArchive, localListFiles, localMoveFile, localPlanArchiveExtraction, localPreviewFile, localReadEditableFile, localRenameFile, localSendConsoleCommand, localServerLogs, localServerStatus, localStreamConsole, localUpdateServer, localUploadFile, localWriteEditableFile } from "./servers/localRuntimeAdapter.js";
 import { scheduleFromBody, startScheduleExecution, tickSchedules } from "./schedules/engine.js";
@@ -178,6 +180,7 @@ services.serversRepository = new ServersRepository(services.storageDatabase, nor
 services.fileEditLeasesRepository = new FileEditLeasesRepository(services.storageDatabase);
 services.modPreferencesRepository = new ModPreferencesRepository(services.storageDatabase);
 services.operationsRepository = new OperationsRepository(services.storageDatabase);
+services.exportCoordinator = new ExportCoordinator(services.operationsRepository);
 services.operationService = new OperationService(services.operationsRepository, {
   markRestartRequired: (serverId) => { services.serversRepository.markRestartRequired(serverId); },
   clearRestartRequired: (serverId) => { services.serversRepository.clearRestartRequired(serverId); },
@@ -352,6 +355,13 @@ registerOperationsRoutes(app, {
   requireRequestPermission,
   assertServerExists: getServer,
   mayCancelOperation: (user, operation) => operation.createdBy === user.id || isFullAccessUser(user),
+  cancelOperation: (operation, message) => {
+    if (operation.type !== "export.run") return services.operationsRepository.cancel(operation.id, message);
+    if (!services.exportCoordinator.requestCancel(operation.id)) {
+      throwHttp(409, "Export is no longer cancellable", { code: "EXPORT_NOT_CANCELLABLE" });
+    }
+    return services.operationsRepository.find(operation.id);
+  },
   operations: services.operationsRepository
 });
 
@@ -368,7 +378,8 @@ registerScheduleRoutes(app, {
   startScheduleExecution,
   cancelActiveScheduleRun,
   serverLogFields,
-  logInfo
+  logInfo,
+  withServerMutation: (serverId, action) => services.exportCoordinator.withMutation(serverId, action)
 });
 
 registerModRoutes(app);
@@ -385,6 +396,7 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   serverLogs: localServerLogs,
   readPlayerObservation: readLocalPlayerObservation,
   serverStats: dockerResourceStats,
+  serverStorage: localServerStorage,
   serverOverview: serverOverviewData,
   resolveExistingPath: localResolveExistingPath,
   resolveWritablePath: localResolveWritablePath,

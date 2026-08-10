@@ -59,6 +59,7 @@ export type {
   ServerTimelineResponse,
   ServerTimelineScheduleMarker,
   ServerRuntimeProfile,
+  ServerStorageSummary,
   VersionResolution,
   VersionSource
 } from "@serversentinel/contracts";

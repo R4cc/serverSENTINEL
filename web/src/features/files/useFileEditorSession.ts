@@ -22,6 +22,8 @@ type FileEditorSessionInputs = {
   demoInstalledMods: InstalledMod[];
   isProvisioning: boolean;
   dockerOperationalLock: boolean;
+  serverMutationLocked?: boolean;
+  serverMutationBlockedReason?: string;
   runtimeControlsDisabledReason: string;
   serverRequiresStoppedForMutableConfig: boolean;
   stoppedServerMutationMessage: string;
@@ -46,6 +48,8 @@ export function useFileEditorSession({
   demoInstalledMods,
   isProvisioning,
   dockerOperationalLock,
+  serverMutationLocked = false,
+  serverMutationBlockedReason = "",
   runtimeControlsDisabledReason,
   serverRequiresStoppedForMutableConfig,
   stoppedServerMutationMessage,
@@ -75,7 +79,9 @@ export function useFileEditorSession({
   const [discardEditorRequest, setDiscardEditorRequest] = useState<DiscardEditorRequest | null>(null);
   const fileEditLeaseRef = useRef<FileEditLease | null>(null);
 
-  const editDisabledReason = fileEditBlockedReason(selectedPath, serverRequiresStoppedForMutableConfig, stoppedServerMutationMessage);
+  const editDisabledReason = serverMutationLocked
+    ? serverMutationBlockedReason
+    : fileEditBlockedReason(selectedPath, serverRequiresStoppedForMutableConfig, stoppedServerMutationMessage);
   const canEditSelectedPath = !editDisabledReason
     && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
 

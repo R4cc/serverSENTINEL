@@ -196,7 +196,7 @@ button.overviewCardRow:focus-visible {
 
 .overviewDashboardGrid > .overviewSummary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: var(--space-2);
 }
@@ -1703,7 +1703,7 @@ button.overviewCardRow:focus-visible {
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid > .overviewSummary > .summaryTile {
@@ -1857,7 +1857,7 @@ button.overviewCardRow:focus-visible {
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
@@ -1882,6 +1882,20 @@ button.overviewCardRow:focus-visible {
    keep the six tiles from twitching against each other between samples. */
 .overviewSummary .uiMetricTileCopy > strong {
   font-variant-numeric: tabular-nums;
+}
+
+.overviewSummary .summaryStorageValue {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.overviewSummary .summaryStorageValue > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--sentinel-warning);
 }
 
 .overviewSummary .statusTile { --status-card-color: var(--sentinel-info); }
@@ -2024,7 +2038,7 @@ button.overviewCardRow:focus-visible {
   }
 
   .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .overviewDashboardGrid .summaryTile.overviewWideSummaryTile {
@@ -2161,5 +2175,11 @@ button.overviewCardRow:focus-visible {
   .activePlayerGrid,
   .overviewPanelSkeleton {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .overviewDashboardGrid > .overviewSummary > .summaryTile.storageRemainingTile {
+    grid-column: 1 / -1;
   }
 }

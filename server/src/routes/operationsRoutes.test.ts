@@ -21,7 +21,7 @@ function operation(overrides: Partial<OperationRecord> = {}): OperationRecord {
 
 const requestingUser = { id: "user-1", username: "manager" } as StoredUser;
 
-function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord; mayCancel?: boolean } = {}) {
+function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord; mayCancel?: boolean; cancelOperation?: OperationsRoutesContext["cancelOperation"] } = {}) {
   const app = Fastify();
   const permissions: Permission[] = [];
   let destructiveRateLimitCalls = 0;
@@ -45,7 +45,8 @@ function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord
     },
     assertServerExists,
     mayCancelOperation: () => options.mayCancel ?? true,
-    operations
+    operations,
+    cancelOperation: options.cancelOperation
   });
 
   return {
@@ -109,6 +110,21 @@ describe("operations routes", () => {
     expect(harness.destructiveRateLimitCalls()).toBe(1);
     expect(harness.permissions).toEqual(["servers.editSettings"]);
     expect(harness.operations.cancel).toHaveBeenCalledWith(operationId, "Operation cancelled by user");
+  });
+
+  it("uses export permission and delegates export cancellation to its abort path", async () => {
+    const runningExport = operation({ type: "export.run", serverId: undefined });
+    const cancelling = operation({ type: "export.run", serverId: undefined, task: "Cancelling export" });
+    const cancelOperation = vi.fn(async () => cancelling);
+    const harness = testApp({ found: runningExport, cancelOperation });
+
+    const response = await harness.app.inject({ method: "POST", url: `/api/operations/${operationId}/cancel` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(cancelling);
+    expect(harness.permissions).toEqual(["servers.export"]);
+    expect(cancelOperation).toHaveBeenCalledWith(runningExport, "Operation cancelled by user");
+    expect(harness.operations.cancel).not.toHaveBeenCalled();
   });
 
   // Cancelling aborts work another user started, so the permission alone is not enough.

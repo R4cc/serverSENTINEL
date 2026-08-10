@@ -140,6 +140,7 @@ export const config = {
   enableDemo: parseBooleanEnv("SERVERSENTINEL_ENABLE_DEMO"),
   trustProxy: parseBooleanEnv("SERVERSENTINEL_TRUST_PROXY"),
   setupToken: optionalSecretEnv("SERVERSENTINEL_SETUP_TOKEN"),
+  /** Legacy no-op retained so existing deployments do not fail configuration validation. */
   exportRetentionMs: parseHourDurationEnv("SERVERSENTINEL_EXPORT_RETENTION_HOURS", 24),
   /** How long an uploaded import archive may sit unconsumed before maintenance reclaims its space. */
   importRetentionMs: parseHourDurationEnv("SERVERSENTINEL_IMPORT_RETENTION_HOURS", 6),

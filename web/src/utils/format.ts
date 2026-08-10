@@ -63,6 +63,20 @@ export function formatBytes(value: number) {
   return `${(value / 1024 / 1024).toFixed(1)} MiB`;
 }
 
+const adaptiveByteUnits = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"] as const;
+
+export function formatAdaptiveBytes(value: number) {
+  const magnitude = Math.abs(value);
+  const unitIndex = magnitude < 1024
+    ? 0
+    : Math.min(Math.floor(Math.log(magnitude) / Math.log(1024)), adaptiveByteUnits.length - 1);
+  if (unitIndex === 0) return `${value} B`;
+
+  const scaled = value / (1024 ** unitIndex);
+  const rounded = scaled.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  return `${rounded} ${adaptiveByteUnits[unitIndex]}`;
+}
+
 export function totalMemoryGb(totalMemory: number) {
   return Math.max(1, totalMemory ? Math.round(totalMemory / (1024 * 1024 * 1024)) : 16);
 }

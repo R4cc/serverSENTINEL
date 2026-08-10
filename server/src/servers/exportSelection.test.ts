@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryTargets, collectServerCategories, isMissingPathError, normalizeExportSelection, worldDirectories } from "./exportSelection.js";
+import { categoryTargets, collectServerCategories, isMissingPathError, measureWorldSize, normalizeExportSelection, worldDirectories } from "./exportSelection.js";
 import { inaccessibleServerRootMessage, missingParentMessage, missingPathMessage } from "../core.js";
 import type { ManagedServer } from "../types.js";
 
@@ -88,6 +88,7 @@ describe("export selection", () => {
     expect(listed).toEqual(["/world", "/world_nether", "/world_the_end", "/worlds"]);
     expect(world.files.map((file) => file.relativePath)).toEqual(["world/level.dat"]);
     expect(world.totalBytes).toBe(12);
+    expect(await measureWorldSize(runtime, server("fabric"))).toBe(12);
   });
 
   it("still fails the export when a node reports a real error", async () => {
