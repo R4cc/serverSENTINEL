@@ -232,10 +232,10 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--accent) 40%, transparent) 0, transparent 38%),
-    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--sentinel-info) 32%, transparent) 0, transparent 40%),
-    radial-gradient(circle at 66% 48%, color-mix(in srgb, var(--sentinel-warning) 16%, transparent) 0, transparent 34%),
-    radial-gradient(circle at 28% 94%, color-mix(in srgb, var(--sentinel-accent-muted) 38%, transparent) 0, transparent 46%),
+    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--accent) 22%, transparent) 0, transparent 38%),
+    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--sentinel-info) 18%, transparent) 0, transparent 40%),
+    radial-gradient(circle at 66% 48%, color-mix(in srgb, var(--sentinel-warning) 7%, transparent) 0, transparent 34%),
+    radial-gradient(circle at 28% 94%, color-mix(in srgb, var(--sentinel-accent-muted) 20%, transparent) 0, transparent 46%),
     var(--app-background);
   background-attachment: fixed;
   color: var(--text);
