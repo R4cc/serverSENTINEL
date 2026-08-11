@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.9.2 - 2026-08-11
+
 - Stopped a node that dropped mid-export from crashing the panel, which failed large world exports with "Operation did not complete before serverSENTINEL restarted" instead of naming the node that disconnected.
 - Kept a node connected while the panel pauses its socket for download backpressure, so a large export is no longer terminated by the heartbeat it cannot answer.
 - Redesigned the Overview server summary cards around a rounded icon container, with clearer label and value hierarchy and a calmer status treatment.
