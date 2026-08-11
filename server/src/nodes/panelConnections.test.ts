@@ -155,6 +155,44 @@ describe("PanelNodeConnections", () => {
     connections.close();
   });
 
+  it("accepts an export stream whose compressed size is unknown until completion", async () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    socket.onSend = (value) => {
+      if (typeof value !== "string") return;
+      const message = JSON.parse(value);
+      if (message.type !== "transferStart") return;
+      queueMicrotask(() => {
+        emitJson(socket, { type: "transferReady", id: message.id, filename: "export.zip" });
+        socket.emit("message", encodeTransferChunk(message.id, Buffer.from("zip")), true);
+        emitJson(socket, { type: "transferFinish", id: message.id, size: 3, sha256: "4a70fe9aa6436e02c2dea340fbd1e352e4ef2d8ce6ca52ad25d4b95471fc8bf2" });
+      });
+    };
+    connections.connect(node(), socket as unknown as WebSocket);
+    const download = await connections.download(node(), "exports.download", {}, 1024, 120_000, false);
+    const chunks: Buffer[] = [];
+    for await (const chunk of download.stream) chunks.push(Buffer.from(chunk));
+    expect(download.size).toBeUndefined();
+    expect(Buffer.concat(chunks).toString()).toBe("zip");
+    connections.close();
+  });
+
+  it("cancels a node download when its consumer closes early", async () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    socket.onSend = (value) => {
+      if (typeof value !== "string") return;
+      const message = JSON.parse(value);
+      if (message.type === "transferStart") queueMicrotask(() => emitJson(socket, { type: "transferReady", id: message.id, filename: "export.zip" }));
+    };
+    connections.connect(node(), socket as unknown as WebSocket);
+    const download = await connections.download(node(), "exports.download", {}, 1024, 120_000, false);
+    download.stream.destroy();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(socket.sent.map(String).map((value) => JSON.parse(value)).some((value) => value.type === "transferCancel" && value.reason === "Download consumer closed")).toBe(true);
+    connections.close();
+  });
+
   it("keeps a node connected while its socket is paused for download backpressure", async () => {
     vi.useFakeTimers();
     try {

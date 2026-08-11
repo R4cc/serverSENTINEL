@@ -21,6 +21,7 @@ import {
   exportArtifactFilename,
   readExportManifest,
   validateImportArchive,
+  writeDownloadedExportArchive,
   writeExportArchive
 } from "../importExport.js";
 import type { ManagedServer } from "../types.js";
@@ -227,7 +228,25 @@ export async function startExportOperation(input: { serverIds?: string[]; select
       });
       const planningDurationMs = durationSince(planningStartedAt);
       await assertExportDiskSpace(plan.totalBytes);
-      const written = await writeExportArchive(join(config.exportsDir, exportArtifactFilename(operation.id)), plan, report, signal);
+      const artifactFilename = exportArtifactFilename(operation.id);
+      const artifactPath = join(config.exportsDir, artifactFilename);
+      const remoteRuntime = servers.length === 1 ? runtimeForServer(servers[0]) : undefined;
+      let remoteArchive = false;
+      let written: Awaited<ReturnType<typeof writeExportArchive>>;
+      if (remoteRuntime?.downloadExportArchive) {
+        report(88, "Checking remote export support");
+        const archiveOverhead = Math.max(1024 ** 3, plan.entries.length * 2048);
+        const maxArchiveBytes = Math.min(Number.MAX_SAFE_INTEGER, plan.totalBytes + archiveOverhead);
+        const download = await remoteRuntime.downloadExportArchive(servers[0], plan.manifest, artifactFilename, maxArchiveBytes);
+        if (download) {
+          remoteArchive = true;
+          written = await writeDownloadedExportArchive(artifactPath, plan, download, report, signal);
+        } else {
+          written = await writeExportArchive(artifactPath, plan, report, signal);
+        }
+      } else {
+        written = await writeExportArchive(artifactPath, plan, report, signal);
+      }
       beginCommit();
       await services.exportArtifactMaintenance.replacePreviousSuccessfulExports(operation.id, serverIds);
       logInfo({
@@ -244,6 +263,7 @@ export async function startExportOperation(input: { serverIds?: string[]; select
         durationMs: durationSince(exportStartedAt),
         archiveInputBytesPerSecond: written.inputBytesPerSecond,
         inventoryReused: Boolean(inventoryByServer),
+        remoteArchive,
         ...written.compression
       }, "Export archive completed");
       return { written, plan, operationId: operation.id };

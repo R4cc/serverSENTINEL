@@ -4,9 +4,9 @@ import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchiv
 import type { ManagedNode, ManagedServer, Permission, PublicServer, ServerActivity, ServerEvent } from "../types.js";
 import type { PlayerObservation } from "../playerSnapshots.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
-import { assertNodeSupports, compactNodeServerSpec, nodeAdvertisesCapability, nodeAdvertisesFeature, type ServerObservationSection } from "./protocol.js";
+import { assertNodeSupports, compactNodeServerSpec, nodeAdvertisesCapability, nodeAdvertisesFeature, nodeProtocolControlMessageMaxBytes, type ServerObservationSection } from "./protocol.js";
 import type { RemoteObservationCoordinator } from "./observationCoordinator.js";
-import type { FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter, RuntimeUploadSource } from "./types.js";
+import type { ExportArchiveDownloadResult, FileDownloadResult, ModIconResult, NodeRuntime, RuntimeAction, RuntimeProgressReporter, RuntimeUploadSource } from "./types.js";
 import type { ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import { summarizeRuntimeExit } from "../runtimeErrors.js";
 import { compactRecentEvents, parseLogEvent } from "../servers/logEvents.js";
@@ -29,6 +29,7 @@ const transferCommandTimeoutMs = 2 * 60 * 1000;
 const modsListCommandTimeoutMs = 30_000;
 const modrinthCommandTimeoutMs = 5 * 60 * 1000;
 const archiveCommandTimeoutMs = 30 * 60 * 1000;
+const exportTransferTimeoutMs = 6 * 60 * 60 * 1000;
 
 function normalizeRemotePath(path: string) {
   const value = path || ".";
@@ -359,7 +360,18 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   async downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult> {
     const binaryNode = await this.binaryTransferNode(server);
-    return this.connections.download(binaryNode, "files.download", { server: compactNodeServerSpec(server), path: normalizeRemotePath(target) }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
+    const download = await this.connections.download(binaryNode, "files.download", { server: compactNodeServerSpec(server), path: normalizeRemotePath(target) }, config.fileDownloadMaxBytes, transferCommandTimeoutMs);
+    if (download.size === undefined) throw new Error("Node omitted file download size");
+    return { ...download, size: download.size };
+  }
+
+  async downloadExportArchive(server: ManagedServer, manifest: unknown, filename: string, maxBytes: number): Promise<ExportArchiveDownloadResult | undefined> {
+    const node = this.connections.connectedNode(server.nodeId);
+    if (!node || !nodeAdvertisesFeature(node, "binary-transfer") || !nodeAdvertisesCapability(node, "exports.download")) return undefined;
+    const payload = { server: compactNodeServerSpec(server), filename, manifest };
+    // Leave room for transfer metadata added by PanelNodeConnections around this payload.
+    if (Buffer.byteLength(JSON.stringify(payload)) > nodeProtocolControlMessageMaxBytes - 1024) return undefined;
+    return this.connections.download(node, "exports.download", payload, maxBytes, exportTransferTimeoutMs, false);
   }
 
   async downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult> {

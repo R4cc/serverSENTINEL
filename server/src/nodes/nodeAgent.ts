@@ -3,10 +3,11 @@ import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/prom
 import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { totalmem } from "node:os";
+import { Readable } from "node:stream";
 import http from "node:http";
 import WebSocket from "ws";
 import { fetch } from "undici";
-import { serverRuntimeDefinition } from "@serversentinel/contracts";
+import { EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
@@ -15,7 +16,7 @@ import { storageSpaceForPath } from "../servers/storageSpace.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
-import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
+import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, openContainedReadStream, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
@@ -62,6 +63,8 @@ import { openStorageDatabase, type StorageDatabase } from "../storage/database.j
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
 import { defaultServerContainerName, newServerId, serverDirectory, serverStorageName } from "../storage/serverIdentity.js";
 import { extractZipArchive, planZipExtraction, type ZipExtractionPlan } from "../zipArchive.js";
+import { createZipArchiveStream, safeArchiveFilename, type FileArchiveEntry } from "../downloadArchive.js";
+import { exportArchiveCompressionLevel } from "../exportCompression.js";
 
 type NodeIdentity = { nodeId: string; nodeSecret: string };
 const modHashCache = new ModHashCache();
@@ -1326,6 +1329,46 @@ async function prepareBinaryDownload(message: NodeTransferStartMessage) {
     const handle = await open(target, "r");
     return { filename: basename(target), size: targetStat.size, stream: handle.createReadStream() };
   }
+  if (message.command === "exports.download") {
+    const manifest = payload.manifest;
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) throw new Error("Export manifest is required");
+    const record = manifest as Record<string, unknown>;
+    if (record.artifactType !== EXPORT_ARTIFACT_TYPE || record.schemaVersion !== EXPORT_SCHEMA_VERSION) {
+      throw new Error("Unsupported export manifest");
+    }
+    if (!Array.isArray(record.servers) || record.servers.length !== 1) throw new Error("Remote export requires exactly one server");
+    const manifestServer = record.servers[0];
+    if (!manifestServer || typeof manifestServer !== "object" || Array.isArray(manifestServer)) throw new Error("Export server manifest is invalid");
+    const manifestServerRecord = manifestServer as Record<string, unknown>;
+    const exportedServer = manifestServerRecord.server as Record<string, unknown> | undefined;
+    if (!exportedServer || exportedServer.id !== server.id) throw new Error("Export server does not match the requested server");
+    const key = safeRelative(manifestServerRecord.key);
+    if (key.includes("/")) throw new Error("Export server key must be one archive segment");
+    if (!Array.isArray(manifestServerRecord.files) || manifestServerRecord.files.length > config.importMaxFiles) {
+      throw new Error(`Export contains more than ${config.importMaxFiles} files`);
+    }
+    const entries: FileArchiveEntry[] = [];
+    const seen = new Set<string>();
+    let totalBytes = 0;
+    for (const rawFile of manifestServerRecord.files) {
+      if (!rawFile || typeof rawFile !== "object" || Array.isArray(rawFile)) throw new Error("Export file manifest is invalid");
+      const file = rawFile as Record<string, unknown>;
+      const path = safeRelative(file.path);
+      if (path === "." || seen.has(path)) throw new Error("Export file path is invalid or duplicated");
+      if (typeof file.size !== "number" || !Number.isSafeInteger(file.size) || file.size < 0) throw new Error("Export file size is invalid");
+      seen.add(path);
+      totalBytes += file.size;
+      if (!Number.isSafeInteger(totalBytes) || totalBytes > config.exportMaxBytes) throw new Error("Export exceeds the configured size limit");
+      entries.push({ sourcePath: path, archivePath: `servers/${key}/${path}`, type: "file", size: file.size });
+    }
+    const manifestBuffer = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    entries.unshift({ sourcePath: EXPORT_MANIFEST_ENTRY, archivePath: EXPORT_MANIFEST_ENTRY, type: "file", size: manifestBuffer.byteLength });
+    const stream = createZipArchiveStream(entries, async (entry) => {
+      if (entry.archivePath === EXPORT_MANIFEST_ENTRY) return Readable.from([manifestBuffer]);
+      return (await openContainedReadStream(await inside(server, entry.sourcePath))).stream;
+    }, { compressionLevel: exportArchiveCompressionLevel });
+    return { filename: safeArchiveFilename(String(payload.filename ?? "serversentinel-export.zip")), size: undefined, stream };
+  }
   throw new Error(`Unsupported download transfer ${message.command}`);
 }
 
@@ -1552,6 +1595,7 @@ export const __nodeAgentTestHooks = {
   runtimeConfigHash,
   nodeReconnectDelayMs,
   prepareBinaryUpload,
+  prepareBinaryDownload,
   selfUpdateContainer
 };
 
@@ -1757,10 +1801,11 @@ export async function startNodeAgent() {
                 const chunk = buffer.subarray(offset, offset + nodeProtocolTransferChunkBytes);
                 hash.update(chunk);
                 sent += chunk.byteLength;
+                if (sent > (message.maxBytes ?? Number.MAX_SAFE_INTEGER)) throw new Error("Download exceeded its declared limit");
                 await sendWebSocket(socket, encodeTransferChunk(message.id, chunk), true);
               }
             }
-            if (sent !== prepared.size) throw new Error(`Download declared ${prepared.size} bytes but streamed ${sent}`);
+            if (prepared.size !== undefined && sent !== prepared.size) throw new Error(`Download declared ${prepared.size} bytes but streamed ${sent}`);
             await sendWebSocket(socket, JSON.stringify({ type: "transferFinish", id: message.id, size: sent, sha256: hash.digest("hex") } satisfies NodeTransferFinishMessage));
           } catch (error) {
             activeTransfers.delete(message.id);

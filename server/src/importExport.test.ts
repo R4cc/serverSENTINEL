@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
@@ -13,6 +14,7 @@ import {
   readExportManifest,
   serverArchiveKey,
   validateImportArchive,
+  writeDownloadedExportArchive,
   writeExportArchive,
   type ExportManifest
 } from "./importExport.js";
@@ -299,6 +301,28 @@ describe("export archives", () => {
       expect((await stat(written.path)).mode & 0o077).toBe(0);
       expect((await stat(join(root, "exports"))).mode & 0o077).toBe(0);
     }
+  });
+
+  it("atomically persists and hashes a complete ZIP streamed from a remote node", async () => {
+    const root = await tempRoot("serversentinel-export-remote-write-");
+    const source = await tempRoot("serversentinel-export-remote-source-");
+    await seedServerDirectory(source);
+    const { plan, written: locallyWritten } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const archive = await readFile(locallyWritten.path);
+    const progress: string[] = [];
+
+    const written = await writeDownloadedExportArchive(
+      join(root, "remote", "artifact.zip"),
+      plan,
+      { filename: "artifact.zip", stream: Readable.from([archive]) },
+      (_value, task) => progress.push(task)
+    );
+
+    expect(await readFile(written.path)).toEqual(archive);
+    expect(written.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(written.compression).toEqual(locallyWritten.compression);
+    expect(progress.at(-1)).toContain("Receiving remote export archive");
+    expect((await readdir(join(root, "remote"))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
   it("carries the manifest inside the archive alongside the real files", async () => {
