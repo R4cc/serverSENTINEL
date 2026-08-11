@@ -1,5 +1,5 @@
 import type { ManagedServer, PlayerSnapshot, ServerStatus } from "../types";
-import { Box, SquareTerminal, UserRound } from "lucide-react";
+import { Box, UserRound } from "lucide-react";
 import { AppIcon } from "./FileTypeIcon";
 import { RestartRequiredBadge } from "./RestartRequiredBadge";
 import { RuntimeControls } from "./RuntimeControls";
@@ -35,8 +35,6 @@ export function ActiveServerStrip({
   controlsDisabled,
   controlsDisabledReason,
   onRuntimeAction,
-  consoleActive,
-  onOpenConsole,
   onRetryConnection,
   refreshDisabled,
   refreshDisabledReason
@@ -59,8 +57,6 @@ export function ActiveServerStrip({
   controlsDisabled: boolean;
   controlsDisabledReason: string;
   onRuntimeAction: (action: "start" | "stop" | "restart") => void;
-  consoleActive: boolean;
-  onOpenConsole: () => void;
   onRetryConnection: () => void;
   refreshDisabled: boolean;
   refreshDisabledReason: string;
@@ -127,16 +123,6 @@ export function ActiveServerStrip({
             onAction={onRuntimeAction}
             className="runtimeControlsCompact"
           />
-          <Button
-            variant="secondary"
-            className={`quickActionButton consoleLink ${consoleActive ? "active" : ""}`.trim()}
-            aria-current={consoleActive ? "page" : undefined}
-            onClick={onOpenConsole}
-            title="Open console"
-          >
-            <SquareTerminal className="buttonIcon" strokeWidth={2.5} aria-hidden="true" />
-            <span>Console</span>
-          </Button>
           <Button
             variant="secondary"
             iconOnly

@@ -30,6 +30,11 @@ type ConnectedNode = {
   transfers: Map<string, TransferState>;
   lastPongAt: number;
   lastPingAt: number;
+  /**
+   * When the panel paused this socket because a download consumer fell behind. Nothing is read from
+   * the socket while it is set, pongs included, so the heartbeat must not read the pong clock.
+   */
+  readPausedAt: number | undefined;
 };
 
 type TransferState = {
@@ -55,7 +60,7 @@ export class PanelNodeConnections {
     this.disconnect(node.id);
     if (previous && previous.socket.readyState === previous.socket.OPEN) previous.socket.close(4000, "Replaced by a newer node session");
     const connectedAt = Date.now();
-    const connected: ConnectedNode = { node, socket, pending: new Map(), streams: new Map(), transfers: new Map(), lastPongAt: connectedAt, lastPingAt: connectedAt };
+    const connected: ConnectedNode = { node, socket, pending: new Map(), streams: new Map(), transfers: new Map(), lastPongAt: connectedAt, lastPingAt: connectedAt, readPausedAt: undefined };
     this.connected.set(node.id, connected);
     socket.on("message", (raw, isBinary) => {
       const buffer = Array.isArray(raw) ? Buffer.concat(raw) : Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
@@ -84,8 +89,8 @@ export class PanelNodeConnections {
     connected.streams.clear();
     for (const transfer of connected.transfers.values()) {
       clearTimeout(transfer.timeout);
-      transfer.stream?.destroy(structuredNodeProtocolError("node_offline", `Node ${nodeId} disconnected during transfer`));
-      transfer.reject(structuredNodeProtocolError("node_offline", `Node ${nodeId} disconnected during transfer`));
+      transfer.stream?.destroy(structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected during transfer`));
+      transfer.reject(structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected during transfer`));
     }
     connected.transfers.clear();
   }
@@ -245,6 +250,15 @@ export class PanelNodeConnections {
     const connected = this.transferConnection(node, command);
     const id = randomUUID();
     const stream = new PassThrough();
+    // `destroy(error)` on a stream nobody listens to is an unhandled 'error' event, which exits the
+    // process. This one can fail before any consumer has seen it -- a node dropping mid-transfer
+    // destroys it from `disconnect` -- so a node blip during a large export used to take the panel
+    // down and leave the operation reading "did not complete before serverSENTINEL restarted".
+    // The listener is additive: consumers that do handle errors still receive them.
+    stream.on("error", () => {});
+    // A consumer that abandons the download never drains it, so a socket paused for backpressure
+    // would stay paused for the rest of the session.
+    stream.once("close", () => this.resumeReads(connected));
     let readyResolve!: (message: NodeTransferReadyMessage) => void;
     const ready = new Promise<NodeTransferReadyMessage>((resolve) => { readyResolve = resolve; });
     let resultResolve!: (value: unknown) => void;
@@ -280,11 +294,10 @@ export class PanelNodeConnections {
         // A node can push chunks faster than the HTTP client drains them. `write` returning false means
         // the PassThrough is over its high-water mark, so stop reading the node socket until it drains
         // instead of letting the difference accumulate in panel memory.
-        if (!transfer.stream.write(payload) && !connected.socket.isPaused) {
+        if (!transfer.stream.write(payload) && connected.readPausedAt === undefined) {
+          connected.readPausedAt = Date.now();
           connected.socket.pause();
-          transfer.stream.once("drain", () => {
-            if (connected.socket.readyState === 1) connected.socket.resume();
-          });
+          transfer.stream.once("drain", () => this.resumeReads(connected));
         }
       } catch (error) {
         connected.socket.close(1002, "Invalid binary transfer frame");
@@ -396,6 +409,18 @@ export class PanelNodeConnections {
     if (connected.socket.readyState === connected.socket.OPEN) connected.socket.send(JSON.stringify({ type: "transferCancel", id, reason }));
   }
 
+  /**
+   * Resumes reads that were paused for backpressure. The pong clock restarts from here: no pong could
+   * be read while the socket was paused, so the age it accumulated describes the panel's own consumer
+   * rather than the node, and charging it to the node terminates a healthy session.
+   */
+  private resumeReads(connected: ConnectedNode) {
+    if (connected.readPausedAt === undefined) return;
+    connected.readPausedAt = undefined;
+    connected.lastPongAt = Date.now();
+    if (connected.socket.readyState === connected.socket.OPEN) connected.socket.resume();
+  }
+
   private send(socket: WebSocket, payload: string | Buffer, binary = false) {
     return new Promise<void>((resolve, reject) => socket.send(payload, { binary }, (error) => error ? reject(error) : resolve()));
   }
@@ -405,7 +430,12 @@ export class PanelNodeConnections {
     this.heartbeat = setInterval(() => {
       const now = Date.now();
       for (const [nodeId, connected] of this.connected) {
-        if (connected.socket.readyState !== connected.socket.OPEN || now - connected.lastPongAt >= heartbeatTimeoutMs) {
+        // A socket paused for backpressure delivers no frames at all, pongs included, and a large
+        // export can hold that pause open for longer than the timeout. The pong clock describes the
+        // panel's own consumer there, not the node, so only the readyState check applies. Pings keep
+        // going out either way, which is what the node's own watchdog measures.
+        const stalePong = connected.readPausedAt === undefined && now - connected.lastPongAt >= heartbeatTimeoutMs;
+        if (connected.socket.readyState !== connected.socket.OPEN || stalePong) {
           connected.socket.terminate();
           this.disconnect(nodeId, connected.socket);
           continue;

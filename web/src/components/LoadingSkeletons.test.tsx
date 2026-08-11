@@ -19,6 +19,7 @@ describe("loading skeletons", () => {
     expect(html).toContain("applicationLoadingSkeleton");
     expect(html).toContain("codeLoadingSkeleton");
     expect(html).toContain("terminalLoadingSkeleton");
+    expect(html).not.toContain("consoleLink");
     expect(html).not.toContain("inlineState-loading");
   });
 

@@ -725,7 +725,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 /* Shared interaction states ----------------------------------------------- */
 
 .uiButton:hover:not(:disabled),
-.quickActionButton:hover:not(:disabled),
 .runtimeControlButton:hover:not(:disabled),
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
@@ -740,13 +739,11 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 }
 
 /* `.uiButton`, `.iconButton` and `.iconOnlyButton` already clear this at the top
-   of the file; only the two shell controls need it restated here. */
-.quickActionButton,
+   of the file; the runtime shell control needs it restated here. */
 .runtimeControlButton {
   box-shadow: none;
 }
 
-.quickActionButton:hover:not(:disabled),
 .runtimeControlButton.restart:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
   background: var(--sentinel-accent-soft);

@@ -48,6 +48,14 @@ export function createZipArchiveStream(
 ) {
   const compress = options.compress === true;
   const zip = new ZipFile();
+  const output = zip.outputStream as Readable;
+  // yazl reports a failed member on the ZipFile itself and pipes member streams with `pipe`, which
+  // forwards neither the error nor the destruction. Nothing listened on either, so a node dropping
+  // mid-transfer raised an unhandled 'error' event and exited the panel process instead of failing
+  // the export. Route both onto the archive stream so the consumer's pipeline rejects with the cause.
+  zip.on("error", (error: Error) => {
+    if (!output.destroyed) output.destroy(error);
+  });
   for (const entry of entries) {
     const archivePath = safeArchivePath(entry.archivePath);
     const mtime = entry.modifiedAt ? new Date(entry.modifiedAt) : undefined;
@@ -64,11 +72,20 @@ export function createZipArchiveStream(
       },
       (callback) => {
         openStream(entry)
-          .then((stream) => callback(null, stream))
+          .then((stream) => {
+            // An earlier member already failed the archive; opening this one further would strand a
+            // remote transfer that nothing will ever read.
+            if (output.destroyed) {
+              stream.destroy();
+              return;
+            }
+            stream.once("error", (error: Error) => zip.emit("error", error));
+            callback(null, stream);
+          })
           .catch((error) => callback(error, Readable.from([])));
       }
     );
   }
   zip.end();
-  return zip.outputStream as Readable;
+  return output;
 }

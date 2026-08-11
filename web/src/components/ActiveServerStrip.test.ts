@@ -7,7 +7,7 @@ import { ActiveServerStrip } from "./ActiveServerStrip";
 
 const server = demoServer();
 
-function render(playerSnapshot: PlayerSnapshot | undefined, consoleActive = false) {
+function render(playerSnapshot: PlayerSnapshot | undefined) {
   return renderToStaticMarkup(
     createElement(ActiveServerStrip, {
       server,
@@ -28,8 +28,6 @@ function render(playerSnapshot: PlayerSnapshot | undefined, consoleActive = fals
       controlsDisabled: false,
       controlsDisabledReason: "",
       onRuntimeAction: () => {},
-      consoleActive,
-      onOpenConsole: () => {},
       onRetryConnection: () => {},
       refreshDisabled: false,
       refreshDisabledReason: ""
@@ -71,8 +69,9 @@ describe("ActiveServerStrip refresh action", () => {
     expect(markup).not.toContain('aria-haspopup="menu"');
   });
 
-  it("announces the console action as the current page", () => {
-    expect(render(undefined, true)).toContain('aria-current="page"');
-    expect(render(undefined, false)).not.toContain('aria-current="page"');
+  it("does not duplicate the sidebar Console navigation", () => {
+    const markup = render(undefined);
+    expect(markup).not.toContain("Open console");
+    expect(markup).not.toContain(">Console<");
   });
 });

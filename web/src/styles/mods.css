@@ -3,8 +3,11 @@
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 /* The metric tiles are the shared uiMetricTile--summary variant; this file only
    owns how they are arranged. */
-.modsWorkspaceToolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+.modsWorkspaceToolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: var(--space-3); }
 .modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.modsWorkspaceToolbar .uiToolbarPrimary { justify-self: start; }
+.modsWorkspaceToolbar .uiToolbarMeta { justify-self: center; }
+.modsWorkspaceToolbar .uiToolbarSecondary { justify-self: end; }
 .modsWorkspacePrimaryActions, .modsWorkspaceUpdateActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .modsWorkspaceUpdateActions { justify-content: flex-end; }
 .modsWorkspaceLastChecked { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
@@ -222,6 +225,10 @@
 
 @media (max-width: 1100px) {
   .modsWorkspaceSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modsWorkspaceToolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modsWorkspaceToolbar .uiToolbarPrimary { grid-column: 1; grid-row: 1; }
+  .modsWorkspaceToolbar .uiToolbarSecondary { grid-column: 2; grid-row: 1; }
+  .modsWorkspaceToolbar .uiToolbarMeta { grid-column: 2; grid-row: 2; }
   .modsWorkspaceTableHead { display: none; }
   .modsWorkspaceRow {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -596,15 +603,21 @@
 
   .modsWorkspaceToolbar.uiToolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
     gap: var(--space-2);
   }
 
   .modsWorkspaceToolbar .uiToolbarPrimary,
   .modsWorkspaceToolbar .uiToolbarSecondary {
+    grid-column: 1 / -1;
     display: block;
+    justify-self: stretch;
   }
+
+  .modsWorkspaceToolbar .uiToolbarPrimary { grid-row: 1; }
+  .modsWorkspaceToolbar .uiToolbarMeta { grid-column: 2; grid-row: 2; justify-self: stretch; justify-content: center; }
+  .modsWorkspaceToolbar .uiToolbarSecondary { grid-row: 3; }
 
   .modsWorkspacePrimaryActions,
   .modsWorkspaceUpdateActions {
@@ -636,7 +649,7 @@
   .modsWorkspaceLastChecked {
     display: block;
     padding-inline: var(--space-1);
-    text-align: right;
+    text-align: center;
   }
 }
 
