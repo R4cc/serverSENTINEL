@@ -162,6 +162,34 @@ async function assertModsToolbarVisible(page, label) {
   assert(result.coveredActions.length === 0, `${label}: mods toolbar actions are covered: ${JSON.stringify(result.coveredActions)}`);
 }
 
+async function assertModsRowsAligned(page, label) {
+  const rows = await page.locator(".modsWorkspaceRow:not(.modsWorkspaceSkeletonRow)").evaluateAll((elements) => elements.map((row) => {
+    const rect = (selector) => {
+      const element = row.querySelector(selector);
+      if (!(element instanceof HTMLElement)) return null;
+      const bounds = element.getBoundingClientRect();
+      return { left: bounds.left, right: bounds.right, centerX: bounds.left + bounds.width / 2, centerY: bounds.top + bounds.height / 2 };
+    };
+    return {
+      columns: getComputedStyle(row).gridTemplateColumns,
+      metadata: rect(".modsWorkspaceMetadata"),
+      status: rect(".modsWorkspaceStatus"),
+      version: rect(".modsWorkspaceVersion"),
+      enabled: rect(".modsWorkspaceEnabled"),
+      switchVersion: rect(".modsWorkspaceSwitchVersionButton")
+    };
+  }));
+  assert(rows.length > 1, `${label}: demo mod rows are missing`);
+  assert(rows.every((row) => row.metadata && row.status && row.version && row.enabled && row.switchVersion), `${label}: a mod row is missing an alignment surface`);
+  assert(new Set(rows.map((row) => row.columns)).size === 1, `${label}: mod row columns vary with content: ${JSON.stringify(rows.map((row) => row.columns))}`);
+  for (const key of ["enabled", "switchVersion"]) {
+    const centers = rows.map((row) => row[key].centerX);
+    assert(Math.max(...centers) - Math.min(...centers) <= 1, `${label}: ${key} controls do not share a column: ${JSON.stringify(centers)}`);
+  }
+  assert(rows.every((row) => Math.abs(row.status.centerY - row.version.centerY) <= 1), `${label}: status and installed version are not vertically aligned`);
+  assert(rows.every((row) => row.status.right <= row.version.left + 1), `${label}: status and installed version overlap`);
+}
+
 async function assertPageDocumentScroll(page, title, label) {
   await openPage(page, title);
   const result = await page.evaluate(() => {
@@ -225,7 +253,7 @@ async function assertOverviewDensity(page, profile, label) {
 
   const portrait = await overviewDensityMetrics(page);
   assert(!portrait.missing, `${label}: portrait Overview surfaces are missing`);
-  assert(portrait.visibleSummaryTiles === 4, `${label}: portrait Overview shows ${portrait.visibleSummaryTiles} summary fields instead of four`);
+  assert(portrait.visibleSummaryTiles === 5, `${label}: portrait Overview shows ${portrait.visibleSummaryTiles} summary fields instead of five`);
   assert(!portrait.timeline && !portrait.legacyResourcePanel, `${label}: portrait Overview still shows a chart`);
   assert(portrait.players, `${label}: portrait Overview does not show Active Players`);
   assert(portrait.summaryBeforePlayers && portrait.summaryToPlayersGap >= 0 && portrait.summaryToPlayersGap <= 24, `${label}: Active Players is not directly below the portrait summary: ${JSON.stringify(portrait)}`);
@@ -236,7 +264,7 @@ async function assertOverviewDensity(page, profile, label) {
   await page.locator(".serverTimelinePanel").waitFor();
   const landscape = await overviewDensityMetrics(page);
   assert(!landscape.missing, `${label}: landscape Overview surfaces are missing`);
-  assert(landscape.visibleSummaryTiles === 4, `${label}: landscape Overview shows ${landscape.visibleSummaryTiles} summary fields instead of four`);
+  assert(landscape.visibleSummaryTiles === 5, `${label}: landscape Overview shows ${landscape.visibleSummaryTiles} summary fields instead of five`);
   assert(landscape.timeline && !landscape.legacyResourcePanel, `${label}: landscape Overview did not switch to the unified timeline`);
   assert(!landscape.players, `${label}: landscape Overview still shows the redundant Active Players card`);
   assert(landscape.horizontalOverflow <= 1, `${label}: landscape Overview overflows horizontally by ${landscape.horizontalOverflow}px`);
@@ -477,6 +505,7 @@ async function runProfile(engine, profile, label) {
 
     await openPage(page, "mods");
     await assertModsToolbarVisible(page, `${label} mods toolbar`);
+    await assertModsRowsAligned(page, `${label} mods rows`);
     const addMods = page.getByRole("button", { name: "Add mods", exact: true });
     assert(await addMods.isEnabled(), `${label}: demo Add mods action is unexpectedly disabled`);
     await addMods.click();

@@ -116,8 +116,10 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
                 <span><strong title={mod.displayName}>{mod.displayName}</strong>{mod.description && <small title={mod.description}>{mod.description}</small>}</span>
                 <AppIcon name="chevronRight" />
               </button>
-              <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
-              <div className="modsWorkspaceVersion" title={modVersion(mod)}>{modVersion(mod)}</div>
+              <div className="modsWorkspaceMetadata">
+                <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
+                <div className="modsWorkspaceVersion" title={modVersion(mod)}>{modVersion(mod)}</div>
+              </div>
               <div className="modsWorkspaceUpdate">
                 {health.key === "missing_dependencies" && (
                   <Button variant="secondary" compact className="modsReviewAction" onClick={() => onInstallDependencies?.(mod)} disabled={dependencyInstallLocked} title={health.detailDescription}>
@@ -164,8 +166,10 @@ function InstalledModSkeletonRow() {
         <SkeletonBlock className="uiSkeleton--icon" />
         <span><SkeletonBlock className="uiSkeleton--title" /><SkeletonBlock className="uiSkeleton--text" /></span>
       </div>
-      <div className="modsWorkspaceStatus"><SkeletonBlock className="uiSkeleton--badge" /></div>
-      <div className="modsWorkspaceVersion"><SkeletonBlock className="uiSkeleton--text" /></div>
+      <div className="modsWorkspaceMetadata">
+        <div className="modsWorkspaceStatus"><SkeletonBlock className="uiSkeleton--badge" /></div>
+        <div className="modsWorkspaceVersion"><SkeletonBlock className="uiSkeleton--text" /></div>
+      </div>
       <div className="modsWorkspaceUpdate"><SkeletonBlock className="modsUpdateSkeleton" /></div>
       <div className="modsWorkspaceEnabled"><SkeletonBlock className="modsToggleSkeleton" /></div>
       <SkeletonBlock className="uiSkeleton--button modsActionSkeleton" />

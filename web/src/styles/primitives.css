@@ -495,7 +495,17 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .activeServerStripLoadingSkeleton .serverStripLoadingIconButton { display: block; width: var(--control-height); height: var(--control-height); }
 .featurePageLoadingSkeleton { width: 100%; min-height: min(560px, calc(100vh - 238px)); align-content: stretch; }
 .applicationSkeletonSummary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-3); }
-.applicationSkeletonTile { height: 82px; }
+.applicationSkeletonTile {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  height: 82px;
+  padding: var(--space-3);
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
 .applicationSkeletonWideTile { display: none; }
 .applicationSkeletonPanel { display: grid; align-content: start; gap: var(--space-3); min-height: 320px; border: var(--border-strong) solid var(--border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--surface); }
 .applicationSkeletonHeading { width: min(240px, 45%); height: 22px; margin-bottom: var(--space-2); }
@@ -530,6 +540,29 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .applicationOverviewModsPanel { grid-area: mods; }
 .applicationOverviewAutomationPanel { grid-area: automation; }
 .applicationOverviewEventsPanel { grid-area: events; }
+.applicationOverviewMetricIcon { width: 36px; height: 36px; border-radius: 999px; }
+.applicationOverviewMetricCopy,
+.applicationOverviewSkeletonRowCopy { min-width: 0; display: grid; gap: 6px; }
+.applicationOverviewMetricLabel { width: min(64px, 72%); height: 9px; }
+.applicationOverviewMetricValue { width: min(96px, 88%); height: 15px; }
+.applicationOverviewSkeletonPanel { gap: var(--space-3); }
+.applicationOverviewSkeletonHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.applicationOverviewSkeletonTitle { width: min(164px, 48%); height: 18px; }
+.applicationOverviewSkeletonMeta { width: 68px; height: 22px; border-radius: 999px; }
+.applicationOverviewSkeletonRows { display: grid; align-content: start; gap: var(--space-2); }
+.applicationOverviewSkeletonRow {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 6px;
+  border-top: var(--border-subtle) solid var(--border-row);
+}
+.applicationOverviewSkeletonRowIcon { width: 32px; height: 32px; border-radius: var(--radius-sm); }
+.applicationOverviewSkeletonRowTitle { width: min(168px, 72%); height: 12px; }
+.applicationOverviewSkeletonRowMeta { width: min(124px, 54%); height: 9px; }
+.applicationOverviewSkeletonRowAction { width: 16px; height: 16px; border-radius: 999px; }
 
 .applicationFilesSkeleton {
   display: grid;
@@ -585,10 +618,9 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .themeDark .terminalSkeletonLine { --skeleton-highlight: rgb(255 255 255 / .13); background: color-mix(in srgb, var(--terminal-text) 14%, var(--terminal-bg)); }
 
 @media (max-width: 760px) {
-  .applicationSkeletonSummary { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .applicationSkeletonSummary > .applicationSkeletonTile { grid-column: span 2; }
-  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(4),
-  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: span 3; }
+  .applicationSkeletonSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .applicationSkeletonSummary > .applicationSkeletonTile { grid-column: auto; }
+  .applicationSkeletonSummary > .applicationSkeletonTile:nth-child(5) { grid-column: 1 / -1; }
   .applicationFilesSkeleton,
   .applicationScheduleGrid { grid-template-columns: minmax(0, 1fr); }
   .applicationFilesDetailsPanel,
@@ -601,8 +633,18 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   .applicationSkeletonBreadcrumb { width: 100%; }
   .applicationOverviewPanelGrid {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(5, max-content);
     grid-template-areas: "timeline" "players" "mods" "automation" "events";
+    align-content: start;
   }
+  .applicationLoadingSkeleton--overview,
+  .applicationOverviewSkeleton { height: auto; }
+  .applicationOverviewSkeletonPanel { padding: var(--space-3); }
+  .applicationOverviewPlayersPanel .applicationOverviewSkeletonRows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .applicationOverviewPlayersPanel .applicationOverviewSkeletonRow { grid-template-columns: 8px minmax(0, 1fr); min-height: 34px; }
+  .applicationOverviewPlayersPanel .applicationOverviewSkeletonRowIcon { width: 8px; height: 8px; }
+  .applicationOverviewPlayersPanel .applicationOverviewSkeletonRowMeta,
+  .applicationOverviewPlayersPanel .applicationOverviewSkeletonRowAction { display: none; }
 }
 
 @media (min-width: 981px) {
