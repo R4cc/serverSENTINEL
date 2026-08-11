@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { compactRecentEvents, parseLogEvent } from "./servers/logEvents.js";
 import {
   requireStrictBoolean,
@@ -428,6 +428,29 @@ describe("file download archives", () => {
 
     expect(archive.includes(Buffer.from("world/level.dat"))).toBe(true);
     expect(archive.includes(Buffer.from("hello"))).toBe(true);
+  });
+
+  // yazl reports both failures on the ZipFile, which nothing listened to. Unhandled, they exited the
+  // panel process, so a node dropping partway through a world export restarted the container instead
+  // of failing the export.
+  it("fails the archive when a member cannot be opened", async () => {
+    const stream = createZipArchiveStream([
+      { sourcePath: "level.dat", archivePath: "world/level.dat", type: "file", size: 5 }
+    ], async () => { throw new Error("Node mc-node-01 disconnected during transfer"); });
+
+    await expect(streamToBuffer(stream)).rejects.toThrow("disconnected during transfer");
+  });
+
+  it("fails the archive when a member stream errors partway through", async () => {
+    const member = new PassThrough();
+    const stream = createZipArchiveStream([
+      { sourcePath: "level.dat", archivePath: "world/level.dat", type: "file", size: 5 }
+    ], async () => member);
+
+    member.write("he");
+    member.destroy(new Error("Node mc-node-01 disconnected during transfer"));
+
+    await expect(streamToBuffer(stream)).rejects.toThrow("disconnected during transfer");
   });
 });
 

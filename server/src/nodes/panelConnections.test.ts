@@ -22,7 +22,11 @@ class FakeSocket extends EventEmitter {
     done?.();
   }
 
+  paused = false;
+
   ping() { this.pingCount += 1; }
+  pause() { this.paused = true; }
+  resume() { this.paused = false; }
   terminate() { this.terminated = true; this.readyState = 3; this.emit("close", 1006, Buffer.alloc(0)); }
   close(code?: number, reason?: string) { this.closed = { code, reason }; this.readyState = 3; this.emit("close", code ?? 1000, Buffer.from(reason ?? "")); }
 }
@@ -148,6 +152,69 @@ describe("PanelNodeConnections", () => {
     const chunks: Buffer[] = [];
     for await (const chunk of download.stream) chunks.push(Buffer.from(chunk));
     expect(Buffer.concat(chunks).toString()).toBe("data");
+    connections.close();
+  });
+
+  it("keeps a node connected while its socket is paused for download backpressure", async () => {
+    vi.useFakeTimers();
+    try {
+      const connections = new PanelNodeConnections();
+      const socket = new FakeSocket();
+      socket.onSend = (value) => {
+        if (typeof value !== "string") return;
+        const message = JSON.parse(value);
+        if (message.type !== "transferStart") return;
+        queueMicrotask(() => emitJson(socket, { type: "transferReady", id: message.id, filename: "world.zip", size: 8 * 1024 * 1024 }));
+      };
+      connections.connect(node(), socket as unknown as WebSocket);
+      const download = await connections.download(node(), "files.download", {}, 8 * 1024 * 1024);
+      const transferId = socket.sent.map(String).map((value) => JSON.parse(value)).find((value) => value.type === "transferStart").id;
+
+      // Nobody drains the stream, so the first chunk past its high-water mark pauses the socket.
+      socket.emit("message", encodeTransferChunk(transferId, Buffer.alloc(256 * 1024)), true);
+      expect(socket.paused).toBe(true);
+
+      // No pong can arrive while the socket is paused, and a large export holds it open for far
+      // longer than the pong timeout. Terminating there kills a healthy transfer.
+      vi.advanceTimersByTime(120_000);
+      expect(socket.terminated).toBe(false);
+      expect(connections.isConnected(node().id)).toBe(true);
+      expect(socket.pingCount).toBeGreaterThan(0);
+
+      download.stream.resume();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(socket.paused).toBe(false);
+
+      // Reads are flowing again, so the pong clock restarts rather than carrying the pause forward.
+      vi.advanceTimersByTime(30_000);
+      expect(socket.terminated).toBe(false);
+      vi.advanceTimersByTime(10_000);
+      expect(socket.terminated).toBe(true);
+      connections.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails a download stream instead of raising an unhandled error when the node drops", async () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    socket.onSend = (value) => {
+      if (typeof value !== "string") return;
+      const message = JSON.parse(value);
+      if (message.type !== "transferStart") return;
+      queueMicrotask(() => emitJson(socket, { type: "transferReady", id: message.id, filename: "world.zip", size: 1024 }));
+    };
+    connections.connect(node(), socket as unknown as WebSocket);
+    const download = await connections.download(node(), "files.download", {}, 1024);
+
+    // No consumer has attached an error handler: yazl pipes archive members without one. An
+    // unhandled 'error' here exits the process, which is what ended a 7 GiB export mid-flight.
+    socket.close();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(download.stream.destroyed).toBe(true);
+    expect(download.stream.errored).toMatchObject({ code: "node_offline" });
     connections.close();
   });
 
