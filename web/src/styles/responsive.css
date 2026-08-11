@@ -2154,10 +2154,6 @@ textarea:hover:not(:disabled),
     padding: var(--space-3);
   }
 
-  .serverStripRight {
-    width: 100%;
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 900px) {
@@ -2623,10 +2619,6 @@ textarea:hover:not(:disabled),
     align-items: stretch;
   }
 
-  .activeServerStrip .serverStripRight {
-    width: 100%;
-    justify-content: flex-start;
-  }
 }
 
 @media (min-width: 721px) and (max-width: 980px) {

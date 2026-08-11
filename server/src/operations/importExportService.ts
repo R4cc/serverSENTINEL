@@ -22,8 +22,10 @@ import {
   readExportManifest,
   validateImportArchive,
   writeDownloadedExportArchive,
-  writeExportArchive
+  writeExportArchive,
+  type ExportPlan
 } from "../importExport.js";
+import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer } from "../types.js";
 import { exportInventoryCache } from "../exportInventoryCache.js";
 
@@ -122,8 +124,13 @@ export async function estimateExport(serverIds: string[] | undefined, selection:
     });
   }
   const freeBytes = await availableBytes(config.exportsDir);
-  const inventoryUnchanged = servers.every((server) => services.exportCoordinator.mutationVersion(server.id) === mutationVersions.get(server.id));
-  const inventoryId = inventoryUnchanged
+  // Only a stopped server has an inventory worth carrying forward. A running one keeps rewriting its
+  // world, and it can stop without any panel mutation to invalidate the token -- a crash never runs
+  // through `withMutation` -- so the export that follows would archive members with the sizes
+  // measured here and fail the moment one of them streams a different number of bytes.
+  const inventoryReusable = estimates.every((estimate) => !estimate.running)
+    && servers.every((server) => services.exportCoordinator.mutationVersion(server.id) === mutationVersions.get(server.id));
+  const inventoryId = inventoryReusable
     ? exportInventoryCache.store({
         createdBy,
         serverIds: servers.map((server) => server.id),
@@ -147,6 +154,40 @@ export async function assertExportDiskSpace(estimatedBytes: number) {
     const needed = Math.ceil((estimatedBytes + config.exportMinFreeBytes) / 1024 / 1024);
     const have = Math.floor(free / 1024 / 1024);
     throw new Error(`Not enough free space for this export: about ${needed} MiB is needed and ${have} MiB is available. Deselect the world, or free up space.`);
+  }
+}
+
+/**
+ * The node that owns the server can build the export ZIP itself, which spares the panel from pulling
+ * every file across the node protocol only to compress it here. A node that refuses the request --
+ * an agent whose export manifest schema predates the panel's, or one configured with a lower size or
+ * file limit -- must not fail the export. Nothing has been written when the refusal arrives, so the
+ * panel degrades to building the archive from the same files instead of ending the operation.
+ */
+export async function streamRemoteExportArchive(input: {
+  runtime: Pick<NodeRuntime, "downloadExportArchive">;
+  server: ManagedServer;
+  plan: ExportPlan;
+  filename: string;
+  signal: AbortSignal;
+  report: (progress: number, task: string) => void;
+  onRefused: (error: unknown) => void;
+}) {
+  if (!input.runtime.downloadExportArchive) return undefined;
+  input.report(88, "Checking remote export support");
+  const archiveOverhead = Math.max(1024 ** 3, input.plan.entries.length * 2048);
+  try {
+    return await input.runtime.downloadExportArchive(
+      input.server,
+      input.plan.manifest,
+      input.filename,
+      input.plan.totalBytes + archiveOverhead
+    );
+  } catch (error) {
+    // A cancelled export is not a refusal; falling back would only rebuild what nobody wants.
+    if (input.signal.aborted) throw error;
+    input.onRefused(error);
+    return undefined;
   }
 }
 
@@ -231,22 +272,24 @@ export async function startExportOperation(input: { serverIds?: string[]; select
       const artifactFilename = exportArtifactFilename(operation.id);
       const artifactPath = join(config.exportsDir, artifactFilename);
       const remoteRuntime = servers.length === 1 ? runtimeForServer(servers[0]) : undefined;
-      let remoteArchive = false;
-      let written: Awaited<ReturnType<typeof writeExportArchive>>;
-      if (remoteRuntime?.downloadExportArchive) {
-        report(88, "Checking remote export support");
-        const archiveOverhead = Math.max(1024 ** 3, plan.entries.length * 2048);
-        const maxArchiveBytes = Math.min(Number.MAX_SAFE_INTEGER, plan.totalBytes + archiveOverhead);
-        const download = await remoteRuntime.downloadExportArchive(servers[0], plan.manifest, artifactFilename, maxArchiveBytes);
-        if (download) {
-          remoteArchive = true;
-          written = await writeDownloadedExportArchive(artifactPath, plan, download, report, signal);
-        } else {
-          written = await writeExportArchive(artifactPath, plan, report, signal);
-        }
-      } else {
-        written = await writeExportArchive(artifactPath, plan, report, signal);
-      }
+      const download = remoteRuntime
+        ? await streamRemoteExportArchive({
+            runtime: remoteRuntime,
+            server: servers[0],
+            plan,
+            filename: artifactFilename,
+            signal,
+            report,
+            onRefused: (error) => logWarn(
+              { operationId: operation.id, serverId: servers[0].id, nodeId: servers[0].nodeId, ...errorLogFields(error) },
+              "Node could not stream the export archive; building it on the panel instead"
+            )
+          })
+        : undefined;
+      const remoteArchive = Boolean(download);
+      const written = download
+        ? await writeDownloadedExportArchive(artifactPath, plan, download, report, signal)
+        : await writeExportArchive(artifactPath, plan, report, signal);
       beginCommit();
       await services.exportArtifactMaintenance.replacePreviousSuccessfulExports(operation.id, serverIds);
       logInfo({
