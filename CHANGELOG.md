@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.9.4 - 2026-08-11
+
+- Kept the Overview mod-update card at a stable height while checking for updates and animated the refresh icon for the duration of the check.
+
 ## 1.9.3 - 2026-08-11
 
 - Kept the server status controls beside the server details whenever the bar has room, instead of wrapping them at fixed desktop viewport widths.

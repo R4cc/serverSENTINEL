@@ -405,7 +405,8 @@ describe("mod health", () => {
       updatePlan: plan,
       loading,
       canView,
-      onOpenMods: () => undefined
+      onOpenMods: () => undefined,
+      onRefresh: () => undefined
     }));
 
     const loadingHtml = render(null);
@@ -425,6 +426,8 @@ describe("mod health", () => {
     expect(refreshingHtml).not.toContain("modUpdatesCardSkeleton");
     expect(refreshingHtml).toContain('aria-busy="true"');
     expect(refreshingHtml).toContain("Refreshing mod updates");
+    expect(refreshingHtml).toContain("modUpdatesRefreshButton isRefreshing");
+    expect(refreshingHtml.match(/aria-busy="true"/g)).toHaveLength(2);
     expect(render(null, false)).toBe("");
   });
 
