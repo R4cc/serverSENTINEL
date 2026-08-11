@@ -35,7 +35,19 @@ export type ZipArchiveStreamOptions = {
    * a great deal for a world folder of region and NBT data.
    */
   compress?: boolean;
+  /**
+   * Selects a zlib level globally or per archive member. Level 0 stores bytes without DEFLATE.
+   * When set, this takes precedence over `compress` so callers can mix stored and compressed members.
+   */
+  compressionLevel?: number | ((entry: FileArchiveEntry) => number);
 };
+
+function compressionOptions(entry: FileArchiveEntry, options: ZipArchiveStreamOptions) {
+  const compressionLevel = typeof options.compressionLevel === "function"
+    ? options.compressionLevel(entry)
+    : options.compressionLevel;
+  return compressionLevel === undefined ? { compress: options.compress === true } : { compressionLevel };
+}
 
 /**
  * Archive members are opened lazily, long after the plan was validated, so each one is opened without
@@ -46,7 +58,6 @@ export function createZipArchiveStream(
   openStream: (entry: FileArchiveEntry) => Promise<Readable> = async (entry) => (await openContainedReadStream(entry.sourcePath)).stream,
   options: ZipArchiveStreamOptions = {}
 ) {
-  const compress = options.compress === true;
   const zip = new ZipFile();
   const output = zip.outputStream as Readable;
   // yazl reports a failed member on the ZipFile itself and pipes member streams with `pipe`, which
@@ -67,7 +78,7 @@ export function createZipArchiveStream(
       archivePath,
       {
         ...(mtime && !Number.isNaN(mtime.getTime()) ? { mtime } : {}),
-        compress,
+        ...compressionOptions(entry, options),
         size: entry.size
       },
       (callback) => {

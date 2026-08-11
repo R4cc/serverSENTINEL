@@ -9,6 +9,7 @@ import {
   applyImportArchive,
   assertExportManifest,
   createExportPlan,
+  exportArchiveCompressionLevel,
   readExportManifest,
   serverArchiveKey,
   validateImportArchive,
@@ -272,6 +273,15 @@ function manifestFixture(overrides: Partial<ExportManifest["servers"][number]> =
 }
 
 describe("export archives", () => {
+  it("uses adaptive compression for large and already-compressed members", () => {
+    const entry = (archivePath: string, size: number) => ({ sourcePath: archivePath, archivePath, type: "file" as const, size });
+
+    expect(exportArchiveCompressionLevel(entry("manifest.json", 32 * 1024))).toBe(6);
+    expect(exportArchiveCompressionLevel(entry("servers/survival/world/region/r.0.0.mca", 8 * 1024 * 1024))).toBe(1);
+    expect(exportArchiveCompressionLevel(entry("servers/survival/mods/custom.jar", 8 * 1024 * 1024))).toBe(0);
+    expect(exportArchiveCompressionLevel(entry("servers/survival/mods/custom.jar.disabled", 8 * 1024 * 1024))).toBe(0);
+  });
+
   it("writes the archive atomically with restrictive permissions", async () => {
     const root = await tempRoot("serversentinel-export-write-");
     const source = await tempRoot("serversentinel-export-source-");
@@ -281,6 +291,9 @@ describe("export archives", () => {
 
     expect(written.size).toBeGreaterThan(0);
     expect(written.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(written.inputBytes).toBeGreaterThan(0);
+    expect(written.inputBytesPerSecond).toBeGreaterThan(0);
+    expect(written.compression).toMatchObject({ storedEntries: 1, standardEntries: expect.any(Number) });
     expect((await readdir(join(root, "exports"))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
     if (process.platform !== "win32") {
       expect((await stat(written.path)).mode & 0o077).toBe(0);

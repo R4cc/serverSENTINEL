@@ -4,7 +4,7 @@ import type { ExportSelection, ExportSizeEstimate, ExportSizeServerEstimate } fr
 import { services, runtimeForServer } from "../appServices.js";
 import { appVersion } from "../buildInfo.js";
 import { config } from "../config.js";
-import { detailedErrorMessage, errorLogFields, logError, logWarn } from "../logging.js";
+import { detailedErrorMessage, durationSince, errorLogFields, logError, logInfo, logWarn } from "../logging.js";
 import { ExportCancelledError } from "../exportCoordinator.js";
 import { validateServerId } from "../http/validation.js";
 import { asArray } from "../storage/valueValidation.js";
@@ -183,12 +183,14 @@ export async function startExportOperation(input: { serverIds?: string[]; select
       }
     }
   }, async (operation, report) => services.exportCoordinator.run(operation.id, serverIds, async (signal, beginCommit) => {
+    const exportStartedAt = Date.now();
     try {
       await services.exportArtifactMaintenance.prepareNewExport(serverIds);
       const servers = await resolveExportServers(serverIds);
       // Re-checked inside the operation: the request may have queued behind other work, and a server
       // that was stopped when the operator clicked export can be running by the time it runs.
       await assertServersStopped(servers);
+      const planningStartedAt = Date.now();
       const plan = await createExportPlan({
         appVersion,
         servers,
@@ -198,10 +200,26 @@ export async function startExportOperation(input: { serverIds?: string[]; select
         report,
         signal
       });
+      const planningDurationMs = durationSince(planningStartedAt);
       await assertExportDiskSpace(plan.totalBytes);
       const written = await writeExportArchive(join(config.exportsDir, exportArtifactFilename(operation.id)), plan, report, signal);
       beginCommit();
       await services.exportArtifactMaintenance.replacePreviousSuccessfulExports(operation.id, serverIds);
+      logInfo({
+        operationId: operation.id,
+        action: "export",
+        status: "succeeded",
+        serverCount: plan.manifest.servers.length,
+        fileCount: plan.manifest.manifest.content.files,
+        uncompressedBytes: plan.totalBytes,
+        archiveBytes: written.size,
+        compressionRatio: plan.totalBytes > 0 ? Number((written.size / plan.totalBytes).toFixed(4)) : undefined,
+        planningDurationMs,
+        archiveDurationMs: written.durationMs,
+        durationMs: durationSince(exportStartedAt),
+        archiveInputBytesPerSecond: written.inputBytesPerSecond,
+        ...written.compression
+      }, "Export archive completed");
       return { written, plan, operationId: operation.id };
     } catch (error) {
       await services.exportArtifactMaintenance.cleanupOperationArtifacts(operation);
