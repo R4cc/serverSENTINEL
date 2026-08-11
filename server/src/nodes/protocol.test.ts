@@ -8,6 +8,7 @@ import {
   nodeProtocolVersion,
   normalizeNodeHello,
   normalizeNodeToPanelMessage,
+  normalizePanelToNodeMessage,
   normalizePanelWelcome,
   encodeTransferChunk,
   decodeTransferChunk
@@ -85,6 +86,18 @@ describe("node protocol v3.1", () => {
     expect(encoded.byteLength).toBe(22);
     expect(decodeTransferChunk(encoded)).toEqual({ id, payload: Buffer.from("hello") });
     expect(() => encodeTransferChunk(id, Buffer.alloc(256 * 1024 + 1))).toThrow("256 KiB");
+  });
+
+  it("accepts the capability-gated streamed export download", () => {
+    expect(nodeCapabilities).toContain("exports.download");
+    expect(normalizePanelToNodeMessage({
+      type: "transferStart",
+      id: "00112233-4455-4677-8899-aabbccddeeff",
+      direction: "download",
+      command: "exports.download",
+      payload: {},
+      maxBytes: 1024
+    })).toMatchObject({ command: "exports.download", direction: "download", maxBytes: 1024 });
   });
 
   it("rejects malformed stream and observation messages", () => {

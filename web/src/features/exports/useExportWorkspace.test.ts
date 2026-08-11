@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportStatePollInterval, sameServerExportState, type ServerExportState } from "./useExportWorkspace";
+import { exportRequestPayload, exportStatePollInterval, sameServerExportState, type ServerExportState } from "./useExportWorkspace";
 
 const state = (status?: NonNullable<ServerExportState["latest"]>["status"]): ServerExportState => ({
   latest: status ? {
@@ -49,5 +49,19 @@ describe("export state equality", () => {
       artifact: { operationId: "export-1", filename: "server.zip", createdAt: "2026-01-01T00:00:00.000Z" }
     };
     expect(sameServerExportState(state("succeeded"), withArtifact)).toBe(false);
+  });
+});
+
+describe("export request payload", () => {
+  it("carries the measured inventory token into the matching export", () => {
+    expect(exportRequestPayload("server-1", ["world"], "lockfile", "inventory-1")).toEqual({
+      serverIds: ["server-1"],
+      selection: { categories: ["world"], contentStrategy: "lockfile" },
+      inventoryId: "inventory-1"
+    });
+  });
+
+  it("omits the token when no completed estimate is available", () => {
+    expect(exportRequestPayload("server-1", ["world"], "lockfile")).not.toHaveProperty("inventoryId");
   });
 });

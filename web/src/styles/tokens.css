@@ -28,14 +28,12 @@
   --surface-muted: var(--swiss-muted);
   --app-background: #dde5f5;
   --surface-read-only: #f7f7f7;
-  --surface-disabled: #eceff2;
   --sidebar-background: #09162c;
   --sidebar-foreground: #f4f7ff;
   --sidebar-foreground-muted: #c3ccdc;
   --text: var(--swiss-black);
   --text-muted: #4a4a4a;
   --text-soft: #626262;
-  --text-disabled: #515761;
   --border: #20242c;
   --border-muted: color-mix(in srgb, var(--border) 18%, var(--surface) 82%);
   --border-subtle: 1px;
@@ -72,7 +70,6 @@
      take a denser tint than a panel that sits on the page wash. */
   --glass-tint-menu: rgb(255 255 255 / 0.94);
   --glass-border: rgb(255 255 255 / 0.82);
-  --glass-border-muted: rgb(255 255 255 / 0.5);
   --glass-edge: color-mix(in srgb, var(--glass-border) 74%, var(--border-panel));
   /* The rim is brightest along the top edge, where the lens catches the light,
      falls off around the sides, and returns as a dim bounce along the bottom.
@@ -118,12 +115,10 @@
   --glass-filter-control: blur(14px) saturate(150%) brightness(var(--glass-brightness));
   --glass-filter-scrim: blur(10px) saturate(120%);
   --solid-control-surface: rgb(255 255 255 / 0.84);
-  /* Elevation scale. `xs` lifts a control off its own track, `md` floats a
-     tooltip or popover, `elevated` carries a drawer or modal. */
+  /* Elevation scale. `xs` lifts a control off its own track, `elevated` carries a
+     drawer or modal. */
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.08);
-  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.1);
   --shadow-elevated: 0 18px 46px rgb(0 0 0 / 0.12);
-  --shadow-lg: var(--shadow-elevated);
   /* One focus treatment for the whole app. Anything that can take keyboard focus
      draws this ring and nothing else, so the shape of "focused" never depends on
      which stylesheet happened to reach an element first. */

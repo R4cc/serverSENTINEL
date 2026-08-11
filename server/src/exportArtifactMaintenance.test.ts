@@ -27,7 +27,6 @@ async function harness() {
   const maintenance = new ExportArtifactMaintenance(
     exportsDir,
     operations,
-    60 * 60 * 1000,
     30 * 24 * 60 * 60 * 1000,
     1_000
   );
@@ -59,9 +58,8 @@ describe("export artifact maintenance", () => {
       }
     }, "2026-01-01T00:00:01.000Z");
 
-    const report = await maintenance.maintain(Date.parse("2026-01-01T01:00:01.000Z"));
+    await maintenance.maintain(Date.parse("2026-01-01T01:00:01.000Z"));
 
-    expect(report.expiredArtifacts).toBe(0);
     expect(existsSync(path)).toBe(true);
     expect(operations.find(operation.id)).toMatchObject({
       status: "succeeded",
@@ -74,8 +72,7 @@ describe("export artifact maintenance", () => {
       }
     });
 
-    const secondReport = await maintenance.maintain(Date.parse("2026-01-01T02:00:00.000Z"));
-    expect(secondReport.expiredArtifacts).toBe(0);
+    await maintenance.maintain(Date.parse("2026-01-01T02:00:00.000Z"));
     expect(existsSync(path)).toBe(true);
   });
 

@@ -25,6 +25,7 @@ export class ExportCoordinator {
   private readonly activeByOperation = new Map<string, ActiveExport>();
   private readonly activeByServer = new Map<string, string>();
   private readonly mutationCounts = new Map<string, number>();
+  private readonly mutationVersions = new Map<string, number>();
 
   constructor(private readonly operations: OperationsRepository) {}
 
@@ -35,6 +36,10 @@ export class ExportCoordinator {
   isCancellationAvailable(operationId: string) {
     const active = this.activeByOperation.get(operationId);
     return Boolean(active?.cancellable && !active.controller.signal.aborted);
+  }
+
+  mutationVersion(serverId: string) {
+    return this.mutationVersions.get(serverId) ?? 0;
   }
 
   assertMutationAllowed(serverId: string) {
@@ -49,6 +54,9 @@ export class ExportCoordinator {
     try {
       return await action();
     } finally {
+      // Invalidate inventories measured before or during the mutation. Failed mutations still count
+      // because they may have changed files before reporting their failure.
+      this.mutationVersions.set(serverId, this.mutationVersion(serverId) + 1);
       const remaining = (this.mutationCounts.get(serverId) ?? 1) - 1;
       if (remaining > 0) this.mutationCounts.set(serverId, remaining);
       else this.mutationCounts.delete(serverId);

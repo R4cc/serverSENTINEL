@@ -15,7 +15,7 @@ import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNo
 
 import { listManagedServers } from "../servers/store.js";
 import { logDebug, logInfo, logWarn, errorLogFields } from "../logging.js";
-import type { CreateNodeResponse } from "../nodes/apiTypes.js";
+import type { CreateNodeResponse } from "@serversentinel/contracts";
 
 import { nodeAdvertisesCapability, nodeFeatures, nodeProtocolVersion, normalizeNodeHello } from "../nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "../nodes/protocol.js";

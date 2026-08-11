@@ -87,7 +87,7 @@ describe("OperationsRepository", () => {
 
   it("supports cancellation for queued or running operations", async () => {
     const operations = await createRepository();
-    const created = operations.create({ type: "backup.create", serverId: "server-id" });
+    const created = operations.create({ type: "schedule.run", serverId: "server-id" });
 
     const cancelled = operations.cancel(created.id, "Cancelled by admin");
 

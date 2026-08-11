@@ -148,8 +148,6 @@ export type OperationType =
   | "mod.toggle"
   | "mod.batchUpdate"
   | "schedule.run"
-  | "backup.create"
-  | "backup.restore"
   | "file.extract"
   | "import.run"
   | "export.run";
@@ -900,6 +898,8 @@ export type ExportSizeEstimate = {
   totalBytes: number;
   /** Free space on the panel volume that holds export artifacts, when the platform reports it. */
   availableBytes?: number;
+  /** Opaque, short-lived handle that lets the matching export reuse this filesystem inventory. */
+  inventoryId?: string;
 };
 
 export type ExportLockfileEntry = {
@@ -912,15 +912,6 @@ export type ExportLockfileEntry = {
   /** Present when known; import verifies the re-downloaded jar against it. */
   sha1?: string;
 };
-
-export type ImportIssueCode =
-  | "missing_node_target"
-  | "conflicting_container_name"
-  | "conflicting_port"
-  | "invalid_ports"
-  | "invalid_path"
-  | "unsupported_schema"
-  | "missing_manifest";
 
 export type ImportIssue = {
   code: string;

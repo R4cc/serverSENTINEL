@@ -387,11 +387,6 @@ export class StorageDatabase {
     return this.connection.pragma("wal_checkpoint(PASSIVE)");
   }
 
-  async backupTo(path: string) {
-    mkdirSync(dirname(path), { recursive: true });
-    return this.connection.backup(path);
-  }
-
   metadata(key: string) {
     const row = this.connection.prepare<[string], { value: string }>("SELECT value FROM storage_metadata WHERE key = ?").get(key);
     return row?.value;

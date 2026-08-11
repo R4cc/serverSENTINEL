@@ -601,8 +601,10 @@ describe("upcoming schedule summary", () => {
     const emptyHtml = renderToStaticMarkup(createElement(SchedulePanel, props));
     const unavailableHtml = renderToStaticMarkup(createElement(SchedulePanel, { ...props, canView: false }));
     expect(emptyHtml).toContain("No schedules configured");
+    expect(emptyHtml).toContain("<h2>Schedules</h2>");
     expect(emptyHtml).toContain("overviewCardStateItem");
     expect(emptyHtml).toContain('aria-label="Open Schedules to create a schedule"');
+    expect(emptyHtml).not.toContain(">Open Schedules</button>");
     expect(unavailableHtml).toContain("View schedules permission is required");
     expect(unavailableHtml).toContain("overviewCardStateItem");
     expect(unavailableHtml).not.toContain("uiEmptyState");
@@ -621,10 +623,13 @@ describe("upcoming schedule summary", () => {
       onOpenSchedules: () => undefined
     }));
 
-    expect(html).toContain(">Schedule<");
+    expect(html).toContain(">Schedules<");
+    expect(html).toContain("10 runs in the next 24 hours");
     expect(html).not.toContain(">Next up<");
-    expect((html.match(/class="overviewCardRow scheduleUpcomingItem"/g) ?? []).length).toBe(4);
-    expect(html).toContain("6 more schedules in the next 24 hours");
+    expect((html.match(/overviewSupportListItem scheduleUpcomingItem/g) ?? []).length).toBe(4);
+    expect((html.match(/overviewSupportListIcon/g) ?? []).length).toBe(4);
+    expect(html).toContain("6 more schedules");
+    expect(html).not.toContain(">Open Schedules</button>");
     expect(html).not.toContain("Task 4");
     expect(html).not.toContain("Task 9");
     expect(html).not.toContain("Past activity");

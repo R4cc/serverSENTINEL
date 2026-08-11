@@ -39,6 +39,13 @@ function validateImportId(value: unknown) {
   return importId;
 }
 
+function optionalExportInventoryId(value: unknown) {
+  const inventoryId = typeof value === "string" ? value.trim() : "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(inventoryId)
+    ? inventoryId
+    : undefined;
+}
+
 async function resolveUploadedArchive(importId: string) {
   const path = resolve(importStagingPath(importId));
   if (!isInsideServersDirectory(config.importsDir, path)) {
@@ -60,20 +67,23 @@ app.get("/api/exports/categories", async (request) => {
 });
 
 app.post<{ Body: { serverIds?: unknown; selection?: unknown } }>("/api/exports/estimate", async (request) => {
-  await requireRequestPermission(request, "servers.export");
-  const selection = normalizeExportSelection(request.body?.selection);
-  const serverIds = selectedExportServerIdsOrAll(selectedExportServerIds(request.body?.serverIds));
-  return estimateExport(serverIds, selection);
-});
-
-app.post<{ Body: { serverIds?: unknown; selection?: unknown } }>("/api/exports", destructiveRateLimit, async (request, reply) => {
   const user = await requireRequestPermission(request, "servers.export");
   const selection = normalizeExportSelection(request.body?.selection);
   const serverIds = selectedExportServerIdsOrAll(selectedExportServerIds(request.body?.serverIds));
-  // Server-state, file-selection, size-limit, and disk-space checks run inside the queued operation.
-  // Walking a multi-gigabyte world here duplicates the modal's estimate and can hold this request
-  // open past a reverse proxy timeout before the browser receives an operation id to poll.
-  const operation = await startExportOperation({ serverIds, selection }, user.id);
+  return estimateExport(serverIds, selection, user.id);
+});
+
+app.post<{ Body: { serverIds?: unknown; selection?: unknown; inventoryId?: unknown } }>("/api/exports", destructiveRateLimit, async (request, reply) => {
+  const user = await requireRequestPermission(request, "servers.export");
+  const selection = normalizeExportSelection(request.body?.selection);
+  const serverIds = selectedExportServerIdsOrAll(selectedExportServerIds(request.body?.serverIds));
+  // Server-state, size, disk-space, and any fallback filesystem walk run inside the queued operation
+  // so this request always returns an operation id before a reverse proxy can time out.
+  const operation = await startExportOperation({
+    serverIds,
+    selection,
+    inventoryId: optionalExportInventoryId(request.body?.inventoryId)
+  }, user.id);
   return reply.code(202).send(operation);
 });
 

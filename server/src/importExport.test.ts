@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
@@ -9,9 +10,11 @@ import {
   applyImportArchive,
   assertExportManifest,
   createExportPlan,
+  exportArchiveCompressionLevel,
   readExportManifest,
   serverArchiveKey,
   validateImportArchive,
+  writeDownloadedExportArchive,
   writeExportArchive,
   type ExportManifest
 } from "./importExport.js";
@@ -272,6 +275,15 @@ function manifestFixture(overrides: Partial<ExportManifest["servers"][number]> =
 }
 
 describe("export archives", () => {
+  it("uses adaptive compression for large and already-compressed members", () => {
+    const entry = (archivePath: string, size: number) => ({ sourcePath: archivePath, archivePath, type: "file" as const, size });
+
+    expect(exportArchiveCompressionLevel(entry("manifest.json", 32 * 1024))).toBe(6);
+    expect(exportArchiveCompressionLevel(entry("servers/survival/world/region/r.0.0.mca", 8 * 1024 * 1024))).toBe(1);
+    expect(exportArchiveCompressionLevel(entry("servers/survival/mods/custom.jar", 8 * 1024 * 1024))).toBe(0);
+    expect(exportArchiveCompressionLevel(entry("servers/survival/mods/custom.jar.disabled", 8 * 1024 * 1024))).toBe(0);
+  });
+
   it("writes the archive atomically with restrictive permissions", async () => {
     const root = await tempRoot("serversentinel-export-write-");
     const source = await tempRoot("serversentinel-export-source-");
@@ -281,11 +293,36 @@ describe("export archives", () => {
 
     expect(written.size).toBeGreaterThan(0);
     expect(written.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(written.inputBytes).toBeGreaterThan(0);
+    expect(written.inputBytesPerSecond).toBeGreaterThan(0);
+    expect(written.compression).toMatchObject({ storedEntries: 1, standardEntries: expect.any(Number) });
     expect((await readdir(join(root, "exports"))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
     if (process.platform !== "win32") {
       expect((await stat(written.path)).mode & 0o077).toBe(0);
       expect((await stat(join(root, "exports"))).mode & 0o077).toBe(0);
     }
+  });
+
+  it("atomically persists and hashes a complete ZIP streamed from a remote node", async () => {
+    const root = await tempRoot("serversentinel-export-remote-write-");
+    const source = await tempRoot("serversentinel-export-remote-source-");
+    await seedServerDirectory(source);
+    const { plan, written: locallyWritten } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const archive = await readFile(locallyWritten.path);
+    const progress: string[] = [];
+
+    const written = await writeDownloadedExportArchive(
+      join(root, "remote", "artifact.zip"),
+      plan,
+      { filename: "artifact.zip", stream: Readable.from([archive]) },
+      (_value, task) => progress.push(task)
+    );
+
+    expect(await readFile(written.path)).toEqual(archive);
+    expect(written.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(written.compression).toEqual(locallyWritten.compression);
+    expect(progress.at(-1)).toContain("Receiving remote export archive");
+    expect((await readdir(join(root, "remote"))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
   it("carries the manifest inside the archive alongside the real files", async () => {
@@ -319,6 +356,32 @@ describe("export archives", () => {
 
     expect(plan.manifest.servers[0].files.map((file) => file.path).sort())
       .toEqual(["server.properties", "whitelist.json"]);
+  });
+
+  it("reuses a measured filesystem inventory without walking the server again", async () => {
+    const source = await tempRoot("serversentinel-export-inventory-");
+    const propertiesPath = join(source, "server.properties");
+    await writeFile(propertiesPath, "server-port=25565\n", "utf8");
+    const info = await stat(propertiesPath);
+    const server = managedServer({ serverDir: source });
+    const runtime = directoryRuntime();
+    runtime.listFiles = vi.fn(async () => { throw new Error("filesystem walk should not run"); });
+
+    const plan = await createExportPlan({
+      appVersion: "1.9.1",
+      servers: [server],
+      selection: { categories: ["serverConfig"], contentStrategy: "lockfile" },
+      runtimeForServer: () => runtime,
+      modPreferencesForServer: () => ({}),
+      inventoryByServer: new Map([[server.id, [{
+        category: "serverConfig",
+        files: [{ relativePath: "server.properties", sourcePath: propertiesPath, size: info.size }],
+        totalBytes: info.size
+      }]]])
+    });
+
+    expect(runtime.listFiles).not.toHaveBeenCalled();
+    expect(plan.manifest.servers[0].files).toEqual([{ path: "server.properties", size: info.size }]);
   });
 
   it("never takes regenerable directories even when the world is selected", async () => {

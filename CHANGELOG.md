@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.9.3 - 2026-08-11
+
+- Kept the server status controls beside the server details whenever the bar has room, instead of wrapping them at fixed desktop viewport widths.
+- Fell back to building an export archive on the panel when the node that owns the server refuses to stream one, instead of failing the whole export.
+- Stopped reusing a size estimate measured while a server was still running, which could fail the export it was meant to speed up once the server was stopped.
+
+## 1.9.2 - 2026-08-11
+
 - Stopped a node that dropped mid-export from crashing the panel, which failed large world exports with "Operation did not complete before serverSENTINEL restarted" instead of naming the node that disconnected.
 - Kept a node connected while the panel pauses its socket for download backpressure, so a large export is no longer terminated by the heartbeat it cannot answer.
 - Redesigned the Overview server summary cards around a rounded icon container, with clearer label and value hierarchy and a calmer status treatment.

@@ -189,7 +189,6 @@ services.operationService = new OperationService(services.operationsRepository, 
 services.exportArtifactMaintenance = new ExportArtifactMaintenance(
   config.exportsDir,
   services.operationsRepository,
-  config.exportRetentionMs,
   operationRetentionMs,
   operationRetentionMaxRows
 );
@@ -204,7 +203,7 @@ const runExportMaintenance = async () => {
   try {
     const result = await services.exportArtifactMaintenance.maintain();
     const abandonedImports = (await sweepAbandonedImports()).removed;
-    if (result.expiredArtifacts || result.abandonedArtifacts || result.orphanedArtifacts || result.prunedOperations || abandonedImports) {
+    if (result.abandonedArtifacts || result.orphanedArtifacts || result.prunedOperations || abandonedImports) {
       logInfo({ ...result, abandonedImports, failures: undefined }, "Completed export artifact and operation maintenance");
     }
     for (const failure of result.failures) {
@@ -592,7 +591,6 @@ app.log.info({
   dataDir: config.dataDir,
   databasePath: config.databasePath,
   managedServersDir: config.serversDir,
-  backupsDir: config.backupsDir,
   importsDir: config.importsDir,
   exportsDir: config.exportsDir,
   tmpDir: config.tmpDir,

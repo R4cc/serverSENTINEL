@@ -1,5 +1,6 @@
 import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
 import { httpError } from "../http/errors.js";
+import { asObject as objectValue } from "../storage/valueValidation.js";
 import type { ManagedNode, ManagedServer } from "../types.js";
 
 export const nodeProtocolVersion = NODE_PROTOCOL_VERSION;
@@ -40,6 +41,7 @@ export const nodeCapabilities = [
   "files.mkdir",
   "files.archive.plan",
   "files.archive.extract",
+  "exports.download",
   "mods.list",
   "mods.install",
   "mods.upload",
@@ -244,7 +246,7 @@ export type NodeTransferStartMessage = {
   type: "transferStart";
   id: string;
   direction: NodeTransferDirection;
-  command: "files.upload" | "files.download" | "mods.upload" | "content.upload";
+  command: "files.upload" | "files.download" | "mods.upload" | "content.upload" | "exports.download";
   payload: unknown;
   size?: number;
   sha256?: string;
@@ -359,7 +361,7 @@ export function normalizePanelToNodeMessage(value: unknown): PanelToNodeMessage 
   if (message.type === "streamStop") return { type: "streamStop", id };
   if (message.type === "transferStart") {
     const command = requiredString(message.command, "command") as NodeTransferStartMessage["command"];
-    if (!["files.upload", "files.download", "mods.upload", "content.upload"].includes(command)) throw new Error(`Unsupported transfer command ${command}`);
+    if (!["files.upload", "files.download", "mods.upload", "content.upload", "exports.download"].includes(command)) throw new Error(`Unsupported transfer command ${command}`);
     const direction = message.direction;
     if (direction !== "upload" && direction !== "download") throw new Error("transfer direction must be upload or download");
     return { type: "transferStart", id, direction, command, payload: message.payload, size: optionalNonNegativeNumber(message.size, "size"), sha256: optionalSha256(message.sha256), maxBytes: optionalPositiveNumber(message.maxBytes, "maxBytes") };
@@ -420,11 +422,6 @@ function normalizeNodeStreamEvent(value: unknown): NodeStreamEvent {
   }
   if (event.type === "result") return { type: "result", result: event.result };
   throw new Error(`Unsupported stream event type ${String(event.type)}`);
-}
-
-function objectValue(value: unknown, field: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${field} must be a JSON object`);
-  return value as Record<string, unknown>;
 }
 
 function requiredStringArray(value: unknown, field: string) {

@@ -516,8 +516,7 @@
     align-items: stretch;
   }
 
-  .workspaceActions,
-  .serverStripRight {
+  .workspaceActions {
     width: 100%;
     justify-content: flex-start;
   }

@@ -15,6 +15,13 @@ export type FileDownloadResult = {
   stream: Readable;
 };
 
+export type ExportArchiveDownloadResult = {
+  filename: string;
+  /** Streaming ZIPs do not know their compressed size until their final protocol frame. */
+  size?: number;
+  stream: Readable;
+};
+
 export type ModIconResult = {
   contentType: string;
   stream: Readable;
@@ -47,6 +54,7 @@ export type NodeRuntime = {
   previewFile(server: ManagedServer, target: string): Promise<unknown>;
   downloadFile(server: ManagedServer, target: string): Promise<FileDownloadResult>;
   downloadArchive(server: ManagedServer, entries: FileArchiveEntry[], filename: string): Promise<FileDownloadResult>;
+  downloadExportArchive?(server: ManagedServer, manifest: unknown, filename: string, maxBytes: number): Promise<ExportArchiveDownloadResult | undefined>;
   planArchiveExtraction(server: ManagedServer, archivePath: string, destinationPath: string): Promise<ZipExtractionPlan>;
   extractArchive(server: ManagedServer, archivePath: string, destinationPath: string, conflictPolicy: "replace" | "skip", report?: RuntimeProgressReporter): Promise<ZipExtractionResult>;
   readFile(server: ManagedServer, target: string): Promise<unknown>;

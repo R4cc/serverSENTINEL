@@ -4,12 +4,12 @@ import type { ExportSelection, ExportSizeEstimate, ExportSizeServerEstimate } fr
 import { services, runtimeForServer } from "../appServices.js";
 import { appVersion } from "../buildInfo.js";
 import { config } from "../config.js";
-import { detailedErrorMessage, errorLogFields, logError, logWarn } from "../logging.js";
+import { detailedErrorMessage, durationSince, errorLogFields, logError, logInfo, logWarn } from "../logging.js";
 import { ExportCancelledError } from "../exportCoordinator.js";
 import { validateServerId } from "../http/validation.js";
 import { asArray } from "../storage/valueValidation.js";
 import { listManagedServers } from "../servers/store.js";
-import { collectServerCategories } from "../servers/exportSelection.js";
+import { collectServerCategories, type CollectedCategory } from "../servers/exportSelection.js";
 import { lockfileOmittedFilenames } from "../servers/exportContent.js";
 import { restoreLockfileContent } from "../servers/importContent.js";
 import { downloadServerJar } from "../servers/provisioning.js";
@@ -21,9 +21,13 @@ import {
   exportArtifactFilename,
   readExportManifest,
   validateImportArchive,
-  writeExportArchive
+  writeDownloadedExportArchive,
+  writeExportArchive,
+  type ExportPlan
 } from "../importExport.js";
+import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer } from "../types.js";
+import { exportInventoryCache } from "../exportInventoryCache.js";
 
 export function selectedExportServerIds(value: unknown) {
   if (value === undefined) return undefined;
@@ -83,13 +87,16 @@ async function availableBytes(path: string) {
   }
 }
 
-export async function estimateExport(serverIds: string[] | undefined, selection: ExportSelection): Promise<ExportSizeEstimate> {
+export async function estimateExport(serverIds: string[] | undefined, selection: ExportSelection, createdBy: string): Promise<ExportSizeEstimate> {
   const servers = await resolveExportServers(serverIds);
   const estimates: ExportSizeServerEstimate[] = [];
+  const inventoryByServer = new Map<string, CollectedCategory[]>();
+  const mutationVersions = new Map(servers.map((server) => [server.id, services.exportCoordinator.mutationVersion(server.id)]));
   const lockfileMode = selection.contentStrategy === "lockfile" && selection.categories.includes("content");
   let totalBytes = 0;
   for (const server of servers) {
     const collected = await collectServerCategories(runtimeForServer(server), server, selection.categories);
+    inventoryByServer.set(server.id, collected);
     // A lockfile export leaves out the jars it can name, so counting the whole content directory
     // would inflate the figure the modal shows and could trip the disk precheck on a selection that
     // actually fits.
@@ -116,7 +123,23 @@ export async function estimateExport(serverIds: string[] | undefined, selection:
       totalBytes: serverTotal
     });
   }
-  return { servers: estimates, totalBytes, availableBytes: await availableBytes(config.exportsDir) };
+  const freeBytes = await availableBytes(config.exportsDir);
+  // Only a stopped server has an inventory worth carrying forward. A running one keeps rewriting its
+  // world, and it can stop without any panel mutation to invalidate the token -- a crash never runs
+  // through `withMutation` -- so the export that follows would archive members with the sizes
+  // measured here and fail the moment one of them streams a different number of bytes.
+  const inventoryReusable = estimates.every((estimate) => !estimate.running)
+    && servers.every((server) => services.exportCoordinator.mutationVersion(server.id) === mutationVersions.get(server.id));
+  const inventoryId = inventoryReusable
+    ? exportInventoryCache.store({
+        createdBy,
+        serverIds: servers.map((server) => server.id),
+        selection,
+        mutationVersion: (serverId) => services.exportCoordinator.mutationVersion(serverId),
+        inventoryByServer
+      })
+    : undefined;
+  return { servers: estimates, totalBytes, availableBytes: freeBytes, inventoryId };
 }
 
 /**
@@ -134,7 +157,41 @@ export async function assertExportDiskSpace(estimatedBytes: number) {
   }
 }
 
-export async function startExportOperation(input: { serverIds?: string[]; selection: ExportSelection }, createdBy: string) {
+/**
+ * The node that owns the server can build the export ZIP itself, which spares the panel from pulling
+ * every file across the node protocol only to compress it here. A node that refuses the request --
+ * an agent whose export manifest schema predates the panel's, or one configured with a lower size or
+ * file limit -- must not fail the export. Nothing has been written when the refusal arrives, so the
+ * panel degrades to building the archive from the same files instead of ending the operation.
+ */
+export async function streamRemoteExportArchive(input: {
+  runtime: Pick<NodeRuntime, "downloadExportArchive">;
+  server: ManagedServer;
+  plan: ExportPlan;
+  filename: string;
+  signal: AbortSignal;
+  report: (progress: number, task: string) => void;
+  onRefused: (error: unknown) => void;
+}) {
+  if (!input.runtime.downloadExportArchive) return undefined;
+  input.report(88, "Checking remote export support");
+  const archiveOverhead = Math.max(1024 ** 3, input.plan.entries.length * 2048);
+  try {
+    return await input.runtime.downloadExportArchive(
+      input.server,
+      input.plan.manifest,
+      input.filename,
+      input.plan.totalBytes + archiveOverhead
+    );
+  } catch (error) {
+    // A cancelled export is not a refusal; falling back would only rebuild what nobody wants.
+    if (input.signal.aborted) throw error;
+    input.onRefused(error);
+    return undefined;
+  }
+}
+
+export async function startExportOperation(input: { serverIds?: string[]; selection: ExportSelection; inventoryId?: string }, createdBy: string) {
   // Explicit ids are durable scope even when preflight later discovers a missing server. This keeps
   // expensive traversal and deterministic preflight failures in the background operation while an
   // all-server export snapshots the current ids before it is accepted.
@@ -183,12 +240,23 @@ export async function startExportOperation(input: { serverIds?: string[]; select
       }
     }
   }, async (operation, report) => services.exportCoordinator.run(operation.id, serverIds, async (signal, beginCommit) => {
+    const exportStartedAt = Date.now();
+    const inventoryByServer = input.inventoryId
+      ? exportInventoryCache.take({
+          id: input.inventoryId,
+          createdBy,
+          serverIds,
+          selection: input.selection,
+          mutationVersion: (serverId) => services.exportCoordinator.mutationVersion(serverId)
+        })
+      : undefined;
     try {
       await services.exportArtifactMaintenance.prepareNewExport(serverIds);
       const servers = await resolveExportServers(serverIds);
       // Re-checked inside the operation: the request may have queued behind other work, and a server
       // that was stopped when the operator clicked export can be running by the time it runs.
       await assertServersStopped(servers);
+      const planningStartedAt = Date.now();
       const plan = await createExportPlan({
         appVersion,
         servers,
@@ -196,12 +264,51 @@ export async function startExportOperation(input: { serverIds?: string[]; select
         runtimeForServer,
         modPreferencesForServer: (serverId) => services.modPreferencesRepository.list(serverId),
         report,
-        signal
+        signal,
+        inventoryByServer
       });
+      const planningDurationMs = durationSince(planningStartedAt);
       await assertExportDiskSpace(plan.totalBytes);
-      const written = await writeExportArchive(join(config.exportsDir, exportArtifactFilename(operation.id)), plan, report, signal);
+      const artifactFilename = exportArtifactFilename(operation.id);
+      const artifactPath = join(config.exportsDir, artifactFilename);
+      const remoteRuntime = servers.length === 1 ? runtimeForServer(servers[0]) : undefined;
+      const download = remoteRuntime
+        ? await streamRemoteExportArchive({
+            runtime: remoteRuntime,
+            server: servers[0],
+            plan,
+            filename: artifactFilename,
+            signal,
+            report,
+            onRefused: (error) => logWarn(
+              { operationId: operation.id, serverId: servers[0].id, nodeId: servers[0].nodeId, ...errorLogFields(error) },
+              "Node could not stream the export archive; building it on the panel instead"
+            )
+          })
+        : undefined;
+      const remoteArchive = Boolean(download);
+      const written = download
+        ? await writeDownloadedExportArchive(artifactPath, plan, download, report, signal)
+        : await writeExportArchive(artifactPath, plan, report, signal);
       beginCommit();
       await services.exportArtifactMaintenance.replacePreviousSuccessfulExports(operation.id, serverIds);
+      logInfo({
+        operationId: operation.id,
+        action: "export",
+        status: "succeeded",
+        serverCount: plan.manifest.servers.length,
+        fileCount: plan.manifest.manifest.content.files,
+        uncompressedBytes: plan.totalBytes,
+        archiveBytes: written.size,
+        compressionRatio: plan.totalBytes > 0 ? Number((written.size / plan.totalBytes).toFixed(4)) : undefined,
+        planningDurationMs,
+        archiveDurationMs: written.durationMs,
+        durationMs: durationSince(exportStartedAt),
+        archiveInputBytesPerSecond: written.inputBytesPerSecond,
+        inventoryReused: Boolean(inventoryByServer),
+        remoteArchive,
+        ...written.compression
+      }, "Export archive completed");
       return { written, plan, operationId: operation.id };
     } catch (error) {
       await services.exportArtifactMaintenance.cleanupOperationArtifacts(operation);

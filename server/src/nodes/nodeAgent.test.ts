@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
+import { readZipEntryBuffer } from "../zipArchive.js";
 
 type NodeAgentTestHooks = typeof import("./nodeAgent.js").__nodeAgentTestHooks;
 
@@ -38,6 +39,40 @@ describe("node reconnect backoff", () => {
     expect(hooks.nodeReconnectDelayMs(4, () => 1)).toBe(16_000);
     expect(hooks.nodeReconnectDelayMs(20, () => 1)).toBe(30_000);
     expect(hooks.nodeReconnectDelayMs(20, () => 0)).toBe(1_000);
+  });
+});
+
+describe("remote export archive transfer", () => {
+  it("builds the final import-compatible ZIP from node-local files", async () => {
+    const server = testServer();
+    const worldDirectory = join(tempRoot, "servers", server.storageName!, "world");
+    await mkdir(worldDirectory, { recursive: true });
+    await writeFile(join(worldDirectory, "level.dat"), "world-data");
+    const manifest = {
+      artifactType: "serversentinel.export",
+      schemaVersion: 4,
+      manifest: {},
+      warnings: [],
+      servers: [{ key: "001-survival", server, modPreferences: {}, lockfile: [], files: [{ path: "world/level.dat", size: 10 }] }]
+    };
+    const prepared = await hooks.prepareBinaryDownload({
+      type: "transferStart",
+      id: "00000000-0000-4000-8000-000000000002",
+      direction: "download",
+      command: "exports.download",
+      payload: { server, filename: "large-world.zip", manifest },
+      maxBytes: 1024 * 1024
+    });
+    const chunks: Buffer[] = [];
+    for await (const chunk of prepared.stream) chunks.push(Buffer.from(chunk));
+    const archivePath = join(tempRoot, "export.zip");
+    await writeFile(archivePath, Buffer.concat(chunks));
+
+    expect(prepared.filename).toBe("large-world.zip");
+    expect(prepared.size).toBeUndefined();
+    const limits = { maxEntries: 10, maxExpandedBytes: 1024 * 1024 };
+    await expect(readZipEntryBuffer(archivePath, "manifest.json", 1024 * 1024, limits)).resolves.toEqual(Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`));
+    await expect(readZipEntryBuffer(archivePath, "servers/001-survival/world/level.dat", 1024, limits)).resolves.toEqual(Buffer.from("world-data"));
   });
 });
 

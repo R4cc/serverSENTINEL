@@ -551,6 +551,33 @@ async function assertTimelineResponsiveGeometry(context, viewport) {
   }
 }
 
+async function assertServerStripActionsInline(context, viewport) {
+  const { page, browserErrors } = await createOverviewPage(context, viewport);
+  try {
+    const geometry = await page.locator(".activeServerStrip").evaluate((strip) => {
+      const left = strip.querySelector(".serverStripLeft")?.getBoundingClientRect();
+      const right = strip.querySelector(".serverStripRight")?.getBoundingClientRect();
+      const buttonTops = [...strip.querySelectorAll(".serverStripRight button")]
+        .map((button) => button.getBoundingClientRect().top);
+      return {
+        leftTop: left?.top ?? 0,
+        rightTop: right?.top ?? 0,
+        buttonTops,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth
+      };
+    });
+
+    assertNear(geometry.rightTop, geometry.leftTop, 2, `Server-strip actions wrap below the server details at ${viewport.width}px`);
+    assert(geometry.buttonTops.length > 0, `Server-strip actions are missing at ${viewport.width}px`);
+    assert(geometry.buttonTops.every((top) => Math.abs(top - geometry.buttonTops[0]) <= 1), `Server-strip buttons wrap internally at ${viewport.width}px: ${JSON.stringify(geometry)}`);
+    assert(geometry.documentWidth <= geometry.viewportWidth, `Server strip causes horizontal overflow at ${viewport.width}px: ${JSON.stringify(geometry)}`);
+    assert.deepEqual(browserErrors, [], `Server-strip browser errors at ${viewport.width}px: ${browserErrors.join("\n")}`);
+  } finally {
+    await page.close();
+  }
+}
+
 async function assertSupportCardGeometry(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport, "?mods-fixture=updates");
   try {
@@ -558,6 +585,7 @@ async function assertSupportCardGeometry(context, viewport) {
       const mods = document.querySelector(".modUpdatesCard");
       const schedule = document.querySelector(".schedulePanel");
       const updates = [...document.querySelectorAll(".modUpdatesListItem")];
+      const scheduleRows = [...document.querySelectorAll(".scheduleUpcomingItem")];
       const remaining = document.querySelector(".modUpdatesRemaining");
       const documentElement = document.documentElement;
       const rect = (element) => element?.getBoundingClientRect();
@@ -568,6 +596,15 @@ async function assertSupportCardGeometry(context, viewport) {
         viewportWidth: documentElement.clientWidth,
         documentWidth: documentElement.scrollWidth,
         updateCount: updates.length,
+        scheduleRowCount: scheduleRows.length,
+        scheduleTitle: schedule?.querySelector(".uiPanelHeader h2")?.textContent?.trim() ?? "",
+        scheduleHeaderButtonCount: schedule?.querySelectorAll(".uiPanelHeader button").length ?? 0,
+        modsUseSharedList: Boolean(mods?.querySelector(":scope > .overviewSupportList")),
+        scheduleUsesSharedList: Boolean(schedule?.querySelector(":scope > .overviewSupportList")),
+        updateRowsUseSharedStructure: updates.every((row) => row.classList.contains("overviewSupportListItem")),
+        scheduleRowsUseSharedStructure: scheduleRows.every((row) => row.classList.contains("overviewSupportListItem")),
+        updateRowHeight: rect(updates[0])?.height ?? 0,
+        scheduleRowHeight: rect(scheduleRows[0])?.height ?? 0,
         remainingText: remaining?.textContent?.trim() ?? "",
         mods: modsRect ? { top: modsRect.top, bottom: modsRect.bottom, height: modsRect.height } : null,
         schedule: scheduleRect ? { top: scheduleRect.top, bottom: scheduleRect.bottom, height: scheduleRect.height } : null,
@@ -578,6 +615,13 @@ async function assertSupportCardGeometry(context, viewport) {
 
     assert.equal(metrics.updateCount, 4, `Ten updates should render four preview rows at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     assert.equal(metrics.remainingText, "6 more updates", `Ten updates should summarize the remaining six at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.scheduleTitle, "Schedules", `Schedule card title is inconsistent at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.scheduleHeaderButtonCount, 0, `Schedule card still has a header action at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.modsUseSharedList && metrics.scheduleUsesSharedList, `Support cards do not share the direct list structure at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.updateRowsUseSharedStructure && metrics.scheduleRowsUseSharedStructure, `Support-card rows do not share their structure at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    if (metrics.scheduleRowCount > 0) {
+      assertNear(metrics.scheduleRowHeight, metrics.updateRowHeight, 1, `Support-card row heights differ at ${viewport.width}px`);
+    }
     assert(metrics.mods && metrics.schedule, `Overview support cards are missing at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     assert(metrics.remainingBottom <= metrics.mods.bottom + 1, `The update disclosure overflows its card at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     assert(metrics.scheduleOverflow <= 1, `The Schedule card clips vertically at ${viewport.width}px: ${JSON.stringify(metrics)}`);
@@ -625,6 +669,15 @@ try {
     { width: 844, height: 390 }
   ]) await assertTimelineResponsiveGeometry(context, viewport);
 
+  for (const viewport of [
+    { width: 721, height: 900 },
+    { width: 980, height: 844 },
+    { width: 981, height: 844 },
+    { width: 1101, height: 900 },
+    { width: 1280, height: 900 },
+    { width: 1366, height: 900 }
+  ]) await assertServerStripActionsInline(context, viewport);
+
   const mobile = await createOverviewPage(context, { width: 390, height: 844 });
   await assertStorageSummary(mobile.page, 5);
   await assertMobile(mobile.page);
@@ -641,7 +694,7 @@ try {
     { width: 390, height: 844 }
   ]) await assertSupportCardGeometry(context, viewport);
 
-  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline geometry; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
+  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline and server-strip geometry; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

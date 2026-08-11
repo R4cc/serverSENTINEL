@@ -29,6 +29,8 @@ import { archiveEntriesForFiles, collectServerCategories, type CollectedCategory
 import { planServerContent } from "./servers/exportContent.js";
 import { config } from "./config.js";
 import type { NodeRuntime } from "./nodes/types.js";
+import { exportArchiveCompressionLevel } from "./exportCompression.js";
+import type { BinaryDownloadResult } from "./nodes/panelConnections.js";
 
 const maxManifestBytes = 64 * 1024 * 1024;
 const contentFileSuffixes = [".jar", ".jar.disabled"];
@@ -92,6 +94,8 @@ type ExportInput = {
   modPreferencesForServer: (serverId: string) => Record<string, ModPreference>;
   report?: (progress: number, task: string) => void;
   signal?: AbortSignal;
+  /** A recent size estimate may supply the same collected filesystem inventory. */
+  inventoryByServer?: ReadonlyMap<string, CollectedCategory[]>;
 };
 
 function throwIfExportAborted(signal?: AbortSignal) {
@@ -129,6 +133,14 @@ export type ContentRestoreReport = {
 export function exportArtifactFilename(operationId: string) {
   return `serversentinel-export-${operationId}.zip`;
 }
+
+/**
+ * Large world members favor fast DEFLATE: it still collapses empty region-file sectors without
+ * spending level-6 CPU on already-compressed chunk payloads. Containers and media that are already
+ * compressed are stored directly, while small metadata keeps normal compression because its cost is
+ * negligible and it benefits most from the denser setting.
+ */
+export { exportArchiveCompressionLevel } from "./exportCompression.js";
 
 function archiveSlug(value: string) {
   const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -186,7 +198,8 @@ export async function createExportPlan(input: ExportInput): Promise<ExportPlan> 
     input.report?.(progress, `Collecting ${server.displayName}`);
     const key = serverArchiveKey(index, server);
     const runtime = input.runtimeForServer(server);
-    const collected = await collectServerCategories(runtime, server, input.selection.categories);
+    const collected = input.inventoryByServer?.get(server.id)
+      ?? await collectServerCategories(runtime, server, input.selection.categories);
     throwIfExportAborted(input.signal);
 
     let lockfile: ExportLockfileEntry[] = [];
@@ -287,6 +300,30 @@ export async function writeExportArchive(path: string, plan: ExportPlan, report?
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await chmod(dirname(path), 0o700);
   const hash = createHash("sha256");
+  const archiveInputBytes = plan.entries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
+  const compression = exportCompressionCounts(plan);
+  const archiveStartedAt = Date.now();
+  let processedBytes = 0;
+  let lastProgressAt = 0;
+  let lastProgressBytes = 0;
+  const formatProgressBytes = (bytes: number) => {
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+    if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+    return `${Math.ceil(bytes / 1024)} KiB`;
+  };
+  const reportArchiveProgress = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastProgressAt < 1_000 && processedBytes - lastProgressBytes < 64 * 1024 * 1024) return;
+    lastProgressAt = now;
+    lastProgressBytes = processedBytes;
+    const fraction = archiveInputBytes > 0 ? Math.min(processedBytes / archiveInputBytes, 1) : 1;
+    const elapsedSeconds = Math.max((now - archiveStartedAt) / 1_000, 0.001);
+    const throughput = processedBytes / elapsedSeconds;
+    report?.(
+      88 + Math.floor(fraction * 10),
+      `Compressing export archive · ${formatProgressBytes(processedBytes)} / ${formatProgressBytes(archiveInputBytes)} · ${formatProgressBytes(throughput)}/s`
+    );
+  };
   const digest = new Transform({
     transform(chunk, _encoding, callback) {
       hash.update(chunk);
@@ -295,20 +332,32 @@ export async function writeExportArchive(path: string, plan: ExportPlan, report?
   });
   try {
     throwIfExportAborted(signal);
-    report?.(88, "Compressing export archive");
+    reportArchiveProgress(true);
     const archive = createZipArchiveStream(
       plan.entries,
       async (entry) => {
         const generated = plan.synthetic.get(entry.archivePath);
-        if (generated) return Readable.from([generated]);
-        const prefix = entry.archivePath.split("/").slice(0, 2).join("/");
-        const open = plan.openers.get(prefix);
-        if (!open) throw new Error(`No reader is registered for archive member ${entry.archivePath}`);
-        return open(entry.sourcePath);
+        let source: Readable;
+        if (generated) {
+          source = Readable.from([generated]);
+        } else {
+          const prefix = entry.archivePath.split("/").slice(0, 2).join("/");
+          const open = plan.openers.get(prefix);
+          if (!open) throw new Error(`No reader is registered for archive member ${entry.archivePath}`);
+          source = await open(entry.sourcePath);
+        }
+        return Readable.from((async function* () {
+          for await (const chunk of source) {
+            processedBytes += Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk);
+            reportArchiveProgress();
+            yield chunk;
+          }
+        })());
       },
-      { compress: true }
+      { compressionLevel: exportArchiveCompressionLevel }
     );
     await pipeline(archive, digest, createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }), { signal });
+    reportArchiveProgress(true);
     throwIfExportAborted(signal);
     await rename(temporaryPath, path);
     await chmod(path, 0o600);
@@ -317,11 +366,93 @@ export async function writeExportArchive(path: string, plan: ExportPlan, report?
     throw error;
   }
   const written = await stat(path);
+  const durationMs = Date.now() - archiveStartedAt;
   return {
     path,
     filename: basename(path),
     size: written.size,
-    sha256: hash.digest("hex")
+    sha256: hash.digest("hex"),
+    durationMs,
+    inputBytes: processedBytes,
+    inputBytesPerSecond: Math.round(processedBytes / Math.max(durationMs / 1_000, 0.001)),
+    compression
+  };
+}
+
+function exportCompressionCounts(plan: ExportPlan) {
+  const compression = { storedEntries: 0, fastEntries: 0, standardEntries: 0 };
+  for (const entry of plan.entries) {
+    if (entry.type !== "file") continue;
+    const level = exportArchiveCompressionLevel(entry);
+    if (level === 0) compression.storedEntries += 1;
+    else if (level === 1) compression.fastEntries += 1;
+    else compression.standardEntries += 1;
+  }
+  return compression;
+}
+
+/** Persist an already-complete ZIP streamed from the node that owns the selected server. */
+export async function writeDownloadedExportArchive(
+  path: string,
+  plan: ExportPlan,
+  download: BinaryDownloadResult,
+  report?: (progress: number, task: string) => void,
+  signal?: AbortSignal
+) {
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await chmod(dirname(path), 0o700);
+  const hash = createHash("sha256");
+  const startedAt = Date.now();
+  const archiveInputBytes = plan.entries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
+  let receivedBytes = 0;
+  let lastReportAt = 0;
+  const formatBytes = (bytes: number) => bytes >= 1024 ** 3
+    ? `${(bytes / 1024 ** 3).toFixed(1)} GiB`
+    : `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+  const reportProgress = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastReportAt < 1_000) return;
+    lastReportAt = now;
+    const elapsedSeconds = Math.max((now - startedAt) / 1_000, 0.001);
+    const fraction = archiveInputBytes > 0 ? Math.min(receivedBytes / archiveInputBytes, 1) : 1;
+    report?.(
+      force && receivedBytes > 0 ? 98 : 88 + Math.floor(fraction * 10),
+      `Receiving remote export archive · ${formatBytes(receivedBytes)} · ${formatBytes(receivedBytes / elapsedSeconds)}/s`
+    );
+  };
+  const digest = new Transform({
+    transform(chunk, _encoding, callback) {
+      receivedBytes += Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk);
+      hash.update(chunk);
+      reportProgress();
+      callback(null, chunk);
+    }
+  });
+  try {
+    throwIfExportAborted(signal);
+    reportProgress(true);
+    await pipeline(download.stream, digest, createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }), { signal });
+    reportProgress(true);
+    throwIfExportAborted(signal);
+    await rename(temporaryPath, path);
+    await chmod(path, 0o600);
+  } catch (error) {
+    download.stream.destroy(error as Error);
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+  const written = await stat(path);
+  const durationMs = Date.now() - startedAt;
+  return {
+    path,
+    filename: basename(path),
+    size: written.size,
+    sha256: hash.digest("hex"),
+    durationMs,
+    inputBytes: archiveInputBytes,
+    inputBytesPerSecond: Math.round(archiveInputBytes / Math.max(durationMs / 1_000, 0.001)),
+    compression: exportCompressionCounts(plan)
   };
 }
 

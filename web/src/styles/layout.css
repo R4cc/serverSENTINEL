@@ -1734,7 +1734,7 @@ button .buttonIcon {
   align-items: center;
   justify-content: flex-end;
   flex: 0 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-2);
   min-width: 0;
 }
@@ -1817,7 +1817,7 @@ button .buttonIcon {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .activeServerStrip .uiButton.runtimeControlButton {
@@ -1882,17 +1882,6 @@ button .buttonIcon {
   border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 32%, var(--surface));
   color: var(--sentinel-accent-strong);
-}
-
-@media (max-width: 980px) {
-  .activeServerStrip .serverStripPrimary {
-    align-items: stretch;
-  }
-
-  .activeServerStrip .serverStripRight {
-    width: 100%;
-    justify-content: flex-start;
-  }
 }
 
 @media (min-width: 721px) and (max-width: 980px) {

@@ -10,8 +10,6 @@ type ExportArtifactMetadata = {
   size?: number;
   sha256?: string;
   downloadUrl?: string;
-  expiresAt?: string;
-  expiredAt?: string;
 };
 
 export type ExportOperationResult = {
@@ -23,7 +21,6 @@ export type ExportOperationResult = {
 };
 
 export type ExportMaintenanceReport = {
-  expiredArtifacts: number;
   abandonedArtifacts: number;
   orphanedArtifacts: number;
   prunedOperations: number;
@@ -51,14 +48,6 @@ function overlapsServerIds(operation: OperationRecord, serverIds: ReadonlySet<st
   return exportOperationServerIds(operation).some((serverId) => serverIds.has(serverId));
 }
 
-export function exportArtifactExpiresAt(operation: OperationRecord, retentionMs: number) {
-  const artifact = objectValue(exportOperationResult(operation).artifact) as ExportArtifactMetadata | undefined;
-  const explicit = artifact?.expiresAt ? Date.parse(artifact.expiresAt) : Number.NaN;
-  if (Number.isFinite(explicit)) return explicit;
-  const completedAt = Date.parse(operation.finishedAt ?? operation.createdAt);
-  return Number.isFinite(completedAt) ? completedAt + retentionMs : undefined;
-}
-
 function insideDirectory(root: string, path: string) {
   const contained = relative(resolve(root), resolve(path));
   return contained !== ""
@@ -75,14 +64,12 @@ export class ExportArtifactMaintenance {
   constructor(
     private readonly exportsDir: string,
     private readonly operations: OperationsRepository,
-    private readonly retentionMs: number,
     private readonly operationRetentionMs: number,
     private readonly operationRetentionMaxRows: number
   ) {}
 
   async maintain(now = Date.now()): Promise<ExportMaintenanceReport> {
     const report: ExportMaintenanceReport = {
-      expiredArtifacts: 0,
       abandonedArtifacts: 0,
       orphanedArtifacts: 0,
       prunedOperations: 0,
@@ -120,8 +107,7 @@ export class ExportArtifactMaintenance {
         continue;
       }
       // The newest successful artifact is retained until another successful export replaces it.
-      // `retentionMs` remains accepted in configuration for backwards compatibility, but no longer
-      // expires the only available download merely because time passed.
+      // Nothing expires the only available download merely because time passed.
       const serverIds = exportOperationServerIds(operation);
       if (
         typeof exportOperationResult(operation).artifactPath === "string"
@@ -208,26 +194,6 @@ export class ExportArtifactMaintenance {
       deletable.push(operation.id);
     }
     this.operations.deleteFinished(deletable);
-  }
-
-  async expireOperation(operation: OperationRecord, now = Date.now(), report?: ExportMaintenanceReport, directoryFileNames?: string[]) {
-    const cleanup = await this.removeOperationFiles(operation, report, directoryFileNames);
-    if (!cleanup.success) return false;
-    const result = exportOperationResult(operation);
-    const artifact = objectValue(result.artifact) as ExportArtifactMetadata | undefined ?? {};
-    if (artifact.expiredAt && !result.artifactPath) return true;
-    const expiresAt = exportArtifactExpiresAt(operation, this.retentionMs) ?? now;
-    const { artifactPath: _artifactPath, ...retainedResult } = result;
-    const { downloadUrl: _downloadUrl, ...retainedArtifact } = artifact;
-    this.operations.replaceResult(operation.id, {
-      ...retainedResult,
-      artifact: {
-        ...retainedArtifact,
-        expiresAt: new Date(expiresAt).toISOString(),
-        expiredAt: new Date(now).toISOString()
-      }
-    });
-    return true;
   }
 
   private canonicalPath(operationId: string) {

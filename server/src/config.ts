@@ -123,7 +123,6 @@ export const config = {
   dataDir: paths.dataDir,
   databasePath: paths.databasePath,
   serversDir: paths.serversDir,
-  backupsDir: paths.backupsDir,
   importsDir: paths.importsDir,
   exportsDir: paths.exportsDir,
   tmpDir: paths.tmpDir,
@@ -140,7 +139,11 @@ export const config = {
   enableDemo: parseBooleanEnv("SERVERSENTINEL_ENABLE_DEMO"),
   trustProxy: parseBooleanEnv("SERVERSENTINEL_TRUST_PROXY"),
   setupToken: optionalSecretEnv("SERVERSENTINEL_SETUP_TOKEN"),
-  /** Legacy no-op retained so existing deployments do not fail configuration validation. */
+  /**
+   * Legacy no-op. Nothing reads this value: the newest successful export is retained until another
+   * export replaces it, never on a timer. It stays parsed and validated only so existing
+   * deployments that still set the variable do not fail configuration validation on upgrade.
+   */
   exportRetentionMs: parseHourDurationEnv("SERVERSENTINEL_EXPORT_RETENTION_HOURS", 24),
   /** How long an uploaded import archive may sit unconsumed before maintenance reclaims its space. */
   importRetentionMs: parseHourDurationEnv("SERVERSENTINEL_IMPORT_RETENTION_HOURS", 6),

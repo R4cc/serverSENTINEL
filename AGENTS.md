@@ -7,6 +7,17 @@
 - For an urgent production hotfix, branch from `main`, merge the fix into `main` through a pull request, and then synchronize `main` back into `dev`.
 - Do not change the default branch, branch rulesets, required checks, or deployment restrictions unless the user explicitly requests it.
 
+# Automatic versioning
+
+- Every completed change to shipped serverSENTINEL behavior must include one SemVer version bump in the same change, even when the user does not separately request a version bump. Determine the bump from the highest-impact change in the task:
+  - **Patch (`x.y.Z`)** for backward-compatible bug fixes, performance improvements, security hardening, dependency maintenance, and user-interface polish that does not add a distinct capability.
+  - **Minor (`x.Y.0`)** for backward-compatible features, new user-visible capabilities, new optional protocol capabilities, and additive API or export-schema functionality.
+  - **Major (`X.0.0`)** for explicitly authorized breaking changes to supported APIs, protocols, stored data, configuration, or user workflows. Do not introduce or infer a breaking change merely to justify a major bump.
+- Use only the highest applicable bump once per task. Do not bump again when the current version was already raised for the same batch of changes, and follow an explicit version requested by the user when one is provided.
+- Do not bump the version for tests-only, documentation-only, CI/tooling-only, comment/formatting, or behavior-preserving refactor changes unless the user explicitly requests it.
+- A version bump must synchronize the root, `server`, `shared`, and `web` manifests; `package-lock.json`; internal `@serversentinel/contracts` pins; `server/src/buildInfo.ts`; `web/src/app/appConfig.ts`; `docker/Dockerfile`; and `CHANGELOG.md`. Preserve historical changelog entries and add a concise user-visible note for the new version.
+- Run `npm run check:versions` after every bump. Also run validation appropriate to the underlying behavior change and `git diff --check` before handoff.
+
 # Repository structure
 
 - `shared/` contains contracts used by both application sides, `server/` contains the backend and node/runtime integrations, and `web/` contains the React frontend.

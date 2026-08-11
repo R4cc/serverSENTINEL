@@ -64,10 +64,6 @@ export function useMobileViewport() {
   return phoneLayout;
 }
 
-export function shouldShowOverviewTimeline(width: number, height: number) {
-  return width >= 981 || width > height;
-}
-
 export function useOverviewTimelineVisibility() {
   const [visible, setVisible] = useState(() => window.matchMedia(overviewTimelineQuery).matches);
 

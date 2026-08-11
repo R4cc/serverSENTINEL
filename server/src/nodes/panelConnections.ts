@@ -49,7 +49,7 @@ type TransferState = {
   maxBytes?: number;
 };
 
-export type BinaryDownloadResult = { filename: string; size: number; stream: Readable };
+export type BinaryDownloadResult = { filename: string; size?: number; stream: Readable };
 
 export class PanelNodeConnections {
   private readonly connected = new Map<string, ConnectedNode>();
@@ -242,10 +242,11 @@ export class PanelNodeConnections {
 
   async download(
     node: ManagedNode,
-    command: Extract<NodeTransferStartMessage["command"], "files.download">,
+    command: Extract<NodeTransferStartMessage["command"], "files.download" | "exports.download">,
     payload: unknown,
     maxBytes: number,
-    timeoutMs = 2 * 60 * 1000
+    timeoutMs = 2 * 60 * 1000,
+    requireSize = true
   ): Promise<BinaryDownloadResult> {
     const connected = this.transferConnection(node, command);
     const id = randomUUID();
@@ -258,7 +259,10 @@ export class PanelNodeConnections {
     stream.on("error", () => {});
     // A consumer that abandons the download never drains it, so a socket paused for backpressure
     // would stay paused for the rest of the session.
-    stream.once("close", () => this.resumeReads(connected));
+    stream.once("close", () => {
+      this.resumeReads(connected);
+      if (connected.transfers.has(id)) this.cancelTransfer(connected, id, "Download consumer closed");
+    });
     let readyResolve!: (message: NodeTransferReadyMessage) => void;
     const ready = new Promise<NodeTransferReadyMessage>((resolve) => { readyResolve = resolve; });
     let resultResolve!: (value: unknown) => void;
@@ -271,8 +275,8 @@ export class PanelNodeConnections {
     try {
       await this.send(connected.socket, JSON.stringify(start));
       const metadata = await Promise.race([ready, result.then(() => { throw new Error("Transfer completed before it became ready"); })]);
-      if (metadata.size === undefined || !metadata.filename) throw new Error("Node omitted transfer metadata");
-      if (metadata.size > maxBytes) throw new Error("Remote file exceeds the configured download limit");
+      if ((requireSize && metadata.size === undefined) || !metadata.filename) throw new Error("Node omitted transfer metadata");
+      if (metadata.size !== undefined && metadata.size > maxBytes) throw new Error("Remote file exceeds the configured download limit");
       return { filename: metadata.filename, size: metadata.size, stream };
     } catch (error) {
       this.cancelTransfer(connected, id, (error as Error).message);

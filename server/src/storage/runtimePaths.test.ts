@@ -26,7 +26,6 @@ describe("runtime data paths", () => {
       dataDir: resolve(root),
       databasePath: join(resolve(root), "serversentinel.sqlite"),
       serversDir: join(resolve(root), "servers"),
-      backupsDir: join(resolve(root), "backups"),
       importsDir: join(resolve(root), "imports"),
       exportsDir: join(resolve(root), "exports"),
       tmpDir: join(resolve(root), "tmp"),
@@ -35,7 +34,7 @@ describe("runtime data paths", () => {
 
     initializeRuntimeDataRoot(paths);
 
-    for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
+    for (const directory of [paths.dataDir, paths.serversDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
       expect(existsSync(directory)).toBe(true);
     }
   });

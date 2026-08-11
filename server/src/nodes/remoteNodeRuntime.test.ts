@@ -90,9 +90,9 @@ function paperServer(): ManagedServer {
   };
 }
 
-function runtimeWithRecorder(result: unknown = { ok: true }) {
-  const calls: Array<{ command: string; timeoutMs?: number }> = [];
-  const node = testNode();
+function runtimeWithRecorder(result: unknown = { ok: true }, nodeOverrides: Partial<ManagedNode> = {}) {
+  const calls: Array<{ command: string; timeoutMs?: number; requireSize?: boolean }> = [];
+  const node = { ...testNode(), ...nodeOverrides };
   const connections = {
     connectedNode: () => ({ ...node, features: [...nodeFeatures] }),
     request: async (_node: ManagedNode, command: string, _payload: unknown, timeoutMs?: number) => {
@@ -103,8 +103,8 @@ function runtimeWithRecorder(result: unknown = { ok: true }) {
       calls.push({ command, timeoutMs });
       return result;
     },
-    download: async (_node: ManagedNode, command: string, _payload: unknown, _maxBytes: number, timeoutMs?: number) => {
-      calls.push({ command, timeoutMs });
+    download: async (_node: ManagedNode, command: string, _payload: unknown, _maxBytes: number, timeoutMs?: number, requireSize?: boolean) => {
+      calls.push({ command, timeoutMs, requireSize });
       return result;
     },
   } as unknown as PanelNodeConnections;
@@ -125,6 +125,27 @@ async function drain(stream: Readable) {
     // Drain the stream so lazy archive entries open their remote transfers.
   }
 }
+
+describe("RemoteNodeRuntime export streaming", () => {
+  it("uses the node-side export stream when the connected node advertises it", async () => {
+    const result = { filename: "export.zip", stream: Readable.from([]) };
+    const { runtime, calls } = runtimeWithRecorder(result);
+    await expect(runtime.downloadExportArchive(testServer(), { servers: [] }, "export.zip", 4096)).resolves.toBe(result);
+    expect(calls).toEqual([{ command: "exports.download", timeoutMs: 6 * 60 * 60 * 1000, requireSize: false }]);
+  });
+
+  it("falls back without starting a transfer when the node lacks the capability", async () => {
+    const { runtime, calls } = runtimeWithRecorder(undefined, { capabilities: nodeCapabilities.filter((capability) => capability !== "exports.download") });
+    await expect(runtime.downloadExportArchive(testServer(), { servers: [] }, "export.zip", 4096)).resolves.toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
+  it("falls back when the manifest cannot fit in a protocol control frame", async () => {
+    const { runtime, calls } = runtimeWithRecorder();
+    await expect(runtime.downloadExportArchive(testServer(), { padding: "x".repeat(8 * 1024 * 1024) }, "export.zip", 4096)).resolves.toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+});
 
 describe("RemoteNodeRuntime storage", () => {
   it("queries storage on the node that hosts the server", async () => {

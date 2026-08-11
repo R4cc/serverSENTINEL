@@ -400,7 +400,7 @@ export function ModHealthPanel({
       loading={loading}
     >
       {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
-      <div className="overviewCardList modUpdatesList">
+      <div className="overviewCardList overviewSupportList modUpdatesList">
         {updateCount === 0 ? (
           <OverviewCardState
             title="Everything is up to date"
@@ -413,13 +413,13 @@ export function ModHealthPanel({
         ) : visibleUpdates.map((entry) => (
           <button
             type="button"
-            className="overviewCardRow modUpdatesListItem"
+            className="overviewCardRow overviewSupportListItem modUpdatesListItem"
             key={entry.filename}
             onClick={onOpenMods}
             title={`Open ${entry.displayName} update in ${contentPluralTitle}`}
           >
             <ModIconImage src={modIconSource(entry.iconUrl)} fallback="MOD" />
-            <span className="modUpdatesListCopy">
+            <span className="overviewSupportListCopy modUpdatesListCopy">
               <strong title={entry.displayName}>{entry.displayName}</strong>
               <small>
                 {entry.currentVersion && <span>{entry.currentVersion}</span>}
@@ -432,7 +432,7 @@ export function ModHealthPanel({
         ))}
       </div>
       {remainingUpdates > 0 && (
-        <Button variant="ghost" compact className="modUpdatesRemaining" onClick={onOpenMods}>
+        <Button variant="ghost" compact className="overviewSupportMore modUpdatesRemaining" onClick={onOpenMods}>
           {remainingUpdates} more update{remainingUpdates === 1 ? "" : "s"}
         </Button>
       )}
@@ -468,11 +468,11 @@ function ModHealthPanelSkeleton({
       loading
     >
       <LoadingLabel>Loading {contentSingular} updates</LoadingLabel>
-      <div className="overviewCardList modUpdatesList" aria-hidden="true">
+      <div className="overviewCardList overviewSupportList modUpdatesList" aria-hidden="true">
         {Array.from({ length: 1 }, (_, index) => (
-          <div className="overviewCardRow modUpdatesListItem" key={index}>
+          <div className="overviewCardRow overviewSupportListItem modUpdatesListItem" key={index}>
             <SkeletonBlock className="modUpdatesIconSkeleton" />
-            <span className="modUpdatesListCopy">
+            <span className="overviewSupportListCopy modUpdatesListCopy">
               <SkeletonBlock className="modUpdatesNameSkeleton" />
               <SkeletonBlock className="modUpdatesVersionSkeleton" />
             </span>
@@ -541,13 +541,24 @@ export function SchedulePanel({
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
 }) {
   const snapshot = buildUpcomingScheduleSnapshot(schedules);
+  const upcomingCount = snapshot.schedules.length + snapshot.remainingInNext24Hours;
+  const description = !canView
+    ? "Permission required"
+    : schedules.length === 0
+      ? "No schedules configured"
+      : snapshot.schedules.length === 0
+        ? "No upcoming runs"
+        : snapshot.remainingInNext24Hours > 0
+          ? `${upcomingCount} runs in the next 24 hours`
+          : `${upcomingCount} upcoming run${upcomingCount === 1 ? "" : "s"}`;
+
   return (
     <OverviewCard
       className="schedulePanel overviewOperationsPanel"
-      title="Schedule"
-      actions={canView && <Button variant="ghost" compact className="textLinkButton" onClick={() => onOpenSchedules()}>Open Schedules</Button>}
+      title="Schedules"
+      description={description}
     >
-      <div className="overviewCardBody">{!canView ? (
+      <div className="overviewCardList overviewSupportList scheduleUpcomingList">{!canView ? (
         <OverviewCardState title="Schedules unavailable" message="View schedules permission is required." icon={<AppIcon name="shield" />} />
       ) : schedules.length === 0 ? (
         <OverviewCardState
@@ -566,38 +577,37 @@ export function SchedulePanel({
           ariaLabel="Open Schedules, no upcoming schedules"
         />
       ) : (
-        <div className="scheduleUpcoming">
-          <div className="scheduleUpcomingList">
-            {snapshot.schedules.map((schedule) => {
-              const nextRunAt = schedule.nextRunAt!;
-              const nextTime = relativeTimestamps ? formatRelativeScheduleTime(nextRunAt) : formatDate(nextRunAt);
-              return (
-                <button
-                  key={schedule.id}
-                  type="button"
-                  className="overviewCardRow scheduleUpcomingItem"
-                  onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
-                  title={`Open ${schedule.name}, next run ${nextTime}`}
-                >
-                  <strong title={schedule.name}>{schedule.name}</strong>
-                  <time dateTime={nextRunAt} title={formatDate(nextRunAt)}>{nextTime}</time>
-                  <AppIcon name="chevronRight" />
-                </button>
-              );
-            })}
-          </div>
-          {snapshot.remainingInNext24Hours > 0 && (
-            <Button
-              variant="ghost"
-              compact
-              className="scheduleUpcomingMore"
-              onClick={() => onOpenSchedules()}
+        snapshot.schedules.map((schedule) => {
+          const nextRunAt = schedule.nextRunAt!;
+          const nextTime = relativeTimestamps ? formatRelativeScheduleTime(nextRunAt) : formatDate(nextRunAt);
+          return (
+            <button
+              key={schedule.id}
+              type="button"
+              className="overviewCardRow overviewSupportListItem scheduleUpcomingItem"
+              onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
+              title={`Open ${schedule.name}, next run ${nextTime}`}
             >
-              {snapshot.remainingInNext24Hours} more {snapshot.remainingInNext24Hours === 1 ? "schedule" : "schedules"} in the next 24 hours
-            </Button>
-          )}
-        </div>
+              <span className="overviewSupportListIcon" aria-hidden="true"><SidebarIcon name="schedule" /></span>
+              <span className="overviewSupportListCopy">
+                <strong title={schedule.name}>{schedule.name}</strong>
+                <small><time dateTime={nextRunAt} title={formatDate(nextRunAt)}>{nextTime}</time></small>
+              </span>
+              <AppIcon name="chevronRight" />
+            </button>
+          );
+        })
       )}</div>
+      {canView && snapshot.remainingInNext24Hours > 0 && (
+        <Button
+          variant="ghost"
+          compact
+          className="overviewSupportMore scheduleUpcomingMore"
+          onClick={() => onOpenSchedules()}
+        >
+          {snapshot.remainingInNext24Hours} more {snapshot.remainingInNext24Hours === 1 ? "schedule" : "schedules"}
+        </Button>
+      )}
     </OverviewCard>
   );
 }
@@ -644,10 +654,6 @@ export type RecentEventTimeSection = {
   events: RecentEventGroup[];
 };
 
-function eventSubject(event: ServerEvent) {
-  return playerEventSubject(event);
-}
-
 function secondsBetween(first: ServerEvent, second: ServerEvent, now: Date) {
   const firstDate = eventDate(first.timestamp, now);
   const secondDate = eventDate(second.timestamp, now);
@@ -693,11 +699,11 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
     if (
       event.eventType === "player_joined"
       && next?.eventType === "player_left"
-      && samePlayerName(eventSubject(event), eventSubject(next))
+      && samePlayerName(playerEventSubject(event), playerEventSubject(next))
       && duration !== null
       && duration * 1_000 <= playerReconnectWindowMs
     ) {
-      const player = eventSubject(event);
+      const player = playerEventSubject(event);
       groups.push({
         id: `${event.id}:${next.id}`,
         kind: "player_reconnected",
@@ -763,7 +769,7 @@ export function groupRecentEventsByTime(groups: RecentEventGroup[], now = new Da
 
 export function recentEventPresentation(group: RecentEventGroup) {
   const playerEvent = group.events[0];
-  const player = eventSubject(playerEvent) || group.title.replace(/\s+(?:joined|left|reconnected)$/i, "").trim();
+  const player = playerEventSubject(playerEvent) || group.title.replace(/\s+(?:joined|left|reconnected)$/i, "").trim();
   if (group.kind === "player_joined") {
     return { title: "Joined", subject: player, details: playerEvent.details };
   }
