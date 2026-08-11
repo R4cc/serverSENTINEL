@@ -898,6 +898,8 @@ export type ExportSizeEstimate = {
   totalBytes: number;
   /** Free space on the panel volume that holds export artifacts, when the platform reports it. */
   availableBytes?: number;
+  /** Opaque, short-lived handle that lets the matching export reuse this filesystem inventory. */
+  inventoryId?: string;
 };
 
 export type ExportLockfileEntry = {

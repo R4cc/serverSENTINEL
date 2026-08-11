@@ -334,6 +334,32 @@ describe("export archives", () => {
       .toEqual(["server.properties", "whitelist.json"]);
   });
 
+  it("reuses a measured filesystem inventory without walking the server again", async () => {
+    const source = await tempRoot("serversentinel-export-inventory-");
+    const propertiesPath = join(source, "server.properties");
+    await writeFile(propertiesPath, "server-port=25565\n", "utf8");
+    const info = await stat(propertiesPath);
+    const server = managedServer({ serverDir: source });
+    const runtime = directoryRuntime();
+    runtime.listFiles = vi.fn(async () => { throw new Error("filesystem walk should not run"); });
+
+    const plan = await createExportPlan({
+      appVersion: "1.9.1",
+      servers: [server],
+      selection: { categories: ["serverConfig"], contentStrategy: "lockfile" },
+      runtimeForServer: () => runtime,
+      modPreferencesForServer: () => ({}),
+      inventoryByServer: new Map([[server.id, [{
+        category: "serverConfig",
+        files: [{ relativePath: "server.properties", sourcePath: propertiesPath, size: info.size }],
+        totalBytes: info.size
+      }]]])
+    });
+
+    expect(runtime.listFiles).not.toHaveBeenCalled();
+    expect(plan.manifest.servers[0].files).toEqual([{ path: "server.properties", size: info.size }]);
+  });
+
   it("never takes regenerable directories even when the world is selected", async () => {
     const root = await tempRoot("serversentinel-export-excluded-");
     const source = await tempRoot("serversentinel-export-source-");

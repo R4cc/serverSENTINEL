@@ -9,7 +9,7 @@ import { ExportCancelledError } from "../exportCoordinator.js";
 import { validateServerId } from "../http/validation.js";
 import { asArray } from "../storage/valueValidation.js";
 import { listManagedServers } from "../servers/store.js";
-import { collectServerCategories } from "../servers/exportSelection.js";
+import { collectServerCategories, type CollectedCategory } from "../servers/exportSelection.js";
 import { lockfileOmittedFilenames } from "../servers/exportContent.js";
 import { restoreLockfileContent } from "../servers/importContent.js";
 import { downloadServerJar } from "../servers/provisioning.js";
@@ -24,6 +24,7 @@ import {
   writeExportArchive
 } from "../importExport.js";
 import type { ManagedServer } from "../types.js";
+import { exportInventoryCache } from "../exportInventoryCache.js";
 
 export function selectedExportServerIds(value: unknown) {
   if (value === undefined) return undefined;
@@ -83,13 +84,16 @@ async function availableBytes(path: string) {
   }
 }
 
-export async function estimateExport(serverIds: string[] | undefined, selection: ExportSelection): Promise<ExportSizeEstimate> {
+export async function estimateExport(serverIds: string[] | undefined, selection: ExportSelection, createdBy: string): Promise<ExportSizeEstimate> {
   const servers = await resolveExportServers(serverIds);
   const estimates: ExportSizeServerEstimate[] = [];
+  const inventoryByServer = new Map<string, CollectedCategory[]>();
+  const mutationVersions = new Map(servers.map((server) => [server.id, services.exportCoordinator.mutationVersion(server.id)]));
   const lockfileMode = selection.contentStrategy === "lockfile" && selection.categories.includes("content");
   let totalBytes = 0;
   for (const server of servers) {
     const collected = await collectServerCategories(runtimeForServer(server), server, selection.categories);
+    inventoryByServer.set(server.id, collected);
     // A lockfile export leaves out the jars it can name, so counting the whole content directory
     // would inflate the figure the modal shows and could trip the disk precheck on a selection that
     // actually fits.
@@ -116,7 +120,18 @@ export async function estimateExport(serverIds: string[] | undefined, selection:
       totalBytes: serverTotal
     });
   }
-  return { servers: estimates, totalBytes, availableBytes: await availableBytes(config.exportsDir) };
+  const freeBytes = await availableBytes(config.exportsDir);
+  const inventoryUnchanged = servers.every((server) => services.exportCoordinator.mutationVersion(server.id) === mutationVersions.get(server.id));
+  const inventoryId = inventoryUnchanged
+    ? exportInventoryCache.store({
+        createdBy,
+        serverIds: servers.map((server) => server.id),
+        selection,
+        mutationVersion: (serverId) => services.exportCoordinator.mutationVersion(serverId),
+        inventoryByServer
+      })
+    : undefined;
+  return { servers: estimates, totalBytes, availableBytes: freeBytes, inventoryId };
 }
 
 /**
@@ -134,7 +149,7 @@ export async function assertExportDiskSpace(estimatedBytes: number) {
   }
 }
 
-export async function startExportOperation(input: { serverIds?: string[]; selection: ExportSelection }, createdBy: string) {
+export async function startExportOperation(input: { serverIds?: string[]; selection: ExportSelection; inventoryId?: string }, createdBy: string) {
   // Explicit ids are durable scope even when preflight later discovers a missing server. This keeps
   // expensive traversal and deterministic preflight failures in the background operation while an
   // all-server export snapshots the current ids before it is accepted.
@@ -184,6 +199,15 @@ export async function startExportOperation(input: { serverIds?: string[]; select
     }
   }, async (operation, report) => services.exportCoordinator.run(operation.id, serverIds, async (signal, beginCommit) => {
     const exportStartedAt = Date.now();
+    const inventoryByServer = input.inventoryId
+      ? exportInventoryCache.take({
+          id: input.inventoryId,
+          createdBy,
+          serverIds,
+          selection: input.selection,
+          mutationVersion: (serverId) => services.exportCoordinator.mutationVersion(serverId)
+        })
+      : undefined;
     try {
       await services.exportArtifactMaintenance.prepareNewExport(serverIds);
       const servers = await resolveExportServers(serverIds);
@@ -198,7 +222,8 @@ export async function startExportOperation(input: { serverIds?: string[]; select
         runtimeForServer,
         modPreferencesForServer: (serverId) => services.modPreferencesRepository.list(serverId),
         report,
-        signal
+        signal,
+        inventoryByServer
       });
       const planningDurationMs = durationSince(planningStartedAt);
       await assertExportDiskSpace(plan.totalBytes);
@@ -218,6 +243,7 @@ export async function startExportOperation(input: { serverIds?: string[]; select
         archiveDurationMs: written.durationMs,
         durationMs: durationSince(exportStartedAt),
         archiveInputBytesPerSecond: written.inputBytesPerSecond,
+        inventoryReused: Boolean(inventoryByServer),
         ...written.compression
       }, "Export archive completed");
       return { written, plan, operationId: operation.id };

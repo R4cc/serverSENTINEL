@@ -94,6 +94,8 @@ type ExportInput = {
   modPreferencesForServer: (serverId: string) => Record<string, ModPreference>;
   report?: (progress: number, task: string) => void;
   signal?: AbortSignal;
+  /** A recent size estimate may supply the same collected filesystem inventory. */
+  inventoryByServer?: ReadonlyMap<string, CollectedCategory[]>;
 };
 
 function throwIfExportAborted(signal?: AbortSignal) {
@@ -200,7 +202,8 @@ export async function createExportPlan(input: ExportInput): Promise<ExportPlan> 
     input.report?.(progress, `Collecting ${server.displayName}`);
     const key = serverArchiveKey(index, server);
     const runtime = input.runtimeForServer(server);
-    const collected = await collectServerCategories(runtime, server, input.selection.categories);
+    const collected = input.inventoryByServer?.get(server.id)
+      ?? await collectServerCategories(runtime, server, input.selection.categories);
     throwIfExportAborted(input.signal);
 
     let lockfile: ExportLockfileEntry[] = [];

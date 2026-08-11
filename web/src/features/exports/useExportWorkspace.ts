@@ -50,6 +50,19 @@ export function sameServerExportState(left: ServerExportState, right: ServerExpo
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+export function exportRequestPayload(
+  serverId: string,
+  categories: ExportCategory[],
+  contentStrategy: ExportContentStrategy,
+  inventoryId?: string
+) {
+  return {
+    serverIds: [serverId],
+    selection: { categories, contentStrategy },
+    ...(inventoryId ? { inventoryId } : {})
+  };
+}
+
 async function pollOperation(operationId: string, onProgress: (operation: OperationRecord) => void) {
   for (;;) {
     const operation = await api<OperationRecord>(`/api/operations/${operationId}`);
@@ -226,10 +239,7 @@ export function useExportWorkspace(
     try {
       const operation = await api<OperationRecord>("/api/exports", {
         method: "POST",
-        body: JSON.stringify({
-          serverIds: [exportServerId],
-          selection: { categories, contentStrategy }
-        })
+        body: JSON.stringify(exportRequestPayload(exportServerId, categories, contentStrategy, estimate?.inventoryId))
       });
       setServerExportState((current) => ({
         ...current,
@@ -257,7 +267,7 @@ export function useExportWorkspace(
     } finally {
       setExportBusy(false);
     }
-  }, [categories, contentStrategy, exportServerId, notify, refreshServerExportState]);
+  }, [categories, contentStrategy, estimate?.inventoryId, exportServerId, notify, refreshServerExportState]);
 
   const cancelExport = useCallback(async (operationId: string) => {
     try {

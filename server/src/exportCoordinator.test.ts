@@ -78,6 +78,15 @@ describe("export coordinator", () => {
     finish();
     await mutation;
     expect(() => coordinator.assertCanStart(["server-1"])).not.toThrow();
+    expect(coordinator.mutationVersion("server-1")).toBe(1);
+  });
+
+  it("invalidates measured inventory even when a mutation fails", async () => {
+    const { coordinator } = await harness();
+
+    await expect(coordinator.withMutation("server-1", async () => { throw new Error("write failed"); })).rejects.toThrow("write failed");
+
+    expect(coordinator.mutationVersion("server-1")).toBe(1);
   });
 
   it("keeps the server locked but closes cancellation before publishing the replacement", async () => {
