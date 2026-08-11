@@ -165,7 +165,6 @@ export function ActiveServerStripLoadingSkeleton() {
             <SkeletonBlock className="runtimeControlButton serverStripLoadingButton" />
             <SkeletonBlock className="runtimeControlButton serverStripLoadingButton" />
           </div>
-          <SkeletonBlock className="quickActionButton consoleLink serverStripLoadingButton" />
           <SkeletonBlock className="refreshStatusButton serverStripLoadingIconButton" />
         </div>
       </div>

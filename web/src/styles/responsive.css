@@ -519,7 +519,6 @@
 }
 
 button,
-.quickActionButton,
 .runtimeControlButton {
   min-height: 42px;
 }
@@ -1382,8 +1381,7 @@ button:disabled,
   }
 
   .workspaceServerPage > .activeServerStrip .serverStripIcon,
-  .workspaceServerPage > .activeServerStrip .serverStripMetaRow,
-  .workspaceServerPage > .activeServerStrip .consoleLink {
+  .workspaceServerPage > .activeServerStrip .serverStripMetaRow {
     display: none;
   }
 
@@ -1973,7 +1971,6 @@ textarea:hover:not(:disabled),
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
 }
 
-.quickActionButton,
 .iconButton,
 .iconOnlyButton,
 .modalCloseButton,
@@ -1983,7 +1980,6 @@ textarea:hover:not(:disabled),
   color: var(--text);
 }
 
-.quickActionButton:hover:not(:disabled),
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
 .modalCloseButton:hover:not(:disabled),
@@ -2749,53 +2745,6 @@ textarea:hover:not(:disabled),
     display: none;
   }
 
-  .modsWorkspaceSummary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .modsWorkspaceSummary > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
-
-  .modsWorkspaceToolbar.uiToolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-  }
-
-  .modsWorkspaceToolbar .uiToolbarPrimary,
-  .modsWorkspaceToolbar .uiToolbarSecondary {
-    display: block;
-  }
-
-  .modsWorkspacePrimaryActions,
-  .modsWorkspaceUpdateActions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2);
-    width: 100%;
-  }
-
-  .modsWorkspacePrimaryActions .uiButton,
-  .modsWorkspaceUpdateActions .uiButton {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .modsWorkspaceBatchAction {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 360px) {
-  .modsWorkspacePrimaryActions,
-  .modsWorkspaceUpdateActions {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .modsWorkspaceBatchAction {
-    grid-column: auto;
-  }
 }
 
 /* Navigation press feedback. The rail cancels the shell's lift on hover, which

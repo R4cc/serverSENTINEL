@@ -2041,8 +2041,7 @@ button.overviewCardRow:focus-visible {
   transform: none;
 }
 
-.uiButton.runtimeControlButton,
-.uiButton.quickActionButton {
+.uiButton.runtimeControlButton {
   height: var(--control-height);
   min-height: var(--control-height);
   border-radius: var(--radius-sm);
@@ -2067,22 +2066,19 @@ button.overviewCardRow:focus-visible {
   color: var(--sentinel-danger-contrast);
 }
 
-.uiButton.runtimeControlButton.restart,
-.uiButton.quickActionButton {
+.uiButton.runtimeControlButton.restart {
   border-color: var(--border-muted);
   background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
   color: var(--text);
 }
 
-.uiButton.runtimeControlButton.restart:hover:not(:disabled),
-.uiButton.quickActionButton:hover:not(:disabled) {
+.uiButton.runtimeControlButton.restart:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
 }
 
-.uiButton.runtimeControlButton:disabled,
-.uiButton.quickActionButton:disabled {
+.uiButton.runtimeControlButton:disabled {
   border-color: var(--border-muted);
   background: var(--surface-muted);
   color: var(--text-soft);

@@ -6,6 +6,8 @@
 - Kept a node connected while the panel pauses its socket for download backpressure, so a large export is no longer terminated by the heartbeat it cannot answer.
 - Redesigned the Overview server summary cards around a rounded icon container, with clearer label and value hierarchy and a calmer status treatment.
 
+## 1.9.1 - 2026-08-11
+
 ## 1.9.0 - 2026-08-10
 
 ## 1.8.2 - 2026-08-10

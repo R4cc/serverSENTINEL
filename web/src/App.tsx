@@ -2224,8 +2224,6 @@ export default function App() {
               controlsDisabled={isProvisioning || !canBasic || dockerOperationalLock || exportMutationLocked}
               controlsDisabledReason={runtimeControlsDisabledReason}
               onRuntimeAction={runContainerAction}
-              consoleActive={activePage === "console"}
-              onOpenConsole={() => setActivePage("console")}
               onRetryConnection={() => { void retryActiveConnection(); }}
               refreshDisabled={isProvisioning}
               refreshDisabledReason={provisioningNavigationReason}

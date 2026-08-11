@@ -326,62 +326,6 @@ button .buttonIcon {
   z-index: 2;
 }
 
-.quickActionButton {
-  min-height: 44px;
-  height: 44px;
-  border: var(--border-strong) solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  padding: 0 var(--space-4);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  border-radius: var(--radius-sm);
-}
-
-.quickActionButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: var(--text);
-  color: var(--surface);
-}
-
-.quickActionButton:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.quickActionButton.consoleLink {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.quickActionButton.consoleLink:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--swiss-white);
-  border-color: var(--accent);
-}
-
-.quickActionButton.consoleLink.active {
-  background: var(--text);
-  color: var(--surface);
-  border-color: var(--accent);
-}
-
-.quickActionButton.consoleLink:disabled {
-  background: var(--surface);
-  color: var(--text-soft);
-  border-color: var(--border-muted);
-}
-
-.quickActionButton.active {
-  background: var(--text);
-  color: var(--surface);
-  border-color: var(--border);
-}
-
 .runtimeControls {
   display: flex;
   gap: var(--space-2);
@@ -1876,8 +1820,7 @@ button .buttonIcon {
   flex-wrap: wrap;
 }
 
-.activeServerStrip .uiButton.runtimeControlButton,
-.activeServerStrip .uiButton.quickActionButton {
+.activeServerStrip .uiButton.runtimeControlButton {
   min-height: 40px;
   height: 40px;
   padding-inline: var(--space-4);
@@ -1901,8 +1844,7 @@ button .buttonIcon {
    the bar reads as one material with its controls cut from it. Start and Stop
    stay solid: a prominent, destructive or primary action should not be
    see-through. */
-.activeServerStrip .uiButton.runtimeControlButton.restart,
-.activeServerStrip .uiButton.quickActionButton {
+.activeServerStrip .uiButton.runtimeControlButton.restart {
   border-color: var(--glass-edge);
   background: var(--glass-tint-soft);
   color: var(--text);
@@ -1911,13 +1853,10 @@ button .buttonIcon {
   backdrop-filter: var(--glass-filter-control);
 }
 
-/* The strip restates the base colours of these buttons, which also outranks the
-   `uiButton--secondary` and `uiButton--primary` hover states -- so without the
-   rules below Start, Restart and Console are the only buttons in the app that
-   look identical under the pointer. The values match the primitives they shadow
+/* The strip restates the base colours of Restart, which also outranks the
+   `uiButton--secondary` hover state. The values match the primitive it shadows
    so the strip responds like every other control. */
-.activeServerStrip .uiButton.runtimeControlButton.restart:hover:not(:disabled),
-.activeServerStrip .uiButton.quickActionButton:hover:not(:disabled) {
+.activeServerStrip .uiButton.runtimeControlButton.restart:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
@@ -1933,18 +1872,6 @@ button .buttonIcon {
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
   color: var(--text-soft);
   opacity: 0.62;
-}
-
-.activeServerStrip .quickActionButton.consoleLink.active {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-row));
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-}
-
-/* The console button is already tinted while its page is open, so hovering it
-   deepens the same tint rather than repeating the neutral-to-accent move. */
-.activeServerStrip .quickActionButton.consoleLink.active:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 74%, var(--surface-raised));
 }
 
 .activeServerStrip .refreshStatusButton {
@@ -1992,8 +1919,7 @@ button .buttonIcon {
     width: 100%;
   }
 
-  .activeServerStrip .uiButton.runtimeControlButton,
-  .activeServerStrip .uiButton.quickActionButton {
+  .activeServerStrip .uiButton.runtimeControlButton {
     flex: 1 1 140px;
   }
 
