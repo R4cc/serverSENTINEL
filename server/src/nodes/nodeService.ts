@@ -4,7 +4,7 @@ import { appBuildId, appVersion } from "../buildInfo.js";
 import { panelNodeConnections, services } from "../appServices.js";
 import { detectedTotalMemory } from "../runtime/local/dockerContainers.js";
 import { buildNodeInstallInstructions } from "./installInstructions.js";
-import type { NodeInstallInstructions } from "./apiTypes.js";
+import type { NodeInstallInstructions } from "@serversentinel/contracts";
 import { totalmem } from "node:os";
 import { badRequest } from "../http/validation.js";
 import { throwHttp } from "../http/errors.js";

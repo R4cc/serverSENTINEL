@@ -7,7 +7,6 @@ export type RuntimeDataPaths = {
   dataDir: string;
   databasePath: string;
   serversDir: string;
-  backupsDir: string;
   importsDir: string;
   exportsDir: string;
   tmpDir: string;
@@ -26,7 +25,6 @@ export function runtimeDataPaths(dataDirInput?: string): RuntimeDataPaths {
     dataDir,
     databasePath: join(dataDir, "serversentinel.sqlite"),
     serversDir: join(dataDir, "servers"),
-    backupsDir: join(dataDir, "backups"),
     importsDir: join(dataDir, "imports"),
     exportsDir: join(dataDir, "exports"),
     tmpDir,
@@ -35,7 +33,7 @@ export function runtimeDataPaths(dataDirInput?: string): RuntimeDataPaths {
 }
 
 export function initializeRuntimeDataRoot(paths: RuntimeDataPaths) {
-  for (const directory of [paths.dataDir, paths.serversDir, paths.backupsDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
+  for (const directory of [paths.dataDir, paths.serversDir, paths.importsDir, paths.exportsDir, paths.tmpDir, paths.nodeUpdatesDir]) {
     mkdirSync(directory, { recursive: true });
   }
   // Both hold whole-server payloads -- exports on the way out, uploaded archives on the way in.

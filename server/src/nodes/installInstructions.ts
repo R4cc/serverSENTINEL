@@ -1,4 +1,4 @@
-import type { NodeInstallInstructions } from "./apiTypes.js";
+import type { NodeInstallInstructions } from "@serversentinel/contracts";
 import { shellQuote } from "../docker/shell.js";
 import { nodeProtocolVersion } from "./protocol.js";
 

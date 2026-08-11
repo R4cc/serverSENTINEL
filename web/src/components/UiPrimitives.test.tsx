@@ -10,7 +10,7 @@ describe("UI primitives", () => {
     expect(html).toContain("uiSurface--compact");
     expect(html).toContain("uiSurface--subtle");
     expect(html).toContain("uiSurface--glass");
-    expect(html).toContain("uiGlassSurface--panel");
+    expect(html).toContain("uiGlassSurface");
   });
 
   it("supports opaque surfaces and forwards the semantic element ref", () => {

@@ -1,5 +1,4 @@
 import { createElement, forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
-import { GlassEffect, type GlassVariant } from "./GlassEffect";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
@@ -151,15 +150,11 @@ export const Surface = forwardRef<HTMLElement, HTMLAttributes<HTMLElement> & {
   density?: SurfaceDensity;
   tone?: SurfaceTone;
   material?: SurfaceMaterial;
-  glassVariant?: GlassVariant;
-  refractive?: boolean;
 }>(function Surface({
   as = "section",
   density = "default",
   tone = "default",
   material = "glass",
-  glassVariant = "panel",
-  refractive = false,
   className,
   children,
   ...props
@@ -176,11 +171,9 @@ export const Surface = forwardRef<HTMLElement, HTMLAttributes<HTMLElement> & {
         `uiSurface--${tone}`,
         `uiSurface--${material}`,
         material === "glass" && "uiGlassSurface",
-        material === "glass" && `uiGlassSurface--${glassVariant}`,
         className
       )
     },
-    material === "glass" && refractive ? <GlassEffect variant={glassVariant} /> : null,
     children
   );
 });

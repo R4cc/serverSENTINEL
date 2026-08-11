@@ -20,7 +20,6 @@ import {
   timelineHorizontalWheelPixels,
   timelineMarkerDisplayLabel,
   timelineMarkerGlyph,
-  timelineMarkerIsImportant,
   timelinePlayerRows,
   timelineSessionGeometry,
   writeTimelineMetricLayers
@@ -340,16 +339,6 @@ describe("server timeline markers", () => {
     const marker = { ...timelineMarkers(response())[0], occurredAt: 59_000 };
     const positioned = positionTimelineClusters(clusterTimelineMarkers([marker], 0, 60_000, 24), 0, 60_000, 300);
     expect(positioned[0]).toMatchObject({ alignEnd: true, inlineLabel: null });
-  });
-
-  it("keeps lifecycle and failed automation labels important while routine and planned markers stay compact", () => {
-    const value = response();
-    value.events.push({ id: "crash", eventType: "server_crashed", type: "error", severity: "error", text: "Server crashed", message: "Server crashed", occurredAt: 30_000, signature: "server_crashed", source: "logs/latest.log" });
-    value.schedules.push({ id: "failed", scheduleId: "schedule-1", scheduleName: "Restart", occurredAt: 40_000, kind: "run", status: "failed" });
-    const markers = timelineMarkers(value);
-    expect(timelineMarkerIsImportant(markers.find((marker) => marker.event?.eventType === "server_crashed")!)).toBe(true);
-    expect(timelineMarkerIsImportant(markers.find((marker) => marker.schedule?.status === "failed")!)).toBe(true);
-    expect(timelineMarkerIsImportant(markers.find((marker) => marker.tone === "planned")!)).toBe(false);
   });
 
   it("omits the schedule legend data when permission-filtered responses contain none", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAdaptiveBytes, formatRelativeTimestamp, formatTimestampForFilename, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
+import { formatAdaptiveBytes, formatRelativeTimestamp, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
 
 describe("adaptive byte formatting", () => {
   it("selects a readable unit without losing useful precision", () => {
@@ -16,15 +16,6 @@ describe("theme preference", () => {
     expect(themePreferenceFromStoredValue(null)).toBe("system");
     expect(themePreferenceFromStoredValue("unknown-theme")).toBe("system");
     expect(themePreferenceFromStoredValue("dark")).toBe("dark");
-  });
-});
-
-describe("configured time zone formatting", () => {
-  it("uses the requested zone for timestamped filenames", () => {
-    const instant = "2026-07-10T12:34:56.000Z";
-
-    expect(formatTimestampForFilename(instant, "UTC")).toBe("2026-07-10T12-34-56");
-    expect(formatTimestampForFilename(instant, "Europe/Vienna")).toBe("2026-07-10T14-34-56");
   });
 });
 

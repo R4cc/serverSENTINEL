@@ -1,5 +1,6 @@
 import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
 import { httpError } from "../http/errors.js";
+import { asObject as objectValue } from "../storage/valueValidation.js";
 import type { ManagedNode, ManagedServer } from "../types.js";
 
 export const nodeProtocolVersion = NODE_PROTOCOL_VERSION;
@@ -420,11 +421,6 @@ function normalizeNodeStreamEvent(value: unknown): NodeStreamEvent {
   }
   if (event.type === "result") return { type: "result", result: event.result };
   throw new Error(`Unsupported stream event type ${String(event.type)}`);
-}
-
-function objectValue(value: unknown, field: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${field} must be a JSON object`);
-  return value as Record<string, unknown>;
 }
 
 function requiredStringArray(value: unknown, field: string) {

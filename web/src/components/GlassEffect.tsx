@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 
-export type GlassVariant = "chrome" | "panel" | "floating" | "modal";
+export type GlassVariant = "chrome" | "floating" | "modal";
 
 const LiquidGlass = lazy(() => import("liquid-glass-react"));
 const fixedMousePosition = { x: 1, y: 1 };
@@ -69,7 +69,6 @@ function useLiquidGlassSupport() {
 
 const glassSettings: Record<GlassVariant, { blurAmount: number; cornerRadius: number; displacementScale: number; saturation: number }> = {
   chrome: { blurAmount: 0.08, cornerRadius: 26, displacementScale: 24, saturation: 142 },
-  panel: { blurAmount: 0.06, cornerRadius: 22, displacementScale: 18, saturation: 136 },
   floating: { blurAmount: 0.09, cornerRadius: 18, displacementScale: 28, saturation: 148 },
   modal: { blurAmount: 0.1, cornerRadius: 28, displacementScale: 22, saturation: 140 }
 };

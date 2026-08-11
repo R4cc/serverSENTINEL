@@ -734,18 +734,6 @@ export function demoStats(running: boolean, sampledAt = Date.now(), serverId = d
   };
 }
 
-export function demoStatsHistory(
-  running: boolean,
-  sampledAt = Date.now(),
-  sampleIntervalMs = 5_000,
-  sampleLimit = 721,
-  serverId = demoServerId
-): ResourceSample[] {
-  return Array.from({ length: sampleLimit }, (_, index) => (
-    demoStats(running, sampledAt - (sampleLimit - index - 1) * sampleIntervalMs, serverId)
-  ));
-}
-
 export function demoTimelineData(running: boolean, schedules: ScheduledExecution[], from: number, to: number, serverId = demoServerId): ServerTimelineResponse {
   const session = demoSession(serverId);
   const step = Math.max(5_000, Math.ceil((to - from) / 900 / 5_000) * 5_000);

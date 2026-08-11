@@ -420,18 +420,6 @@ export function timelineMarkerDisplayLabel(marker: TimelineMarker): TimelineMark
   return { primary: marker.label };
 }
 
-export function timelineMarkerIsImportant(marker: TimelineMarker) {
-  if (marker.schedule) return marker.schedule.status === "failed" || marker.schedule.status === "running";
-  return Boolean(marker.event && [
-    "server_started",
-    "server_stopped",
-    "server_crashed",
-    "server_overloaded",
-    "exception_caught",
-    "mod_disabled"
-  ].includes(marker.event.eventType));
-}
-
 export const maxTimelineClusterIcons = 3;
 
 export function timelineClusterIconMarkers(cluster: MarkerCluster) {
