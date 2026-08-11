@@ -387,7 +387,7 @@ export function ModHealthPanel({
     : `${updateCount} update${updateCount === 1 ? "" : "s"} available`;
   const actions = (
     <div className="overviewCardHeaderActions">
-      <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} disabled={loading} />
+      <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} loading={loading} />
     </div>
   );
 
@@ -399,8 +399,8 @@ export function ModHealthPanel({
       actions={actions}
       loading={loading}
     >
-      {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
       <div className="overviewCardList overviewSupportList modUpdatesList">
+        {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
         {updateCount === 0 ? (
           <OverviewCardState
             title="Everything is up to date"
@@ -440,11 +440,21 @@ export function ModHealthPanel({
   );
 }
 
-function ModUpdatesRefreshButton({ contentPlural, onRefresh, disabled = false }: { contentPlural: "mods" | "plugins"; onRefresh?: () => void; disabled?: boolean }) {
+function ModUpdatesRefreshButton({ contentPlural, onRefresh, loading = false }: { contentPlural: "mods" | "plugins"; onRefresh?: () => void; loading?: boolean }) {
   if (!onRefresh) return null;
   const label = `Recheck ${contentPlural} for updates`;
   return (
-    <Button variant="secondary" compact iconOnly className="modUpdatesRefreshButton" onClick={onRefresh} aria-label={label} title={label} disabled={disabled}>
+    <Button
+      variant="secondary"
+      compact
+      iconOnly
+      className={`modUpdatesRefreshButton${loading ? " isRefreshing" : ""}`}
+      onClick={onRefresh}
+      aria-label={label}
+      aria-busy={loading}
+      title={label}
+      disabled={loading}
+    >
       <AppIcon name="refresh" />
     </Button>
   );
@@ -463,12 +473,12 @@ function ModHealthPanelSkeleton({
       title={`${contentSingularTitle} updates`}
       description="Checking for updates"
       actions={<div className="overviewCardHeaderActions">
-        <Button variant="secondary" compact iconOnly className="modUpdatesRefreshButton" disabled aria-label={`Recheck ${contentPlural} for updates`}><AppIcon name="refresh" /></Button>
+        <Button variant="secondary" compact iconOnly className="modUpdatesRefreshButton isRefreshing" disabled aria-busy="true" aria-label={`Recheck ${contentPlural} for updates`}><AppIcon name="refresh" /></Button>
       </div>}
       loading
     >
-      <LoadingLabel>Loading {contentSingular} updates</LoadingLabel>
       <div className="overviewCardList overviewSupportList modUpdatesList" aria-hidden="true">
+        <LoadingLabel>Loading {contentSingular} updates</LoadingLabel>
         {Array.from({ length: 1 }, (_, index) => (
           <div className="overviewCardRow overviewSupportListItem modUpdatesListItem" key={index}>
             <SkeletonBlock className="modUpdatesIconSkeleton" />

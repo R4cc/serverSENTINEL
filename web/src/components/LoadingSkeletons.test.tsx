@@ -29,6 +29,9 @@ describe("loading skeletons", () => {
 
     expect(overview.match(/applicationSkeletonTile/g)).toHaveLength(7);
     expect(overview.match(/applicationSkeletonWideTile/g)).toHaveLength(2);
+    expect(overview.match(/applicationOverviewMetricIcon/g)).toHaveLength(7);
+    expect(overview.match(/applicationOverviewSkeletonPanel/g)).toHaveLength(5);
+    expect(overview.match(/applicationOverviewSkeletonRow"/g)).toHaveLength(13);
     expect(overview).toContain("applicationLoadingSkeleton--overview");
     expect(files).toContain("applicationLoadingSkeleton--files");
     expect(files).not.toContain("applicationSkeletonSummary");

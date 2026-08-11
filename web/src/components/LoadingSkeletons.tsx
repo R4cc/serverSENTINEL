@@ -41,14 +41,14 @@ function ApplicationSkeletonContent({ page }: { page: ActivePage }) {
     return (
       <div className="applicationOverviewSkeleton" aria-hidden="true">
         <div className="applicationSkeletonSummary">
-          {Array.from({ length: 7 }, (_, index) => <SkeletonBlock className={`applicationSkeletonTile ${index > 4 ? "applicationSkeletonWideTile" : ""}`} key={index} />)}
+          {Array.from({ length: 7 }, (_, index) => <OverviewSkeletonMetricTile wide={index > 4} key={index} />)}
         </div>
         <div className="applicationOverviewPanelGrid">
-          <SkeletonPanel className="applicationOverviewTimelinePanel" rows={4} />
-          <SkeletonPanel className="applicationOverviewPlayersPanel" rows={2} />
-          <SkeletonPanel className="applicationOverviewModsPanel" rows={2} />
-          <SkeletonPanel className="applicationOverviewAutomationPanel" rows={2} />
-          <SkeletonPanel className="applicationOverviewEventsPanel" rows={3} />
+          <OverviewSkeletonPanel className="applicationOverviewTimelinePanel" rows={4} />
+          <OverviewSkeletonPanel className="applicationOverviewPlayersPanel" rows={4} />
+          <OverviewSkeletonPanel className="applicationOverviewModsPanel" rows={1} />
+          <OverviewSkeletonPanel className="applicationOverviewAutomationPanel" rows={1} />
+          <OverviewSkeletonPanel className="applicationOverviewEventsPanel" rows={3} />
         </div>
       </div>
     );
@@ -133,6 +133,41 @@ function ApplicationSkeletonContent({ page }: { page: ActivePage }) {
   }
 
   return <SkeletonPanel className="applicationFormSkeleton" rows={6} />;
+}
+
+function OverviewSkeletonMetricTile({ wide }: { wide: boolean }) {
+  return (
+    <div className={`applicationSkeletonTile${wide ? " applicationSkeletonWideTile" : ""}`}>
+      <SkeletonBlock className="applicationOverviewMetricIcon" />
+      <div className="applicationOverviewMetricCopy">
+        <SkeletonBlock className="applicationOverviewMetricLabel" />
+        <SkeletonBlock className="applicationOverviewMetricValue" />
+      </div>
+    </div>
+  );
+}
+
+function OverviewSkeletonPanel({ rows, className }: { rows: number; className: string }) {
+  return (
+    <div className={`applicationSkeletonPanel applicationOverviewSkeletonPanel ${className}`}>
+      <div className="applicationOverviewSkeletonHeader">
+        <SkeletonBlock className="applicationOverviewSkeletonTitle" />
+        <SkeletonBlock className="applicationOverviewSkeletonMeta" />
+      </div>
+      <div className="applicationOverviewSkeletonRows">
+        {Array.from({ length: rows }, (_, index) => (
+          <div className="applicationOverviewSkeletonRow" key={index}>
+            <SkeletonBlock className="applicationOverviewSkeletonRowIcon" />
+            <div className="applicationOverviewSkeletonRowCopy">
+              <SkeletonBlock className="applicationOverviewSkeletonRowTitle" />
+              <SkeletonBlock className="applicationOverviewSkeletonRowMeta" />
+            </div>
+            <SkeletonBlock className="applicationOverviewSkeletonRowAction" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function SkeletonPanel({ rows = 6, className = "" }: { rows?: number; className?: string }) {

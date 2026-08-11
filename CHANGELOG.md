@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.9.5 - 2026-08-11
+
+- Kept mobile Mods rows aligned when names, statuses, and installed versions have different lengths.
+- Replaced the oversized mobile Overview loading block with card-shaped summary and panel skeletons that match the loaded page.
+
+## 1.9.4 - 2026-08-11
+
+- Kept the Overview mod-update card at a stable height while checking for updates and animated the refresh icon for the duration of the check.
+
 ## 1.9.3 - 2026-08-11
 
 - Kept the server status controls beside the server details whenever the bar has room, instead of wrapping them at fixed desktop viewport widths.
