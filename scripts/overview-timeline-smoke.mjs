@@ -558,6 +558,7 @@ async function assertSupportCardGeometry(context, viewport) {
       const mods = document.querySelector(".modUpdatesCard");
       const schedule = document.querySelector(".schedulePanel");
       const updates = [...document.querySelectorAll(".modUpdatesListItem")];
+      const scheduleRows = [...document.querySelectorAll(".scheduleUpcomingItem")];
       const remaining = document.querySelector(".modUpdatesRemaining");
       const documentElement = document.documentElement;
       const rect = (element) => element?.getBoundingClientRect();
@@ -568,6 +569,15 @@ async function assertSupportCardGeometry(context, viewport) {
         viewportWidth: documentElement.clientWidth,
         documentWidth: documentElement.scrollWidth,
         updateCount: updates.length,
+        scheduleRowCount: scheduleRows.length,
+        scheduleTitle: schedule?.querySelector(".uiPanelHeader h2")?.textContent?.trim() ?? "",
+        scheduleHeaderButtonCount: schedule?.querySelectorAll(".uiPanelHeader button").length ?? 0,
+        modsUseSharedList: Boolean(mods?.querySelector(":scope > .overviewSupportList")),
+        scheduleUsesSharedList: Boolean(schedule?.querySelector(":scope > .overviewSupportList")),
+        updateRowsUseSharedStructure: updates.every((row) => row.classList.contains("overviewSupportListItem")),
+        scheduleRowsUseSharedStructure: scheduleRows.every((row) => row.classList.contains("overviewSupportListItem")),
+        updateRowHeight: rect(updates[0])?.height ?? 0,
+        scheduleRowHeight: rect(scheduleRows[0])?.height ?? 0,
         remainingText: remaining?.textContent?.trim() ?? "",
         mods: modsRect ? { top: modsRect.top, bottom: modsRect.bottom, height: modsRect.height } : null,
         schedule: scheduleRect ? { top: scheduleRect.top, bottom: scheduleRect.bottom, height: scheduleRect.height } : null,
@@ -578,6 +588,13 @@ async function assertSupportCardGeometry(context, viewport) {
 
     assert.equal(metrics.updateCount, 4, `Ten updates should render four preview rows at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     assert.equal(metrics.remainingText, "6 more updates", `Ten updates should summarize the remaining six at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.scheduleTitle, "Schedules", `Schedule card title is inconsistent at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.scheduleHeaderButtonCount, 0, `Schedule card still has a header action at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.modsUseSharedList && metrics.scheduleUsesSharedList, `Support cards do not share the direct list structure at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.updateRowsUseSharedStructure && metrics.scheduleRowsUseSharedStructure, `Support-card rows do not share their structure at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    if (metrics.scheduleRowCount > 0) {
+      assertNear(metrics.scheduleRowHeight, metrics.updateRowHeight, 1, `Support-card row heights differ at ${viewport.width}px`);
+    }
     assert(metrics.mods && metrics.schedule, `Overview support cards are missing at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     assert(metrics.remainingBottom <= metrics.mods.bottom + 1, `The update disclosure overflows its card at ${viewport.width}px: ${JSON.stringify(metrics)}`);
     assert(metrics.scheduleOverflow <= 1, `The Schedule card clips vertically at ${viewport.width}px: ${JSON.stringify(metrics)}`);
