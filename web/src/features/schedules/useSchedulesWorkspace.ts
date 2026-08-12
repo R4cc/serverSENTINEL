@@ -88,6 +88,7 @@ export function useSchedulesWorkspace({
           cron: patch.cron,
           steps: patch.steps,
           onlyWhenNoPlayers: patch.onlyWhenNoPlayers,
+          waitForPlayersToLeave: patch.waitForPlayersToLeave,
           enabled: patch.enabled
         })
       });
@@ -128,6 +129,7 @@ export function useSchedulesWorkspace({
           cron: next.cron,
           steps: next.steps,
           onlyWhenNoPlayers: next.onlyWhenNoPlayers,
+          waitForPlayersToLeave: next.waitForPlayersToLeave,
           enabled: next.enabled
         })
       });
@@ -178,12 +180,27 @@ export function useSchedulesWorkspace({
 
   async function runScheduleNow(schedule: ScheduledExecution) {
     if (locked || !activeServer) return false;
+    if (schedule.activeRuns?.length) {
+      const message = `${schedule.name} already has an active run`;
+      setNotice(message);
+      notify("info", message);
+      return false;
+    }
     setBusy(true);
     if (activeServerIsDemo) {
       const runId = clientId();
       const startedAt = new Date().toISOString();
       if (!demoRunning) {
         const message = "Skipped because Minecraft server is stopped";
+        const run: ScheduledRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "skipped", message, ranAt: startedAt, details: { stepCount: schedule.steps.length, completedStepCount: 0 } };
+        setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, lastRunAt: startedAt, lastStatus: "skipped", lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
+        notify("info", `${schedule.name} was skipped`);
+        setBusy(false);
+        return true;
+      }
+      const demoPlayersOnline = demoFixtures().demoPlayerSnapshot(true, activeServer.id).online ?? 0;
+      if (schedule.onlyWhenNoPlayers && !schedule.waitForPlayersToLeave && demoPlayersOnline > 0) {
+        const message = `Skipped because ${demoPlayersOnline} player${demoPlayersOnline === 1 ? "" : "s"} are online`;
         const run: ScheduledRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "skipped", message, ranAt: startedAt, details: { stepCount: schedule.steps.length, completedStepCount: 0 } };
         setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, lastRunAt: startedAt, lastStatus: "skipped", lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
         notify("info", `${schedule.name} was skipped`);
@@ -228,6 +245,19 @@ export function useSchedulesWorkspace({
     let message = "";
     const steps: ScheduledRunStepDetails[] = [];
     try {
+      const updateActive = (patch: Partial<ScheduledActiveRun>) => setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [{ ...activeRun, ...patch }] } : candidate));
+      const demoPlayersOnline = demoFixtures().demoPlayerSnapshot(true, server.id).online ?? 0;
+      if (schedule.waitForPlayersToLeave && demoPlayersOnline > 0) {
+        updateActive({ message: `Waiting for ${demoPlayersOnline} player${demoPlayersOnline === 1 ? "" : "s"} to leave` });
+        await new Promise<void>((resolve, reject) => {
+          const timer = window.setTimeout(resolve, 2_500);
+          controller.signal.addEventListener("abort", () => {
+            window.clearTimeout(timer);
+            reject(new DOMException("Cancelled", "AbortError"));
+          }, { once: true });
+        });
+        updateActive({ message: "Server is empty; preparing schedule" });
+      }
       for (const [index, step] of schedule.steps.entries()) {
         terminalStepIndex = index;
         terminalStep = step.type === "command" ? step.command : "Restart";

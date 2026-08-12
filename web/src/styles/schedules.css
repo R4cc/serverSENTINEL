@@ -888,7 +888,26 @@
 
 .scheduleEditOptions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.schedulePlayerPolicy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.schedulePlayerPolicy > strong {
+  color: var(--text);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-strong);
+}
+
+.schedulePlayerPolicyChoices {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
@@ -917,6 +936,11 @@
 .scheduleOptionToggle:focus-within {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 40%, var(--surface-raised));
+}
+
+.scheduleOptionToggle:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 58%, var(--surface-raised));
 }
 
 .scheduleEditFieldset:disabled .scheduleOptionToggle {
@@ -954,6 +978,16 @@
   font-size: var(--type-meta-size);
   font-weight: var(--weight-body);
   line-height: 1.4;
+}
+
+.schedulePlayerPolicyNote {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.4;
+}
+
+.scheduleEnabledOption {
+  min-height: 58px;
 }
 
 /* Shared form utilities retained for runtime settings -------------------- */
@@ -1260,6 +1294,10 @@
 
   .scheduleEditFields,
   .scheduleEditOptions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedulePlayerPolicyChoices {
     grid-template-columns: minmax(0, 1fr);
   }
 

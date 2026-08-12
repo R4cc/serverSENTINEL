@@ -14,12 +14,14 @@ import type { ManagedServer, ManagedServerPort, RestartRequiredChange, RestartRe
 export function normalizeSchedule(value: unknown): ScheduledExecution {
   const schedule = asObject(value, "schedule");
   const steps = sanitizeScheduleSteps(schedule.steps);
+  const waitForPlayersToLeave = optionalStrictBoolean(schedule.waitForPlayersToLeave, "schedule.waitForPlayersToLeave", false);
   return {
     id: validateScheduleId(schedule.id),
     name: requiredString(schedule.name, "schedule.name"),
     cron: requiredString(schedule.cron, "schedule.cron"),
     steps,
-    onlyWhenNoPlayers: requireStrictBoolean(schedule.onlyWhenNoPlayers, "schedule.onlyWhenNoPlayers"),
+    onlyWhenNoPlayers: waitForPlayersToLeave || requireStrictBoolean(schedule.onlyWhenNoPlayers, "schedule.onlyWhenNoPlayers"),
+    waitForPlayersToLeave,
     enabled: requireStrictBoolean(schedule.enabled, "schedule.enabled"),
     createdAt: requiredString(schedule.createdAt, "schedule.createdAt"),
     updatedAt: requiredString(schedule.updatedAt, "schedule.updatedAt"),

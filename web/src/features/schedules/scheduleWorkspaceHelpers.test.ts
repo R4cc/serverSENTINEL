@@ -16,6 +16,7 @@ function patch(overrides: Partial<SchedulePatch> = {}): SchedulePatch {
     cron: "0 3 * * *",
     steps: [commandStep],
     onlyWhenNoPlayers: true,
+    waitForPlayersToLeave: false,
     enabled: true,
     ...overrides
   };

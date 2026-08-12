@@ -22,7 +22,7 @@ type ScheduleFormMode =
   | { type: "create" }
   | { type: "edit"; schedule: ScheduledExecution };
 
-type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "enabled">;
+type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "waitForPlayersToLeave" | "enabled">;
 type StepDraft = {
   id: string;
   type: "command" | "action";
@@ -49,6 +49,29 @@ function stepDraftFromStep(step: ScheduleStep): StepDraft {
     delayValue: delay.value,
     delayUnit: delay.unit
   };
+}
+
+export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: ScheduledExecution }) {
+  return (
+    <div className="schedulePlayerPolicy" role="radiogroup" aria-labelledby="schedule-player-policy-label">
+      <strong id="schedule-player-policy-label">Players online at start</strong>
+      <div className="schedulePlayerPolicyChoices">
+        <label className="scheduleOptionToggle">
+          <input name="playerOnlinePolicy" value="run" type="radio" defaultChecked={!schedule?.onlyWhenNoPlayers} />
+          <span className="scheduleOptionCopy"><strong>Run anyway</strong><small>Start on time, even while players are connected.</small></span>
+        </label>
+        <label className="scheduleOptionToggle">
+          <input name="playerOnlinePolicy" value="skip" type="radio" defaultChecked={Boolean(schedule?.onlyWhenNoPlayers && !schedule.waitForPlayersToLeave)} />
+          <span className="scheduleOptionCopy"><strong>Skip this run</strong><small>Skip this occurrence and try again at the next scheduled time.</small></span>
+        </label>
+        <label className="scheduleOptionToggle">
+          <input name="playerOnlinePolicy" value="wait" type="radio" defaultChecked={schedule?.waitForPlayersToLeave ?? false} />
+          <span className="scheduleOptionCopy"><strong>Wait until empty</strong><small>Keep one cancellable run waiting, then start once everyone leaves.</small></span>
+        </label>
+      </div>
+      <small className="schedulePlayerPolicyNote">Waiting has no timeout. Later matches are ignored so runs never stack up; cancel the active run at any time.</small>
+    </div>
+  );
 }
 
 export function reorderScheduleSteps<T extends { id: string }>(steps: readonly T[], movedId: string, targetId: string): T[] {
@@ -220,6 +243,7 @@ export function SchedulePage({
   }, []);
 
   function schedulePatchFromForm(form: FormData): SchedulePatch {
+    const playerOnlinePolicy = String(form.get("playerOnlinePolicy") ?? "run");
     const steps: ScheduleStep[] = stepDrafts.map((draft) => draft.type === "command"
       ? { type: "command", command: draft.command.trim(), delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) }
       : { type: "action", procedure: "restart", delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) });
@@ -227,7 +251,8 @@ export function SchedulePage({
       name: String(form.get("name") ?? "").trim(),
       cron: String(form.get("cron") ?? "").trim(),
       steps,
-      onlyWhenNoPlayers: form.get("onlyWhenNoPlayers") === "on",
+      onlyWhenNoPlayers: playerOnlinePolicy !== "run",
+      waitForPlayersToLeave: playerOnlinePolicy === "wait",
       enabled: form.get("enabled") === "on"
     };
   }
@@ -437,6 +462,7 @@ export function SchedulePage({
             <div className="scheduleTableBody" role="rowgroup">
               {scheduleRows.length ? scheduleRows.map((row) => {
                 const schedule = row.original;
+                const scheduleIsActive = Boolean(schedule.activeRuns?.length);
                 return (
                 <article
                   key={schedule.id}
@@ -527,8 +553,10 @@ export function SchedulePage({
                             label: "Test now",
                             icon: <AppIcon name="refresh" />,
                             onSelect: () => { void onRunNow(schedule); },
-                            disabled,
-                            title: disabled ? disabledReason || "Schedule testing is unavailable right now." : `Test ${schedule.name} now`
+                            disabled: disabled || scheduleIsActive,
+                            title: scheduleIsActive
+                              ? "This schedule already has an active run. Cancel it or wait for it to finish."
+                              : disabled ? disabledReason || "Schedule testing is unavailable right now." : `Test ${schedule.name} now`
                           },
                           {
                             id: "edit",
@@ -736,14 +764,11 @@ export function SchedulePage({
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-options-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-options-heading">Options</h3><p>Control when this automation is allowed to start.</p></div>
+                  <div><h3 id="schedule-options-heading">Options</h3><p>Choose what happens at the scheduled start time.</p></div>
                 </div>
                 <div className="scheduleEditOptions">
-                  <label className="scheduleOptionToggle">
-                    <input name="onlyWhenNoPlayers" type="checkbox" defaultChecked={modalSchedule?.onlyWhenNoPlayers ?? false} />
-                    <span className="scheduleOptionCopy"><strong>Only run when no players are online</strong><small>Skip this schedule while players are connected.</small></span>
-                  </label>
-                  <label className="scheduleOptionToggle">
+                  <SchedulePlayerPolicyOptions schedule={modalSchedule ?? undefined} />
+                  <label className="scheduleOptionToggle scheduleEnabledOption">
                     <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
                     <span className="scheduleOptionCopy"><strong>Enabled</strong><small>Allow cron matches to start this schedule.</small></span>
                   </label>
@@ -954,12 +979,16 @@ export function scheduleDescription(schedule: ScheduledExecution) {
   const commands = schedule.steps.filter((step) => step.type === "command");
   const actions = schedule.steps.filter((step) => step.type === "action");
   const delayed = schedule.steps.filter((step) => step.delaySeconds > 0).length;
+  const playerPolicy = schedule.waitForPlayersToLeave
+    ? "waits until no players are online"
+    : schedule.onlyWhenNoPlayers ? "skips while players are online" : "";
   if (schedule.steps.length > 1 || actions.length) {
     const parts = [commands.length ? `${commands.length} command${commands.length === 1 ? "" : "s"}` : "", actions.length ? `${actions.length} Restart action` : ""].filter(Boolean);
-    return `${parts.join(", ")}${delayed ? `, ${delayed} delayed` : ""}`;
+    const steps = `${parts.join(", ")}${delayed ? `, ${delayed} delayed` : ""}`;
+    return playerPolicy ? `${steps} · ${playerPolicy}` : steps;
   }
-  if (commands[0]?.type === "command") return commands[0].command;
-  return schedule.onlyWhenNoPlayers ? "Runs only with no players online" : "Console command automation";
+  if (commands[0]?.type === "command") return playerPolicy ? `${commands[0].command} · ${playerPolicy}` : commands[0].command;
+  return playerPolicy || "Console command automation";
 }
 
 function cronSummary(cron: string) {

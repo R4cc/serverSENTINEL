@@ -127,6 +127,7 @@ describe("server timeline schedule markers", () => {
     cron: "* * * * *",
     steps: [{ type: "command" as const, command: "save-all", delaySeconds: 0 }],
     onlyWhenNoPlayers: false,
+    waitForPlayersToLeave: false,
     enabled: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z"

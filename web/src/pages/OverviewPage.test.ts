@@ -54,6 +54,7 @@ const schedule = (overrides: Partial<ScheduledExecution> = {}): ScheduledExecuti
   cron: "0 4 * * *",
   steps: [{ type: "command", command: "stop", delaySeconds: 0 }],
   onlyWhenNoPlayers: true,
+  waitForPlayersToLeave: false,
   enabled: true,
   createdAt: "2026-07-01T00:00:00.000Z",
   updatedAt: "2026-07-01T00:00:00.000Z",

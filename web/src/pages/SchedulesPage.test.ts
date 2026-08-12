@@ -7,6 +7,7 @@ import {
   lastRunRelativeTime,
   nextRunRelativeTime,
   SchedulePage,
+  SchedulePlayerPolicyOptions,
   ScheduleRunDetailsDialog,
   resolveScheduleNavigationTarget,
   reorderScheduleSteps,
@@ -20,6 +21,7 @@ function schedule(steps: ScheduledExecution["steps"]): ScheduledExecution {
     cron: "0 4 * * *",
     steps,
     onlyWhenNoPlayers: false,
+    waitForPlayersToLeave: false,
     enabled: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z"
@@ -105,6 +107,32 @@ describe("overview schedule navigation", () => {
     expect(resolveScheduleNavigationTarget([value], { kind: "active-run", scheduleId: "schedule-1", runId: "run-active" })).toMatchObject({ kind: "active-run", run: { id: "run-active" } });
     expect(resolveScheduleNavigationTarget([value], { kind: "completed-run", scheduleId: "schedule-1", runId: "run-completed" })).toMatchObject({ kind: "completed-run", run: { id: "run-completed" } });
     expect(resolveScheduleNavigationTarget([value], { kind: "completed-run", scheduleId: "schedule-1", runId: "run-active" })).toBeUndefined();
+  });
+
+  it("includes the configured online-player behavior in schedule summaries", () => {
+    const base = schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]);
+
+    expect(scheduleDescription({ ...base, onlyWhenNoPlayers: true })).toBe("save-all · skips while players are online");
+    expect(scheduleDescription({ ...base, onlyWhenNoPlayers: true, waitForPlayersToLeave: true })).toBe("save-all · waits until no players are online");
+  });
+});
+
+describe("online-player schedule options", () => {
+  it("explains all three outcomes and selects the waiting policy", () => {
+    const value = {
+      ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]),
+      onlyWhenNoPlayers: true,
+      waitForPlayersToLeave: true
+    };
+    const html = renderToStaticMarkup(createElement(SchedulePlayerPolicyOptions, { schedule: value }));
+
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain("Run anyway");
+    expect(html).toContain("Skip this run");
+    expect(html).toContain("Wait until empty");
+    expect(html).toContain("runs never stack up");
+    expect(html).toMatch(/<input(?=[^>]+value="wait")(?=[^>]+checked)[^>]*>/);
+    expect(html.match(/checked=""/g)).toHaveLength(1);
   });
 });
 

@@ -96,12 +96,14 @@ function runFromRow(row: RunRow): ScheduledRun {
 
 function scheduleFromRow(row: ScheduleRow, runs: ScheduledRun[]): ScheduledExecution {
   const steps = JSON.parse(row.steps_json) as ScheduleStep[];
+  const playerPolicy = row.only_when_no_players;
   return {
     id: row.id,
     name: row.name,
     cron: row.cron,
     steps,
-    onlyWhenNoPlayers: row.only_when_no_players === 1,
+    onlyWhenNoPlayers: playerPolicy === 1 || playerPolicy === 2,
+    waitForPlayersToLeave: playerPolicy === 2,
     enabled: row.enabled === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -371,7 +373,7 @@ export class ServersRepository {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
     const result = statement.run(
-      schedule.name, schedule.cron, JSON.stringify(schedule.steps), schedule.onlyWhenNoPlayers ? 1 : 0,
+      schedule.name, schedule.cron, JSON.stringify(schedule.steps), schedule.waitForPlayersToLeave ? 2 : schedule.onlyWhenNoPlayers ? 1 : 0,
       schedule.enabled ? 1 : 0, schedule.createdAt, schedule.updatedAt, serverId, schedule.id
     );
     if (update && result.changes === 0) throw new Error("Schedule not found");
@@ -457,7 +459,7 @@ export class ServersRepository {
     for (const schedule of server.schedules ?? []) {
       upsert.run(
         server.id, schedule.id, schedule.name, schedule.cron, JSON.stringify(schedule.steps),
-        schedule.onlyWhenNoPlayers ? 1 : 0, schedule.enabled ? 1 : 0, schedule.createdAt,
+        schedule.waitForPlayersToLeave ? 2 : schedule.onlyWhenNoPlayers ? 1 : 0, schedule.enabled ? 1 : 0, schedule.createdAt,
         schedule.updatedAt, schedule.lastRunAt ?? null, schedule.lastStatus ?? null,
         schedule.lastMessage ?? null
       );

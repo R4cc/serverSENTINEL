@@ -429,6 +429,7 @@ export type ScheduledExecution = {
   cron: string;
   steps: ScheduleStep[];
   onlyWhenNoPlayers: boolean;
+  waitForPlayersToLeave: boolean;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;

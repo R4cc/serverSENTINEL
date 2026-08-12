@@ -311,6 +311,7 @@ export const initialDemoSchedules: ScheduledExecution[] = [{
     { type: "action", procedure: "restart", delaySeconds: 300 }
   ],
   onlyWhenNoPlayers: true,
+  waitForPlayersToLeave: false,
   enabled: true,
   createdAt: new Date(demoStartedAt - 86_400_000).toISOString(),
   updatedAt: new Date(demoStartedAt - 3_600_000).toISOString(),

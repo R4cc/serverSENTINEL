@@ -115,6 +115,7 @@ function managedServer(overrides: Partial<ManagedServer> = {}): ManagedServer {
         { type: "command", command: "stop", delaySeconds: 300 }
       ],
       onlyWhenNoPlayers: false,
+      waitForPlayersToLeave: false,
       enabled: true,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
