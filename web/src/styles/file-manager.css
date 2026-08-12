@@ -572,9 +572,6 @@
 
   .filesPage {
     grid-template-columns: 1fr;
-  }
-
-  .filesPage {
     height: auto;
     min-height: 0;
     max-height: none;

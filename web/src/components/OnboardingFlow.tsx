@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import type { ContextNode, ManagedServer } from "../types";
 import { AppIcon } from "./FileTypeIcon";
@@ -125,15 +125,28 @@ export function OnboardingFlow({
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [playerHeadsChoice, setPlayerHeadsChoice] = useState(playerHeadsEnabled);
   const [finishing, setFinishing] = useState(false);
+  const resumedRef = useRef(false);
   const selectedNode = readyNodes.find((node) => node.id === selectedNodeId);
   const firstServer = servers.find((server) => server.id === activeServerId) ?? servers[0];
 
+  /**
+   * The recommended step and the player-heads choice are seeded once per opening.
+   * Recomputing them on every render would discard a manual "Back to host" step or
+   * a pending toggle each time an app refresh hands down a new `nodes` array. Node
+   * selection stays reactive because it only fills in when the current pick is gone.
+   */
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      resumedRef.current = false;
+      return;
+    }
+    if (!selectedNodeId || !readyNodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(localNode?.id ?? firstRemoteNode?.id ?? "");
+    }
+    if (resumedRef.current) return;
+    resumedRef.current = true;
     setStep(onboardingRecommendedStep({ serverCount: servers.length, serverRunning }));
     setPlayerHeadsChoice(playerHeadsEnabled);
-    if (selectedNodeId && readyNodes.some((node) => node.id === selectedNodeId)) return;
-    setSelectedNodeId(localNode?.id ?? firstRemoteNode?.id ?? "");
   }, [firstRemoteNode?.id, localNode?.id, open, playerHeadsEnabled, readyNodes, selectedNodeId, serverRunning, servers.length]);
 
   if (!open) return null;

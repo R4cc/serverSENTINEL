@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.10.2 - 2026-08-12
+
+- Kept the first-run setup guide on the step you selected instead of snapping back to the recommended step whenever panel data refreshed.
+- Removed duplicated stylesheet rules left by the responsive-style colocation so node modals, the file manager, and summary tiles are described in one place each.
+
 ## 1.10.1 - 2026-08-12
 
 - Made dark mode the default for new browser sessions while keeping light and system themes available.

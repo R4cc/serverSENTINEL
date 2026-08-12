@@ -679,13 +679,10 @@
 @media (max-width: 720px) {
 
   .modsDrawerHeader button {
-    min-height: 44px;
-  }
-
-  .modsDrawerHeader button {
     width: 44px;
     min-width: 44px;
     height: 44px;
+    min-height: 44px;
   }
 
   .modsDrawerBackdrop {

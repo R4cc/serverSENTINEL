@@ -2064,13 +2064,10 @@ button .buttonIcon {
 @media (max-width: 720px) {
 
   .userModalHeader button {
-    min-height: 44px;
-  }
-
-  .userModalHeader button {
     width: 44px;
     min-width: 44px;
     height: 44px;
+    min-height: 44px;
   }
 
   .userModalBody {

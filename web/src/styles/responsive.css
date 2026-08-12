@@ -1222,10 +1222,6 @@ textarea:hover:not(:disabled),
   opacity: 0.46;
 }
 
-.summaryTile::before {
-  display: none;
-}
-
 .eventList {
   gap: var(--space-2);
 }

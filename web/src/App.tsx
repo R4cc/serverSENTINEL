@@ -2075,23 +2075,6 @@ export default function App() {
     if (canManageUsers) nodesWorkspace.onOpenAddNode();
   }
 
-  function openAddNodeFromOnboarding() {
-    setOnboardingOpen(false);
-    setActivePage("nodes");
-    if (canManageUsers) nodesWorkspace.onOpenAddNode();
-  }
-
-  function openCreateServerFromOnboarding(nodeId: string) {
-    setOnboardingOpen(false);
-    openCreateServerForNode(nodeId);
-  }
-
-  function openImportFromOnboarding(nodeId: string) {
-    setOnboardingOpen(false);
-    setActivePage("nodes");
-    exportWorkspace.openImport(nodeId);
-  }
-
   async function finishOnboarding(playerHeadsEnabled: boolean) {
     if (canManageIntegrations && (effectiveAppState.playerHeads.onboardingRequired || effectiveAppState.playerHeads.enabled !== playerHeadsEnabled)) {
       const saved = await updatePlayerHeads(playerHeadsEnabled, true);
@@ -2503,16 +2486,26 @@ export default function App() {
           panelTimeZone={panelTimeZone}
           modrinthConfigured={effectiveAppState.modrinthApiConfigured}
           playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-          playerHeadsBusy={playerHeadsBusy || integrationBusy}
+          playerHeadsBusy={integrationBusy}
           canCreateServers={canCreateServers}
           canManageNodes={canManageUsers}
           canControlServers={canBasic}
           canManageIntegrations={canManageIntegrations}
           startingServer={runtimeAction === "start" || activeStatus?.lifecycle.state === "starting"}
           onClose={() => setOnboardingOpen(false)}
-          onAddNode={openAddNodeFromOnboarding}
-          onCreateServer={openCreateServerFromOnboarding}
-          onImportServer={openImportFromOnboarding}
+          onAddNode={() => {
+            setOnboardingOpen(false);
+            openAddNodeFromEmptyState();
+          }}
+          onCreateServer={(nodeId) => {
+            setOnboardingOpen(false);
+            openCreateServerForNode(nodeId);
+          }}
+          onImportServer={(nodeId) => {
+            setOnboardingOpen(false);
+            setActivePage("nodes");
+            exportWorkspace.openImport(nodeId);
+          }}
           onOpenServer={(serverId) => {
             setOnboardingOpen(false);
             openServerFromNode(serverId);

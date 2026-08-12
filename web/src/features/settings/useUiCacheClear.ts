@@ -54,7 +54,7 @@ async function deleteIndexedDatabase(name: string) {
 }
 
 /** Best-effort fallback for browsers that ignore some Clear-Site-Data directives. */
-export async function clearBrowserUiData() {
+async function clearBrowserUiData() {
   try { window.localStorage.clear(); } catch { /* Storage can be denied by browser policy. */ }
   try { window.sessionStorage.clear(); } catch { /* Storage can be denied by browser policy. */ }
 
