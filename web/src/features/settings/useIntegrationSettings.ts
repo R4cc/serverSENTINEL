@@ -20,15 +20,17 @@ export function useIntegrationSettings(inputs: {
 }) {
   const { canManageIntegrations, playerHeads, setAppState, notify, refreshApp, requestConfirmation } = inputs;
   const [playerHeadsBusy, setPlayerHeadsBusy] = useState(false);
+  const [modrinthBusy, setModrinthBusy] = useState(false);
   const [playerHeadsOnboardingError, setPlayerHeadsOnboardingError] = useState("");
 
   async function updateModrinthKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canManageIntegrations) return;
+    if (!canManageIntegrations || modrinthBusy) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const key = trimFormValue(form, "modrinthApiKey");
     if (setValidationNotice(formElement, key ? [] : [{ field: "modrinthApiKey", message: "Modrinth API key is required." }], (message) => notify("error", message))) return;
+    setModrinthBusy(true);
     try {
       await api("/api/settings/modrinth", {
         method: "PUT",
@@ -39,6 +41,8 @@ export function useIntegrationSettings(inputs: {
       await refreshApp();
     } catch (error) {
       notify("error", (error as Error).message);
+    } finally {
+      setModrinthBusy(false);
     }
   }
 
@@ -47,7 +51,7 @@ export function useIntegrationSettings(inputs: {
    * toast, so the first-run chooser can show the error inline and stay open.
    */
   async function updatePlayerHeads(enabled: boolean, onboarding = false) {
-    if (!canManageIntegrations || playerHeadsBusy) return;
+    if (!canManageIntegrations || playerHeadsBusy) return false;
     setPlayerHeadsBusy(true);
     if (onboarding) setPlayerHeadsOnboardingError("");
     try {
@@ -58,10 +62,12 @@ export function useIntegrationSettings(inputs: {
       setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
       setPlayerHeadsOnboardingError("");
       notify("success", enabled ? "Player heads enabled" : "Player heads disabled");
+      return true;
     } catch (error) {
       const message = (error as Error).message;
       if (onboarding) setPlayerHeadsOnboardingError(message);
       else notify("error", message);
+      return false;
     } finally {
       setPlayerHeadsBusy(false);
     }
@@ -94,6 +100,7 @@ export function useIntegrationSettings(inputs: {
 
   return {
     playerHeadsBusy,
+    integrationBusy: playerHeadsBusy || modrinthBusy,
     playerHeadsOnboardingError,
     updateModrinthKey,
     updatePlayerHeads,

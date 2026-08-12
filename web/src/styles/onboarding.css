@@ -1,0 +1,457 @@
+.onboardingBackdrop {
+  z-index: 120;
+  padding: var(--space-5);
+  overflow-y: auto;
+  align-items: safe center;
+}
+
+.modalBackdrop .onboardingPanel {
+  width: min(1080px, 100%);
+  max-width: 1080px;
+  max-height: min(900px, calc(100dvh - (2 * var(--space-5))));
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  border-radius: var(--radius-lg);
+}
+
+.onboardingHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+  background: var(--glass-tint-soft);
+}
+
+.onboardingBrandMark,
+.onboardingChoiceIcon,
+.onboardingActionIcon,
+.onboardingServerReadyIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 35%, var(--glass-edge));
+  border-radius: var(--radius-md);
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.onboardingBrandMark {
+  width: 48px;
+  height: 48px;
+}
+
+.onboardingBrandMark .buttonIcon,
+.onboardingChoiceIcon .buttonIcon,
+.onboardingActionIcon .buttonIcon,
+.onboardingServerReadyIcon .buttonIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.onboardingHeaderCopy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.onboardingEyebrow,
+.onboardingStageHeading > span {
+  color: var(--sentinel-accent-strong);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.onboardingHeaderCopy h2,
+.onboardingStageHeading h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.onboardingHeaderCopy h2 {
+  font-size: clamp(24px, 3vw, 34px);
+}
+
+.onboardingHeaderCopy p,
+.onboardingStageHeading p,
+.onboardingChoiceCard p,
+.onboardingActionCard p,
+.onboardingFinishCard p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  line-height: 1.5;
+}
+
+.onboardingStepper {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+  background: var(--surface-inset);
+}
+
+.onboardingStepper li {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-soft);
+}
+
+.onboardingStepper li > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+}
+
+.onboardingStepper li > span .buttonIcon {
+  width: 15px;
+  height: 15px;
+}
+
+.onboardingStepper li > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.onboardingStepper strong,
+.onboardingStepper small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboardingStepper strong {
+  font-size: var(--type-helper-size);
+}
+
+.onboardingStepper small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.onboardingStepper li.active {
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.onboardingStepper li.active > span {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.onboardingStepper li.completed > span {
+  border-color: color-mix(in srgb, var(--sentinel-success) 55%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-success) 12%, var(--surface-raised));
+  color: var(--sentinel-success);
+}
+
+.onboardingBody {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+.onboardingStage {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.onboardingStageHeading {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.onboardingStageHeading h3 {
+  font-size: clamp(22px, 2.4vw, 30px);
+}
+
+.onboardingChoiceGrid,
+.onboardingActionGrid,
+.onboardingFinishGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.onboardingChoiceGrid,
+.onboardingActionGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.onboardingFinishGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.onboardingChoiceCard,
+.onboardingActionCard,
+.onboardingFinishCard {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  border-color: var(--border-row);
+}
+
+.onboardingChoiceCard.selected {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border-row));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.onboardingChoiceCard.unavailable {
+  background: var(--surface-inset);
+}
+
+.onboardingChoiceHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.onboardingChoiceIcon,
+.onboardingActionIcon,
+.onboardingServerReadyIcon {
+  width: 42px;
+  height: 42px;
+}
+
+.onboardingChoiceHeader > div,
+.onboardingActionCard > div,
+.onboardingServerReadyCopy > div {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.onboardingChoiceHeader strong,
+.onboardingActionCard strong,
+.onboardingFinishCard strong,
+.onboardingServerReadyCopy strong,
+.onboardingCompletion strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+}
+
+.onboardingChoiceHeader > div > span,
+.onboardingServerReadyCopy span,
+.onboardingServerReadyCopy small,
+.onboardingCompletion span {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  line-height: 1.45;
+}
+
+.onboardingChoiceCard > .uiButton,
+.onboardingActionCard > .uiButton {
+  align-self: end;
+  justify-self: start;
+}
+
+.onboardingActionCard {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.onboardingActionCard > .uiButton {
+  grid-column: 2;
+}
+
+.onboardingStageFooter {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.onboardingServerReadyCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-row));
+}
+
+.onboardingServerReadyCopy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.onboardingServerReadyCopy strong {
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+.onboardingServerReadyActions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  border-top: var(--border-subtle) solid var(--border-row);
+  padding-top: var(--space-3);
+}
+
+.onboardingFinishCard > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.onboardingFinishCard > .uiButton,
+.onboardingSegmentedChoice {
+  justify-self: start;
+  align-self: end;
+}
+
+.onboardingSegmentedChoice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.onboardingCompletion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-success) 38%, var(--border-row));
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+}
+
+.onboardingCompletion > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.onboardingResumeBanner {
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 760px) {
+  .modalBackdrop.onboardingBackdrop {
+    padding: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .modalBackdrop .onboardingPanel {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    min-height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .onboardingHeader,
+  .onboardingBody {
+    padding: var(--space-4);
+  }
+
+  .onboardingBrandMark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .onboardingHeaderCopy h2 {
+    font-size: 24px;
+  }
+
+  .onboardingHeaderCopy p {
+    display: none;
+  }
+
+  .onboardingStepper {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .onboardingStepper li {
+    grid-template-columns: auto;
+    justify-items: center;
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .onboardingStepper li > div {
+    text-align: center;
+  }
+
+  .onboardingStepper small {
+    display: none;
+  }
+
+  .onboardingChoiceGrid,
+  .onboardingActionGrid,
+  .onboardingFinishGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .onboardingServerReadyCard {
+    grid-template-columns: 1fr;
+    padding: var(--space-4);
+  }
+
+  .onboardingServerReadyCard > .uiStatusBadge {
+    justify-self: start;
+  }
+
+  .onboardingServerReadyActions,
+  .onboardingCompletion {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .onboardingServerReadyActions .uiButton,
+  .onboardingCompletion .uiButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .onboardingHeader {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .onboardingBrandMark {
+    display: none;
+  }
+
+  .onboardingChoiceHeader {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .onboardingChoiceHeader > .uiStatusBadge {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .onboardingActionCard {
+    grid-template-columns: 1fr;
+  }
+
+  .onboardingActionCard > .uiButton {
+    grid-column: 1;
+    width: 100%;
+  }
+}

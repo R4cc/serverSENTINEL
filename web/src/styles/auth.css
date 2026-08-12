@@ -21,6 +21,25 @@
   backdrop-filter: var(--glass-filter-modal);
 }
 
+.authPanel--setup {
+  width: min(620px, 100%);
+  gap: var(--space-3);
+}
+
+.authPanel--setup .brandLockup {
+  padding-bottom: var(--space-3);
+}
+
+.authPanel--setup .appForm fieldset {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.authPanel--setup .authSetupTokenField,
+.authPanel--setup .authUsernameField,
+.authPanel--setup .appForm fieldset > .uiButton {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 540px) {
   .authShell {
     padding: var(--space-3);
@@ -29,6 +48,16 @@
   .authPanel {
     padding: var(--space-4);
     gap: var(--space-3);
+  }
+
+  .authPanel--setup .appForm fieldset {
+    grid-template-columns: 1fr;
+  }
+
+  .authPanel--setup .authSetupTokenField,
+  .authPanel--setup .authUsernameField,
+  .authPanel--setup .appForm fieldset > .uiButton {
+    grid-column: 1;
   }
 }
 
@@ -46,6 +75,39 @@
 
 .authPanel .appForm fieldset {
   padding: 0;
+}
+
+.authSetupIntro {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.authSetupIntro > span {
+  color: var(--sentinel-accent-strong);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.authSetupIntro h2,
+.authSetupIntro p {
+  margin: 0;
+}
+
+.authSetupIntro h2 {
+  color: var(--text);
+  font-size: clamp(22px, 5vw, 28px);
+}
+
+.authSetupIntro p {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  line-height: 1.5;
+}
+
+.authPanel .uiBanner code {
+  overflow-wrap: anywhere;
 }
 
 .sidebar {

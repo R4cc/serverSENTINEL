@@ -144,6 +144,15 @@ export class OperationsRepository {
     `).all(serverId, safeLimit).map(operationFromRow);
   }
 
+  countActive() {
+    const row = this.storage.connection.prepare<[], { count: number }>(`
+      SELECT COUNT(*) AS count
+      FROM operations
+      WHERE status IN ('queued', 'running')
+    `).get();
+    return row?.count ?? 0;
+  }
+
   start(id: string, patch: OperationPatch = {}, now = new Date().toISOString()) {
     this.storage.connection.prepare(`
       UPDATE operations

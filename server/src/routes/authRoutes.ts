@@ -45,6 +45,7 @@ type AuthRoutesContext = {
   publicUser(user: StoredUser): PublicUser;
   demoEnabled: boolean;
   isDemoUser(user: Pick<StoredUser, "username"> | null | undefined): boolean;
+  activeOperationCount(): number;
   logInfo(fields: Record<string, unknown>, message: string): void;
   logWarn(fields: Record<string, unknown>, message: string): void;
 };
@@ -150,6 +151,42 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       category: "audit",
       action: "logout"
     }, "User logged out");
+    return { ok: true };
+  });
+
+  app.get("/api/auth/ui-cache-status", async (request) => {
+    await context.requireRequestPermission(request);
+    return { activeOperationCount: context.activeOperationCount() };
+  });
+
+  app.post("/api/auth/clear-ui-cache", context.destructiveRateLimit, async (request, reply) => {
+    const user = await context.requireRequestPermission(request);
+    const activeOperationCount = context.activeOperationCount();
+    if (activeOperationCount > 0) {
+      throwHttp(409, "Wait for every running task to finish before clearing the UI cache", {
+        code: "UI_CACHE_CLEAR_BLOCKED",
+        activeOperationCount
+      });
+    }
+
+    const sessionId = context.parseCookies(request.headers.cookie).get(context.sessionCookieName);
+    if (sessionId) context.sessions.delete(sessionId);
+    reply.header("Set-Cookie", context.sessionCookie("", 0, requestUsesPublicHttps(request, context.trustProxy)));
+    reply.header("Cache-Control", "no-store, no-transform");
+    // `cache` covers the browser's HTTP and implementation caches; `storage` clears
+    // local/session storage, IndexedDB, Cache Storage, and service workers. Reloading
+    // every same-origin context prevents another open panel tab from restoring data
+    // from memory after the purge. The panel session cookie is expired explicitly
+    // above so unrelated cookies on sibling subdomains are not swept away.
+    reply.header("Clear-Site-Data", '"cache", "storage", "executionContexts"');
+    context.logInfo({
+      userId: user.id,
+      username: user.username,
+      rolePreset: user.rolePreset,
+      category: "audit",
+      action: "clear_ui_cache",
+      status: "succeeded"
+    }, "Browser UI cache clear requested");
     return { ok: true };
   });
 

@@ -15,6 +15,7 @@ import { detectedTotalMemory } from "../runtime/local/dockerContainers.js";
 import { requireStrictBoolean } from "../http/validation.js";
 import { runtimeForServer } from "../appServices.js";
 import { logInfo } from "../logging.js";
+import { completeOnboarding, onboardingCurrentVersion, publicOnboardingState } from "../onboarding.js";
 
 export function publicPlayerHeadsState(demoMode = false) {
   if (demoMode) {
@@ -45,6 +46,7 @@ app.get("/api/app", async (request) => {
       timeZone: config.timeZone,
       modrinthApiConfigured: false,
       playerHeads: publicPlayerHeadsState(true),
+      onboarding: { currentVersion: onboardingCurrentVersion, completedVersion: onboardingCurrentVersion },
       dockerSocketMounted: false,
       totalMemory: 0
     };
@@ -62,6 +64,7 @@ app.get("/api/app", async (request) => {
     timeZone: config.timeZone,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     playerHeads: publicPlayerHeadsState(),
+    onboarding: publicOnboardingState(services.storageDatabase),
     dockerSocketMounted,
     totalMemory,
     currentUser: user ? publicUser(user) : undefined
@@ -99,6 +102,13 @@ app.put<{ Body: { enabled?: boolean } }>("/api/settings/player-heads", async (re
   services.playerHeadService.setEnabled(enabled);
   logInfo({ action: "configure_player_heads", enabled, status: "succeeded" }, "Player head integration updated");
   return { ok: true, playerHeads: publicPlayerHeadsState() };
+});
+
+app.put("/api/settings/onboarding/complete", async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const onboarding = completeOnboarding(services.storageDatabase);
+  logInfo({ action: "complete_onboarding", onboardingVersion: onboarding.completedVersion, status: "succeeded" }, "Initial onboarding completed");
+  return { ok: true, onboarding };
 });
 
 app.delete("/api/settings/player-heads/cache", destructiveRateLimit, async (request) => {
