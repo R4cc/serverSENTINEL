@@ -73,8 +73,8 @@ export function ManagedServerForm({
   const [minecraftVersion, setMinecraftVersion] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("");
   const [showSnapshots, setShowSnapshots] = useState(false);
-  const [runtimeMinecraftVersions, setRuntimeMinecraftVersions] = useState(fallbackMinecraftVersions);
-  const [loadedMinecraftRuntimeType, setLoadedMinecraftRuntimeType] = useState<ServerRuntimeType>("fabric");
+  const [runtimeMinecraftVersions, setRuntimeMinecraftVersions] = useState<CreateWizardMinecraftVersion[]>([]);
+  const [loadedMinecraftRuntimeType, setLoadedMinecraftRuntimeType] = useState<ServerRuntimeType | "">("");
   const [compatibleRuntimeVersions, setCompatibleRuntimeVersions] = useState<RuntimeVersion[]>([]);
   const [loadedRuntimeVersionsKey, setLoadedRuntimeVersionsKey] = useState("");
   const [minimumHeapGb, setMinimumHeapGb] = useState(2);
@@ -106,11 +106,10 @@ export function ManagedServerForm({
   const identityReady = !displayNameError;
   const nextDisabled = provisioning || placementBlocked || !identityReady;
   const minecraftVersionsLoading = loadedMinecraftRuntimeType !== runtimeType;
-  const minecraftOptions = useMemo(() => (
-    runtimeType === "paper" && runtimeMinecraftVersions.length === 0
-      ? []
-      : runtimeMinecraftOptions(runtimeMinecraftVersions, showSnapshots)
-  ), [runtimeMinecraftVersions, runtimeType, showSnapshots]);
+  const minecraftOptions = useMemo(
+    () => runtimeMinecraftOptions(runtimeMinecraftVersions, showSnapshots),
+    [runtimeMinecraftVersions, showSnapshots]
+  );
   const runtimeVersionsKey = `${runtimeType}:${minecraftVersion}`;
   const runtimeVersionsLoading = Boolean(minecraftVersion) && loadedRuntimeVersionsKey !== runtimeVersionsKey;
   const runtimeOptions = useMemo(() => {
@@ -1365,7 +1364,7 @@ function ReviewCreateWizardStep({
   );
 }
 
-function ReviewSummaryCard({
+export function ReviewSummaryCard({
   title,
   onEdit,
   children
@@ -1378,7 +1377,7 @@ function ReviewSummaryCard({
     <section className="reviewSummaryCard" aria-labelledby={`review-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
       <div className="reviewSummaryHeader">
         <strong id={`review-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>{title}</strong>
-        <Button variant="ghost" compact className="reviewEditButton" onClick={onEdit}>
+        <Button variant="ghost" compact className="reviewEditButton" onClick={onEdit} aria-label={`Edit ${title}`}>
           <AppIcon name="edit" />
           <span>Edit</span>
         </Button>
@@ -1456,11 +1455,11 @@ export function CreateServerStepper({ activeStep }: { activeStep: number }) {
   );
 }
 
-function NodeOverviewCard({ node, fallbackMemory }: { node?: ContextNode; fallbackMemory: number }) {
+export function NodeOverviewCard({ node, fallbackMemory }: { node?: ContextNode; fallbackMemory: number }) {
   const totalMemory = node?.totalMemory || fallbackMemory;
   const status = node ? nodeStatusText(node) : "No node selected";
   const uptime = node ? formatNodeUptime(node) : "Select a node";
-  const memory = totalMemory ? `${formatBytes(totalMemory)} / ${formatBytes(totalMemory)}` : "Unknown";
+  const memory = totalMemory ? formatBytes(totalMemory) : "Unknown";
   return (
     <section className="createNodeOverview" aria-label="Node overview">
       <strong>Node overview</strong>
@@ -1483,7 +1482,7 @@ function NodeOverviewCard({ node, fallbackMemory }: { node?: ContextNode; fallba
           <strong>{uptime}</strong>
         </div>
         <div className="createNodeOverviewMetric">
-          <span>Available memory</span>
+          <span>Total memory</span>
           <strong>{memory}</strong>
         </div>
       </div>

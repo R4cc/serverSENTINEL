@@ -53,7 +53,7 @@ export function ServerCreateTab({
         <section className="inlineState inlineState-error" role="alert">
           <div className="inlineStateText">
             <strong>Server setup failed</strong>
-            <span>{provisioningError} Review the details below, adjust the form if needed, then try again.</span>
+            <span>{provisioningError} Review the details below, resolve the reported problem, then try again.</span>
             {provisioningErrorDetails && (
               <details className="failureDetails">
                 <summary>Show full API failure log</summary>

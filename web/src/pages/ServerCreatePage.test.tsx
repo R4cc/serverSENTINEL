@@ -1,7 +1,7 @@
 import { serverRuntimeDefinitions } from "@serversentinel/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { createServerReviewSummary, CreateServerStepper, RuntimeWizardStep } from "./ServerCreatePage";
+import { createServerReviewSummary, CreateServerStepper, NodeOverviewCard, ReviewSummaryCard, RuntimeWizardStep } from "./ServerCreatePage";
 
 function renderPaperRuntime(input: { runtimeVersion?: string; noStableBuild?: boolean; loading?: boolean; minecraftLoading?: boolean } = {}) {
   const runtimeVersion = input.runtimeVersion ?? "132";
@@ -84,5 +84,25 @@ describe("CreateServerStepper", () => {
     expect(html).toContain("Completed");
     expect(html).toContain("Current step");
     expect(html).toContain("Not started");
+  });
+
+  it("gives each edit action a section-specific accessible name", () => {
+    const html = renderToStaticMarkup(
+      <ReviewSummaryCard title="Runtime" onEdit={vi.fn()}><span>Details</span></ReviewSummaryCard>
+    );
+
+    expect(html).toContain('aria-label="Edit Runtime"');
+    expect(html).toContain("<span>Edit</span>");
+  });
+});
+
+describe("NodeOverviewCard", () => {
+  it("labels and displays the node total memory without inventing an available amount", () => {
+    const html = renderToStaticMarkup(<NodeOverviewCard fallbackMemory={8 * 1024 ** 3} />);
+
+    expect(html).toContain("Total memory");
+    expect(html).toContain("8192.0 MiB");
+    expect(html).not.toContain("Available memory");
+    expect(html).not.toContain("8192.0 MiB / 8192.0 MiB");
   });
 });

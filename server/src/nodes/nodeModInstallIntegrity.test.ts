@@ -38,6 +38,7 @@ async function loadHooks() {
     dockerErrorMessage: (body: string) => body,
     dockerJsonRequest: vi.fn(),
     dockerLogTailMaxBytes: 16 * 1024 * 1024,
+    dockerReachable: async () => false,
     dockerRequest: vi.fn(),
     isMissingDockerNetworkError: () => false,
     sendDockerContainerStdinLine: vi.fn()

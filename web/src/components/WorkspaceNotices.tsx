@@ -43,7 +43,7 @@ export function WorkspaceNotices({
       {provisioningError && activePage === "overview" && (
         <section className="systemBanner error" role="alert">
           <strong>Server setup failed.</strong>
-          <span>{provisioningError} Review the form values, then try creating the server again.</span>
+          <span>{provisioningError} Resolve the reported problem, then try creating the server again.</span>
           {provisioningErrorDetails && (
             <details className="failureDetails">
               <summary>Show full API failure log</summary>

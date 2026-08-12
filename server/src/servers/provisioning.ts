@@ -6,7 +6,7 @@ import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js"
 import { appUserAgentFor } from "../buildInfo.js";
 import { detailedError, detailedErrorMessage, durationSince, errorLogFields, logError, logInfo, logWarn } from "../logging.js";
 import { validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../http/validation.js";
-import { dockerAvailable } from "../docker/dockerClient.js";
+import { dockerReachable } from "../docker/dockerClient.js";
 import { defaultServerJarProvider } from "../runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "../runtime/artifact.js";
 import { runtimeProfileForServer, type ServerJarProvider } from "../runtime/profile.js";
@@ -23,6 +23,20 @@ import { writeVersionMetadataFile } from "./versions.js";
 import type { ManagedServer, ServerRuntimeProfile, ServerRuntimeType } from "../types.js";
 
 export const serverJarProvider: ServerJarProvider = defaultServerJarProvider;
+
+export function provisioningErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "Server setup failed";
+  if (/\bconnect\s+(?:EACCES|ECONNREFUSED|ENOENT|ENOTSOCK|EPERM|EPIPE|ETIMEDOUT)\b|Docker socket request timed out|Docker integration is not configured/i.test(message)) {
+    return "Docker is not reachable on the selected node. Check the Docker connection, then try again.";
+  }
+  return message;
+}
+
+function publicProvisioningError(error: unknown) {
+  const message = provisioningErrorMessage(error);
+  if (error instanceof Error && message === error.message) return error;
+  return detailedError(new Error(message), detailedErrorMessage(error));
+}
 
 export function parseServerRuntimeType(value: unknown, field = "runtimeType"): ServerRuntimeType {
   const runtimeType = requiredString(value, field);
@@ -180,7 +194,7 @@ export async function createManagedServer(input: CreateServerInput, report?: (pr
   let saved = false;
   try {
     await createServerFiles(server, input.acceptEula, serverPort, queryPort, report);
-    if (dockerAvailable()) {
+    if (await dockerReachable()) {
       report?.(78, "Pulling runtime image and creating Docker container");
       await ensureDockerContainer(server);
     } else {
@@ -237,5 +251,11 @@ export async function startProvisionOperation(input: CreateServerInput, createdB
       logError({ operationId: operation.id, nodeId, serverName: input.displayName?.trim(), errorDetails: detailedErrorMessage(error), ...errorLogFields(error) }, "Provisioning operation failed");
     },
     onSettled: (operation) => { activeProvisionPortReservations.delete(operation.id); }
-  }, (operation, report) => runtimeForNodeId(nodeId).createServer({ ...input, nodeId }, report, operation.id));
+  }, async (operation, report) => {
+    try {
+      return await runtimeForNodeId(nodeId).createServer({ ...input, nodeId }, report, operation.id);
+    } catch (error) {
+      throw publicProvisioningError(error);
+    }
+  });
 }

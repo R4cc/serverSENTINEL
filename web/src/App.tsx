@@ -1722,7 +1722,6 @@ export default function App() {
     } catch (error) {
       const message = (error as Error).message;
       const details = error instanceof Error && "details" in error && typeof error.details === "string" ? error.details : "";
-      setNotice(message);
       setProvisioningError(message);
       setProvisioningErrorDetails(details);
       notify("error", message);

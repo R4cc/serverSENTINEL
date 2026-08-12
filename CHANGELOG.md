@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.9.6 - 2026-08-12
+
+- Corrected managed-server creation defaults, Docker readiness and failure guidance, review accessibility, and node memory labeling.
+
 ## 1.9.5 - 2026-08-11
 
 - Kept mobile Mods rows aligned when names, statuses, and installed versions have different lengths.

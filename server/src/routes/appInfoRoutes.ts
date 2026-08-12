@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { config } from "../config.js";
 import { services } from "../appServices.js";
 import { appBuildId, appVersion } from "../buildInfo.js";
-import { dockerAvailable } from "../docker/dockerClient.js";
+import { dockerReachable } from "../docker/dockerClient.js";
 import { destructiveRateLimit } from "../http/rateLimits.js";
 import { isDemoModeRequest, publicUser, requireRequestPermission } from "../auth/sessionService.js";
 
@@ -51,6 +51,7 @@ app.get("/api/app", async (request) => {
   }
   const servers = await listManagedServers();
   const nodes = await readNodes();
+  const dockerSocketMounted = await dockerReachable();
   const totalMemory = await detectedTotalMemory();
   return {
     servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
@@ -61,7 +62,7 @@ app.get("/api/app", async (request) => {
     timeZone: config.timeZone,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     playerHeads: publicPlayerHeadsState(),
-    dockerSocketMounted: dockerAvailable(),
+    dockerSocketMounted,
     totalMemory,
     currentUser: user ? publicUser(user) : undefined
   };

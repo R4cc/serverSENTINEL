@@ -20,7 +20,7 @@ import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserErro
 import { hashPassword, verifyPassword } from "./auth/passwords.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
-import { dockerAvailable } from "./docker/dockerClient.js";
+import { dockerReachable } from "./docker/dockerClient.js";
 import { configureModrinthApiKeyProvider } from "./modrinth/modrinthClient.js";
 import { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
 import { registerShutdownHandlers } from "./shutdown.js";
@@ -584,7 +584,7 @@ const startupUsers = await readUsers().catch(() => []);
 const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const playerHeadsEnabled = services.settingsRepository.get().playerHeadsEnabled;
-const dockerSocketMounted = config.runtimeMode === "panel" ? false : dockerAvailable();
+const dockerSocketMounted = config.runtimeMode === "panel" ? false : await dockerReachable();
 app.log.info({
   appVersion,
   appBuildId,
@@ -603,7 +603,7 @@ app.log.info({
   port: config.port
 }, "serverSENTINEL startup configuration");
 if (config.runtimeMode !== "panel" && !dockerSocketMounted) {
-  app.log.warn({ dockerSocket: config.dockerSocket }, "Docker socket is not mounted; runtime management is unavailable");
+  app.log.warn({ dockerSocket: config.dockerSocket }, "Docker endpoint is unavailable; runtime management is unavailable");
 }
 
 return app;

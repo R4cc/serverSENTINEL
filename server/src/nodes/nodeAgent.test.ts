@@ -130,6 +130,7 @@ async function loadHooks() {
     dockerErrorMessage: (body: string, statusCode?: number) => body || `Docker API returned ${statusCode ?? "an error"}`,
     dockerJsonRequest: mockDockerJsonRequest,
     dockerLogTailMaxBytes: 16 * 1024 * 1024,
+    dockerReachable: async () => mockDockerAvailable,
     dockerRequest: mockDockerRequest,
     isMissingDockerNetworkError: (error: unknown) => /\bnetwork\s+[a-f0-9]{12,64}\s+not found\b/i.test(error instanceof Error ? error.message : typeof error === "string" ? error : ""),
     sendDockerContainerStdinLine: mockSendDockerContainerStdinLine
