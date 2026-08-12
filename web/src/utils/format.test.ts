@@ -12,10 +12,12 @@ describe("adaptive byte formatting", () => {
 });
 
 describe("theme preference", () => {
-  it("defaults to the system theme while preserving a saved choice", () => {
-    expect(themePreferenceFromStoredValue(null)).toBe("system");
-    expect(themePreferenceFromStoredValue("unknown-theme")).toBe("system");
+  it("defaults to dark mode while preserving a saved choice", () => {
+    expect(themePreferenceFromStoredValue(null)).toBe("dark");
+    expect(themePreferenceFromStoredValue("unknown-theme")).toBe("dark");
     expect(themePreferenceFromStoredValue("dark")).toBe("dark");
+    expect(themePreferenceFromStoredValue("light")).toBe("light");
+    expect(themePreferenceFromStoredValue("system")).toBe("system");
   });
 });
 

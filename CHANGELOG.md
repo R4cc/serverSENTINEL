@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.10.1 - 2026-08-12
+
+- Made dark mode the default for new browser sessions while keeping light and system themes available.
+- Updated the automated README screenshots to showcase dark mode by default and include a light-mode example.
+
 ## 1.10.0 - 2026-08-12
 
 - Added a resumable first-run experience that guides administrators through host selection, server creation or import, the first successful start, and optional integrations.

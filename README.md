@@ -27,6 +27,8 @@ I recommend to keep the panel isolated and not make it directly exposed to the p
 
 ## Screenshots
 
+The screenshots below show the default dark theme. Light mode is also available from the appearance settings.
+
 <table>
   <tr>
     <td valign="top" width="50%">
@@ -94,11 +96,11 @@ I recommend to keep the panel isolated and not make it directly exposed to the p
   </tr>
   <tr>
     <td valign="top" colspan="2">
-      <p align="center"><strong>Dark Mode</strong></p>
-      <a href="docs/screenshots/overview-dark.png">
-        <img width="1440" height="1000" alt="serverSENTINEL server overview in dark mode" src="docs/screenshots/overview-dark.png" style="max-width: 100%;" />
+      <p align="center"><strong>Light Mode</strong></p>
+      <a href="docs/screenshots/overview-light.png">
+        <img width="1440" height="1000" alt="serverSENTINEL server overview in light mode" src="docs/screenshots/overview-light.png" style="max-width: 100%;" />
       </a>
-      <p align="center">The full interface is also available in dark mode.</p>
+      <p align="center">The full interface is also available in light mode.</p>
     </td>
   </tr>
 </table>

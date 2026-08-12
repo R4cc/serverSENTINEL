@@ -168,14 +168,14 @@ try {
     deviceScaleFactor: 1,
     locale: "en-US",
     timezoneId: "UTC",
-    colorScheme: "light",
+    colorScheme: "dark",
     reducedMotion: "reduce"
   });
   await signInThroughApi(context, baseUrl);
   const page = await context.newPage();
   await page.clock.setFixedTime(fixedTime);
   await page.addInitScript(() => {
-    localStorage.setItem("serversentinel-theme", "light");
+    localStorage.setItem("serversentinel-theme", "dark");
     localStorage.setItem("serversentinel-date-locale", "en-US");
     localStorage.setItem("serversentinel-number-locale", "en-US");
     localStorage.setItem("serversentinel-display-time-zone", "utc");
@@ -225,11 +225,11 @@ try {
   await waitForSettingsPage(page);
   await capture(page, "settings.png");
 
-  await page.getByLabel("Theme", { exact: true }).selectOption("dark");
-  await page.locator(".appShell.themeDark").waitFor();
+  await page.getByLabel("Theme", { exact: true }).selectOption("light");
+  await page.locator(".appShell.themeLight").waitFor();
   await openPage(page, "overview", "Overview");
   await waitForOverviewTimeline(page);
-  await capture(page, "overview-dark.png");
+  await capture(page, "overview-light.png");
 
   console.log(`Updated README screenshots in ${outputDirectory}`);
 } finally {

@@ -164,12 +164,12 @@ export function readThemePreference(): ThemePreference {
     const saved = window.localStorage.getItem("serversentinel-theme");
     return themePreferenceFromStoredValue(saved);
   } catch {
-    return "system";
+    return "dark";
   }
 }
 
 export function themePreferenceFromStoredValue(value: string | null): ThemePreference {
-  return isThemePreference(value) ? value : "system";
+  return isThemePreference(value) ? value : "dark";
 }
 
 const regionalFormatStorageKey = "serversentinel-regional-format";
