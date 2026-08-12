@@ -21,47 +21,11 @@
 # Repository structure
 
 - `shared/` contains contracts used by both application sides, `server/` contains the backend and node/runtime integrations, and `web/` contains the React frontend.
+- Directory-specific routing lives in `server/AGENTS.md` and `web/AGENTS.md`; follow the scoped file when working in that tree.
 - Keep changes narrow and preserve unrelated work. When a contract crosses package boundaries, update the shared definition and all affected consumers together.
 - Use the root npm workspace scripts rather than maintaining separate dependency installations in each workspace.
-- The `shared/` directory publishes as `@serversentinel/contracts`. Searching for `from "shared` finds nothing; search for `@serversentinel/contracts` instead. `web/src/types.ts` re-exports most of it, so a type used in the frontend is usually defined in `shared/src/index.ts`.
+- The `shared/` directory publishes as `@serversentinel/contracts`. Searching for `from "shared` finds nothing; search for `@serversentinel/contracts` instead.
 - `shared/` is consumed as built output. Every workspace `build`, `test`, and `typecheck` script rebuilds it first, so a focused test run works from a clean checkout. If an import of `@serversentinel/contracts` fails to resolve, the fix is to build `shared/`, not to edit its `package.json` exports.
-
-# Where the frontend lives
-
-- `web/src/App.tsx` is the state hub: authentication, navigation, the active server, and the console pipeline. It owns the app-level effects and passes state down as props, so most page changes also touch it.
-- `web/src/features/<area>/use<Area>Workspace.ts` owns per-area state and data loading for files, mods, nodes, schedules, settings, and users. Prefer changing the workspace hook over adding state to `App.tsx`.
-- `web/src/app/` holds shell concerns split out of `App.tsx` (config, navigation storage, workspace guards, display formatters). `web/src/utils/` holds pure helpers that are unit tested in isolation.
-- Pages under `web/src/pages/` are largely presentational and receive their state as props.
-
-# Stylesheets
-
-Styles are global CSS, not modules, so cascade order is load-bearing. `web/src/styles.css` is the entry point and its `@import` order is the contract; `web/src/styles.test.ts` asserts it.
-
-Each stylesheet owns a class family. Change a rule in its owning file rather than overriding it downstream:
-
-| Stylesheet | Owns |
-| --- | --- |
-| `tokens.css`, `themes.css`, `fonts.css` | Custom properties, theme surfaces, font faces |
-| `typography.css` | Type scale applied to shell and form elements |
-| `primitives.css` | The `ui*` primitives (`uiButton`, `uiMetricTile`, `uiPanelHeader`, `uiSurface`) and loading skeletons |
-| `canonical-layout.css` | Cross-page shell geometry: `workspaceHeader`, sidebar collapse, server strip |
-| `layout.css` | Shell chrome: `activeServerStrip`, `runtimeBadge`, toasts, users table |
-| `overview.css` | Overview page and the server timeline |
-| `mods.css` | `modsWorkspace*`, mod drawers and compatibility cards |
-| `file-manager.css` | `filesPage` and file tables |
-| `files-console.css` | Terminal, file editor, mod install version rows |
-| `schedules.css` | Schedule tables, runs, and steps |
-| `settings.css` | `settingsHub*` |
-| `settings-nodes.css` | Node create wizard, node drawer, `summaryTile` |
-| `nodes.css` | Nodes list page; loads after `responsive.css` and owns its layout end to end |
-| `server-properties.css` | Properties form and danger panel |
-| `auth.css`, `confirmation-modal.css` | Sign-in and confirmation dialogs |
-| `responsive.css` | Shared shell breakpoints and cross-feature responsive primitives |
-| `motion.css` | Transitions and animation |
-
-- Put a feature's responsive rules in that feature's stylesheet next to the base rule. `responsive.css` is only for shell-wide and cross-feature primitive breakpoints; adding a feature-owned selector there creates competing owners and is rejected by `styles.test.ts`.
-- Feature stylesheets must use theme tokens, not raw hex or `rgb()` values, and must not redefine `ui*` primitives.
-- `styles.test.ts` asserts ownership, cascade order, and retired class names. It deliberately does not assert declaration values — do not add regexes that pin pixel sizes, colors, or property order, because they cannot verify rendering and break on reformatting. Verify visual behaviour with the smoke scripts instead.
 
 # Validation
 
