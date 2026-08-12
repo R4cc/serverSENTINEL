@@ -165,7 +165,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     if (activeOperationCount > 0) {
       throwHttp(409, "Wait for every running task to finish before clearing the UI cache", {
         code: "UI_CACHE_CLEAR_BLOCKED",
-        activeOperationCount
+        details: { activeOperationCount }
       });
     }
 

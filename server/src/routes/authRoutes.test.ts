@@ -226,9 +226,16 @@ describe("auth demo login", () => {
     context.activeOperationCount = () => activeOperationCount;
     registerAuthRoutes(app, context);
 
+    const status = await app.inject({ method: "GET", url: "/api/auth/ui-cache-status" });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toEqual({ activeOperationCount: 1 });
+
     const blocked = await app.inject({ method: "POST", url: "/api/auth/clear-ui-cache" });
     expect(blocked.statusCode).toBe(409);
-    expect(blocked.json()).toMatchObject({ error: { code: "UI_CACHE_CLEAR_BLOCKED", details: { activeOperationCount: 1 } } });
+    expect(blocked.json()).toMatchObject({
+      statusCode: 409,
+      message: "Wait for every running task to finish before clearing the UI cache"
+    });
     expect(blocked.headers["clear-site-data"]).toBeUndefined();
 
     activeOperationCount = 0;

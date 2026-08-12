@@ -6,6 +6,7 @@
 
 - Added a resumable first-run experience that guides administrators through host selection, server creation or import, the first successful start, and optional integrations.
 - Refreshed administrator setup guidance and deferred optional player-head configuration until the essential server setup is complete.
+- Added a guarded Clear UI cache action under System settings that clears browser-held panel files and data, signs the current browser out, and reloads only after active work has settled.
 
 ## 1.9.6 - 2026-08-12
 
