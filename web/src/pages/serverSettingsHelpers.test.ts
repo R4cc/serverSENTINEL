@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preferredMinecraftVersion } from "./serverSettingsHelpers";
+import { preferredMinecraftVersion, runtimeMinecraftOptions } from "./serverSettingsHelpers";
 
 describe("preferredMinecraftVersion", () => {
   it("defaults to the newest release returned by the runtime provider", () => {
@@ -18,5 +18,11 @@ describe("preferredMinecraftVersion", () => {
 
   it("does not invent a Minecraft version when the runtime provider has none", () => {
     expect(preferredMinecraftVersion([])).toBe("");
+  });
+});
+
+describe("runtimeMinecraftOptions", () => {
+  it("does not expose fallback versions while the live catalog is still loading", () => {
+    expect(runtimeMinecraftOptions([], false)).toEqual([]);
   });
 });

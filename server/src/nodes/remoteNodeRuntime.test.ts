@@ -164,7 +164,7 @@ describe("RemoteNodeRuntime payload projection", () => {
       schedules: [{
         id: "schedule-1", name: "Nightly restart", cron: "0 4 * * *",
         steps: [{ type: "action", procedure: "restart", delaySeconds: 0 }],
-        onlyWhenNoPlayers: true, enabled: true,
+        onlyWhenNoPlayers: true, waitForPlayersToLeave: false, enabled: true,
         createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
         recentRuns: [{ id: "run-1", scheduleId: "schedule-1", scheduleName: "Nightly restart", status: "succeeded", ranAt: "2026-01-02T04:00:00.000Z" }]
       }],

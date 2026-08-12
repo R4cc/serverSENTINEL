@@ -64,6 +64,9 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     refreshingSystemInfo: false,
     onRefreshSystemInfo: vi.fn(),
     onCopyDiagnostics: vi.fn(),
+    clearingUiCache: false,
+    clearUiCacheDisabledReason: "",
+    onClearUiCache: vi.fn(),
     onExitDemo: vi.fn(),
     exitDemoDisabled: false,
     ...overrides
@@ -148,5 +151,14 @@ describe("SettingsPage", () => {
     expect(html).toContain("Remote-node mode");
     expect(html).toContain("Not required (remote-node mode)");
     expect(html).toContain("Privacy-safe diagnostics");
+    expect(html).toContain("Clear UI cache");
+  });
+
+  it("disables UI cache clearing while work that a reload could interrupt is active", () => {
+    const reason = "Wait for every running task to finish before clearing the UI cache.";
+    const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "system", clearUiCacheDisabledReason: reason })} />);
+    expect(html).toContain("Clear UI cache");
+    expect(html).toContain("disabled");
+    expect(html).toContain(reason);
   });
 });

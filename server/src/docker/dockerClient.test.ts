@@ -40,6 +40,45 @@ describe("Docker client helpers", () => {
     expect(() => dockerJsonBody("{")).toThrow("Docker API returned malformed JSON");
   });
 
+  it("probes the Docker API before reporting the endpoint as reachable", async () => {
+    const fakeRequest = { on: vi.fn(), end: vi.fn(), write: vi.fn(), destroy: vi.fn() } as any;
+    const handlers = new Map<string, (chunk?: Buffer) => void>();
+    const response = {
+      statusCode: 200,
+      on: (event: string, handler: (chunk?: Buffer) => void) => { handlers.set(event, handler); return response; },
+      destroy: vi.fn()
+    };
+    requestMock.mockImplementation((options: http.RequestOptions, onResponse: (value: unknown) => void) => {
+      expect(options.path).toBe("/_ping");
+      queueMicrotask(() => {
+        onResponse(response);
+        handlers.get("data")?.(Buffer.from("OK", "utf8"));
+        handlers.get("end")?.();
+      });
+      return fakeRequest;
+    });
+
+    const { dockerReachable } = await import("./dockerClient.js");
+    await expect(dockerReachable()).resolves.toBe(true);
+  });
+
+  it("does not treat an existing but unusable Docker path as reachable", async () => {
+    let errorHandler: ((error: Error) => void) | undefined;
+    const fakeRequest = {
+      on: vi.fn((event: string, handler: (error: Error) => void) => {
+        if (event === "error") errorHandler = handler;
+        return fakeRequest;
+      }),
+      end: vi.fn(() => queueMicrotask(() => errorHandler?.(new Error("connect ENOTSOCK /tmp/docker.fake")))),
+      write: vi.fn(),
+      destroy: vi.fn()
+    } as any;
+    requestMock.mockReturnValue(fakeRequest);
+
+    const { dockerReachable } = await import("./dockerClient.js");
+    await expect(dockerReachable()).resolves.toBe(false);
+  });
+
   it("uses Docker attach stdin instead of exec or /proc/1/fd/0", async () => {
     const writes: Buffer[] = [];
     const fakeRequest = {

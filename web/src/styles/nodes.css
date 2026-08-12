@@ -533,3 +533,43 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+.nodesPage {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+
+  .nodesPage > .nodeDrawerBackdrop {
+    position: static;
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: calc(100dvh - 68px);
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .nodesPage > .nodeDrawerBackdrop > .nodeDetailsDrawer {
+    width: 100%;
+    height: auto;
+    min-height: calc(100dvh - 68px);
+    border: 0;
+    box-shadow: none;
+  }
+
+  .nodesPage > .nodeDrawerBackdrop .nodeDrawerBody {
+    flex: 0 0 auto;
+    overflow: visible;
+    overscroll-behavior-y: auto;
+  }
+
+  .nodesPage > .nodeDrawerBackdrop .nodeDrawerFooter {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+}

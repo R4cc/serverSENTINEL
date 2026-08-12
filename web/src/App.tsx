@@ -33,6 +33,7 @@ import { AuthLoadingSkeleton, FeaturePageLoadingSkeleton } from "./components/Lo
 import { Button, EmptyState } from "./components/UiPrimitives";
 import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
+import { OnboardingFlow, OnboardingResumeBanner, onboardingRecommendedStep } from "./components/OnboardingFlow";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
@@ -48,6 +49,7 @@ import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
+import { uiCacheLocalBlockedReason, useUiCacheClear } from "./features/settings/useUiCacheClear";
 import { useExportWorkspace } from "./features/exports/useExportWorkspace";
 import { ExportModal } from "./features/exports/ExportModal";
 import { ImportModal } from "./features/exports/ImportModal";
@@ -139,6 +141,7 @@ export default function App() {
   const overviewTimelineVisible = useOverviewTimelineVisibility();
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const [preferredCreateNodeId, setPreferredCreateNodeId] = useState("");
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const {
     themePreference,
     setThemePreference,
@@ -181,6 +184,7 @@ export default function App() {
   const refreshModsAfterFileMutationRef = useRef<() => Promise<unknown> | unknown>(() => undefined);
   const activeServerIdRef = useRef("");
   const panelFirstRunPromptedRef = useRef(false);
+  const onboardingAutoOpenedRef = useRef(false);
   const provisionSubmitLockRef = useRef(false);
   const appRefreshInFlightRef = useRef(false);
   const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
@@ -349,9 +353,33 @@ export default function App() {
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
   const canViewUsers = !demoMode && hasPermission(permissionUser, "users.view");
   const canManageUsers = !demoMode && hasPermission(permissionUser, "users.manage");
+  const onboardingPending = appStateLoaded
+    && !demoMode
+    && Boolean(authSession?.authenticated)
+    && appState.onboarding.completedVersion < appState.onboarding.currentVersion;
+  const onboardingServerRunning = Boolean(activeServer && (
+    (activeStatus?.server.id === activeServer.id && activeStatus.docker.running)
+    || activeServer.runtimeIntent === "running"
+    || activeServer.runtimeIntent === "restarting"
+  ));
+  const onboardingStep = onboardingRecommendedStep({
+    serverCount: effectiveAppState.servers.length,
+    serverRunning: onboardingServerRunning
+  });
   const exportWorkspace = useExportWorkspace(notify, activeServer?.id ?? "", canExportServers && Boolean(authSession?.authenticated));
   const exportMutationLocked = exportWorkspace.exportMutationLocked;
   const exportMutationBlockedReason = exportWorkspace.exportMutationBlockedReason;
+
+  useEffect(() => {
+    if (!onboardingPending) {
+      onboardingAutoOpenedRef.current = false;
+      setOnboardingOpen(false);
+      return;
+    }
+    if (onboardingAutoOpenedRef.current) return;
+    onboardingAutoOpenedRef.current = true;
+    setOnboardingOpen(true);
+  }, [onboardingPending]);
 
   useEffect(() => {
     if (activePage === "mods" && activeServer && !supportsManagedMods) setActivePage("overview");
@@ -442,6 +470,7 @@ export default function App() {
   const settingsDataLoading = !appStateLoaded && !appLoadError;
   const {
     playerHeadsBusy,
+    integrationBusy,
     playerHeadsOnboardingError,
     updateModrinthKey,
     updatePlayerHeads,
@@ -588,6 +617,33 @@ export default function App() {
     requestConfirmation,
     handleStaleSession,
     refreshApp: () => refreshApp()
+  });
+  const uiCacheLocalReason = uiCacheLocalBlockedReason({
+    runningTasks: activeJobs.some((job) => job.status === "queued" || job.status === "running")
+      || exportMutationLocked
+      || Boolean(filesWorkspace.state.zipOperationId),
+    unsavedFileChanges: filesWorkspace.state.dirty,
+    fileMutation: Boolean(filesWorkspace.state.fileOperationBusy)
+      || filesWorkspace.state.fileSaving
+      || filesWorkspace.state.fileOpening
+      || filesWorkspace.state.fileLeaseBusy,
+    runtimeMutation: Boolean(runtimeAction),
+    serverSettingsMutation: serverSettingsSaving,
+    consoleCommand: commandSending,
+    nodeMutation: nodesWorkspace.busy,
+    scheduleMutation: schedulesWorkspace.busy,
+    userMutation: usersWorkspace.busy,
+    integrationMutation: integrationBusy,
+    transferMutation: exportWorkspace.exportBusy || exportWorkspace.importBusy,
+    modMutation: isAnyModJobRunning
+      || modsWorkspace.state.batchUpdateRunning
+      || Boolean(modsWorkspace.state.installState?.installing)
+  });
+  const uiCacheClear = useUiCacheClear({
+    enabled: activePage === "settings" && Boolean(authSession?.authenticated),
+    localBlockedReason: uiCacheLocalReason,
+    requestConfirmation,
+    notify
   });
   const consoleCommandDisabledReason = isProvisioning
       ? "Server setup is still running."
@@ -1716,13 +1772,13 @@ export default function App() {
       await refreshStatus(server.id);
       await pollConsoleBacklog(server.id);
       notify("success", `Created ${server.displayName}`);
+      if (onboardingPending) setOnboardingOpen(true);
       window.setTimeout(() => {
         setActiveJobs((current) => current.filter((j) => j.id !== operation.id));
       }, 1200);
     } catch (error) {
       const message = (error as Error).message;
       const details = error instanceof Error && "details" in error && typeof error.details === "string" ? error.details : "";
-      setNotice(message);
       setProvisioningError(message);
       setProvisioningErrorDetails(details);
       notify("error", message);
@@ -2019,6 +2075,21 @@ export default function App() {
     if (canManageUsers) nodesWorkspace.onOpenAddNode();
   }
 
+  async function finishOnboarding(playerHeadsEnabled: boolean) {
+    if (canManageIntegrations && (effectiveAppState.playerHeads.onboardingRequired || effectiveAppState.playerHeads.enabled !== playerHeadsEnabled)) {
+      const saved = await updatePlayerHeads(playerHeadsEnabled, true);
+      if (!saved) return;
+    }
+    try {
+      const result = await api<{ onboarding: AppState["onboarding"] }>("/api/settings/onboarding/complete", { method: "PUT" });
+      setAppState((current) => ({ ...current, onboarding: result.onboarding }));
+      setOnboardingOpen(false);
+      notify("success", "Initial setup complete");
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not finish initial setup."));
+    }
+  }
+
   function renderNoManagedServersEmptyState(title: string) {
     return (
       <NoManagedServersEmptyState
@@ -2095,6 +2166,10 @@ export default function App() {
           onRetryAppLoad={() => void refreshApp()}
         />
 
+        {onboardingPending && !onboardingOpen && activePage !== "create" ? (
+          <OnboardingResumeBanner step={onboardingStep} onResume={() => setOnboardingOpen(true)} />
+        ) : null}
+
         {applicationReady && activePage === "create" && (
           <ServerCreateTab
             provisionOperation={currentProvisionOperation}
@@ -2163,6 +2238,9 @@ export default function App() {
             refreshingSystemInfo={appRefreshing}
             onRefreshSystemInfo={() => void refreshApp()}
             onCopyDiagnostics={(value) => void copyText(value)}
+            clearingUiCache={uiCacheClear.clearing}
+            clearUiCacheDisabledReason={uiCacheClear.disabledReason}
+            onClearUiCache={() => void uiCacheClear.clearUiCache()}
             onExitDemo={() => void logout()}
             exitDemoDisabled={isProvisioning}
           />
@@ -2173,6 +2251,10 @@ export default function App() {
           <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading nodes" page="nodes" />}>
             <NodesPage
               {...nodesWorkspace}
+              onDoneAddNode={() => {
+                nodesWorkspace.onDoneAddNode();
+                if (onboardingPending) setOnboardingOpen(true);
+              }}
               nodes={contextNodes}
               panelVersion={panelVersion}
               panelBuildId={panelBuildId}
@@ -2393,7 +2475,50 @@ export default function App() {
           onCancel={() => settleConfirmation(false)}
         />
       ) : null}
-      {appStateLoaded && !demoMode && canManageIntegrations && appState.playerHeads.onboardingRequired ? (
+      {onboardingPending ? (
+        <OnboardingFlow
+          open={onboardingOpen}
+          nodes={contextNodes}
+          servers={effectiveAppState.servers}
+          activeServerId={activeServer?.id}
+          serverRunning={onboardingServerRunning}
+          runtimeMode={effectiveAppState.runtimeMode}
+          panelTimeZone={panelTimeZone}
+          modrinthConfigured={effectiveAppState.modrinthApiConfigured}
+          playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+          playerHeadsBusy={integrationBusy}
+          canCreateServers={canCreateServers}
+          canManageNodes={canManageUsers}
+          canControlServers={canBasic}
+          canManageIntegrations={canManageIntegrations}
+          startingServer={runtimeAction === "start" || activeStatus?.lifecycle.state === "starting"}
+          onClose={() => setOnboardingOpen(false)}
+          onAddNode={() => {
+            setOnboardingOpen(false);
+            openAddNodeFromEmptyState();
+          }}
+          onCreateServer={(nodeId) => {
+            setOnboardingOpen(false);
+            openCreateServerForNode(nodeId);
+          }}
+          onImportServer={(nodeId) => {
+            setOnboardingOpen(false);
+            setActivePage("nodes");
+            exportWorkspace.openImport(nodeId);
+          }}
+          onOpenServer={(serverId) => {
+            setOnboardingOpen(false);
+            openServerFromNode(serverId);
+          }}
+          onStartServer={() => runContainerAction("start", { skipConfirmation: true })}
+          onOpenSettings={() => {
+            setOnboardingOpen(false);
+            setActivePage("settings");
+          }}
+          onFinish={finishOnboarding}
+        />
+      ) : null}
+      {appStateLoaded && !onboardingPending && !demoMode && canManageIntegrations && appState.playerHeads.onboardingRequired ? (
         <PlayerHeadsOnboarding
           busy={playerHeadsBusy}
           error={playerHeadsOnboardingError}

@@ -86,6 +86,7 @@ function authContext(demoEnabled: boolean, permissionGranted = false) {
     }),
     demoEnabled,
     isDemoUser: (user: Pick<StoredUser, "username"> | null | undefined) => user?.username.toLowerCase() === "demo",
+    activeOperationCount: () => 0,
     logInfo,
     logWarn
   };
@@ -216,6 +217,34 @@ describe("auth demo login", () => {
     expect(response.statusCode).toBe(200);
     expect(context.calls.cookies.at(-1)).toMatchObject({ sessionId: "", maxAgeSeconds: 0, secure: true });
     expect(response.headers["set-cookie"]).toContain("Secure");
+  });
+
+  it("clears browser UI data only when no operation is active", async () => {
+    const app = Fastify();
+    const context = authContext(true, true);
+    let activeOperationCount = 1;
+    context.activeOperationCount = () => activeOperationCount;
+    registerAuthRoutes(app, context);
+
+    const status = await app.inject({ method: "GET", url: "/api/auth/ui-cache-status" });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toEqual({ activeOperationCount: 1 });
+
+    const blocked = await app.inject({ method: "POST", url: "/api/auth/clear-ui-cache" });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toMatchObject({
+      statusCode: 409,
+      message: "Wait for every running task to finish before clearing the UI cache"
+    });
+    expect(blocked.headers["clear-site-data"]).toBeUndefined();
+
+    activeOperationCount = 0;
+    const cleared = await app.inject({ method: "POST", url: "/api/auth/clear-ui-cache" });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.headers["cache-control"]).toBe("no-store, no-transform");
+    expect(cleared.headers["clear-site-data"]).toBe('"cache", "storage", "executionContexts"');
+    expect(cleared.headers["set-cookie"]).toContain("Max-Age=0");
+    expect(context.logInfo).toHaveBeenCalledWith(expect.objectContaining({ action: "clear_ui_cache", status: "succeeded" }), "Browser UI cache clear requested");
   });
 
   it("sets Secure cookies for a host-preserving HTTPS tunnel without proxy trust", async () => {

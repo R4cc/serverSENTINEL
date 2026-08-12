@@ -33,19 +33,30 @@ export function AuthPanel({
           and the shared rim on this panel, because at card size they read as a
           second nested surface. Mounting the layer anyway only pulled the
           liquid-glass chunk on the first screen of the app to render nothing. */}
-      <section className="authPanel uiGlassSurface uiGlassSurface--modal">
+      <section className={`authPanel uiGlassSurface uiGlassSurface--modal ${setupRequired ? "authPanel--setup" : ""}`.trim()}>
         <div className="brandLockup">
           <BrandLogo />
           <div>
             <h1>serverSENTINEL</h1>
           </div>
         </div>
+        {setupRequired && (
+          <div className="authSetupIntro">
+            <span>Initial setup · Account</span>
+            <h2>Create your administrator account</h2>
+            <p>This account owns the first-run setup and receives full access to servers, nodes, integrations, and users.</p>
+          </div>
+        )}
         {notice && <Banner tone={notice.tone} role={notice.tone === "warning" ? "status" : undefined} title={notice.title} message={notice.message} />}
         {demoEnabled && (
           <Banner tone="info" data-testid="demo-credentials" title="Demo environment" message={<>Sign in with username <code>demo</code> and password <code>demo</code>. Do not create another user.</>} />
         )}
         {setupRequired && (
-          <Banner tone="warning" title="First-run setup" message="Enter the one-time setup token printed in the panel startup log, then create the admin account." />
+          <Banner
+            tone="warning"
+            title="One-time setup token required"
+            message={<>Paste the token from the panel startup log. With Docker Compose, run <code>docker compose logs serversentinel</code>.</>}
+          />
         )}
         <form
           onSubmit={onSubmit}
@@ -59,7 +70,7 @@ export function AuthPanel({
           <fieldset>
             <legend className="srOnly">{setupRequired ? "Create the first administrator account" : "Sign in to serverSENTINEL"}</legend>
             {setupRequired && (
-              <FormField htmlFor="auth-setup-token" label="Setup token" error={fieldErrors.setupToken} required>
+              <FormField className="authSetupTokenField" htmlFor="auth-setup-token" label="Setup token" error={fieldErrors.setupToken} required>
                 <input
                   id="auth-setup-token"
                   name="setupToken"
@@ -75,7 +86,7 @@ export function AuthPanel({
                 />
               </FormField>
             )}
-            <FormField htmlFor="auth-username" label="Username" error={fieldErrors.username} required>
+            <FormField className="authUsernameField" htmlFor="auth-username" label="Username" error={fieldErrors.username} required>
               <input
                 id="auth-username"
                 name="username"
@@ -92,7 +103,7 @@ export function AuthPanel({
                 onInput={() => onFieldChange?.("username")}
               />
             </FormField>
-            <FormField htmlFor="auth-password" label="Password" error={fieldErrors.password} required>
+              <FormField className="authPasswordField" htmlFor="auth-password" label="Password" error={fieldErrors.password} required>
               <input
                 id="auth-password"
                 name="password"
@@ -107,7 +118,7 @@ export function AuthPanel({
               />
             </FormField>
             {setupRequired && (
-              <FormField htmlFor="auth-confirm-password" label="Confirm password" error={fieldErrors.confirmPassword} required>
+              <FormField className="authConfirmPasswordField" htmlFor="auth-confirm-password" label="Confirm password" error={fieldErrors.confirmPassword} required>
                 <input
                   id="auth-confirm-password"
                   name="confirmPassword"

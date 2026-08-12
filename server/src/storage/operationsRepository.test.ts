@@ -138,6 +138,12 @@ describe("OperationsRepository", () => {
     operations.start(other.id);
 
     expect(operations.listActive("server-a").map((operation) => operation.id)).toEqual([running.id, queued.id]);
+    expect(operations.countActive()).toBe(3);
+
+    operations.cancel(queued.id);
+    operations.succeed(running.id);
+    operations.fail(other.id, "Stopped");
+    expect(operations.countActive()).toBe(0);
   });
 
   it("prunes old finished operations and caps retained history", async () => {

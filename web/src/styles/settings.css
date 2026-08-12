@@ -786,7 +786,6 @@
   }
 }
 
-
 /* Settings layout cohesion */
 .keyForm {
   display: block;
@@ -965,5 +964,99 @@
 
   .usersSettings {
     padding: var(--space-3);
+  }
+}
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+@media (max-width: 1100px) {
+
+  .keyForm {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settingsPage {
+    grid-template-columns: 1fr;
+  }
+
+  .keyFormActions,
+  .secretPreview {
+    width: 100%;
+  }
+
+  .keyFormActions {
+    justify-content: end;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .keyFormActions button,
+  .keyFormConfigured button {
+    width: 100%;
+  }
+
+  .keyFormActions,
+  .keyFormConfigured,
+  .secretPreview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+.settingsNavLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyForm,
+.secretPreview {
+  min-width: 0;
+}
+
+.keyFormActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.settingsHubContent { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+.keyForm {
+  min-width: 0;
+}
+
+.keyForm label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+}
+
+.keyForm label input {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.settingsHubContent { border-color: var(--border-panel); box-shadow: none; }
+
+.secretPreview {
+  border-color: var(--border-row);
+  box-shadow: none;
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+
+  .settingsPage {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

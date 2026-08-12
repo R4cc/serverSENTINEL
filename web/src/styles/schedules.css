@@ -888,7 +888,26 @@
 
 .scheduleEditOptions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.schedulePlayerPolicy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.schedulePlayerPolicy > strong {
+  color: var(--text);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-strong);
+}
+
+.schedulePlayerPolicyChoices {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
@@ -917,6 +936,11 @@
 .scheduleOptionToggle:focus-within {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 40%, var(--surface-raised));
+}
+
+.scheduleOptionToggle:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 58%, var(--surface-raised));
 }
 
 .scheduleEditFieldset:disabled .scheduleOptionToggle {
@@ -954,6 +978,16 @@
   font-size: var(--type-meta-size);
   font-weight: var(--weight-body);
   line-height: 1.4;
+}
+
+.schedulePlayerPolicyNote {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.4;
+}
+
+.scheduleEnabledOption {
+  min-height: 58px;
 }
 
 /* Shared form utilities retained for runtime settings -------------------- */
@@ -1263,6 +1297,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .schedulePlayerPolicyChoices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .scheduleOptionToggle {
     min-height: 0;
   }
@@ -1275,5 +1313,54 @@
   .scheduleOptionToggle,
   .scheduleRunLogs summary .buttonIcon {
     transition-duration: .01ms !important;
+  }
+}
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+@media (max-width: 1100px) {
+
+  .schedulePage {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scheduleTableCard,
+.scheduledRunsCard { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+@media (min-width: 721px) {
+
+  .workspacePage-schedule {
+    display: flex;
+    height: 100vh;
+    min-height: 0;
+    flex-direction: column;
+    align-content: normal;
+    overflow: hidden;
+  }
+
+  .workspacePage-schedule > .workspaceHeader {
+    flex: 0 0 auto;
+  }
+
+  .workspacePage-schedule > .tabPage {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+
+.scheduleTableCard,
+.scheduledRunsCard { border-color: var(--border-panel); box-shadow: none; }
+
+.scheduleTableFrame {
+  border-color: var(--border-row);
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+
+  .schedulePage {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

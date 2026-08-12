@@ -667,8 +667,6 @@ button .buttonIcon {
   border-style: dashed;
 }
 
-
-
 .sonnerToast {
   --toast-severity: var(--sentinel-info);
   --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-tint-menu));
@@ -1216,7 +1214,6 @@ button .buttonIcon {
   background: var(--text-soft);
 }
 
-
 .userModalPanel {
   width: min(720px, calc(100vw - 32px));
   padding: 0;
@@ -1370,12 +1367,9 @@ button .buttonIcon {
   padding-left: var(--space-2);
 }
 
-
 .panel {
   min-width: 0;
 }
-
-
 
 .dangerPanel {
   border-color: var(--sentinel-danger);
@@ -1392,9 +1386,6 @@ button .buttonIcon {
 .dangerPanel p {
   margin: var(--space-2) 0 var(--space-4);
 }
-
-
-
 
 .appForm .checkLine input {
   width: auto;
@@ -1451,15 +1442,10 @@ button .buttonIcon {
   margin-top: var(--space-3);
 }
 
-
-
-
-
 .tabPage {
   display: grid;
   gap: var(--space-4);
 }
-
 
 /* Server context header layout */
 /* Compact contextual server command header */
@@ -1936,5 +1922,236 @@ button .buttonIcon {
   .accountLogoutButton,
   .sideNav .accountLogoutButton {
     transition: none;
+  }
+}
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+@media (max-width: 720px) {
+
+  .userActions {
+    justify-content: stretch;
+  }
+
+  .userActions button {
+    flex: 1;
+  }
+
+  .userModalFields,
+  .permissionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .userModalBody {
+    padding: var(--space-3);
+  }
+}
+
+.roleInfoButton {
+  flex: 0 0 auto;
+}
+
+.userModalHeader,
+.userModalFooter {
+  padding: var(--space-4);
+}
+
+.usersTable td,
+.usersTable th {
+  overflow: hidden;
+}
+
+.usersTable td:nth-child(2) {
+  overflow: visible;
+}
+
+.usersTable td:last-child {
+  overflow: visible;
+}
+
+.usersTable td > *,
+.usersTable th > * {
+  min-width: 0;
+}
+
+.userActions,
+.userModalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.usersSettings { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+.userModalHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.userModalHeader h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userModalForm {
+  min-width: 0;
+}
+
+.userModalForm label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+}
+
+.userModalForm label input,
+.userModalForm label select,
+.userModalForm label textarea {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: var(--weight-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.userModalForm label.checkLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--weight-meta);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  border: var(--border-subtle) solid var(--border);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.userModalFooter {
+  justify-content: flex-end;
+  border-top: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+.userModalHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+@media (max-width: 720px) {
+
+  .userModalHeader button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .userModalBody {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .restartRequirementTooltip,
+  .roleTooltip,
+  .fieldTooltip {
+    max-width: calc(100vw - 16px);
+    max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+    overflow: auto;
+  }
+
+  .restartRequirementTooltip {
+    position: fixed;
+    top: max(76px, calc(env(safe-area-inset-top) + 60px));
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+}
+
+.userModalHeader,
+.usersTable th,
+.usersTable td {
+  border-color: var(--border-row);
+}
+
+.usersSettings { border-color: var(--border-panel); box-shadow: none; }
+
+.roleInfoButton {
+  border-color: var(--border-muted);
+}
+
+.roleBadge {
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+  letter-spacing: var(--tracking-label);
+}
+
+.userModalHeader,
+.userModalFooter {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
+}
+
+.userModalBody {
+  background: var(--surface-raised);
+}
+
+.usersTable {
+  border-color: var(--border-row);
+}
+
+.permissionWarning,
+.permissionGroup {
+  border-color: var(--border-muted);
+}
+
+.permissionGroup {
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-muted));
+}
+
+.usersTable th {
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
+}
+
+.usersTable td {
+  border-color: var(--border-row);
+}
+
+@media (max-width: 900px) {
+
+  .userModalFooter {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .userModalHeader,
+  .userModalFooter {
+    padding: var(--space-3);
   }
 }

@@ -1,7 +1,7 @@
 import type { ScheduledExecution } from "../../types";
 import { validateCommandList, validateCronExpression } from "../../utils/validation";
 
-export type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "enabled">;
+export type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "waitForPlayersToLeave" | "enabled">;
 
 export function scheduleValidationMessage(patch: SchedulePatch) {
   if (!patch.name) return "Schedule name is required.";
@@ -25,6 +25,7 @@ export function createDemoSchedule(patch: SchedulePatch, id: string, now: string
     cron: patch.cron,
     steps: patch.steps,
     onlyWhenNoPlayers: patch.onlyWhenNoPlayers,
+    waitForPlayersToLeave: patch.waitForPlayersToLeave,
     enabled: patch.enabled,
     createdAt: now,
     updatedAt: now,

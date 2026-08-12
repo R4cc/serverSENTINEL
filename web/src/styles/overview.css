@@ -1842,7 +1842,6 @@ button.overviewCardRow:focus-visible {
 
 }
 
-
 /* Overview layout cohesion */
 /* Overview shared layout --------------------------------------------------- */
 
@@ -2209,5 +2208,111 @@ button.overviewCardRow:focus-visible {
 @media (max-width: 540px) {
   .overviewDashboardGrid > .overviewSummary > .summaryTile.storageRemainingTile {
     grid-column: 1 / -1;
+  }
+}
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+@media (max-width: 1320px) {
+
+  .overviewPage {
+    grid-template-columns: 1fr;
+  }
+
+  .overviewSummary,
+  .overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .overviewSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+
+  .overviewPage {
+    grid-template-columns: 1fr;
+  }
+
+  .overviewSummary,
+  .overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.serverTimelinePanel { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+@media (max-width: 720px) {
+
+  .workspacePage-overview > .overviewPage {
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+}
+
+.serverTimelinePanel { border-color: var(--border-panel); box-shadow: none; }
+
+@media (min-width: 1101px) and (max-width: 1280px) {
+
+  .overviewSummary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+
+  .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overviewPage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overviewPage > *,
+  .overviewPage > .eventsPanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .overviewDashboardGrid > .overviewSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+
+  .overviewDashboardGrid > .overviewSummary > .summaryTile {
+    --metric-tile-marker-size: 28px;
+    grid-column: auto;
+    min-height: 56px;
+    gap: 0 var(--space-2);
+    padding: var(--space-2) 10px;
+  }
+
+  .overviewSummary > .summaryTile .uiMetricTileCopy {
+    gap: 2px;
+  }
+
+  .overviewSummary > .summaryTile .uiMetricTileLabel {
+    font-size: 10px;
+  }
+
+  .overviewSummary > .summaryTile .uiMetricTileCopy > strong,
+  .overviewSummary > .summaryTile .summaryStatusText {
+    overflow: hidden;
+    font-size: 15px;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

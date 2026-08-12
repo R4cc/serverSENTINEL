@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { config } from "../config.js";
 import { services } from "../appServices.js";
 import { appBuildId, appVersion } from "../buildInfo.js";
-import { dockerAvailable } from "../docker/dockerClient.js";
+import { dockerReachable } from "../docker/dockerClient.js";
 import { destructiveRateLimit } from "../http/rateLimits.js";
 import { isDemoModeRequest, publicUser, requireRequestPermission } from "../auth/sessionService.js";
 
@@ -15,6 +15,7 @@ import { detectedTotalMemory } from "../runtime/local/dockerContainers.js";
 import { requireStrictBoolean } from "../http/validation.js";
 import { runtimeForServer } from "../appServices.js";
 import { logInfo } from "../logging.js";
+import { completeOnboarding, onboardingCurrentVersion, publicOnboardingState } from "../onboarding.js";
 
 export function publicPlayerHeadsState(demoMode = false) {
   if (demoMode) {
@@ -45,12 +46,14 @@ app.get("/api/app", async (request) => {
       timeZone: config.timeZone,
       modrinthApiConfigured: false,
       playerHeads: publicPlayerHeadsState(true),
+      onboarding: { currentVersion: onboardingCurrentVersion, completedVersion: onboardingCurrentVersion },
       dockerSocketMounted: false,
       totalMemory: 0
     };
   }
   const servers = await listManagedServers();
   const nodes = await readNodes();
+  const dockerSocketMounted = await dockerReachable();
   const totalMemory = await detectedTotalMemory();
   return {
     servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
@@ -61,7 +64,8 @@ app.get("/api/app", async (request) => {
     timeZone: config.timeZone,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     playerHeads: publicPlayerHeadsState(),
-    dockerSocketMounted: dockerAvailable(),
+    onboarding: publicOnboardingState(services.storageDatabase),
+    dockerSocketMounted,
     totalMemory,
     currentUser: user ? publicUser(user) : undefined
   };
@@ -98,6 +102,13 @@ app.put<{ Body: { enabled?: boolean } }>("/api/settings/player-heads", async (re
   services.playerHeadService.setEnabled(enabled);
   logInfo({ action: "configure_player_heads", enabled, status: "succeeded" }, "Player head integration updated");
   return { ok: true, playerHeads: publicPlayerHeadsState() };
+});
+
+app.put("/api/settings/onboarding/complete", async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const onboarding = completeOnboarding(services.storageDatabase);
+  logInfo({ action: "complete_onboarding", onboardingVersion: onboarding.completedVersion, status: "succeeded" }, "Initial onboarding completed");
+  return { ok: true, onboarding };
 });
 
 app.delete("/api/settings/player-heads/cache", destructiveRateLimit, async (request) => {

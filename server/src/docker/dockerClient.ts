@@ -10,6 +10,15 @@ export function dockerAvailable() {
   return existsSync(config.dockerSocket);
 }
 
+export async function dockerReachable() {
+  try {
+    await dockerBufferRequest("GET", "/_ping", 200, 2_000, undefined, 1_024);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function dockerErrorMessage(body: string, statusCode?: number) {
   if (body) {
     try {

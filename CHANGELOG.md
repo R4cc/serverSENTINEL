@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 1.11.0 - 2026-08-12
+
+- Added a schedule start policy that can wait without timeout for all players to leave, keeps one cancellable run active, and ignores later matches instead of stacking them.
+
+## 1.10.2 - 2026-08-12
+
+- Kept the first-run setup guide on the step you selected instead of snapping back to the recommended step whenever panel data refreshed.
+- Removed duplicated stylesheet rules left by the responsive-style colocation so node modals, the file manager, and summary tiles are described in one place each.
+
+## 1.10.1 - 2026-08-12
+
+- Made dark mode the default for new browser sessions while keeping light and system themes available.
+- Updated the automated README screenshots to showcase dark mode by default and include a light-mode example.
+
+## 1.10.0 - 2026-08-12
+
+- Added a resumable first-run experience that guides administrators through host selection, server creation or import, the first successful start, and optional integrations.
+- Refreshed administrator setup guidance and deferred optional player-head configuration until the essential server setup is complete.
+- Added a guarded Clear UI cache action under System settings that clears browser-held panel files and data, signs the current browser out, and reloads only after active work has settled.
+
+## 1.9.6 - 2026-08-12
+
+- Corrected managed-server creation defaults, Docker readiness and failure guidance, review accessibility, and node memory labeling.
+
 ## 1.9.5 - 2026-08-11
 
 - Kept mobile Mods rows aligned when names, statuses, and installed versions have different lengths.

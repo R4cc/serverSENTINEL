@@ -488,17 +488,8 @@
     padding: var(--space-4);
   }
 
-  .filesPage,
   .schedulePage {
     grid-template-columns: 1fr;
-  }
-
-  .filesPage {
-    height: auto;
-  }
-
-  .filesPage .filesExplorer {
-    height: max(520px, calc(100vh - 238px));
   }
 
   .overviewPage {

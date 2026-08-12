@@ -38,9 +38,10 @@ describe("AuthPanel", () => {
     const html = renderAuthPanel({ setupRequired: true });
 
     expect(html).toContain("uiBanner--warning");
-    expect(html).toContain("First-run setup");
+    expect(html).toContain("Initial setup · Account");
+    expect(html).toContain("Create your administrator account");
     expect(html).toContain('action="/api/auth/register-first"');
-    expect(html.match(/one-time setup token printed in the panel startup log/g)).toHaveLength(1);
+    expect(html.match(/docker compose logs serversentinel/g)).toHaveLength(1);
     expect(html).toContain(">Create admin<");
   });
 

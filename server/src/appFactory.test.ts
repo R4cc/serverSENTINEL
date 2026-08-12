@@ -674,6 +674,7 @@ describe("Fastify application factory", () => {
         cron: "0 * * * *",
         steps: [{ type: "command", command: "say hello", delaySeconds: 0 }],
         onlyWhenNoPlayers: false,
+        waitForPlayersToLeave: false,
         enabled: true,
         createdAt: now,
         updatedAt: now,

@@ -142,9 +142,8 @@ export function formatManagedPortBindings(serverPort: string, queryPort: string,
 }
 
 export function runtimeMinecraftOptions(versions: CreateWizardMinecraftVersion[], showSnapshots: boolean): CreateWizardMinecraftVersion[] {
-  const source = versions.length > 0 ? versions : fallbackMinecraftVersions;
-  const filtered = showSnapshots ? source : source.filter((version) => version.type === undefined || version.type === "release");
-  return filtered.length > 0 ? filtered : source;
+  const filtered = showSnapshots ? versions : versions.filter((version) => version.type === undefined || version.type === "release");
+  return filtered.length > 0 ? filtered : versions;
 }
 
 export function preferredMinecraftVersion(options: CreateWizardMinecraftVersion[]) {

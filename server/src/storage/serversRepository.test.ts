@@ -97,6 +97,7 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
         { type: "command", command: "save-all", delaySeconds: 300 }
       ],
       onlyWhenNoPlayers: false,
+      waitForPlayersToLeave: false,
       enabled: true,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
@@ -146,6 +147,8 @@ describe("ServersRepository", () => {
   it("stores server, port, schedule, and run state in normalized tables", async () => {
     const { storage, servers } = await createRepositories();
     const server = managedServer();
+    server.schedules![0].onlyWhenNoPlayers = true;
+    server.schedules![0].waitForPlayersToLeave = true;
     expect(servers.list()).toEqual([]);
 
     servers.create(server);
@@ -172,6 +175,7 @@ describe("ServersRepository", () => {
     servers.recordScheduledRun(updated.id, updated.schedules![0].id, updated.schedules![0].recentRuns![0]);
 
     expect(servers.list()).toEqual([updated]);
+    expect(storage.connection.prepare("SELECT only_when_no_players AS policy FROM schedules WHERE id = ?").get("schedule-id")).toEqual({ policy: 2 });
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 2 });
   });
 
