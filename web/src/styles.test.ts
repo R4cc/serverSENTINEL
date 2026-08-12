@@ -28,6 +28,7 @@ const modsStyles = readFileSync(new URL("./styles/mods.css", import.meta.url), "
 const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta.url), "utf8");
 const authStyles = readFileSync(new URL("./styles/auth.css", import.meta.url), "utf8");
 const nodesStyles = readFileSync(new URL("./styles/nodes.css", import.meta.url), "utf8");
+const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.meta.url), "utf8");
 // Every stylesheet the entry point imports, keyed by name so a failure names the
 // file rather than reporting an anonymous index.
 const featureStyles: Record<string, string> = Object.fromEntries(
@@ -74,6 +75,35 @@ describe("global stylesheet entry point", () => {
 });
 
 describe("stylesheet ownership", () => {
+  it("keeps feature selectors out of the shared responsive layer", () => {
+    const featureOwners: Record<string, RegExp> = {
+      "overview.css": /(?:\.workspacePage-overview|\.overview|\.serverTimeline)/,
+      "files-console.css": /(?:\.workspacePage-console|\.consolePanel|\.minecraftTerminal|\.terminal\b|\.consolePrompt|\.fileEditor|\.fileCodeEditor|\.discardEditor)/,
+      "file-manager.css": /(?:\.workspacePage-files|\.filesPage|\.filesExplorer|\.filesPanel|\.fileDetails|\.fileNav|\.fileToolbar|\.fileBreadcrumbs|\.fileTable|\.fileColumn|\.fileModified|\.fileType|\.fileSize|\.fileName|\.selectionAction|\.selectionSummary)/,
+      "mods.css": /(?:\.workspacePage-mods|\.mods|\.mod[A-Z])/,
+      "schedules.css": /(?:\.workspacePage-schedule|\.schedule|\.scheduledRuns)/,
+      "nodes.css": /\.nodesPage/,
+      "settings-nodes.css": /(?:\.node(?:Modal|Drawer|Details|Install)|\.addNode|\.installSnippet)/,
+      "settings.css": /(?:\.settingsPage|\.settingsHub|\.settingsNav|\.keyForm|\.secretPreview)/,
+      "server-properties.css": /(?:\.serverProperties|\.properties|\.memory(?:Number|Range|Value)|\.minecraftPorts|\.danger(?:Check|Panel)|\.advancedResourceDisclosure|\.resourceDisclosure)/,
+      "confirmation-modal.css": /(?:\.confirm|\.discardEditorModal)/,
+      "export-import.css": /(?:\.export|\.import)/,
+      "auth.css": /\.auth/,
+      "layout.css": /(?:\.user|\.users|\.role|\.permission|\.restartRequirementTooltip|\.fieldTooltip)/
+    };
+    const selectors = [...responsiveStyles
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .matchAll(/([^{}]+)\{/g)]
+      .map((match: RegExpMatchArray) => match[1].trim())
+      .filter((selector: string) => !selector.startsWith("@"))
+      .flatMap((selectorList: string) => selectorList.split(",").map((selector: string) => selector.trim()));
+    const misplaced = Object.entries(featureOwners).flatMap(([owner, pattern]) =>
+      selectors.filter((selector) => pattern.test(selector)).map((selector) => `${owner}: ${selector}`)
+    );
+
+    expect(misplaced).toEqual([]);
+  });
+
   it("keeps global primitives in the shared primitive stylesheet", () => {
     expect(primitiveStyles).toContain(".uiSurface");
     expect(primitiveStyles).toContain(".uiToolbar");

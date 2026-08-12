@@ -315,7 +315,6 @@
   .modsWorkspaceTable { flex: none; scrollbar-gutter: auto; }
 }
 
-
 /* Mods layout cohesion */
 /* Mods and Nodes shared layout -------------------------------------------- */
 
@@ -672,3 +671,82 @@
     grid-column: auto;
   }
 }
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+.modsWorkspaceInstalled { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+@media (max-width: 720px) {
+
+  .modsDrawerHeader button {
+    min-height: 44px;
+  }
+
+  .modsDrawerHeader button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .modsDrawerBackdrop {
+    height: var(--visual-viewport-height, 100dvh);
+    overscroll-behavior: none;
+  }
+
+  .modsDrawerBody {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modsWorkflowDrawer,
+  .modsDetailsDrawer {
+    width: 100vw;
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    border-left: 0;
+  }
+
+  .modsDrawerHeader,
+  .modsDrawerFooter {
+    padding-right: max(var(--space-3), env(safe-area-inset-right));
+    padding-left: max(var(--space-3), env(safe-area-inset-left));
+  }
+
+  .modsDrawerHeader {
+    padding-top: max(var(--space-3), env(safe-area-inset-top));
+  }
+
+  .modsDrawerBody {
+    padding: var(--space-3) max(var(--space-3), env(safe-area-inset-right)) var(--space-3) max(var(--space-3), env(safe-area-inset-left));
+  }
+
+  .modsDrawerFooter {
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 721px) {
+
+  .workspacePage-mods {
+    display: flex;
+    height: 100vh;
+    min-height: 0;
+    flex-direction: column;
+    align-content: normal;
+    overflow: hidden;
+  }
+
+  .workspacePage-mods > .workspaceHeader {
+    flex: 0 0 auto;
+  }
+
+  .workspacePage-mods > .tabPage {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+
+.modsWorkspaceInstalled { border-color: var(--border-panel); box-shadow: none; }

@@ -1277,3 +1277,52 @@
     transition-duration: .01ms !important;
   }
 }
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+@media (max-width: 1100px) {
+
+  .schedulePage {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scheduleTableCard,
+.scheduledRunsCard { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+@media (min-width: 721px) {
+
+  .workspacePage-schedule {
+    display: flex;
+    height: 100vh;
+    min-height: 0;
+    flex-direction: column;
+    align-content: normal;
+    overflow: hidden;
+  }
+
+  .workspacePage-schedule > .workspaceHeader {
+    flex: 0 0 auto;
+  }
+
+  .workspacePage-schedule > .tabPage {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+
+.scheduleTableCard,
+.scheduledRunsCard { border-color: var(--border-panel); box-shadow: none; }
+
+.scheduleTableFrame {
+  border-color: var(--border-row);
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+
+  .schedulePage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

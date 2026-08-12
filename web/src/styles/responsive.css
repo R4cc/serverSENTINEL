@@ -1,35 +1,18 @@
-/* Shared shell breakpoints.
+/* Shared shell and interaction breakpoints.
  *
  * Scope: the application shell — sidebar, server strip, workspace chrome, and
- * the phone scroll model. Feature responsive rules belong in that feature's
- * stylesheet, next to the base rule they override; putting them here separates
- * a rule from its base across a file this size and is why several sections
- * below need `!important`.
+ * the phone scroll model, plus cross-feature interaction primitives. Feature
+ * responsive rules belong in their owner's stylesheet next to the base rule;
+ * `styles.test.ts` enforces that boundary.
  *
  * Cascade: this loads after every feature stylesheet except `nodes.css`, so
  * rules here win ties. Sections are ordered by intent, not by breakpoint, and
- * some later blocks deliberately re-open an earlier breakpoint to land after
- * the feature rules they adjust. Moving a block changes which rule wins.
+ * some later blocks deliberately re-open an earlier breakpoint. Moving a
+ * shared block can therefore change which rule wins.
  *
- * Breakpoints: 1320/1100px desktop reflow, 980/900px tablet, 720px phone,
- * 640/360px small phone, 2560px ultrawide.
+ * Breakpoints: 1366/1280/1100px desktop reflow, 980/900px tablet, and 720px
+ * phone.
  */
-
-@media (max-width: 1320px) {
-  .overviewPage {
-    grid-template-columns: 1fr;
-  }
-
-  .overviewSummary,
-.overviewPage > .eventsPanel {
-    grid-column: 1 / -1;
-    grid-row: auto;
-  }
-
-  .overviewSummary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
 
 @media (max-width: 1100px) {
   .appShell,
@@ -106,18 +89,14 @@
   }
 
   .workspaceHeader,
-  .systemBanner,
-  .keyForm {
+  .systemBanner {
     align-items: stretch;
     flex-direction: column;
   }
 
-
-
   .activeServerStrip {
     grid-template-columns: 1fr;
   }
-
 
   .runtimeControls {
     flex-wrap: wrap;
@@ -127,55 +106,9 @@
     grid-template-columns: 1fr;
   }
 
-  .overviewPage,
-  .filesPage,
-  .schedulePage,
-  .settingsPage {
-    grid-template-columns: 1fr;
-  }
-
-  .filesPage {
-    height: auto;
-    min-height: 0;
-    max-height: none;
-  }
-
-  .filesExplorer {
-    height: min(640px, calc(100vh - 220px));
-    min-height: 420px;
-  }
-
-  .overviewSummary,
-.overviewPage > .eventsPanel {
-    grid-column: 1 / -1;
-    grid-row: auto;
-  }
-
-  .fileDetailsPanel {
-    height: auto;
-    min-height: 320px;
-  }
-
-  .fileNavBar {
-    grid-template-columns: 1fr;
-  }
-
-  .fileToolbar {
-    justify-content: start;
-  }
-
 .settingsStatus {
     justify-self: stretch;
     max-width: none;
-  }
-
-  .keyFormActions,
-  .secretPreview {
-    width: 100%;
-  }
-
-  .keyFormActions {
-    justify-content: end;
   }
 
 }
@@ -183,31 +116,6 @@
 /* The compact shell stacks its navigation above the workspace. The desktop console contract uses
    a full-viewport workspace from 721px upward, so without a bounded shell that workspace adds its
    own 100vh below the compact navigation and pushes the command line out of short viewports. */
-@media (min-width: 721px) and (max-width: 1100px) {
-  .appShell:has(.workspacePage-console),
-  .sidebarCollapsed.appShell:has(.workspacePage-console) {
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr);
-    overflow: hidden;
-  }
-
-  .appShell:has(.workspacePage-console) > .workspacePage-console {
-    height: 100%;
-  }
-}
-
-@media (min-width: 721px) and (max-width: 1100px) and (max-height: 520px) {
-  .workspacePage-console {
-    padding: var(--space-3);
-    gap: var(--space-2);
-  }
-
-  .workspacePage-console > .workspaceHeader {
-    display: none;
-  }
-}
 
 @media (max-width: 720px) {
   .workspace,
@@ -219,49 +127,13 @@
     font-size: clamp(34px, 14vw, 58px);
   }
 
-.workspaceActions,
-.fileToolbar {
+  .workspaceActions {
     align-items: stretch;
     flex-direction: column;
   }
 
-.workspaceActions button,
-.fileToolbar button,
-.keyFormActions button,
-.keyFormConfigured button {
+  .workspaceActions button {
     width: 100%;
-  }
-
-  .filesPage .fileNavBar .fileToolbar {
-    align-items: center;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    gap: 8px;
-    justify-content: stretch;
-    width: 100%;
-  }
-
-  .filesPage .fileNavBar .fileToolbar .uiButton {
-    flex: 1 1 0;
-    justify-content: center;
-    min-width: 0;
-    width: auto;
-    padding-inline: 0;
-  }
-
-  .filesPage .fileNavBar .fileToolbar .fileToolbarLabel {
-    display: none;
-  }
-
-  .keyFormActions,
-  .keyFormConfigured,
-  .secretPreview {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .overviewSummary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .eventRow {
@@ -287,32 +159,6 @@
     min-height: 44px;
     justify-self: end;
   }
-
-
-  .userActions {
-    justify-content: stretch;
-  }
-
-  .userActions button {
-    flex: 1;
-  }
-
-  .userModalFields,
-  .permissionGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .userModalBody {
-    padding: var(--space-3);
-  }
-
-
-
-
-
-  .minecraftTerminal {
-    height: 360px;
-  }
 }
 
 .fieldError {
@@ -322,56 +168,6 @@
   line-height: 1.35;
   text-transform: none;
 }
-
-/* Installed Mods responsive styles */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /* Switch styling */
 .switch {
@@ -434,37 +230,9 @@
   cursor: not-allowed;
 }
 
-
-
-
-/* Responsive Table Styles */
-
-/* Mod Details Modal Refinements */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 .emptyInline.noBorder {
   border: 0;
 }
-
-
-
-
-
-
 
 /* Responsive application layout */
 .workspace {
@@ -491,21 +259,8 @@
 }
 
 .pageStack,
-.tabPage,
-.nodesPage {
+.tabPage {
   min-width: 0;
-}
-
-.tabPage:has(.consolePanel) {
-  display: grid;
-  grid-template-rows: 1fr;
-  height: max(560px, calc(100vh - 238px));
-  min-height: 0;
-}
-
-.tabPage:has(.consolePanel) {
-  max-width: none;
-  align-content: stretch;
 }
 
 .serverStripInfo {
@@ -513,8 +268,7 @@
 }
 
 .emptyInline,
-.eventEmpty,
-.fileDetailsEmpty {
+.eventEmpty {
   border-radius: var(--radius-sm);
 }
 
@@ -528,7 +282,6 @@ button,
 .modalCloseButton,
 .eventHideButton,
 .iconDangerButton,
-.roleInfoButton,
 .accountLogoutButton {
   flex: 0 0 auto;
 }
@@ -549,8 +302,7 @@ button:disabled,
   transform: none;
 }
 
-.accountName,
-.settingsNavLabel {
+.accountName {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -564,8 +316,7 @@ button:disabled,
 
 .themeDark .inlineState-empty,
 .themeDark .emptyInline,
-.themeDark .eventEmpty,
-.themeDark .fileDetailsEmpty {
+.themeDark .eventEmpty {
   background:
     repeating-linear-gradient(45deg, color-mix(in srgb, var(--text) 2%, transparent) 0 1px, transparent 1px 10px),
     var(--surface-muted);
@@ -589,272 +340,13 @@ button:disabled,
   line-height: 1.5;
 }
 
-.confirmModalPanel,
-.discardEditorModal {
-  width: min(520px, calc(100vw - 32px));
-  padding: 0;
-  display: grid;
-  gap: 0;
-  overflow: hidden;
-}
-
-.confirmContent blockquote {
-  margin: 0;
-  border-left: var(--border-heavy) solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--surface-muted);
-  padding: var(--space-2) var(--space-3);
-  overflow-wrap: anywhere;
-}
-
-.discardEditorActions {
-  margin: 0;
-}
-
-.fileEditorHeader,
-.fileEditorFooter,
-.userModalHeader,
-.userModalFooter,
-.nodeModalHeader,
-.nodeModalBody {
-  padding: var(--space-4);
-}
-
-.nodeModalFooter.inline {
-  margin-top: 0;
-}
-
-@media (max-width: 640px) {
-  .nodeModalPanel {
-    width: calc(100vw - 20px);
-    max-height: calc(100vh - 20px);
-    border-radius: 14px;
-  }
-
-}
-
-.fileEditorBody {
-  min-height: 0;
-}
-
-.fileEditorMetaRow {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--border-row);
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.fileEditorMode {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text);
-  font-weight: var(--weight-title);
-}
-
-.fileEditorModeDot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--text-muted);
-}
-
-.fileEditorMode.editing .fileEditorModeDot {
-  background: var(--accent);
-}
-
-.fileEditorMetaDivider {
-  width: 1px;
-  height: 14px;
-  background: var(--border-row);
-}
-
-.fileEditorMetaRow .dirty {
-  color: var(--sentinel-accent-strong);
-  font-weight: var(--weight-title);
-}
-
-.fileEditorRestriction {
-  flex: 0 1 auto;
-  max-width: min(240px, 32vw);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row));
-  border-radius: 999px;
-  padding: 3px 8px;
-  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface));
-  color: color-mix(in srgb, var(--sentinel-warning) 82%, var(--text));
-  font-weight: var(--weight-strong);
-}
-
-.fileEditorMode.unavailable .fileEditorModeDot {
-  background: var(--sentinel-warning);
-}
-
-.fileEditorMetaActions {
-  min-width: 0;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.fileEditorCopyButton {
-  flex: 0 0 auto;
-}
-
-.fileCodeEditor {
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-.fileCodeEditor-disabled {
-  background: var(--surface-muted);
-  color: var(--text-muted);
-}
-
-.fileEditorMainArea {
-  flex: 1 1 0;
-  min-height: 0;
-  height: auto;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  gap: var(--space-3);
-}
-
-.fileEditorMainArea.hasReadError {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.fileCodeEditor.cm-theme,
-.fileCodeEditor .cm-theme,
-.fileCodeEditor .cm-editor {
-  height: 100%;
-  min-height: 0;
-}
-
-.fileCodeEditor .cm-scroller {
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-}
-
-.fileCodeEditor .cm-line {
-  white-space: pre;
-}
-
-.fileCodeEditor .cm-gutter {
-  min-height: 100%;
-}
-
-.fileEditorStateFill {
-  min-height: 0;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  padding: var(--space-4);
-}
-
-.fileEditorStateFill .inlineState {
-  width: min(560px, 100%);
-}
-
-.installSnippet {
-  white-space: pre;
-  overflow-wrap: normal;
-}
-
-.installSnippetShell {
-  overflow-x: auto;
-}
-
-.terminal,
-.installSnippet {
-  scrollbar-width: thin;
-}
-
-.installSnippet code {
-  overflow-wrap: normal;
-}
-
-.fileTable {
-  width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.fileTableHead,
-.fileTableRow {
-  min-width: 760px;
-}
-
-.fileTableRow.selected {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
-}
-
-.fileTableRow > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.keyForm,
-.secretPreview {
-  min-width: 0;
-}
-
-.usersTable td,
-.usersTable th {
-  overflow: hidden;
-}
-
-.usersTable td:nth-child(2) {
-  overflow: visible;
-}
-
-.usersTable td:last-child {
-  overflow: visible;
-}
-
-.usersTable td > *,
-.usersTable th > * {
-  min-width: 0;
-}
-
 /* Unified interaction primitives */
-.userActions,
-.keyFormActions,
-.fileToolbar,
-.selectionActions,
-.modalFooter,
-.userModalFooter,
-.nodeModalFooter.inline,
-.fileEditorFooter {
+.modalFooter {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
   flex-wrap: wrap;
-}
-
-.fileToolbar,
-.selectionActionBar {
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
 }
 
 .panel,
@@ -867,22 +359,7 @@ button:disabled,
 
 .modalPanel { background: var(--glass-tint-strong); border-radius: var(--radius-lg); }
 
-.consolePanel,
-.fileEditorModal,
-.serverTimelinePanel,
-.filesPanel,
-.fileDetailsPanel,
-.modsWorkspaceInstalled,
-.scheduleTableCard,
-.scheduledRunsCard,
-.settingsHubContent,
-.usersSettings { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-
-.nodeInstallHeader,
-.modalHeader,
-.userModalHeader,
-.nodeModalHeader,
-.fileEditorHeader {
+.modalHeader {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -890,24 +367,17 @@ button:disabled,
   gap: var(--space-3);
 }
 
-.modalHeader h2,
-.userModalHeader h2,
-.nodeModalHeader h2,
-.fileEditorHeader h2 {
+.modalHeader h2 {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.appForm,
-.userModalForm,
-.keyForm {
+.appForm {
   min-width: 0;
 }
 
-.appForm label,
-.userModalForm label,
-.keyForm label {
+.appForm label {
   display: grid;
   gap: var(--space-2);
   color: var(--text-muted);
@@ -918,11 +388,7 @@ button:disabled,
 
 .appForm label input,
 .appForm label select,
-.appForm label textarea,
-.userModalForm label input,
-.userModalForm label select,
-.userModalForm label textarea,
-.keyForm label input {
+.appForm label textarea {
   color: var(--text);
   font-size: 14px;
   font-weight: var(--weight-body);
@@ -931,8 +397,7 @@ button:disabled,
 }
 
 .checkLine,
-.appForm label.checkLine,
-.userModalForm label.checkLine {
+.appForm label.checkLine {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -944,8 +409,7 @@ button:disabled,
 }
 
 .settingsStatus,
-.runtimeBadge,
-.roleBadge {
+.runtimeBadge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -988,7 +452,6 @@ button:disabled,
   color: var(--status-neutral-foreground);
 }
 
-.fileTableRow,
 .eventRow {
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
 }
@@ -997,43 +460,27 @@ button:disabled,
   padding: 0;
 }
 
-.modalFooter,
-.userModalFooter,
-.nodeModalFooter.inline,
-.fileEditorFooter {
+.modalFooter {
   justify-content: flex-end;
   border-top: var(--border-strong) solid var(--border);
   padding: var(--space-4);
 }
 
-.modalHeader,
-.userModalHeader,
-.nodeModalHeader,
-.fileEditorHeader {
+.modalHeader {
   border-bottom: var(--border-strong) solid var(--border);
   padding: var(--space-4);
 }
-
-
-
-
 
 .dangerTextButton,
 .iconDangerButton {
   border-color: var(--sentinel-danger);
 }
 
-
 .dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled) {
   background: var(--sentinel-danger);
   border-color: var(--sentinel-danger);
   color: var(--swiss-white);
-}
-
-.themeDark .fileToolbar,
-.themeDark .selectionActionBar {
-  background: var(--surface-raised);
 }
 
 /* Surface and interaction hierarchy */
@@ -1169,11 +616,9 @@ button:disabled,
   /* The console prompt is excluded because it has to raise its marker along with its input, which
      this rule cannot reach. It applies the same 16px floor to the whole row in `files-console.css`
      instead; the mobile smoke checks every visible editable control, so the floor stays enforced. */
-  input:not([type="checkbox"]):not([type="radio"]):not(.consolePromptInput),
   select,
   textarea,
-  [contenteditable="true"],
-  .fileCodeEditor .cm-content {
+  [contenteditable="true"] {
     font-size: 16px !important;
   }
 
@@ -1182,47 +627,28 @@ button:disabled,
      are deliberately left alone: xterm sizes this textarea inline to follow the composing word,
      and pinning it to zero is the case its own source calls out as breaking IMEs — an Android
      keyboard with predictive text then drops letters as they are typed. */
-  .minecraftTerminal .xterm-helper-textarea {
-    min-width: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    font-size: 16px !important;
-  }
 
   .uiButton,
   .iconButton,
   .iconOnlyButton,
   .actionMenuItem,
   .sideNav button,
-  .fileBreadcrumbs button,
   .runtimeControlButton,
   .installTabs button,
-  .modalHeader button,
-  .userModalHeader button,
-  .nodeModalHeader button,
-  .fileEditorHeader button,
-  .modsDrawerHeader button {
+  .modalHeader button {
     min-height: 44px;
   }
 
   .uiButton--icon,
   .iconButton,
   .iconOnlyButton,
-  .selectionActionMenu .actionMenuTrigger,
-  .modalHeader button,
-  .userModalHeader button,
-  .nodeModalHeader button,
-  .fileEditorHeader button,
-  .modsDrawerHeader button {
+  .modalHeader button {
     width: 44px;
     min-width: 44px;
     height: 44px;
   }
 
-  .modalBackdrop,
-  .modsDrawerBackdrop,
-  .nodeDrawerBackdrop {
+  .modalBackdrop {
     height: var(--visual-viewport-height, 100dvh);
     overscroll-behavior: none;
   }
@@ -1231,53 +657,13 @@ button:disabled,
     max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
   }
 
-  .modalPanel.fileEditorModal {
-    height: calc(var(--visual-viewport-height, 100dvh) - 16px);
-    max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
-  }
-
-  .modalBody,
-  .userModalBody,
-  .nodeModalBody,
-  .fileEditorBody,
-  .modsDrawerBody,
-  .nodeDrawerBody {
+  .modalBody {
     min-height: 0;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
 
-  .modsWorkflowDrawer,
-  .modsDetailsDrawer,
-  .nodeDetailsDrawer {
-    width: 100vw;
-    height: var(--visual-viewport-height, 100dvh);
-    min-height: 0;
-    border-left: 0;
-  }
-
-  .modsDrawerHeader,
-  .modsDrawerFooter {
-    padding-right: max(var(--space-3), env(safe-area-inset-right));
-    padding-left: max(var(--space-3), env(safe-area-inset-left));
-  }
-
-  .modsDrawerHeader {
-    padding-top: max(var(--space-3), env(safe-area-inset-top));
-  }
-
-  .modsDrawerBody {
-    padding: var(--space-3) max(var(--space-3), env(safe-area-inset-right)) var(--space-3) max(var(--space-3), env(safe-area-inset-left));
-  }
-
-  .modsDrawerFooter {
-    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
-  }
-
-  .actionMenuPopover,
-  .restartRequirementTooltip,
-  .roleTooltip,
-  .fieldTooltip {
+  .actionMenuPopover {
     max-width: calc(100vw - 16px);
     max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
     overflow: auto;
@@ -1293,54 +679,10 @@ button:disabled,
     right: auto;
     left: 0;
   }
-
-  .restartRequirementTooltip {
-    position: fixed;
-    top: max(76px, calc(env(safe-area-inset-top) + 60px));
-    right: 8px;
-    left: 8px;
-    width: auto;
-  }
 }
 
 /* Fill the desktop viewport from the shell instead of approximating the
    remaining page height with per-feature 100vh offsets. */
-@media (min-width: 2560px) {
-  .workspace.workspacePage-console {
-    max-width: none;
-  }
-}
-
-@media (min-width: 721px) {
-  .workspacePage-console,
-  .workspacePage-files,
-  .workspacePage-mods,
-  .workspacePage-schedule {
-    display: flex;
-    height: 100vh;
-    min-height: 0;
-    flex-direction: column;
-    align-content: normal;
-    overflow: hidden;
-  }
-
-  .workspacePage-console > .workspaceHeader,
-  .workspacePage-files > .workspaceHeader,
-  .workspacePage-mods > .workspaceHeader,
-  .workspacePage-schedule > .workspaceHeader {
-    flex: 0 0 auto;
-  }
-
-  .workspacePage-console > .tabPage,
-  .workspacePage-files > .tabPage,
-  .workspacePage-mods > .tabPage,
-  .workspacePage-schedule > .tabPage {
-    height: auto;
-    min-height: 0;
-    flex: 1 1 auto;
-    overflow: auto;
-  }
-}
 
 /* Mobile workspaces reserve the viewport for the active page rather than the shell. */
 @media (max-width: 720px) {
@@ -1438,145 +780,9 @@ button:disabled,
     padding: 8px;
   }
 
-  .workspaceServerPage > .tabPage,
-  .workspaceServerPage > .filesPage {
+  .workspaceServerPage > .tabPage {
     width: 100%;
     overscroll-behavior: contain;
-  }
-
-  .workspacePage-console > .tabPage:has(.consolePanel) {
-    display: flex;
-    height: auto;
-    min-height: 0;
-    width: calc(100% + var(--space-4) + var(--space-4));
-    margin-inline: calc(0px - var(--space-4));
-    overflow: hidden;
-  }
-
-  .workspacePage-console .consolePanel {
-    min-height: 0;
-    padding: 0;
-    gap: 0;
-    border-inline: 0;
-    border-radius: 0;
-    overflow: hidden;
-  }
-
-  .workspacePage-console .consolePanel .terminal,
-  .workspacePage-console .minecraftTerminal {
-    height: auto;
-    min-height: 0;
-  }
-
-  .workspacePage-console .consolePanel .terminal {
-    border-inline: 0;
-    border-radius: 0;
-  }
-
-  .workspacePage-files > .filesPage {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    height: auto;
-    max-height: none;
-    overflow: hidden;
-  }
-
-  .workspacePage-files .filesExplorer,
-  .workspacePage-files .filesPanel {
-    height: 100%;
-    min-height: 0;
-  }
-
-  .workspacePage-files .filesPanel {
-    padding: 6px;
-    gap: 6px;
-  }
-
-  .workspacePage-files .fileDetailsPanel {
-    display: none;
-  }
-
-  .workspacePage-files .fileNavBar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "navigation actions"
-      "breadcrumbs breadcrumbs";
-    min-height: 0;
-    padding: 6px;
-    gap: 6px;
-  }
-
-  .workspacePage-files .fileToolbar {
-    grid-area: actions;
-  }
-
-  .workspacePage-files .fileNavButtons,
-  .workspacePage-files .fileToolbar {
-    gap: 4px;
-  }
-
-  .workspacePage-files .fileNavButtons .uiButton,
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
-  .workspacePage-files .fileBreadcrumbs button {
-    padding: 0;
-  }
-
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
-    flex: 0 0 32px;
-  }
-
-  .workspacePage-files .fileBreadcrumbs button {
-    max-width: 160px;
-    padding-inline: 8px;
-  }
-
-  .workspacePage-files .selectionActionBar {
-    display: flex;
-    min-height: 36px;
-    padding: 4px 8px;
-    gap: 4px;
-  }
-
-  .workspacePage-files .selectionSummary {
-    min-width: 0;
-    overflow: hidden;
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .workspacePage-files .selectionActions {
-    margin-left: auto;
-  }
-
-  .workspacePage-files .selectionActions:empty::after {
-    display: none;
-  }
-
-  .workspacePage-files .fileTableHead,
-  .workspacePage-files .fileTableRow {
-    grid-template-columns: 34px minmax(0, 1fr);
-    min-width: 0;
-    padding-inline: 4px;
-  }
-
-  .workspacePage-files .fileColumnHeader--modifiedAt,
-  .workspacePage-files .fileColumnHeader--type,
-  .workspacePage-files .fileColumnHeader--size,
-  .workspacePage-files .fileModifiedCell,
-  .workspacePage-files .fileTypeCell,
-  .workspacePage-files .fileSizeCell {
-    display: none;
-  }
-
-  .workspacePage-files .fileTableFooter {
-    min-height: 32px;
-    padding: 6px 8px;
-  }
-
-  .workspacePage-overview > .overviewPage {
-    padding-bottom: max(4px, env(safe-area-inset-bottom));
   }
 }
 
@@ -1825,18 +1031,9 @@ button:disabled,
   border-left: 0;
 }
 
-
 .brandBlock,
 .workspaceHeader,
-.modalHeader,
-.userModalHeader,
-.nodeModalHeader,
-.fileEditorHeader,
-.fileNavBar,
-.usersTable th,
-.usersTable td,
-.fileTableHead,
-.fileTableRow {
+.modalHeader {
   border-color: var(--border-row);
 }
 
@@ -1847,9 +1044,7 @@ button:disabled,
 
 .brandLogo,
 .serverStripIcon,
-.fileTypeIcon,
-.accountIcon,
-.addNodeStepCircle {
+.accountIcon {
   border-color: var(--border-muted);
 }
 
@@ -1897,9 +1092,6 @@ button:disabled,
 
 .panel,
 .modalPanel,
-.fileCodeEditor,
-.fileEditorStateFill,
-.installSnippetShell,
 .systemBanner {
   border-color: var(--glass-edge);
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
@@ -1907,53 +1099,25 @@ button:disabled,
 
 .themeDark .panel,
 .themeDark .modalPanel,
-.themeDark .fileCodeEditor,
-.themeDark .fileEditorStateFill,
-.themeDark .installSnippetShell,
 .themeDark .systemBanner {
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
 }
 
-.consolePanel,
-.fileEditorModal,
-.serverTimelinePanel,
-.filesPanel,
-.fileDetailsPanel,
-.modsWorkspaceInstalled,
-.scheduleTableCard,
-.scheduledRunsCard,
-.settingsHubContent,
-.usersSettings { border-color: var(--border-panel); box-shadow: none; }
-
 .panel .panel,
 .modalPanel .panel,
-.nodeModalBody .panel,
-.fileEditorBody .panel,
 .presetSummary,
-.secretPreview,
-.addNodeStatusCard,
 .inlineState,
 .notice,
 .toast,
 .emptyInline,
-.eventEmpty,
-.fileDetailsEmpty {
+.eventEmpty {
   border-color: var(--border-row);
-  box-shadow: none;
-}
-
-.fileToolbar,
-.selectionActionBar {
-  border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 74%, var(--surface-muted));
   box-shadow: none;
 }
 
 input,
 select,
 textarea,
-.fileBreadcrumbs button,
-.roleInfoButton,
 .iconButton,
 .iconOnlyButton,
 .modalCloseButton,
@@ -1966,8 +1130,7 @@ input:hover:not(:disabled),
 select:hover:not(:disabled),
 textarea:hover:not(:disabled),
 .iconButton:hover:not(:disabled),
-.iconOnlyButton:hover:not(:disabled),
-.fileBreadcrumbs button:hover:not(:disabled) {
+.iconOnlyButton:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-muted));
 }
 
@@ -1996,8 +1159,7 @@ textarea:hover:not(:disabled),
 }
 
 .settingsStatus,
-.runtimeBadge,
-.roleBadge {
+.runtimeBadge {
   border-color: color-mix(in srgb, currentColor 34%, transparent);
   letter-spacing: var(--tracking-label);
 }
@@ -2018,57 +1180,32 @@ textarea:hover:not(:disabled),
   border-color: color-mix(in srgb, var(--sentinel-danger) 38%, transparent);
 }
 
-.fileTableRow,
 .eventRow {
   border-color: var(--border-row);
   box-shadow: none;
 }
 
-.fileTableRow,
 .eventRow {
   background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
 }
 
-.fileTableRow:hover,
 .eventRow:hover {
   background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
 }
 
 .modalHeader,
-.userModalHeader,
-.nodeModalHeader,
-.fileEditorHeader,
-.modalFooter,
-.userModalFooter,
-.nodeModalFooter.inline,
-.fileEditorFooter {
+.modalFooter {
   border-color: var(--border-row);
   background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
 }
 
-.modalBody,
-.userModalBody,
-.nodeModalBody,
-.fileEditorBody {
+.modalBody {
   background: var(--surface-raised);
-}
-
-.terminal,
-.minecraftTerminal,
-.fileCodeEditor,
-.installSnippetShell {
-  border-color: color-mix(in srgb, var(--border) 54%, var(--surface));
-}
-
-.terminal,
-.minecraftTerminal {
-  border-color: color-mix(in srgb, var(--terminal-text) 22%, var(--terminal-bg));
 }
 
 .emptyInline,
 .eventEmpty,
-.fileDetailsEmpty,
 .inlineState-empty {
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
 }
@@ -2085,12 +1222,6 @@ textarea:hover:not(:disabled),
   opacity: 0.46;
 }
 
-.usersTable,
-.fileTable,
-.scheduleTableFrame {
-  border-color: var(--border-row);
-}
-
 .summaryTile::before {
   display: none;
 }
@@ -2099,36 +1230,9 @@ textarea:hover:not(:disabled),
   gap: var(--space-2);
 }
 
-.permissionWarning,
-.permissionGroup,
-.installTabs,
-.addNodeStepCircle {
+.installTabs {
   border-color: var(--border-muted);
 }
-
-.permissionGroup {
-  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-muted));
-}
-
-.usersTable th,
-.fileTableHead {
-  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
-}
-
-.usersTable td,
-.fileTableRow {
-  border-color: var(--border-row);
-}
-
-.fileNameCell {
-  border-color: transparent;
-}
-
-.fileNameCell:hover {
-  border-color: var(--border-row);
-}
-
-
 
 .installTabs button.active {
   background: var(--text);
@@ -2166,18 +1270,7 @@ textarea:hover:not(:disabled),
     justify-content: flex-start;
   }
 
-  .selectionActionBar {
-    grid-template-columns: 1fr;
-  }
-
-  .selectionActions,
-  .fileToolbar {
-    justify-content: flex-start;
-  }
-
-  .modalFooter,
-  .fileEditorFooter,
-  .userModalFooter {
+  .modalFooter {
     flex-wrap: wrap;
   }
 
@@ -2186,19 +1279,11 @@ textarea:hover:not(:disabled),
 @media (max-width: 720px) {
   .modalHeader,
   .modalBody,
-  .modalFooter,
-  .fileEditorHeader,
-  .fileEditorFooter,
-  .userModalHeader,
-  .userModalFooter,
-  .nodeModalHeader,
-  .nodeModalBody {
+  .modalFooter {
     padding: var(--space-3);
   }
 
-  .modalFooter button,
-  .fileEditorFooter button,
-  .discardEditorActions button {
+  .modalFooter button {
     width: 100%;
   }
 
@@ -2209,20 +1294,6 @@ textarea:hover:not(:disabled),
 
   .inlineStateSpinner {
     align-self: start;
-  }
-
-  .fileEditorMetaRow {
-    align-items: center;
-  }
-
-  .fileEditorRestriction {
-    max-width: min(220px, 58vw);
-  }
-
-  .fileEditorMetaActions {
-    width: 100%;
-    margin-left: 0;
-    justify-content: space-between;
   }
 }
 
@@ -2308,14 +1379,6 @@ textarea:hover:not(:disabled),
   }
 
   .modalPanel {
-    max-height: calc(100vh - 16px);
-    max-height: calc(100dvh - 16px);
-  }
-
-  .modalPanel.fileEditorModal {
-    width: calc(100vw - 16px);
-    height: calc(100vh - 16px);
-    height: calc(100dvh - 16px);
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
   }
@@ -2422,23 +1485,6 @@ textarea:hover:not(:disabled),
   .workspaceServerPage > .activeServerStrip .refreshStatusButton {
     width: 44px;
   }
-
-  .workspacePage-files .fileNavButtons .uiButton,
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton,
-  .workspacePage-files .fileBreadcrumbs button {
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
-  }
-
-  .workspacePage-files .fileBreadcrumbs button {
-    width: auto;
-  }
-
-  .workspacePage-files .fileTableHead,
-  .workspacePage-files .fileTableRow {
-    min-height: 44px;
-  }
 }
 
 /* Native document scrolling lets mobile Safari collapse its browser chrome.
@@ -2489,8 +1535,7 @@ textarea:hover:not(:disabled),
     overflow: visible;
   }
 
-  .workspaceServerPage > .tabPage,
-  .workspaceServerPage > .filesPage {
+  .workspaceServerPage > .tabPage {
     min-height: calc(100dvh - 68px);
     flex: 0 0 auto;
     overflow: visible;
@@ -2505,81 +1550,11 @@ textarea:hover:not(:disabled),
      sight when it brings the command line into view — the console ends up a band at the top of the
      screen above a blank half. Pinning the shell to the visible area, and taking the page down to
      the same size, leaves nowhere to scroll to and nothing to reveal. */
-  html:has(.workspacePage-console),
-  body:has(.workspacePage-console),
-  #root:has(.workspacePage-console) {
-    height: var(--visual-viewport-height, 100dvh);
-    min-height: 0;
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
-
-  .appShell:has(.workspacePage-console),
-  .sidebarCollapsed.appShell:has(.workspacePage-console) {
-    position: fixed;
-    inset-inline: 0;
-    /* Not `top: 0`: that is the top of the page, and the keyboard can leave the visible area some
-       way down it. */
-    top: var(--visual-viewport-offset-top, 0px);
-    height: var(--visual-viewport-height, 100dvh);
-    min-height: 0;
-    grid-template-rows: 68px minmax(0, 1fr);
-    overflow: hidden;
-  }
-
-  .workspacePage-console {
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-    overscroll-behavior-y: contain;
-  }
-
-  .workspacePage-console.workspaceServerPage > .tabPage:has(.consolePanel) {
-    min-height: 0;
-    flex: 1 1 auto;
-    overflow: hidden;
-    overscroll-behavior-y: contain;
-  }
 
   /* The console is the one page a phone cannot scroll, so every pixel of shell around it
      is a pixel the conversation never gets back. The composer and the terminal prompt own
      the bottom edge, where padding would only read as a gap above the browser toolbar. */
-  .workspacePage-console.workspaceServerPage {
-    padding-block: var(--space-2) 0;
-  }
-
-  .nodesPage > .nodeDrawerBackdrop {
-    position: static;
-    display: block;
-    width: 100%;
-    height: auto;
-    min-height: calc(100dvh - 68px);
-    background: transparent;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-
-  .nodesPage > .nodeDrawerBackdrop > .nodeDetailsDrawer {
-    width: 100%;
-    height: auto;
-    min-height: calc(100dvh - 68px);
-    border: 0;
-    box-shadow: none;
-  }
-
-  .nodesPage > .nodeDrawerBackdrop .nodeDrawerBody {
-    flex: 0 0 auto;
-    overflow: visible;
-    overscroll-behavior-y: auto;
-  }
-
-  .nodesPage > .nodeDrawerBackdrop .nodeDrawerFooter {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-  }
 }
-
 
 /* Responsive shell cohesion */
 /* Responsive shell adjustments -------------------------------------------- */
@@ -2611,10 +1586,6 @@ textarea:hover:not(:disabled),
     padding-inline: var(--space-2);
   }
 
-  .overviewSummary {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .activeServerStrip {
     align-items: stretch;
   }
@@ -2632,111 +1603,6 @@ textarea:hover:not(:disabled),
   .sidebarCollapsed .brandLockup > div {
     display: none !important;
   }
-
-  .overviewSummary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .overviewPage,
-  .filesPage,
-  .schedulePage,
-  .settingsPage {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .overviewPage > *,
-.overviewPage > .eventsPanel {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 720px) {
-  .overviewDashboardGrid > .overviewSummary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2);
-  }
-
-  /* Two cards to a phone row, so the well shrinks to the smallest size that still reads as a
-     container rather than being dropped: the icon named the metric here before the redesign too,
-     and keeping it costs less than the row losing the anatomy it has at every other width. */
-  .overviewDashboardGrid > .overviewSummary > .summaryTile {
-    --metric-tile-marker-size: 28px;
-    grid-column: auto;
-    min-height: 56px;
-    gap: 0 var(--space-2);
-    padding: var(--space-2) 10px;
-  }
-
-  .overviewSummary > .summaryTile .uiMetricTileCopy {
-    gap: 2px;
-  }
-
-  .overviewSummary > .summaryTile .uiMetricTileLabel {
-    font-size: 10px;
-  }
-
-  .overviewSummary > .summaryTile .uiMetricTileCopy > strong,
-  .overviewSummary > .summaryTile .summaryStatusText {
-    overflow: hidden;
-    font-size: 15px;
-    line-height: 1.15;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .workspacePage-files .filesPage .fileNavBar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "navigation"
-      "breadcrumbs"
-      "actions";
-    gap: var(--space-2);
-    padding: var(--space-2);
-    overflow: hidden;
-  }
-
-  .workspacePage-files .fileNavButtons {
-    grid-area: navigation;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(44px, 1fr));
-    gap: var(--space-2);
-  }
-
-  .workspacePage-files .fileBreadcrumbs {
-    grid-area: breadcrumbs;
-    width: 100%;
-    min-width: 0;
-    min-height: 44px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-  }
-
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar {
-    grid-area: actions;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(44px, 1fr));
-    gap: var(--space-2);
-    width: 100%;
-  }
-
-  .workspacePage-files .fileNavButtons .uiButton,
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
-    width: 100%;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
-    padding-inline: var(--space-2);
-  }
-
-  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton {
-    flex-basis: auto;
-  }
-
-  .workspacePage-files .fileToolbarLabel {
-    display: none;
-  }
-
 }
 
 /* Navigation press feedback. The rail cancels the shell's lift on hover, which

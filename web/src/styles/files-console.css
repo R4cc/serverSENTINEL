@@ -838,3 +838,480 @@
   color: var(--text);
   margin-bottom: var(--space-1);
 }
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+@media (min-width: 721px) and (max-width: 1100px) {
+
+  .appShell:has(.workspacePage-console),
+  .sidebarCollapsed.appShell:has(.workspacePage-console) {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .appShell:has(.workspacePage-console) > .workspacePage-console {
+    height: 100%;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1100px) and (max-height: 520px) {
+
+  .workspacePage-console {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .workspacePage-console > .workspaceHeader {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .minecraftTerminal {
+    height: 360px;
+  }
+}
+
+.tabPage:has(.consolePanel) {
+  display: grid;
+  grid-template-rows: 1fr;
+  height: max(560px, calc(100vh - 238px));
+  min-height: 0;
+}
+
+.tabPage:has(.consolePanel) {
+  max-width: none;
+  align-content: stretch;
+}
+
+.discardEditorModal {
+  width: min(520px, calc(100vw - 32px));
+  padding: 0;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+
+.discardEditorActions {
+  margin: 0;
+}
+
+.fileEditorHeader,
+.fileEditorFooter {
+  padding: var(--space-4);
+}
+
+.fileEditorBody {
+  min-height: 0;
+}
+
+.fileEditorMetaRow {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border-row);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.fileEditorMode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-weight: var(--weight-title);
+}
+
+.fileEditorModeDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.fileEditorMode.editing .fileEditorModeDot {
+  background: var(--accent);
+}
+
+.fileEditorMetaDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--border-row);
+}
+
+.fileEditorMetaRow .dirty {
+  color: var(--sentinel-accent-strong);
+  font-weight: var(--weight-title);
+}
+
+.fileEditorRestriction {
+  flex: 0 1 auto;
+  max-width: min(240px, 32vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row));
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-warning) 82%, var(--text));
+  font-weight: var(--weight-strong);
+}
+
+.fileEditorMode.unavailable .fileEditorModeDot {
+  background: var(--sentinel-warning);
+}
+
+.fileEditorMetaActions {
+  min-width: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fileEditorCopyButton {
+  flex: 0 0 auto;
+}
+
+.fileCodeEditor {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.fileCodeEditor-disabled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.fileEditorMainArea {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.fileEditorMainArea.hasReadError {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.fileCodeEditor.cm-theme,
+.fileCodeEditor .cm-theme,
+.fileCodeEditor .cm-editor {
+  height: 100%;
+  min-height: 0;
+}
+
+.fileCodeEditor .cm-scroller {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.fileCodeEditor .cm-line {
+  white-space: pre;
+}
+
+.fileCodeEditor .cm-gutter {
+  min-height: 100%;
+}
+
+.fileEditorStateFill {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: var(--border-strong) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: var(--space-4);
+}
+
+.fileEditorStateFill .inlineState {
+  width: min(560px, 100%);
+}
+
+.terminal {
+  scrollbar-width: thin;
+}
+
+.fileEditorFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.consolePanel,
+.fileEditorModal { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+.fileEditorHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.fileEditorHeader h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileEditorFooter {
+  justify-content: flex-end;
+  border-top: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+.fileEditorHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+@media (max-width: 720px) {
+
+  input:not([type="checkbox"]):not([type="radio"]):not(.consolePromptInput),
+  .fileCodeEditor .cm-content {
+    font-size: 16px !important;
+  }
+
+  .minecraftTerminal .xterm-helper-textarea {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    font-size: 16px !important;
+  }
+
+  .fileEditorHeader button {
+    min-height: 44px;
+  }
+
+  .fileEditorHeader button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .modalPanel.fileEditorModal {
+    height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+    max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+  }
+
+  .fileEditorBody {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (min-width: 2560px) {
+
+  .workspace.workspacePage-console {
+    max-width: none;
+  }
+}
+
+@media (min-width: 721px) {
+
+  .workspacePage-console {
+    display: flex;
+    height: 100vh;
+    min-height: 0;
+    flex-direction: column;
+    align-content: normal;
+    overflow: hidden;
+  }
+
+  .workspacePage-console > .workspaceHeader {
+    flex: 0 0 auto;
+  }
+
+  .workspacePage-console > .tabPage {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .workspacePage-console > .tabPage:has(.consolePanel) {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    width: calc(100% + var(--space-4) + var(--space-4));
+    margin-inline: calc(0px - var(--space-4));
+    overflow: hidden;
+  }
+
+  .workspacePage-console .consolePanel {
+    min-height: 0;
+    padding: 0;
+    gap: 0;
+    border-inline: 0;
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  .workspacePage-console .consolePanel .terminal,
+  .workspacePage-console .minecraftTerminal {
+    height: auto;
+    min-height: 0;
+  }
+
+  .workspacePage-console .consolePanel .terminal {
+    border-inline: 0;
+    border-radius: 0;
+  }
+}
+
+.fileEditorHeader {
+  border-color: var(--border-row);
+}
+
+.fileCodeEditor,
+.fileEditorStateFill {
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+}
+
+.themeDark .fileCodeEditor,
+.themeDark .fileEditorStateFill {
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+}
+
+.consolePanel,
+.fileEditorModal { border-color: var(--border-panel); box-shadow: none; }
+
+.fileEditorBody .panel {
+  border-color: var(--border-row);
+  box-shadow: none;
+}
+
+.fileEditorHeader,
+.fileEditorFooter {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
+}
+
+.fileEditorBody {
+  background: var(--surface-raised);
+}
+
+.terminal,
+.minecraftTerminal,
+.fileCodeEditor {
+  border-color: color-mix(in srgb, var(--border) 54%, var(--surface));
+}
+
+.terminal,
+.minecraftTerminal {
+  border-color: color-mix(in srgb, var(--terminal-text) 22%, var(--terminal-bg));
+}
+
+@media (max-width: 900px) {
+
+  .fileEditorFooter {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 720px) {
+
+  .fileEditorHeader,
+  .fileEditorFooter {
+    padding: var(--space-3);
+  }
+
+  .fileEditorFooter button,
+  .discardEditorActions button {
+    width: 100%;
+  }
+
+  .fileEditorMetaRow {
+    align-items: center;
+  }
+
+  .fileEditorRestriction {
+    max-width: min(220px, 58vw);
+  }
+
+  .fileEditorMetaActions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 1100px) {
+
+  .modalPanel.fileEditorModal {
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+@media (max-width: 720px) {
+
+  html:has(.workspacePage-console),
+  body:has(.workspacePage-console),
+  #root:has(.workspacePage-console) {
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .appShell:has(.workspacePage-console),
+  .sidebarCollapsed.appShell:has(.workspacePage-console) {
+    position: fixed;
+    inset-inline: 0;
+    /* Not `top: 0`: that is the top of the page, and the keyboard can leave the visible area some
+       way down it. */
+    top: var(--visual-viewport-offset-top, 0px);
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    grid-template-rows: 68px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .workspace.workspacePage-console {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  .workspacePage-console.workspaceServerPage > .tabPage:has(.consolePanel) {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  .workspacePage-console.workspaceServerPage {
+    padding-block: var(--space-2) 0;
+  }
+}

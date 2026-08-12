@@ -56,10 +56,10 @@ Each stylesheet owns a class family. Change a rule in its owning file rather tha
 | `nodes.css` | Nodes list page; loads after `responsive.css` and owns its layout end to end |
 | `server-properties.css` | Properties form and danger panel |
 | `auth.css`, `confirmation-modal.css` | Sign-in and confirmation dialogs |
-| `responsive.css` | Shared shell breakpoints only |
+| `responsive.css` | Shared shell breakpoints and cross-feature responsive primitives |
 | `motion.css` | Transitions and animation |
 
-- Put a feature's responsive rules in that feature's stylesheet next to the base rule. `responsive.css` is for shell-wide breakpoints; adding feature rules there splits them from their base rule across a 2,800-line file.
+- Put a feature's responsive rules in that feature's stylesheet next to the base rule. `responsive.css` is only for shell-wide and cross-feature primitive breakpoints; adding a feature-owned selector there creates competing owners and is rejected by `styles.test.ts`.
 - Feature stylesheets must use theme tokens, not raw hex or `rgb()` values, and must not redefine `ui*` primitives.
 - `styles.test.ts` asserts ownership, cascade order, and retired class names. It deliberately does not assert declaration values — do not add regexes that pin pixel sizes, colors, or property order, because they cannot verify rendering and break on reformatting. Verify visual behaviour with the smoke scripts instead.
 

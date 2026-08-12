@@ -8,8 +8,6 @@
   letter-spacing: var(--tracking-label);
 }
 
-
-
 .settingsStatus.ready {
   border-color: var(--sentinel-success);
   color: var(--status-success-foreground);
@@ -515,7 +513,6 @@
   }
 }
 
-
 .minecraftPortsSection {
   display: grid;
   gap: var(--space-3);
@@ -531,22 +528,12 @@
   gap: var(--space-3);
 }
 
-
-
-
-
-
-
-
-
 .nodeSelectRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: var(--space-2);
 }
-
-
 
 .nodeRefreshInlineButton {
   width: 44px;
@@ -1778,7 +1765,6 @@
   font-weight: var(--weight-strong);
 }
 
-
 .createWizardFooter {
   margin-top: var(--space-4);
 }
@@ -1923,20 +1909,6 @@
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* The summary tiles are the first surfaces on the Overview and Nodes pages and
    carry no dense content, so they take the panel material rather than an opaque
    fill -- the tile row is where the shell's translucency is most legible. */
@@ -2011,8 +1983,6 @@
   line-height: 1.35;
   text-transform: none;
 }
-
-
 
 .eventList {
   display: grid;
@@ -2098,7 +2068,6 @@
   font-size: var(--type-meta-size);
   box-shadow: none;
 }
-
 
 .userSkeletonRow { pointer-events: none; }
 .userNameSkeleton { width: min(180px, 70%); height: 15px; }
@@ -2591,5 +2560,157 @@
 
   .nodeTechnicalDetails summary::after {
     transition: none;
+  }
+}
+
+/* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
+
+.nodeModalHeader,
+.nodeModalBody {
+  padding: var(--space-4);
+}
+
+.nodeModalFooter.inline {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+
+  .nodeModalPanel {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    border-radius: 14px;
+  }
+}
+
+.installSnippet {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.installSnippetShell {
+  overflow-x: auto;
+}
+
+.installSnippet {
+  scrollbar-width: thin;
+}
+
+.installSnippet code {
+  overflow-wrap: normal;
+}
+
+.nodeModalFooter.inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.nodeInstallHeader,
+.nodeModalHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.nodeModalHeader h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nodeModalFooter.inline {
+  justify-content: flex-end;
+  border-top: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+.nodeModalHeader {
+  border-bottom: var(--border-strong) solid var(--border);
+  padding: var(--space-4);
+}
+
+@media (max-width: 720px) {
+
+  .nodeModalHeader button {
+    min-height: 44px;
+  }
+
+  .nodeModalHeader button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .nodeDrawerBackdrop {
+    height: var(--visual-viewport-height, 100dvh);
+    overscroll-behavior: none;
+  }
+
+  .nodeModalBody,
+  .nodeDrawerBody {
+    min-height: 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nodeDetailsDrawer {
+    width: 100vw;
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    border-left: 0;
+  }
+}
+
+.nodeModalHeader {
+  border-color: var(--border-row);
+}
+
+.addNodeStepCircle {
+  border-color: var(--border-muted);
+}
+
+.installSnippetShell {
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+}
+
+.themeDark .installSnippetShell {
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+}
+
+.nodeModalBody .panel,
+.addNodeStatusCard {
+  border-color: var(--border-row);
+  box-shadow: none;
+}
+
+.nodeModalHeader,
+.nodeModalFooter.inline {
+  border-color: var(--border-row);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
+}
+
+.nodeModalBody {
+  background: var(--surface-raised);
+}
+
+.installSnippetShell {
+  border-color: color-mix(in srgb, var(--border) 54%, var(--surface));
+}
+
+.addNodeStepCircle {
+  border-color: var(--border-muted);
+}
+
+@media (max-width: 720px) {
+
+  .nodeModalHeader,
+  .nodeModalBody {
+    padding: var(--space-3);
   }
 }
