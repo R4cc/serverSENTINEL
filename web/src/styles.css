@@ -6,6 +6,7 @@
 @import "./styles/canonical-layout.css";
 @import "./styles/layout.css";
 @import "./styles/auth.css";
+@import "./styles/onboarding.css";
 @import "./styles/overview.css";
 @import "./styles/server-properties.css";
 @import "./styles/settings-nodes.css";

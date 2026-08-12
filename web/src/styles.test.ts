@@ -68,7 +68,8 @@ describe("global stylesheet entry point", () => {
     "schedules.css",
     "mods.css",
     "file-manager.css",
-    "settings.css"
+    "settings.css",
+    "onboarding.css"
   ])("loads %s before lazy pages render", (fileName) => {
     expect(stylesheet).toContain(`@import "./styles/${fileName}";`);
   });
@@ -89,6 +90,7 @@ describe("stylesheet ownership", () => {
       "confirmation-modal.css": /(?:\.confirm|\.discardEditorModal)/,
       "export-import.css": /(?:\.export|\.import)/,
       "auth.css": /\.auth/,
+      "onboarding.css": /\.onboarding/,
       "layout.css": /(?:\.user|\.users|\.role|\.permission|\.restartRequirementTooltip|\.fieldTooltip)/
     };
     const selectors = [...responsiveStyles

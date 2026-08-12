@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.10.0 - 2026-08-12
+
+- Added a resumable first-run experience that guides administrators through host selection, server creation or import, the first successful start, and optional integrations.
+- Refreshed administrator setup guidance and deferred optional player-head configuration until the essential server setup is complete.
+
 ## 1.9.6 - 2026-08-12
 
 - Corrected managed-server creation defaults, Docker readiness and failure guidance, review accessibility, and node memory labeling.

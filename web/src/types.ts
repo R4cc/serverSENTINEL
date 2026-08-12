@@ -133,6 +133,11 @@ export type PlayerHeadsState = {
   cacheBytes: number;
 };
 
+export type OnboardingState = {
+  currentVersion: number;
+  completedVersion: number;
+};
+
 export type AppState = {
   servers: ManagedServer[];
   /**
@@ -146,6 +151,7 @@ export type AppState = {
   timeZone?: string;
   modrinthApiConfigured: boolean;
   playerHeads: PlayerHeadsState;
+  onboarding: OnboardingState;
   dockerSocketMounted: boolean;
   totalMemory: number;
   currentUser?: PublicUser;

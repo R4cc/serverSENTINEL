@@ -1,6 +1,6 @@
 {
   "name": "@serversentinel/server",
-  "version": "1.9.6",
+  "version": "1.10.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,7 +21,7 @@
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^10.1.3",
     "@fastify/websocket": "^11.3.0",
-    "@serversentinel/contracts": "1.9.6",
+    "@serversentinel/contracts": "1.10.0",
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.11.3",
     "undici": "^8.10.0",

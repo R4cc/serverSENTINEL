@@ -1,6 +1,6 @@
 import type { ActivePage, AppState, PlaceholderNode } from "../types";
 
-export const appVersion = "1.9.6";
+export const appVersion = "1.10.0";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 export const demoLocalStorageKey = "serversentinel-demo-mode";
@@ -19,6 +19,10 @@ export const emptyApp: AppState = {
     provider: "mc-heads.net",
     cacheEntries: 0,
     cacheBytes: 0
+  },
+  onboarding: {
+    currentVersion: 1,
+    completedVersion: 1
   },
   dockerSocketMounted: false,
   totalMemory: 0

@@ -66,6 +66,9 @@ export type SettingsPageProps = {
   refreshingSystemInfo: boolean;
   onRefreshSystemInfo(): void;
   onCopyDiagnostics(value: string): void;
+  clearingUiCache: boolean;
+  clearUiCacheDisabledReason: string;
+  onClearUiCache(): void;
   onExitDemo(): void;
   exitDemoDisabled: boolean;
 };
@@ -308,6 +311,20 @@ export function SettingsPage(props: SettingsPageProps) {
             <div><strong>Time zones</strong><span>Panel: {props.systemInfo.panelTimeZone}</span><span>Display: {props.systemInfo.displayTimeZone}</span></div>
             <div><strong>Agent versions</strong><code>{systemSummary.agentVersions}</code></div>
             <div><strong>Protocol versions</strong><code>{systemSummary.protocolVersions}</code></div>
+          </div>
+          <div className="settingsHubRows">
+            <PreferenceRow title="UI cache" description="Remove cached panel files and browser data from this device, sign out, and reload the application.">
+              <Button
+                variant="critical"
+                onClick={props.onClearUiCache}
+                disabled={props.clearingUiCache || Boolean(props.clearUiCacheDisabledReason)}
+                aria-busy={props.clearingUiCache}
+                reserveLabel="Clearing UI cache"
+                title={props.clearUiCacheDisabledReason || "Clear cached UI files and browser data"}
+              >
+                {props.clearingUiCache ? "Clearing UI cache" : "Clear UI cache"}
+              </Button>
+            </PreferenceRow>
           </div>
           <div className="settingsHubPrivacyNote"><strong>Privacy-safe diagnostics</strong><span>Copied diagnostics include aggregate runtime information only. Usernames, credentials, commands, server and node names, and filesystem paths are excluded.</span></div>
           {props.systemInfo.demoMode && <div className="settingsHubDemoCallout"><div><strong>Demo mode</strong><span>Leave the sample workspace and return to sign-in.</span></div><Button variant="secondary" onClick={props.onExitDemo} disabled={props.exitDemoDisabled}>Exit demo mode</Button></div>}
