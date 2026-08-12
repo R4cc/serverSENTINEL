@@ -9,6 +9,7 @@ export type ScheduleBody = {
   cron?: string;
   steps?: unknown;
   onlyWhenNoPlayers?: boolean;
+  waitForPlayersToLeave?: boolean;
   enabled?: boolean;
 };
 

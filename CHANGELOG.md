@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.11.0 - 2026-08-12
+
+- Added a schedule start policy that can wait without timeout for all players to leave, keeps one cancellable run active, and ignores later matches instead of stacking them.
+
 ## 1.10.2 - 2026-08-12
 
 - Kept the first-run setup guide on the step you selected instead of snapping back to the recommended step whenever panel data refreshed.

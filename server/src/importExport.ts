@@ -655,7 +655,7 @@ function assertSchedules(value: unknown, label: string) {
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
   for (const [index, schedule] of value.entries()) {
     if (!isPlainObject(schedule)) throw new Error(`${label}[${index}] must be a JSON object`);
-    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "steps", "onlyWhenNoPlayers", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
+    rejectUnsupportedKeys(schedule, ["id", "name", "cron", "steps", "onlyWhenNoPlayers", "waitForPlayersToLeave", "enabled", "createdAt", "updatedAt", "lastRunAt", "lastStatus", "lastMessage", "nextRunAt", "recentRuns"], `${label}[${index}]`);
     stringValue(schedule.id, `${label}[${index}].id`);
     stringValue(schedule.name, `${label}[${index}].name`);
     stringValue(schedule.cron, `${label}[${index}].cron`);
@@ -670,6 +670,12 @@ function assertSchedules(value: unknown, label: string) {
       if (!Number.isInteger(step.delaySeconds) || (step.delaySeconds as number) < 0 || (step.delaySeconds as number) > 604_800) throw new Error(`${label}[${index}].steps[${stepIndex}].delaySeconds must be a whole number from 0 to 604800`);
     }
     booleanValue(schedule.onlyWhenNoPlayers, `${label}[${index}].onlyWhenNoPlayers`);
+    if (schedule.waitForPlayersToLeave !== undefined) {
+      booleanValue(schedule.waitForPlayersToLeave, `${label}[${index}].waitForPlayersToLeave`);
+      if (schedule.waitForPlayersToLeave && schedule.onlyWhenNoPlayers !== true) {
+        throw new Error(`${label}[${index}].waitForPlayersToLeave requires onlyWhenNoPlayers`);
+      }
+    }
     booleanValue(schedule.enabled, `${label}[${index}].enabled`);
     stringValue(schedule.createdAt, `${label}[${index}].createdAt`);
     stringValue(schedule.updatedAt, `${label}[${index}].updatedAt`);

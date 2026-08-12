@@ -14,6 +14,7 @@ function schedule(overrides: Partial<ScheduledExecution> = {}): ScheduledExecuti
     cron: "0 4 * * *",
     steps: [{ type: "action", procedure: "restart", delaySeconds: 0 }],
     onlyWhenNoPlayers: false,
+    waitForPlayersToLeave: false,
     enabled: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",

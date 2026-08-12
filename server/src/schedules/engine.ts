@@ -17,6 +17,7 @@ export function scheduleFromBody(body: {
   cron?: string;
   steps?: unknown;
   onlyWhenNoPlayers?: boolean;
+  waitForPlayersToLeave?: boolean;
   enabled?: boolean;
 }, existing?: ScheduledExecution): ScheduledExecution {
   const name = body.name?.trim();
@@ -29,13 +30,15 @@ export function scheduleFromBody(body: {
   }
   validateCron(cron);
   const steps = sanitizeScheduleSteps(body.steps);
+  const waitForPlayersToLeave = optionalStrictBoolean(body.waitForPlayersToLeave, "waitForPlayersToLeave", false);
   const now = new Date().toISOString();
   return {
     id: existing?.id ?? randomUUID(),
     name,
     cron,
     steps,
-    onlyWhenNoPlayers: optionalStrictBoolean(body.onlyWhenNoPlayers, "onlyWhenNoPlayers", false),
+    onlyWhenNoPlayers: waitForPlayersToLeave || optionalStrictBoolean(body.onlyWhenNoPlayers, "onlyWhenNoPlayers", false),
+    waitForPlayersToLeave,
     enabled: optionalStrictBoolean(body.enabled, "enabled", existing?.enabled ?? true),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
@@ -61,6 +64,22 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
   });
   try {
     const runtime = runtimeForServer(server);
+    if (schedule.waitForPlayersToLeave) {
+      throwIfScheduleCancelled(active.controller.signal);
+      active.message = "Checking server status";
+      const initialStatus = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
+      if (!initialStatus.docker?.running) {
+        logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
+        return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
+      }
+      const waitResult = await waitUntilServerIsEmpty(server, schedule, active);
+      if (waitResult === "stopped") {
+        logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline_while_waiting" }, "Schedule skipped");
+        return { status: "skipped", message: "Skipped because Minecraft server stopped while waiting for players to leave", details: details() };
+      }
+    }
+
+    return await withScheduleMutation(server.id, active, schedule.waitForPlayersToLeave, async () => {
     throwIfScheduleCancelled(active.controller.signal);
     active.message = "Checking server status";
     const status = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
@@ -68,7 +87,7 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
       return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
     }
-    if (schedule.onlyWhenNoPlayers) {
+    if (schedule.onlyWhenNoPlayers && !schedule.waitForPlayersToLeave) {
       throwIfScheduleCancelled(active.controller.signal);
       active.message = "Checking online players";
       const count = await services.playerSnapshotCoordinator!.freshOnlineCount(server);
@@ -138,6 +157,7 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     }
     logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "success" }, "Schedule execution succeeded");
     return { status: "success", message: `Completed ${schedule.steps.length} step${schedule.steps.length === 1 ? "" : "s"}`, details: details() };
+    });
   } catch (error) {
     if (error instanceof ScheduleCancellationError || active.controller.signal.aborted) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "cancelled" }, "Schedule execution cancelled");
@@ -146,6 +166,63 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     logError({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
     return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed", details: details() };
   }
+}
+
+export const schedulePlayerWaitPollSeconds = 30;
+
+export async function waitUntilServerIsEmpty(
+  server: ManagedServer,
+  schedule: ScheduledExecution,
+  active: ActiveScheduleExecution,
+  pollSeconds = schedulePlayerWaitPollSeconds
+) {
+  let lastMessage = "";
+  while (true) {
+    throwIfScheduleCancelled(active.controller.signal);
+    const status = await runtimeForServer(server).serverStatus(server) as { docker?: { running?: boolean } };
+    if (!status.docker?.running) return "stopped" as const;
+
+    const count = await services.playerSnapshotCoordinator!.freshOnlineCount(server);
+    throwIfScheduleCancelled(active.controller.signal);
+    if (count === 0) {
+      active.message = "Server is empty; preparing schedule";
+      if (lastMessage !== active.message) {
+        services.operationsRepository.update(active.operationId, { progress: 15, task: active.message });
+      }
+      return "empty" as const;
+    }
+
+    active.message = count === null
+      ? "Waiting for player status"
+      : `Waiting for ${count} player${count === 1 ? "" : "s"} to leave`;
+    if (lastMessage !== active.message) {
+      lastMessage = active.message;
+      services.operationsRepository.update(active.operationId, { progress: 10, task: active.message });
+      logInfo({ ...serverLogFields(server), scheduleId: schedule.id, playersOnline: count ?? undefined, reason: count === null ? "player_count_unknown" : "waiting_for_players" }, active.message);
+    }
+    await waitForCommandDelay(pollSeconds, active.controller.signal);
+  }
+}
+
+async function withScheduleMutation<T>(
+  serverId: string,
+  active: ActiveScheduleExecution,
+  waitForAvailability: boolean,
+  action: () => Promise<T>
+) {
+  if (!waitForAvailability) return services.exportCoordinator.withMutation(serverId, action);
+  while (services.exportCoordinator.activeOperationId(serverId)) {
+    throwIfScheduleCancelled(active.controller.signal);
+    if (active.message !== "Server is empty; waiting for export to finish") {
+      active.message = "Server is empty; waiting for export to finish";
+      services.operationsRepository.update(active.operationId, { progress: 15, task: active.message });
+    }
+    await waitForCommandDelay(1, active.controller.signal);
+  }
+  // The final availability check and mutation registration are synchronous. An export cannot
+  // slip between them on this event loop, while action failures still propagate without retrying
+  // already-executed schedule steps.
+  return services.exportCoordinator.withMutation(serverId, action);
 }
 
 export function scheduledRunLogSnapshot(runtime: NodeRuntime, server: ManagedServer) {
@@ -257,7 +334,7 @@ export function startScheduleExecution(server: ManagedServer, schedule: Schedule
   services.exportCoordinator.assertMutationAllowed(server.id);
 
   runningSchedules.add(key);
-  void services.exportCoordinator.withMutation(server.id, () => executeMatchedSchedule(server, schedule))
+  void executeMatchedSchedule(server, schedule)
     .catch((error) => {
       logError({ ...serverLogFields(server), scheduleId: schedule.id, ...errorLogFields(error) }, "Schedule run could not be recorded");
     })

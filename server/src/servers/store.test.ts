@@ -45,6 +45,7 @@ function schedule(recentRuns: ScheduledRun[]): ScheduledExecution {
     cron: "0 4 * * *",
     steps: [{ type: "command", command: "save-all", delaySeconds: 0 }],
     onlyWhenNoPlayers: false,
+    waitForPlayersToLeave: false,
     enabled: false,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
