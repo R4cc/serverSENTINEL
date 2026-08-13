@@ -227,6 +227,8 @@ describe("layout stability guards", () => {
   it("reserves scrollbar gutters before async content changes page height", () => {
     expect(tokenStyles).toContain("scrollbar-gutter: stable");
     expect(modsStyles).toContain("scrollbar-gutter: stable");
+    expect(featureStyles["files-console.css"]).toMatch(/\.fileCodeEditor \.cm-scroller\s*\{[^}]*scrollbar-gutter: stable/s);
+    expect(featureStyles["files-console.css"]).toContain(".fileCodeEditor .cm-scroller::-webkit-scrollbar-thumb");
   });
 });
 
