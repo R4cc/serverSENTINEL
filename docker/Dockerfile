@@ -11,7 +11,7 @@ COPY package*.json ./
 COPY shared/package.json shared/package.json
 COPY server/package.json server/package.json
 RUN --mount=type=cache,id=serversentinel-npm,target=/root/.npm \
-  npm ci --omit=dev --workspace server \
+  npm ci --ignore-scripts --omit=dev --workspace server \
   && test -f node_modules/better-sqlite3/prebuilds/linux-x64.node \
   && find node_modules/better-sqlite3/prebuilds -type f ! -name linux-x64.node -delete \
   && rm -rf node_modules/better-sqlite3/build \
@@ -28,7 +28,7 @@ COPY package*.json ./
 COPY shared/package.json shared/package.json
 COPY server/package.json server/package.json
 COPY web/package.json web/package.json
-RUN --mount=type=cache,id=serversentinel-npm,target=/root/.npm npm ci
+RUN --mount=type=cache,id=serversentinel-npm,target=/root/.npm npm ci --ignore-scripts
 
 COPY shared shared
 COPY server server
