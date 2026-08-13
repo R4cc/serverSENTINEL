@@ -256,7 +256,7 @@ function aggregate(points: ServerTimelineResourcePoint[], maxPoints: number) {
   for (let index = 0; index < points.length; index += bucketSize) {
     const bucket = points.slice(index, index + bucketSize);
     const containsGap = bucket.some((item) => !item.available || !item.running);
-    const lastPlayersOnline = [...bucket].reverse().find((item) => item.playersOnline !== null)?.playersOnline ?? null;
+    const lastPlayersOnline = bucket.findLast((item) => item.playersOnline !== null)?.playersOnline ?? null;
     output.push({
       sampledAt: Math.round(average(bucket.map((item) => item.sampledAt)) ?? bucket[0].sampledAt),
       available: !containsGap,
@@ -276,7 +276,7 @@ function aggregate(points: ServerTimelineResourcePoint[], maxPoints: number) {
 
 export function timelineResourcePoints(samples: ResourceStatsSample[], from: number, to: number, maxPoints: number, fallbackCpuCapacityCores?: number) {
   const output: ServerTimelineResourcePoint[] = [];
-  const cpuCapacityCores = [...samples].reverse().find((sample) => sample.cpuCapacityCores)?.cpuCapacityCores ?? fallbackCpuCapacityCores;
+  const cpuCapacityCores = samples.findLast((sample) => sample.cpuCapacityCores)?.cpuCapacityCores ?? fallbackCpuCapacityCores;
   let cachedPlayersOnline: number | null = null;
   // The last sample whose counters came from a distinct stats read, plus the rate it produced.
   // Rates are measured against that reading rather than the previous sample so a repeated remote

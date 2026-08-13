@@ -39,10 +39,6 @@ function versionMatchesLoader(version: ModrinthVersion, loaders: ReadonlySet<str
   return loaders.size > 0 && version.loaders.some((loader) => loaders.has(loader));
 }
 
-function compatibilityDescription(options: VersionCompatibilityOptions) {
-  return { runtimeName: options.runtimeName, contentKind: options.contentKind };
-}
-
 type TimedCacheEntry<T> = {
   value: T;
   expiresAt: number;
@@ -286,7 +282,7 @@ function compatibleResult(
   options: VersionCompatibilityOptions,
   projectSides?: { server_side?: string; client_side?: string }
 ): ModrinthCompatibilityMatch {
-  const { runtimeName, contentKind } = compatibilityDescription(options);
+  const { runtimeName, contentKind } = options;
   return {
     status: "compatible",
     compatible: true,
@@ -363,7 +359,7 @@ export function resolveCompatibilityFromVersions(
     ?? versions.find((version) => modrinthJarFile(version));
 
   if (loaderVersions.length === 0) {
-    const { runtimeName } = compatibilityDescription(options);
+    const { runtimeName } = options;
     return incompatible("no_compatible_loader", `No ${runtimeName}-compatible version available`, fallbackVersion, projectSides);
   }
   if (loaderAndGameVersions.length === 0) {

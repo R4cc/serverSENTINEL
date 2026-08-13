@@ -1778,7 +1778,7 @@
 }
 
 .scheduleTableCard,
-.scheduledRunsCard { border-color: var(--border-panel); box-shadow: none; }
+.scheduledRunsCard { border-color: var(--border-panel); }
 
 .scheduleTableFrame {
   border-color: var(--border-row);

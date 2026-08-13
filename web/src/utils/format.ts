@@ -61,11 +61,16 @@ export function totalMemoryGb(totalMemory: number) {
 }
 
 export function parseMaxMemoryGb(javaArgs?: string) {
-  return parseJavaMemoryArgs(javaArgs).xmxGb ?? 4;
+  return parseMemoryToken(javaArgs || "", "Xmx") ?? 4;
 }
 
+const memoryTokenPatterns = {
+  Xms: /-Xms(\d+)([gGmM])/,
+  Xmx: /-Xmx(\d+)([gGmM])/
+} as const;
+
 function parseMemoryToken(javaArgs: string, flag: "Xms" | "Xmx") {
-  const match = javaArgs.match(new RegExp(`-${flag}(\\d+)([gGmM])`));
+  const match = javaArgs.match(memoryTokenPatterns[flag]);
   if (!match) return null;
   const value = parseInt(match[1], 10);
   if (!Number.isFinite(value)) return null;

@@ -3,6 +3,7 @@ import type { PublicUser } from "../types";
 import {
   fileManagerPermissionForPath,
   hasFileManagerPermission,
+  inferRolePreset,
   isModsPublicPath,
   isServerPropertiesPath,
   permissionsForPreset
@@ -19,6 +20,13 @@ function userWith(permissions: PublicUser["permissions"]): PublicUser {
 }
 
 describe("file manager permissions", () => {
+  it("infers presets from normalized and dependency-expanded permissions", () => {
+    const operatorPermissions = permissionsForPreset("operator");
+    expect(inferRolePreset(operatorPermissions)).toBe("operator");
+    expect(inferRolePreset([...operatorPermissions].reverse())).toBe("operator");
+    expect(inferRolePreset(["servers.view", "files.view"])).toBe("custom");
+  });
+
   it("exposes server export only to Manager and Admin presets", () => {
     expect(permissionsForPreset("viewer")).not.toContain("servers.export");
     expect(permissionsForPreset("manager")).toContain("servers.export");

@@ -461,7 +461,6 @@ button:disabled,
 }
 
 .modalFooter {
-  justify-content: flex-end;
   border-top: var(--border-strong) solid var(--border);
   padding: var(--space-4);
 }

@@ -5,11 +5,7 @@
  * enforced, exports now authorize on permissions alone, like the rest of the API.
  */
 
-function uniqueServerIds(serverIds: readonly string[]) {
-  return [...new Set(serverIds)];
-}
-
 /** Normalizes the requested server list; `undefined` still means "every server in the instance". */
 export function selectedExportServerIdsOrAll(requestedServerIds: readonly string[] | undefined) {
-  return requestedServerIds === undefined ? undefined : uniqueServerIds(requestedServerIds);
+  return requestedServerIds === undefined ? undefined : [...new Set(requestedServerIds)];
 }

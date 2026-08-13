@@ -1010,10 +1010,6 @@
 }
 
 .keyFormActions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -1040,7 +1036,7 @@
   text-transform: none;
 }
 
-.settingsHubContent { border-color: var(--border-panel); box-shadow: none; }
+.settingsHubContent { border-color: var(--border-panel); }
 
 .secretPreview {
   border-color: var(--border-row);

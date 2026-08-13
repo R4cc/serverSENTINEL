@@ -1,5 +1,20 @@
 import type { FileEntry } from '../types';
 
+const maxEditableFileSize = 2 * 1024 * 1024;
+
+const knownBinaryExtensions = new Set([
+  "jar", "zip", "gz", "gzip", "tar", "tgz", "7z", "rar", "bz2", "xz",
+  "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svgz",
+  "mp3", "ogg", "wav", "flac", "mp4", "webm", "avi", "mov",
+  "class", "so", "dll", "dylib", "exe", "bin", "dat", "nbt", "mca", "mcr",
+  "db", "sqlite", "sqlite3", "pdf", "woff", "woff2", "ttf", "otf"
+]);
+
+function isKnownBinaryFile(entry: FileEntry) {
+  const extension = entry.name.split(".").pop()?.toLowerCase() ?? "";
+  return knownBinaryExtensions.has(extension);
+}
+
 export function parentPath(path: string) {
   if (path === "/") return "/";
   const parts = path.split("/").filter(Boolean);
@@ -8,16 +23,7 @@ export function parentPath(path: string) {
 }
 
 export function isEditableFile(entry: FileEntry) {
-  if (entry.type !== "file" || entry.size > 2 * 1024 * 1024) return false;
-  const extension = entry.name.split(".").pop()?.toLowerCase() ?? "";
-  const knownBinaryExtensions = new Set([
-    "jar", "zip", "gz", "gzip", "tar", "tgz", "7z", "rar", "bz2", "xz",
-    "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svgz",
-    "mp3", "ogg", "wav", "flac", "mp4", "webm", "avi", "mov",
-    "class", "so", "dll", "dylib", "exe", "bin", "dat", "nbt", "mca", "mcr",
-    "db", "sqlite", "sqlite3", "pdf", "woff", "woff2", "ttf", "otf"
-  ]);
-  return !knownBinaryExtensions.has(extension);
+  return entry.type === "file" && entry.size <= maxEditableFileSize && !isKnownBinaryFile(entry);
 }
 
 export function fileDisplayType(entry: FileEntry) {
@@ -41,7 +47,7 @@ export function fileStatusLabel(entry: FileEntry) {
 }
 
 export function isPreviewableFile(entry: FileEntry) {
-  return entry.type === "file" && isEditableFile({ ...entry, size: Math.min(entry.size, 2 * 1024 * 1024) });
+  return entry.type === "file" && !isKnownBinaryFile(entry);
 }
 
 export function joinPublicPath(parent: string, name: string) {

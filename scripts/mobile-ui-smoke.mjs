@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { chromium, devices, webkit } from "playwright";
 import { launchBrowser, signInThroughForm, startDemoHarness } from "./lib/demo-harness.mjs";
 
@@ -6,10 +7,6 @@ const harness = await startDemoHarness({
   env: { MODRINTH_API_KEY: "demo-token" }
 });
 const { baseUrl } = harness;
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
 
 async function openPage(page, title) {
   const target = page.locator(`.sideNav button[title="Open ${title}"]`);

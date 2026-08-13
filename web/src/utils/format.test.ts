@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAdaptiveBytes, formatRelativeTimestamp, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
+import { formatAdaptiveBytes, formatRelativeTimestamp, parseJavaMemoryArgs, parseMaxMemoryGb, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
 
 describe("adaptive byte formatting", () => {
   it("selects a readable unit without losing useful precision", () => {
@@ -8,6 +8,14 @@ describe("adaptive byte formatting", () => {
     expect(formatAdaptiveBytes(748.46 * 1024 * 1024)).toBe("748.46 MiB");
     expect(formatAdaptiveBytes(7.4846 * 1024 * 1024 * 1024)).toBe("7.48 GiB");
     expect(formatAdaptiveBytes(2.25 * 1024 * 1024 * 1024 * 1024)).toBe("2.25 TiB");
+  });
+});
+
+describe("Java memory argument parsing", () => {
+  it("parses initial and maximum heap sizes independently", () => {
+    expect(parseJavaMemoryArgs("-Xms512M -Xmx8G")).toEqual({ xmsGb: 1, xmxGb: 8 });
+    expect(parseMaxMemoryGb("-Xms2G -Xmx6144M")).toBe(6);
+    expect(parseMaxMemoryGb("-Xms2G")).toBe(4);
   });
 });
 

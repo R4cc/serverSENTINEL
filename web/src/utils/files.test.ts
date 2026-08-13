@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FileEntry } from "../types";
-import { isEditableFile } from "./files";
+import { isEditableFile, isPreviewableFile } from "./files";
 
 function file(name: string, size = 100): FileEntry {
   return { name, path: `/${name}`, type: "file", size, modifiedAt: new Date(0).toISOString(), status: "ok" };
@@ -18,5 +18,11 @@ describe("editable file detection", () => {
       expect(isEditableFile(file(name)), name).toBe(false);
     }
     expect(isEditableFile(file("large.json", 2 * 1024 * 1024 + 1))).toBe(false);
+  });
+
+  it("previews text files without applying the editor size limit", () => {
+    expect(isPreviewableFile(file("latest.log", 8 * 1024 * 1024))).toBe(true);
+    expect(isPreviewableFile(file("backup.zip", 100))).toBe(false);
+    expect(isPreviewableFile({ ...file("config"), type: "directory" })).toBe(false);
   });
 });

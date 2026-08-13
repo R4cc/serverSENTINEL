@@ -92,7 +92,11 @@ const normalizedRolePresets = new Map<RolePreset, PermissionKey[]>(
 export function inferRolePreset(permissions: readonly PermissionKey[]): RolePreset {
   const normalized = normalizePermissions(permissions);
   for (const preset of ROLE_PRESET_ORDER) {
-    if (samePermissions(normalized, normalizedRolePresets.get(preset)!)) return preset;
+    const presetPermissions = normalizedRolePresets.get(preset)!;
+    if (
+      normalized.length === presetPermissions.length
+      && normalized.every((permission, index) => permission === presetPermissions[index])
+    ) return preset;
   }
   return "custom";
 }
@@ -112,8 +116,13 @@ const derivedPermissionsCache = new WeakMap<PublicUser, {
   lookup: Set<PermissionKey>;
 }>();
 
+const emptyDerivedPermissions = {
+  ordered: [] as PermissionKey[],
+  lookup: new Set<PermissionKey>()
+};
+
 function derivedPermissions(user?: PublicUser | null) {
-  if (!user) return { ordered: [] as PermissionKey[], lookup: new Set<PermissionKey>() };
+  if (!user) return emptyDerivedPermissions;
   const source = user.permissions ?? [];
   const cached = derivedPermissionsCache.get(user);
   if (cached && cached.source === source) return cached;
@@ -191,12 +200,6 @@ export function dependentPermissions(basePermission: PermissionKey) {
 
 function sortPermissions(permissions: PermissionKey[]) {
   return permissions.sort((a, b) => permissionOrder.get(a)! - permissionOrder.get(b)!);
-}
-
-function samePermissions(a: readonly PermissionKey[], b: readonly PermissionKey[]) {
-  const normalizedA = normalizePermissions(a);
-  const normalizedB = normalizePermissions(b);
-  return normalizedA.length === normalizedB.length && normalizedA.every((permission, index) => permission === normalizedB[index]);
 }
 
 function normalizePublicPath(path: string) {

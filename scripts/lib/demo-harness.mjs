@@ -43,10 +43,18 @@ export async function startDemoHarness({
   const stop = async () => {
     if (server && server.exitCode === null) {
       server.kill("SIGTERM");
-      await Promise.race([
-        new Promise((resolveExit) => server.once("exit", resolveExit)),
-        new Promise((resolveWait) => setTimeout(resolveWait, 5_000))
-      ]);
+      await new Promise((resolveExit) => {
+        const onExit = () => {
+          clearTimeout(timeout);
+          resolveExit();
+        };
+        const timeout = setTimeout(() => {
+          server.off("exit", onExit);
+          resolveExit();
+        }, 5_000);
+        if (server.exitCode === null) server.once("exit", onExit);
+        else onExit();
+      });
       if (server.exitCode === null) server.kill("SIGKILL");
     }
     await rm(dataDirectory, { recursive: true, force: true });
