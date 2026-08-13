@@ -1994,11 +1994,6 @@ button .buttonIcon {
   flex: 0 0 auto;
 }
 
-.userModalHeader,
-.userModalFooter {
-  padding: var(--space-4);
-}
-
 .usersTable td,
 .usersTable th {
   overflow: hidden;
@@ -2088,20 +2083,7 @@ button .buttonIcon {
   background: var(--surface-muted);
   color: var(--text-muted);
   font-size: 10px;
-  font-weight: var(--weight-title);
   line-height: 1;
-  white-space: nowrap;
-}
-
-.userModalFooter {
-  justify-content: flex-end;
-  border-top: var(--border-strong) solid var(--border);
-  padding: var(--space-4);
-}
-
-.userModalHeader {
-  border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-4);
 }
 
 @media (max-width: 720px) {
@@ -2142,7 +2124,7 @@ button .buttonIcon {
   border-color: var(--border-row);
 }
 
-.usersSettings { border-color: var(--border-panel); box-shadow: none; }
+.usersSettings { border-color: var(--border-panel); }
 
 .roleInfoButton {
   border-color: var(--border-muted);
@@ -2150,7 +2132,6 @@ button .buttonIcon {
 
 .roleBadge {
   border-color: color-mix(in srgb, currentColor 34%, transparent);
-  letter-spacing: var(--tracking-label);
 }
 
 .userModalHeader,

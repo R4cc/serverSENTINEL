@@ -1,18 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetch } from "undici";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configureModrinthApiKeyProvider, modrinthFetch, modrinthRequestHeaders, resetModrinthClientStateForTests } from "./modrinthClient.js";
 
-vi.mock("undici", () => ({
-  fetch: vi.fn()
-}));
-
-const fetchMock = vi.mocked(fetch);
+const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
   resetModrinthClientStateForTests();
   configureModrinthApiKeyProvider(async () => "");
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("Modrinth client", () => {
   it("rejects non-Modrinth and non-HTTPS outbound URLs before fetching", async () => {

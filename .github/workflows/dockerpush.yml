@@ -75,28 +75,14 @@ jobs:
             exit 1
           fi
 
-      - name: Build PR test image
-        if: github.event_name == 'pull_request'
+      - name: Build Docker image
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64
-          build-args: |
-            SS_BUILD_ID=${{ github.sha }}
-            SS_VERSION=${{ steps.version.outputs.value }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          push: false
-
-      - name: Build and push
-        if: github.event_name == 'push'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          platforms: linux/amd64
-          push: true
+          push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             SS_BUILD_ID=${{ github.sha }}

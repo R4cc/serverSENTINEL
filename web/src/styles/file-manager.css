@@ -844,7 +844,7 @@
 }
 
 .filesPanel,
-.fileDetailsPanel { border-color: var(--border-panel); box-shadow: none; }
+.fileDetailsPanel { border-color: var(--border-panel); }
 
 .fileDetailsEmpty {
   border-color: var(--border-row);
@@ -890,10 +890,6 @@
 
 .fileTableHead {
   background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface-raised));
-}
-
-.fileTableRow {
-  border-color: var(--border-row);
 }
 
 .fileNameCell {

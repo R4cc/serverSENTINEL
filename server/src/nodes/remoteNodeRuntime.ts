@@ -300,12 +300,11 @@ export class RemoteNodeRuntime implements NodeRuntime {
       .split(/\r?\n/)
       .map((line, index) => parseLogEvent(line, source, index))
       .filter((event): event is ServerEvent => Boolean(event));
-    const reversedEvents = [...parsedEvents].reverse();
     const props = parseServerProperties(propertiesText);
     const eulaAccepted = eulaText ? /^eula\s*=\s*true\s*$/im.test(eulaText) : undefined;
     const activity: ServerActivity = {
-      lastStartedAt: validDockerTimestamp(status.docker?.startedAt) ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
-      lastStoppedAt: validDockerTimestamp(status.docker?.finishedAt) ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
+      lastStartedAt: validDockerTimestamp(status.docker?.startedAt) ?? parsedEvents.findLast((event) => event.eventType === "server_started")?.timestamp,
+      lastStoppedAt: validDockerTimestamp(status.docker?.finishedAt) ?? parsedEvents.findLast((event) => event.eventType === "server_stopped")?.timestamp,
       currentWorld: props["level-name"],
       serverPort: configuredServerPort(server, props),
       eulaAccepted,

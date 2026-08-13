@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 26.8.12 - 2026-08-13
+
+- Reduced container storage by retaining maximum-quality Brotli assets while compressing the uncommon gzip fallback on demand.
+- Shortened container builds and reduced intermediate cache size by using the packaged SQLite binary without a compiler toolchain and caching npm downloads across dependency installs.
+
+## 26.8.11 - 2026-08-13
+
+- Reduced the container image and runtime attack surface with a shell-free Distroless Node image, guarded by final-image SQLite, timezone, fetch, and CA certificate checks.
+
+## 26.8.10 - 2026-08-13
+
+- Reduced the container image by retaining only the production Linux x64 SQLite binary and removing native build sources and unused platform binaries.
+
+## 26.8.9 - 2026-08-13
+
+- Kept the file editor's CodeMirror runtime out of the initial page download and added a build-time guard against loading it before the editor opens.
+- Reduced production and development dependencies by using Node's built-in fetch, completing the TypeScript 7 migration, and removing redundant build overrides.
+
 ## 26.8.8 - 2026-08-13
 
 - Loaded player counts on every server workspace page, so the status bar no longer waits for a visit to Overview before showing online players.

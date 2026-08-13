@@ -54,7 +54,6 @@ export async function serverOverviewData(server: ManagedServer) {
   const parsedAt = new Date();
   const parsedEvents = logSources
     .flatMap(({ source, text }) => text.split(/\r?\n/).map((line, index) => parseLogEvent(line, source, index, parsedAt)).filter((event): event is ServerEvent => Boolean(event)));
-  const reversedEvents = [...parsedEvents].reverse();
   const events = compactRecentEvents(parsedEvents, 20);
   const props = properties.status === "fulfilled" ? parseServerProperties(properties.value) : {};
   const eulaAccepted = eula.status === "fulfilled"
@@ -67,8 +66,8 @@ export async function serverOverviewData(server: ManagedServer) {
     ? validDockerTimestamp(dockerInspect.value?.State?.FinishedAt)
     : undefined;
   const activity: ServerActivity = {
-    lastStartedAt: startedAt ?? reversedEvents.find((event) => event.eventType === "server_started")?.timestamp,
-    lastStoppedAt: stoppedAt ?? reversedEvents.find((event) => event.eventType === "server_stopped")?.timestamp,
+    lastStartedAt: startedAt ?? parsedEvents.findLast((event) => event.eventType === "server_started")?.timestamp,
+    lastStoppedAt: stoppedAt ?? parsedEvents.findLast((event) => event.eventType === "server_stopped")?.timestamp,
     currentWorld: props["level-name"],
     serverPort: configuredServerPort(server, props),
     eulaAccepted,

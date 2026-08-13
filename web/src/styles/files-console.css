@@ -935,18 +935,12 @@
 .discardEditorModal {
   width: min(520px, calc(100vw - 32px));
   padding: 0;
-  display: grid;
   gap: 0;
   overflow: hidden;
 }
 
 .discardEditorActions {
   margin: 0;
-}
-
-.fileEditorHeader,
-.fileEditorFooter {
-  padding: var(--space-4);
 }
 
 .fileEditorBody {
@@ -1150,17 +1144,6 @@
   text-overflow: ellipsis;
 }
 
-.fileEditorFooter {
-  justify-content: flex-end;
-  border-top: var(--border-strong) solid var(--border);
-  padding: var(--space-4);
-}
-
-.fileEditorHeader {
-  border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-4);
-}
-
 @media (max-width: 720px) {
 
   input:not([type="checkbox"]):not([type="radio"]):not(.consolePromptInput),
@@ -1273,7 +1256,7 @@
 }
 
 .consolePanel,
-.fileEditorModal { border-color: var(--border-panel); box-shadow: none; }
+.fileEditorModal { border-color: var(--border-panel); }
 
 .fileEditorBody .panel {
   border-color: var(--border-row);

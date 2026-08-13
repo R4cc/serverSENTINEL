@@ -370,10 +370,6 @@ export async function loadBatchVersionsFromSha1(hashes: string[]) {
   return resolved;
 }
 
-export async function batchProjects(projectIds: string[]) {
-  return await fetchProjects(projectIds);
-}
-
 export async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
   if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
   const base = result as { mods: Array<Record<string, unknown>> };
@@ -385,7 +381,7 @@ export async function reconcileRemoteInstalledMods(server: ManagedServer, result
     try {
       versions = await batchVersionsFromSha1(hashes);
       const projectIds = Array.from(new Set(Array.from(versions.values()).map((version) => version.project_id).filter((projectId): projectId is string => Boolean(projectId))));
-      projects = await batchProjects(projectIds);
+      projects = await fetchProjects(projectIds);
     } catch (error) {
       logWarn({ ...serverLogFields(server), hashCount: hashes.length, action: "remote_mod_metadata_reconcile", ...errorLogFields(error) }, "Remote mod metadata refresh failed; retaining last-known metadata");
     }
@@ -397,7 +393,7 @@ export async function reconcileRemoteInstalledMods(server: ManagedServer, result
     }).filter((projectId): projectId is string => Boolean(projectId))));
     if (missingIconProjectIds.length) {
       try {
-        projects = await batchProjects(missingIconProjectIds);
+        projects = await fetchProjects(missingIconProjectIds);
       } catch (error) {
         logWarn({ ...serverLogFields(server), projectCount: missingIconProjectIds.length, action: "remote_mod_icon_reconcile", ...errorLogFields(error) }, "Remote mod icon metadata refresh failed; retaining last-known metadata");
       }
@@ -1553,8 +1549,9 @@ export async function installModWithRemoteVersionFallback(server: ManagedServer,
       installPlan.installs = installPlan.installs.filter((planned) => planned.dependencyType === "required");
     }
     const listResult = await reconcileRemoteInstalledMods(server, await runtime.listMods(server, { forceRefresh: false }));
-    const installedProjectIds = new Set(modsFromListResult(listResult).map((mod) => remoteModMetadata(mod.modrinth)?.projectId).filter(Boolean));
-    const installedFilenames = new Set(modsFromListResult(listResult).map((mod) => typeof mod.filename === "string" ? mod.filename : undefined).filter(Boolean));
+    const listedMods = modsFromListResult(listResult);
+    const installedProjectIds = new Set(listedMods.map((mod) => remoteModMetadata(mod.modrinth)?.projectId).filter(Boolean));
+    const installedFilenames = new Set(listedMods.map((mod) => typeof mod.filename === "string" ? mod.filename : undefined).filter(Boolean));
     const installed: Array<{ projectId: string; version: string; filename: string; dependencyType: "root" | "required"; path?: string }> = [];
     const createdFilenames: string[] = [];
     const previousPrefs = await readModPreferences(server);
