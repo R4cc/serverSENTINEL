@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { ScheduledActiveRun, ScheduledExecution } from "../types";
 import {
   activeRunStatus,
+  appendScheduleStep,
   lastRunRelativeTime,
   nextRunRelativeTime,
   SchedulePage,
@@ -69,13 +70,27 @@ describe("schedule step summaries", () => {
     ];
 
     expect(scheduleStepTypeAvailability(steps, "one").canBecomeRestart).toBe(false);
-    expect(scheduleStepTypeAvailability(steps, "one").reason).toBe("Restart has to be the last step.");
+    expect(scheduleStepTypeAvailability(steps, "one").reason).toBe("A lifecycle action has to be the last step.");
     expect(scheduleStepTypeAvailability(steps, "two").canBecomeRestart).toBe(true);
 
     const withRestart = [steps[0], { id: "two", type: "action" as const }];
     expect(scheduleStepTypeAvailability(withRestart, "two").canBecomeRestart).toBe(true);
     // A second Restart is not available anywhere, including the step that already is one.
     expect(scheduleStepTypeAvailability([...withRestart, { id: "three", type: "command" as const }], "three").canBecomeRestart).toBe(false);
+  });
+
+  // Appending after a lifecycle action left the schedule invalid with nothing showing it until the
+  // save was rejected, and a step added to a schedule that ends in Restart belongs before it.
+  it("adds a step before the lifecycle action rather than after it", () => {
+    type Draft = { id: string; type: "command" | "action" };
+    const command: Draft = { id: "one", type: "command" };
+    const action: Draft = { id: "two", type: "action" };
+    const added: Draft = { id: "new", type: "command" };
+
+    expect(appendScheduleStep([command, action], added).map((step) => step.id)).toEqual(["one", "new", "two"]);
+    expect(appendScheduleStep([action], added).map((step) => step.id)).toEqual(["new", "two"]);
+    expect(appendScheduleStep([command], added).map((step) => step.id)).toEqual(["one", "new"]);
+    expect(appendScheduleStep([], added).map((step) => step.id)).toEqual(["new"]);
   });
 
   it("refuses a reorder that would leave Restart anywhere but last", () => {
@@ -96,7 +111,7 @@ describe("schedule step summaries", () => {
     expect(scheduleDescription(schedule([
       { type: "command", command: "say restarting", delaySeconds: 0 },
       { type: "action", procedure: "restart", delaySeconds: 300 }
-    ]))).toBe("1 command, 1 Restart action, 1 delayed");
+    ]))).toBe("1 command, Restart action, 1 delayed");
   });
 
   it("shows a single command verbatim", () => {

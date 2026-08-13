@@ -10,7 +10,8 @@ import {
   cronFromSchedulePlan,
   schedulePlanFromCron,
   type CronSchedulePlan,
-  type CronScheduleMode
+  type CronScheduleMode,
+  type ScheduleProcedure
 } from '@serversentinel/contracts';
 import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
@@ -25,17 +26,23 @@ import { formatScheduleOffset, scheduleDelayParts, scheduleDelayToSeconds, sched
 import { describeCronExpression } from '../features/schedules/cronDescription';
 import { buildCronPreview } from '../features/schedules/cronPreview';
 import { scheduleTemplateById, scheduleTemplates } from '../features/schedules/scheduleTemplates';
+import { scheduleHealth } from '../features/schedules/scheduleHealth';
 
+/**
+ * Duplicate carries a source schedule the way edit does, but creates the way create does: the copy
+ * exists only once the editor is submitted, so its name and anything else can be changed first.
+ */
 type ScheduleFormMode =
   | { type: "create" }
-  | { type: "edit"; schedule: ScheduledExecution };
+  | { type: "edit"; schedule: ScheduledExecution }
+  | { type: "duplicate"; schedule: ScheduledExecution };
 
 type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "waitForPlayersToLeave" | "enabled">;
 type StepDraft = {
   id: string;
   type: "command" | "action";
   command: string;
-  procedure: "restart";
+  procedure: ScheduleProcedure;
   delayValue: number;
   delayUnit: "seconds" | "minutes" | "hours";
 };
@@ -44,6 +51,23 @@ type ScheduledRunPanelItem =
   | (ScheduledRun & { kind: "completed"; sortAt: string });
 
 const defaultDailyCron = "0 4 * * *";
+
+const scheduleProcedureOptions: { value: ScheduleProcedure; label: string }[] = [
+  { value: "restart", label: "Restart" },
+  { value: "stop", label: "Stop" },
+  { value: "start", label: "Start" }
+];
+
+/** Older runs were recorded before the procedure was stored, and all of those were restarts. */
+function scheduleProcedureName(procedure: ScheduleProcedure | undefined) {
+  return scheduleProcedureOptions.find((option) => option.value === (procedure ?? "restart"))?.label ?? "Restart";
+}
+
+const scheduleProcedureDescription: Record<ScheduleProcedure, string> = {
+  restart: "Gracefully restarts the Minecraft server.",
+  stop: "Gracefully stops the Minecraft server, leaving it stopped.",
+  start: "Starts the Minecraft server. This is the one action that runs against a stopped server."
+};
 
 const weekdayChoices = [
   { value: 1, short: "Mon", label: "Monday" },
@@ -91,7 +115,7 @@ function stepDraftFromStep(step: ScheduleStep): StepDraft {
     id: clientId(),
     type: step.type,
     command: step.type === "command" ? step.command : "",
-    procedure: "restart",
+    procedure: step.type === "action" ? step.procedure : "restart",
     delayValue: delay.value,
     delayUnit: delay.unit
   };
@@ -126,14 +150,14 @@ export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Pick<Sche
  * the save. Reporting the state per step lets the control say so while the schedule is built.
  */
 export function scheduleStepTypeAvailability(steps: readonly { id: string; type: StepDraft["type"] }[], stepId: string) {
-  const restartIndex = steps.findIndex((step) => step.type === "action");
+  const actionIndex = steps.findIndex((step) => step.type === "action");
   const index = steps.findIndex((step) => step.id === stepId);
-  const isRestart = restartIndex === index && restartIndex >= 0;
+  const isAction = actionIndex === index && actionIndex >= 0;
   const isLast = index === steps.length - 1;
   return {
-    // Only the final step may become the Restart, and only when no other step already is.
-    canBecomeRestart: isRestart || (isLast && restartIndex < 0),
-    reason: isRestart || isLast ? "" : "Restart has to be the last step."
+    // Only the final step may become a lifecycle action, and only when no other step already is one.
+    canBecomeRestart: isAction || (isLast && actionIndex < 0),
+    reason: isAction || isLast ? "" : "A lifecycle action has to be the last step."
   };
 }
 
@@ -146,6 +170,16 @@ export function scheduleStepMoveBlocked(steps: readonly { type: StepDraft["type"
   if (restartIndex < 0) return false;
   if (from === restartIndex) return to !== steps.length - 1;
   return to >= restartIndex;
+}
+
+/**
+ * Adds a step without stranding the lifecycle action. Appending after one left the schedule invalid
+ * in a way nothing showed until it was saved, and a step added to a schedule that ends in Restart is
+ * meant to happen before the restart, not after it.
+ */
+export function appendScheduleStep<T extends { type: StepDraft["type"] }>(steps: readonly T[], added: T): T[] {
+  const last = steps.at(-1);
+  return last?.type === "action" ? [...steps.slice(0, -1), added, last] : [...steps, added];
 }
 
 export function reorderScheduleSteps<T extends { id: string }>(steps: readonly T[], movedId: string, targetId: string): T[] {
@@ -238,15 +272,15 @@ export function SchedulePage({
       stopStepAutoScroll();
       return;
     }
-    const steps = formMode.type === "edit" ? formMode.schedule.steps : [];
+    const steps = formMode.type === "create" ? [] : formMode.schedule.steps;
     setStepDrafts(steps.length ? steps.map(stepDraftFromStep) : [emptyStepDraft()]);
     setFormError("");
     // A new schedule opens on the shape most of them have; an existing one opens on whichever shape
     // its expression already is, so editing starts from what the author wrote rather than raw cron.
-    const initialCron = formMode.type === "edit" ? formMode.schedule.cron : defaultDailyCron;
+    const initialCron = formMode.type === "create" ? defaultDailyCron : formMode.schedule.cron;
     setCronValue(initialCron);
     setCronMode(schedulePlanFromCron(initialCron).mode);
-    setNameValue(formMode.type === "edit" ? formMode.schedule.name : "");
+    setNameValue(formMode.type === "edit" ? formMode.schedule.name : formMode.type === "duplicate" ? `${formMode.schedule.name} copy` : "");
     setPolicySeed(null);
     setAppliedTemplateId("");
     setDraggingStepId(null);
@@ -345,7 +379,7 @@ export function SchedulePage({
     const playerOnlinePolicy = String(form.get("playerOnlinePolicy") ?? "run");
     const steps: ScheduleStep[] = stepDrafts.map((draft) => draft.type === "command"
       ? { type: "command", command: draft.command.trim(), delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) }
-      : { type: "action", procedure: "restart", delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) });
+      : { type: "action", procedure: draft.procedure, delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) });
     return {
       name: String(form.get("name") ?? "").trim(),
       // Read from state rather than the form: outside Advanced the expression is assembled by the
@@ -366,8 +400,8 @@ export function SchedulePage({
       : validateCronExpression(patch.cron)
         || (!patch.steps.length ? "At least one schedule step is required." : "")
         || (commands.length ? validateCommandList(commands) : "")
-        || (restartIndexes.length > 1 ? "A schedule can contain at most one Restart action." : "")
-        || (restartIndexes.length === 1 && restartIndexes[0] !== patch.steps.length - 1 ? "Restart must be the final schedule step." : "")
+        || (restartIndexes.length > 1 ? "A schedule can contain at most one lifecycle action." : "")
+        || (restartIndexes.length === 1 && restartIndexes[0] !== patch.steps.length - 1 ? "A lifecycle action must be the final schedule step." : "")
         || (patch.steps.some((step) => !Number.isInteger(step.delaySeconds) || step.delaySeconds < 0 || step.delaySeconds > 604_800)
           ? "Step delays must be whole values no longer than 7 days."
           : "");
@@ -383,7 +417,7 @@ export function SchedulePage({
       return;
     }
     setFormError("");
-    if (formMode.type === "create") {
+    if (formMode.type !== "edit") {
       const created = await onCreate(patch);
       if (created !== false) setFormMode(null);
       return;
@@ -516,8 +550,8 @@ export function SchedulePage({
     moveStep(stepId, stepDrafts[targetIndex].id);
   }
 
-  const modalSchedule = formMode?.type === "edit" ? formMode.schedule : null;
-  const modalTitle = formMode?.type === "edit" ? "Edit schedule" : "Add schedule";
+  const modalSchedule = formMode && formMode.type !== "create" ? formMode.schedule : null;
+  const modalTitle = formMode?.type === "edit" ? "Edit schedule" : formMode?.type === "duplicate" ? "Duplicate schedule" : "Add schedule";
   const modalBusyTitle = saveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor";
   // The expression stays the single source of truth: the builder reads the plan back out of it on
   // every render and writes a new expression on every change, so the two can never disagree and an
@@ -621,6 +655,7 @@ export function SchedulePage({
               {scheduleRows.length ? scheduleRows.map((row) => {
                 const schedule = row.original;
                 const scheduleIsActive = Boolean(schedule.activeRuns?.length);
+                const health = scheduleHealth(schedule);
                 return (
                 <article
                   key={schedule.id}
@@ -636,6 +671,14 @@ export function SchedulePage({
                     <div className="scheduleCellValue scheduleNameValue">
                       <strong title={schedule.name}>{schedule.name}</strong>
                       <small title={scheduleDescription(schedule)}>{scheduleDescription(schedule)}</small>
+                      {/* A schedule that has failed or skipped its way through several occurrences
+                          in a row reads exactly like a working one everywhere else. */}
+                      {health && (
+                        <span className={`scheduleHealthBadge ${health.tone}`} title={health.detail}>
+                          <AppIcon name={health.tone === "failed" ? "x" : "minus"} />
+                          <span>{health.label}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="scheduleCell" data-label="Schedule" role="cell">
@@ -731,6 +774,15 @@ export function SchedulePage({
                             label: "Edit",
                             icon: <AppIcon name="edit" />,
                             onSelect: () => setFormMode({ type: "edit", schedule }),
+                            disabled
+                          },
+                          {
+                            id: "duplicate",
+                            label: "Duplicate",
+                            icon: <AppIcon name="copy" />,
+                            // Opens a filled editor rather than saving a copy outright, so the name
+                            // and whatever else differs can be changed before it exists.
+                            onSelect: () => setFormMode({ type: "duplicate", schedule }),
                             disabled
                           },
                           {
@@ -1038,17 +1090,23 @@ export function SchedulePage({
                           <label className="scheduleStepType">
                             <span>Type</span>
                             <select
-                              value={draft.type}
-                              onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))}
+                              value={draft.type === "command" ? "command" : draft.procedure}
+                              onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id
+                                ? event.target.value === "command"
+                                  ? { ...step, type: "command" }
+                                  : { ...step, type: "action", procedure: event.target.value as ScheduleProcedure }
+                                : step))}
                               aria-label={`Type for step ${index + 1}`}
                               title={stepTypeAvailability[index].reason || undefined}
                             >
                               <option value="command">Command</option>
-                              {/* Offered only where a Restart could legally go, so the rule is
-                                  visible while the schedule is built rather than at save time. */}
-                              <option value="action" disabled={!stepTypeAvailability[index].canBecomeRestart}>
-                                Restart{stepTypeAvailability[index].canBecomeRestart ? "" : " (last step only)"}
-                              </option>
+                              {/* Offered only where a lifecycle action could legally go, so the rule
+                                  is visible while the schedule is built rather than at save time. */}
+                              {scheduleProcedureOptions.map((option) => (
+                                <option key={option.value} value={option.value} disabled={!stepTypeAvailability[index].canBecomeRestart}>
+                                  {option.label}{stepTypeAvailability[index].canBecomeRestart ? "" : " (last step only)"}
+                                </option>
+                              ))}
                             </select>
                           </label>
                           {draft.type === "command" ? (
@@ -1057,9 +1115,9 @@ export function SchedulePage({
                               <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
                             </label>
                           ) : (
-                            // Restart is the only procedure, and the Type control already names it,
-                            // so this states what happens instead of offering a choice of one.
-                            <p className="scheduleStepValue scheduleStepProcedure">Gracefully restarts the Minecraft server. This has to be the final step.</p>
+                            // The Type control names the procedure, so this states what it does
+                            // rather than repeating the choice in a second dropdown.
+                            <p className="scheduleStepValue scheduleStepProcedure">{scheduleProcedureDescription[draft.procedure]} This has to be the final step.</p>
                           )}
                           <label className="scheduleCommandDelay">
                             <span>Delay before step</span>
@@ -1076,7 +1134,7 @@ export function SchedulePage({
                       </div>
                     ))}
                   </div>
-                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
+                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => appendScheduleStep(steps, emptyStepDraft()))}>
                     <AppIcon name="plus" />
                     <span>Additional step</span>
                   </Button>
@@ -1313,11 +1371,11 @@ function ScheduleRunStep({ step, logsLoading, logsError }: { step: ScheduledRunS
       <header>
         <div>
           <span className="scheduleRunStepNumber">Step {step.stepIndex + 1}</span>
-          <strong>{isCommand ? "Command" : "Restart action"}</strong>
+          <strong>{isCommand ? "Command" : `${scheduleProcedureName(step.procedure)} action`}</strong>
         </div>
         <span className={`scheduleRunStepStatus ${step.status}`}>{step.status === "success" ? "Completed" : "Failed"}</span>
       </header>
-      {isCommand ? <code>{step.command || "Command not recorded"}</code> : <p>Gracefully restart the Minecraft server.</p>}
+      {isCommand ? <code>{step.command || "Command not recorded"}</code> : <p>{scheduleProcedureDescription[step.procedure ?? "restart"]}</p>}
       {step.delaySeconds > 0 && <small>Waited {formatRunDelay(step.delaySeconds)} before this step.</small>}
       {isCommand && (
         <details className="scheduleRunLogs">
@@ -1399,7 +1457,11 @@ export function scheduleDescription(schedule: ScheduledExecution) {
     ? "waits until no players are online"
     : schedule.onlyWhenNoPlayers ? "skips while players are online" : "";
   if (schedule.steps.length > 1 || actions.length) {
-    const parts = [commands.length ? `${commands.length} command${commands.length === 1 ? "" : "s"}` : "", actions.length ? `${actions.length} Restart action` : ""].filter(Boolean);
+    const action = actions[0];
+    const parts = [
+      commands.length ? `${commands.length} command${commands.length === 1 ? "" : "s"}` : "",
+      action?.type === "action" ? `${scheduleProcedureName(action.procedure)} action` : ""
+    ].filter(Boolean);
     const steps = `${parts.join(", ")}${delayed ? `, ${delayed} delayed` : ""}`;
     return playerPolicy ? `${steps} · ${playerPolicy}` : steps;
   }

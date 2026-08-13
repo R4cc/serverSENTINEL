@@ -20,6 +20,7 @@ import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
 import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
 import { playerHeadSource, playerHeadVersion } from '../utils/playerHeads';
+import { schedulesNeedingAttention } from '../features/schedules/scheduleHealth';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const activePlayerPreviewLimit = 8;
@@ -552,15 +553,20 @@ export function SchedulePanel({
 }) {
   const snapshot = buildUpcomingScheduleSnapshot(schedules);
   const upcomingCount = snapshot.schedules.length + snapshot.remainingInNext24Hours;
+  // A schedule failing or skipping its way through several occurrences says nothing anywhere else,
+  // and the next run it advertises here is exactly as reassuring as a working one's.
+  const attention = canView ? schedulesNeedingAttention(schedules) : [];
   const description = !canView
     ? "Permission required"
-    : schedules.length === 0
-      ? "No schedules configured"
-      : snapshot.schedules.length === 0
-        ? "No upcoming runs"
-        : snapshot.remainingInNext24Hours > 0
-          ? `${upcomingCount} runs in the next 24 hours`
-          : `${upcomingCount} upcoming run${upcomingCount === 1 ? "" : "s"}`;
+    : attention.length
+      ? `${attention.length} schedule${attention.length === 1 ? "" : "s"} needs attention`
+      : schedules.length === 0
+        ? "No schedules configured"
+        : snapshot.schedules.length === 0
+          ? "No upcoming runs"
+          : snapshot.remainingInNext24Hours > 0
+            ? `${upcomingCount} runs in the next 24 hours`
+            : `${upcomingCount} upcoming run${upcomingCount === 1 ? "" : "s"}`;
 
   return (
     <OverviewCard
@@ -568,6 +574,22 @@ export function SchedulePanel({
       title="Schedules"
       description={description}
     >
+      {attention.length > 0 && (
+        <div className="scheduleAttentionList">
+          {attention.map(({ schedule, health }) => (
+            <button
+              key={schedule.id}
+              type="button"
+              className={`scheduleAttentionItem ${health.tone}`}
+              onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
+              title={health.detail}
+            >
+              <strong>{schedule.name}</strong>
+              <small>{health.label}</small>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="overviewCardList overviewSupportList scheduleUpcomingList">{!canView ? (
         <OverviewCardState title="Schedules unavailable" message="View schedules permission is required." icon={<AppIcon name="shield" />} />
       ) : schedules.length === 0 ? (

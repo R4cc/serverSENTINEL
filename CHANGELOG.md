@@ -11,6 +11,10 @@
 - Showed the Restart rules while a schedule is built: Restart is offered only on the final step, and a reorder that would move it away from the end is refused instead of failing when saved.
 - Added a View runs action to each schedule, showing every run the panel has kept for it rather than the eight most recent across all schedules.
 - Replaced the repeated field captions on narrow screens with a schedule card, which returns roughly 40% of the row width to the values.
+- Added Stop and Start schedule steps alongside Restart, so a server can be stopped overnight and started again in the morning. A schedule whose only action is Start now runs against a stopped server instead of being skipped, and existing Restart schedules are unaffected.
+- Added a warning to schedules that have failed or skipped their last three runs, on the schedule itself and on the Overview, because a schedule quietly doing nothing otherwise reads exactly like one that is working.
+- Added a Duplicate action to each schedule, which opens a pre-filled editor rather than saving a copy outright.
+- Added a new schedule step above the closing Restart instead of after it, where it could not have run.
 
 ## 1.13.0 - 2026-08-13
 

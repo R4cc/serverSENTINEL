@@ -23,7 +23,7 @@ vi.mock("../appServices.js", () => ({
   runtimeForServer: () => ({ serverStatus, serverLogs: async () => ({ text: "" }) })
 }));
 
-const { executeMatchedSchedule, scheduleFromBody, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
+const { executeMatchedSchedule, scheduleFromBody, scheduleRequiresRunningServer, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
 const { activeScheduleExecutions, cancelActiveScheduleRunsForSchedule, runningSchedules } = await import("./activeRuns.js");
 
 const server = { id: "server-1", nodeId: "local", displayName: "Survival" } as ManagedServer;
@@ -196,6 +196,21 @@ describe("scheduled run bookkeeping", () => {
 
     // A schedule with nothing running is deletable.
     expect(cancelActiveScheduleRunsForSchedule(server.id, "schedule-none")).toBe(true);
+  });
+
+  // A schedule whose only action is Start exists precisely for a stopped server, so the guard that
+  // skips a run against one has to let it through.
+  it("runs a start-only schedule against a stopped server, and skips every other kind", () => {
+    const stepsFor = (steps: ScheduledExecution["steps"]) => ({ steps });
+
+    expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "start", delaySeconds: 0 }]))).toBe(false);
+    expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "stop", delaySeconds: 0 }]))).toBe(true);
+    expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "restart", delaySeconds: 0 }]))).toBe(true);
+    // A command cannot reach a stopped server even when a Start follows it.
+    expect(scheduleRequiresRunningServer(stepsFor([
+      { type: "command", command: "save-all", delaySeconds: 0 },
+      { type: "action", procedure: "start", delaySeconds: 0 }
+    ]))).toBe(true);
   });
 
   it("does not stack another occurrence while one is waiting", async () => {

@@ -375,15 +375,22 @@ export type ServerRuntimeProfile = {
   resolvedAt: string;
 };
 
+/**
+ * The lifecycle actions a schedule step can perform. Additive by design: a panel that does not know
+ * a procedure refuses the schedule rather than misreading it, and stored steps are JSON, so adding
+ * one needs no migration.
+ */
+export type ScheduleProcedure = "restart" | "stop" | "start";
+
 export type ScheduleStep =
   | { type: "command"; command: string; delaySeconds: number }
-  | { type: "action"; procedure: "restart"; delaySeconds: number };
+  | { type: "action"; procedure: ScheduleProcedure; delaySeconds: number };
 
 export type ScheduledRunStepDetails = {
   stepIndex: number;
   type: "command" | "action";
   command?: string;
-  procedure?: "restart";
+  procedure?: ScheduleProcedure;
   delaySeconds: number;
   status: "success" | "failed";
   startedAt: string;

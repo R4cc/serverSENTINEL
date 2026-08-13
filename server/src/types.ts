@@ -34,6 +34,7 @@ export type {
   RuntimeVersion,
   SafeBatchUpdateResult,
   ServerRuntimeIssue,
+  ScheduleProcedure,
   ScheduleStep,
   ScheduledActiveRun,
   ScheduledExecution,

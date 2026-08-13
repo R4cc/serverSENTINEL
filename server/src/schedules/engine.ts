@@ -7,11 +7,11 @@ import { durationSince, logError, logInfo, logWarn, errorLogFields } from "../lo
 import { captureScheduledCommandLogs } from "./runLogCapture.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import { listManagedServers } from "../servers/store.js";
-import { restartServerGracefully, sendConsoleCommandWithIntent } from "../servers/lifecycle.js";
+import { restartServerGracefully, sendConsoleCommandWithIntent, startServerWithIntent, stopServerWithIntent } from "../servers/lifecycle.js";
 import { activeScheduleExecutions, activeScheduledRunsFor, runningSchedules, scheduleExecutionKey, type ActiveScheduleExecution } from "./activeRuns.js";
 import { sanitizeScheduleSteps, ScheduleCancellationError, throwIfScheduleCancelled, waitForCommandDelay } from "./steps.js";
 import type { NodeRuntime } from "../nodes/types.js";
-import type { ManagedServer, ScheduledExecution, ScheduledRun, ScheduledRunDetails, ScheduledRunStepDetails } from "../types.js";
+import type { ManagedServer, ScheduleProcedure, ScheduledExecution, ScheduledRun, ScheduledRunDetails, ScheduledRunStepDetails } from "../types.js";
 export function scheduleFromBody(body: {
   name?: string;
   cron?: string;
@@ -91,7 +91,7 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     throwIfScheduleCancelled(active.controller.signal);
     active.message = "Checking server status";
     const status = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
-    if (!status.docker?.running) {
+    if (!status.docker?.running && scheduleRequiresRunningServer(schedule)) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
       return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
     }
@@ -112,20 +112,23 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     for (const [index, step] of schedule.steps.entries()) {
       throwIfScheduleCancelled(active.controller.signal);
       const delaySeconds = step.delaySeconds;
-      const label = step.type === "command" ? step.command : "Restart";
+      const label = step.type === "command" ? step.command : scheduleProcedureLabel[step.procedure];
       terminalStepIndex = index;
       terminalStep = label;
       active.currentStepIndex = index;
       active.currentStep = label;
       active.waitingDelaySeconds = delaySeconds || undefined;
       active.waitingUntil = delaySeconds ? new Date(Date.now() + delaySeconds * 1000).toISOString() : undefined;
+      const runningMessage = step.type === "command"
+        ? `Sending command ${index + 1} of ${schedule.steps.length}`
+        : scheduleProcedureRunningMessage[step.procedure];
       active.message = delaySeconds
         ? `Waiting before step ${index + 1} of ${schedule.steps.length}`
-        : step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
+        : runningMessage;
       await waitForCommandDelay(delaySeconds, active.controller.signal);
       active.waitingDelaySeconds = undefined;
       active.waitingUntil = undefined;
-      active.message = step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
+      active.message = runningMessage;
       throwIfScheduleCancelled(active.controller.signal);
       const stepDetails: ScheduledRunStepDetails = {
         stepIndex: index,
@@ -152,8 +155,8 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
       } else {
         active.cancellable = false;
         try {
-          await restartServerGracefully(server);
-          active.message = "Server restarted";
+          await runScheduleProcedure(server, step.procedure);
+          active.message = scheduleProcedureCompletedMessage[step.procedure];
         } catch (error) {
           stepDetails.status = "failed";
           throw error;
@@ -174,6 +177,39 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     logError({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
     return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed", details: details() };
   }
+}
+
+export const scheduleProcedureLabel: Record<ScheduleProcedure, string> = {
+  restart: "Restart",
+  stop: "Stop",
+  start: "Start"
+};
+
+const scheduleProcedureRunningMessage: Record<ScheduleProcedure, string> = {
+  restart: "Restarting server",
+  stop: "Stopping server",
+  start: "Starting server"
+};
+
+const scheduleProcedureCompletedMessage: Record<ScheduleProcedure, string> = {
+  restart: "Server restarted",
+  stop: "Server stopped",
+  start: "Server started"
+};
+
+function runScheduleProcedure(server: ManagedServer, procedure: ScheduleProcedure) {
+  if (procedure === "restart") return restartServerGracefully(server);
+  if (procedure === "stop") return stopServerWithIntent(server);
+  return startServerWithIntent(server);
+}
+
+/**
+ * Whether the run needs a running server to mean anything. Commands cannot reach a stopped server
+ * and neither Restart nor Stop has anything to act on, so those runs are skipped rather than failed.
+ * A schedule whose only action is Start is the exception: a stopped server is precisely its purpose.
+ */
+export function scheduleRequiresRunningServer(schedule: Pick<ScheduledExecution, "steps">) {
+  return schedule.steps.some((step) => step.type === "command" || step.procedure !== "start");
 }
 
 export const schedulePlayerWaitPollSeconds = 30;
