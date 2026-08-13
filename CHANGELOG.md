@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.14.0 - 2026-08-13
+
 - Added a preview of the next three runs to the schedule editor, so an expression can be checked against real dates before it is saved.
 - Added the reader's own clock to that preview whenever the display time zone differs from the one schedules run in, which resolves a schedule written as 04:00 being listed as 06:00.
 - Added a repeat builder to the schedule editor covering every few minutes or hours, every day, and chosen weekdays, so a schedule no longer has to be written as a cron expression. Advanced keeps the expression field, and an expression the builder cannot express opens there untouched.
@@ -15,6 +17,7 @@
 - Added a warning to schedules that have failed or skipped their last three runs, on the schedule itself and on the Overview, because a schedule quietly doing nothing otherwise reads exactly like one that is working.
 - Added a Duplicate action to each schedule, which opens a pre-filled editor rather than saving a copy outright.
 - Added a new schedule step above the closing Restart instead of after it, where it could not have run.
+- Reworked the schedule create, edit, and duplicate modal into a wider, clearly grouped workflow that keeps timing, steps, and run conditions easy to scan across desktop and mobile layouts without repetitive helper copy.
 
 ## 1.13.0 - 2026-08-13
 

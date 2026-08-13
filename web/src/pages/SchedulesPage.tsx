@@ -708,7 +708,7 @@ export function SchedulePage({
                           </span>
                         </div>
                       ) : (
-                        <><span>Never run</span><small>No execution yet</small></>
+                        <span>Never run</span>
                       )}
                     </div>
                   </div>
@@ -723,7 +723,7 @@ export function SchedulePage({
                           {relativeTimestamps ? nextRunRelativeTime(schedule.nextRunAt, relativeNow) : formatScheduleTime(schedule.nextRunAt, formatDate)}
                         </time>
                       ) : (
-                        <><span>{schedule.enabled ? "Not available" : "Disabled"}</span><small>{schedule.enabled ? "Waiting for a valid cron match" : "Enable to resume"}</small></>
+                        <><span>{schedule.enabled ? "Not available" : "Disabled"}</span>{schedule.enabled && <small>Waiting for a valid cron match</small>}</>
                       )}
                     </div>
                   </div>
@@ -809,7 +809,7 @@ export function SchedulePage({
         </section>
 
         <aside className="panel scheduledRunsCard">
-          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description={activeRunCount ? `${activeRunCount} active execution${activeRunCount === 1 ? "" : "s"} plus recent history.` : "Most recent scheduled executions."} />
+          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description={activeRunCount ? `${activeRunCount} active execution${activeRunCount === 1 ? "" : "s"} plus recent history.` : undefined} />
           {runItems.length ? (
             <div ref={runsFeedRef} className="scheduledRunsFeed">
               {runItems.map((run) => (
@@ -864,7 +864,7 @@ export function SchedulePage({
       {formMode && (
         <DialogSurface backdrop="scheduleModalBackdrop" dismissible={!saveRunning} className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => setFormMode(null)}>
           <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
-            <div className="userModalHeader">
+            <div className="userModalHeader scheduleModalHeader">
               <h2 id="schedule-modal-title">{modalTitle}</h2>
               <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={() => setFormMode(null)} disabled={saveRunning} aria-label="Close schedule editor" title={modalBusyTitle}>
                 <AppIcon name="x" />
@@ -898,9 +898,11 @@ export function SchedulePage({
                 </section>
               )}
 
-              <section className="scheduleEditorSection" aria-labelledby="schedule-details-heading">
+              <div className="scheduleEditorLayout">
+              <div className="scheduleEditorMain">
+              <section className="scheduleEditorSection scheduleDetailsSection" aria-labelledby="schedule-details-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-details-heading">Details</h3><p>Name the automation and choose when it runs.</p></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="hourglass" /></span><div><h3 id="schedule-details-heading">Timing</h3></div></div>
                   <span className="scheduleEditorMeta">Timezone: {scheduleTimeZone}</span>
                 </div>
                 <div className="userModalFields scheduleEditFields">
@@ -1023,7 +1025,7 @@ export function SchedulePage({
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-steps-heading">Steps</h3><p>Steps run from top to bottom. Reorder them with the arrow buttons, or by dragging a handle.</p></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="drag" /></span><div><h3 id="schedule-steps-heading">Steps</h3><p>Steps run from top to bottom. Reorder them with the arrow buttons, or by dragging a handle.</p></div></div>
                 </div>
                 <div className="commandStack scheduleCommandStack">
                   <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
@@ -1145,24 +1147,28 @@ export function SchedulePage({
                   )}
                 </div>
               </section>
+              </div>
 
-              <section className="scheduleEditorSection" aria-labelledby="schedule-options-heading">
+              <section className="scheduleEditorSection scheduleOptionsSection" aria-labelledby="schedule-options-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-options-heading">Options</h3><p>Choose what happens at the scheduled start time.</p></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="shield" /></span><div><h3 id="schedule-options-heading">Run conditions</h3></div></div>
                 </div>
                 <div className="scheduleEditOptions">
-                  <SchedulePlayerPolicyOptions key={appliedTemplateId} schedule={policySeed ?? modalSchedule ?? undefined} />
                   <label className="scheduleOptionToggle scheduleEnabledOption">
                     <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
-                    <span className="scheduleOptionCopy"><strong>Enabled</strong><small>Allow cron matches to start this schedule.</small></span>
+                    <span className="scheduleOptionCopy"><strong>Enabled</strong></span>
                   </label>
+                  <SchedulePlayerPolicyOptions key={appliedTemplateId} schedule={policySeed ?? modalSchedule ?? undefined} />
                 </div>
               </section>
+              </div>
               </fieldset>
             </div>
-            <div className="userModalFooter">
-              <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
-              <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
+            <div className="userModalFooter scheduleModalFooter">
+              <div className="scheduleModalFooterActions">
+                <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
+                <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
+              </div>
             </div>
           </form>
         </DialogSurface>

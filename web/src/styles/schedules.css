@@ -658,7 +658,7 @@
 /* Schedule editor -------------------------------------------------------- */
 
 .modalPanel.scheduleModalPanel {
-  width: min(840px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   overflow: clip;
@@ -693,9 +693,29 @@
   min-width: 0;
   display: grid;
   gap: var(--space-2);
-  padding: 0;
-  border: 0;
-  background: transparent;
+  padding: var(--space-3);
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.scheduleTemplateSection {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 28%, var(--surface-raised));
+}
+
+.scheduleEditorLayout {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.scheduleEditorMain {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
 }
 
 .scheduleEditorSectionHeader {
@@ -708,6 +728,33 @@
 
 .scheduleEditorSectionHeader > div {
   min-width: 0;
+}
+
+.scheduleEditorSectionTitle {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.scheduleEditorSectionIndex {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--swiss-white);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+.scheduleEditorSectionIndex .buttonIcon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
 }
 
 .scheduleEditorSectionHeader h3 {
@@ -971,7 +1018,7 @@
   gap: 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--surface-raised);
   text-align: left;
   /* Buttons inherit nowrap here, and this one holds a sentence. */
   white-space: normal;
@@ -989,13 +1036,19 @@
   line-height: 1.35;
 }
 
-.scheduleTemplateCard:hover {
+.scheduleTemplateCard:hover:not(:disabled) {
   border-color: var(--accent);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 42%, var(--surface-raised));
+  color: var(--text);
 }
 
 .scheduleTemplateCard.applied {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.scheduleTemplateCard.applied:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
 
 .scheduleStepControls {
@@ -1090,6 +1143,13 @@
   border-radius: var(--radius-md);
   background: var(--surface-muted);
   transition: box-shadow var(--control-transition), opacity var(--control-transition), background var(--control-transition);
+}
+
+.scheduleEditorMain .scheduleStepCard {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-1);
+  background: var(--surface-raised);
 }
 
 .scheduleStepCard.isDragging {
@@ -1211,6 +1271,32 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
+}
+
+.scheduleOptionsSection .schedulePlayerPolicyChoices {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.scheduleOptionsSection .scheduleOptionToggle {
+  min-height: 0;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+}
+
+.scheduleEnabledOption {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border-row));
+}
+
+.scheduleModalFooter {
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.scheduleModalFooterActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .schedulePlayerPolicy {
@@ -1542,6 +1628,14 @@
     min-height: 28px;
     justify-content: space-between;
   }
+
+  .scheduleEditorLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scheduleOptionsSection .schedulePlayerPolicyChoices {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1655,8 +1749,24 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .scheduleOptionsSection .schedulePlayerPolicyChoices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .scheduleOptionToggle {
     min-height: 0;
+  }
+
+  .scheduleEditorSection {
+    padding: var(--space-2);
+  }
+
+  .scheduleModalFooterActions {
+    width: 100%;
+  }
+
+  .scheduleModalFooterActions .uiButton {
+    flex: 1 1 0;
   }
 }
 

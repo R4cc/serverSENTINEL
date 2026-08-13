@@ -128,6 +128,33 @@ async function assertScheduleActionMenuVisible(page, label) {
   await page.keyboard.press("Escape");
 }
 
+async function assertScheduleEditorLayout(page, label) {
+  const result = await page.evaluate(() => {
+    const panel = document.querySelector(".scheduleModalPanel");
+    const body = document.querySelector(".scheduleModalPanel .scheduleEditBody");
+    const layout = document.querySelector(".scheduleEditorLayout");
+    const footer = document.querySelector(".scheduleModalFooter");
+    if (!(panel instanceof HTMLElement) || !(body instanceof HTMLElement) || !(layout instanceof HTMLElement) || !(footer instanceof HTMLElement)) return { missing: true };
+    const panelRect = panel.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    return {
+      missing: false,
+      panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
+      footer: { left: footerRect.left, right: footerRect.right, top: footerRect.top, bottom: footerRect.bottom },
+      viewport: { width: innerWidth, height: innerHeight },
+      bodyHorizontalOverflow: body.scrollWidth - body.clientWidth,
+      columns: getComputedStyle(layout).gridTemplateColumns,
+      sectionCount: layout.querySelectorAll(".scheduleEditorSection").length
+    };
+  });
+  assert(!result.missing, `${label}: schedule editor surfaces are missing`);
+  assert(result.panel.left >= 0 && result.panel.right <= result.viewport.width && result.panel.top >= 0 && result.panel.bottom <= result.viewport.height, `${label}: schedule editor leaves the viewport: ${JSON.stringify(result)}`);
+  assert(result.footer.left >= 0 && result.footer.right <= result.viewport.width && result.footer.bottom <= result.viewport.height, `${label}: schedule editor footer leaves the viewport: ${JSON.stringify(result)}`);
+  assert(result.bodyHorizontalOverflow <= 1, `${label}: schedule editor body overflows horizontally: ${JSON.stringify(result)}`);
+  assert(!result.columns.includes(" "), `${label}: schedule editor did not collapse to one column: ${JSON.stringify(result)}`);
+  assert(result.sectionCount === 3, `${label}: schedule editor is missing a workflow section: ${JSON.stringify(result)}`);
+}
+
 async function assertModsToolbarVisible(page, label) {
   const result = await page.evaluate(() => {
     const toolbar = document.querySelector(".modsWorkspaceToolbar");
@@ -553,6 +580,7 @@ async function runProfile(engine, profile, label) {
     await assertEditableFontSizes(page, `${label} schedule dialog`);
     await assertTargets(page, [".scheduleModalPanel .modalCloseButton"], `${label} schedule dialog`);
     await assertDialogScrollLock(page, ".scheduleModalBackdrop", ".scheduleModalPanel .scheduleEditBody", `${label} schedule dialog`);
+    await assertScheduleEditorLayout(page, `${label} schedule dialog`);
     await page.keyboard.press("Escape");
     await page.locator(".scheduleModalPanel").waitFor({ state: "detached" });
     await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Add schedule", null, { timeout: 2_000 });
