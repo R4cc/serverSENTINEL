@@ -1,4 +1,4 @@
-ARG SS_VERSION=26.8.10
+ARG SS_VERSION=26.8.11
 FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
@@ -38,7 +38,7 @@ COPY docker docker
 COPY docker-compose.yml .env.example README.md CHANGELOG.md ./
 RUN npm run build
 
-FROM node:22-bookworm-slim AS runtime
+FROM gcr.io/distroless/nodejs22-debian13:latest AS runtime
 
 WORKDIR /app
 ARG SS_BUILD_ID
@@ -61,5 +61,7 @@ COPY --from=build /app/shared/dist shared/dist
 COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/web/dist web/dist
 
+RUN ["/nodejs/bin/node", "-e", "const fs = require('node:fs'); const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.exec('SELECT 1'); db.close(); new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Vienna' }).format(new Date()); if (typeof fetch !== 'function' || !fs.existsSync(process.env.SSL_CERT_FILE)) process.exit(1)"]
+
 EXPOSE 8080
-CMD ["node", "server/dist/index.js"]
+CMD ["server/dist/index.js"]

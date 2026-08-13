@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.8.11 - 2026-08-13
+
+- Reduced the container image and runtime attack surface with a shell-free Distroless Node image, guarded by final-image SQLite, timezone, fetch, and CA certificate checks.
+
 ## 26.8.10 - 2026-08-13
 
 - Reduced the container image by retaining only the production Linux x64 SQLite binary and removing native build sources and unused platform binaries.
