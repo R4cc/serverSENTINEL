@@ -1063,10 +1063,14 @@
 .fileCodeEditor .cm-scroller {
   height: 100%;
   min-height: 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: scroll;
   scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-muted) 72%, var(--surface)) var(--surface-muted);
+  /* Keep these at their initial values in Chromium. Non-auto standardized
+     scrollbar properties override the WebKit pseudo-elements below and can
+     collapse back to the OS auto-hidden overlay scrollbar on Windows. */
+  scrollbar-width: auto;
+  scrollbar-color: auto;
 }
 
 .fileCodeEditor .cm-scroller::-webkit-scrollbar {
@@ -1077,6 +1081,10 @@
 .fileCodeEditor .cm-scroller::-webkit-scrollbar-corner,
 .fileCodeEditor .cm-scroller::-webkit-scrollbar-track {
   background: var(--surface-muted);
+}
+
+.fileCodeEditor .cm-scroller::-webkit-scrollbar-track {
+  border-left: 1px solid var(--border-row);
 }
 
 .fileCodeEditor .cm-scroller::-webkit-scrollbar-thumb {

@@ -8,7 +8,9 @@ describe("PlayerHeadsOnboarding", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain("Player heads on Overview");
     expect(html).toContain("MCHeads (mc-heads.net)");
-    expect(html).toContain("sends no requests, health checks, or other traffic");
+    expect(html).toContain("When disabled, no MCHeads requests are made");
+    expect(html).toContain("refresh on a rolling daily schedule");
+    expect(html).not.toContain("12 hours");
     expect(html).toContain(">Keep disabled</button>");
     expect(html).toContain("Enable player heads");
     expect(html).not.toContain("modalCloseButton");

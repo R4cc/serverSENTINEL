@@ -3,7 +3,7 @@ import type { SettingsRepository } from "./storage/settingsRepository.js";
 import type { PlayerHeadCacheEntry, PlayerHeadCacheRepository } from "./storage/playerHeadCacheRepository.js";
 
 export const playerHeadProvider = "mc-heads.net";
-export const playerHeadFreshMs = 12 * 60 * 60 * 1000;
+export const playerHeadFreshMs = 24 * 60 * 60 * 1000;
 export const playerHeadRequestIntervalMs = 1_000;
 export const playerHeadMaxConcurrentRequests = 2;
 export const playerHeadMaxBytes = 64 * 1024;
@@ -39,6 +39,25 @@ export type PlayerHeadServiceOptions = {
 
 function cacheKey(playerName: string) {
   return playerName.trim().toLocaleLowerCase("en-US");
+}
+
+function rollingRefreshOffsetMs(key: string) {
+  let hash = 2_166_136_261;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = Math.imul(hash ^ key.charCodeAt(index), 16_777_619) >>> 0;
+  }
+  hash = (hash ^ (hash >>> 16)) >>> 0;
+  hash = Math.imul(hash, 0x85ebca6b) >>> 0;
+  hash = (hash ^ (hash >>> 13)) >>> 0;
+  hash = Math.imul(hash, 0xc2b2ae35) >>> 0;
+  hash = (hash ^ (hash >>> 16)) >>> 0;
+  return Math.floor((hash / 0x1_0000_0000) * playerHeadFreshMs);
+}
+
+export function playerHeadRefreshAfter(key: string, refreshedAt: number, previous?: Pick<PlayerHeadCacheEntry, "fetchedAt" | "refreshAfter">) {
+  const previousWindow = previous ? previous.refreshAfter - previous.fetchedAt : 0;
+  const needsRollingOffset = !previous || previousWindow < playerHeadFreshMs;
+  return refreshedAt + playerHeadFreshMs + (needsRollingOffset ? rollingRefreshOffsetMs(key) : 0);
 }
 
 function retryAfterMs(value: string | null, now: number) {
@@ -92,10 +111,12 @@ export class PlayerHeadService {
   private readonly controllers = new Set<AbortController>();
   private activeRequests = 0;
   private nextStartAt = 0;
+  private nextBackgroundStartAt = 0;
   private cooldownUntil = 0;
   private consecutiveFailures = 0;
   private generation = 0;
   private pumpTimer: NodeJS.Timeout | undefined;
+  private pumpTimerPriority: Priority | undefined;
 
   constructor(private readonly options: PlayerHeadServiceOptions) {
     this.fetch = options.fetch ?? undiciFetch;
@@ -145,6 +166,8 @@ export class PlayerHeadService {
     this.generation += 1;
     if (this.pumpTimer) clearTimeout(this.pumpTimer);
     this.pumpTimer = undefined;
+    this.pumpTimerPriority = undefined;
+    this.nextBackgroundStartAt = 0;
     for (const controller of this.controllers) controller.abort();
     for (const item of [...this.foregroundQueue, ...this.backgroundQueue]) item.resolve();
     this.foregroundQueue.length = 0;
@@ -165,24 +188,37 @@ export class PlayerHeadService {
     const item = { key, playerName, cached, generation: this.generation, promise, resolve };
     this.pending.set(key, item);
     (priority === "foreground" ? this.foregroundQueue : this.backgroundQueue).push(item);
+    if (priority === "foreground" && this.pumpTimer && this.pumpTimerPriority === "background") {
+      clearTimeout(this.pumpTimer);
+      this.pumpTimer = undefined;
+      this.pumpTimerPriority = undefined;
+    }
     this.pump();
     return promise;
   }
 
   private pump() {
     if (this.activeRequests >= this.maxConcurrentRequests || this.pumpTimer) return;
-    const next = this.foregroundQueue[0] ?? this.backgroundQueue[0];
+    const priority: Priority = this.foregroundQueue.length > 0 ? "foreground" : "background";
+    const next = priority === "foreground" ? this.foregroundQueue[0] : this.backgroundQueue[0];
     if (!next) return;
-    const waitMs = Math.max(0, this.nextStartAt - this.now(), this.cooldownUntil - this.now());
+    const waitMs = Math.max(
+      0,
+      this.nextStartAt - this.now(),
+      this.cooldownUntil - this.now(),
+      priority === "background" ? this.nextBackgroundStartAt - this.now() : 0
+    );
     if (waitMs > 0) {
+      this.pumpTimerPriority = priority;
       this.pumpTimer = setTimeout(() => {
         this.pumpTimer = undefined;
+        this.pumpTimerPriority = undefined;
         this.pump();
       }, waitMs);
       this.pumpTimer.unref?.();
       return;
     }
-    const item = this.foregroundQueue.shift() ?? this.backgroundQueue.shift();
+    const item = priority === "foreground" ? this.foregroundQueue.shift() : this.backgroundQueue.shift();
     if (!item) return;
     if (item.generation !== this.generation || !this.enabled()) {
       this.finish(item);
@@ -191,6 +227,10 @@ export class PlayerHeadService {
     }
     this.activeRequests += 1;
     this.nextStartAt = this.now() + this.requestIntervalMs;
+    if (priority === "background") {
+      const cacheEntries = Math.max(1, this.options.cache.stats().entries);
+      this.nextBackgroundStartAt = this.now() + Math.max(this.requestIntervalMs, Math.ceil(playerHeadFreshMs / cacheEntries));
+    }
     void this.refresh(item).finally(() => {
       this.activeRequests -= 1;
       this.finish(item);
@@ -226,7 +266,7 @@ export class PlayerHeadService {
       }
       if (response.status === 304 && item.cached) {
         await discardBody(response);
-        this.options.cache.markRefreshed(item.key, now, now + playerHeadFreshMs, response.headers.get("etag") ?? undefined);
+        this.options.cache.markRefreshed(item.key, now, playerHeadRefreshAfter(item.key, now, item.cached), response.headers.get("etag") ?? undefined);
         this.markSuccess();
         return;
       }
@@ -253,7 +293,7 @@ export class PlayerHeadService {
         bytes,
         etag: response.headers.get("etag") ?? undefined,
         fetchedAt: now,
-        refreshAfter: now + playerHeadFreshMs,
+        refreshAfter: playerHeadRefreshAfter(item.key, now, item.cached),
         lastAccessedAt: now
       });
       this.options.cache.enforceLimits(playerHeadCacheMaxEntries, playerHeadCacheMaxBytes);

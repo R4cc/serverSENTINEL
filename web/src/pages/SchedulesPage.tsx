@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   getCoreRowModel,
   getSortedRowModel,
@@ -24,7 +24,6 @@ import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 import { formatScheduleOffset, scheduleDelayParts, scheduleDelayToSeconds, scheduleOffsetBadge, scheduleStepOffsets } from '../features/schedules/scheduleDelays';
 import { describeCronExpression } from '../features/schedules/cronDescription';
-import { buildCronPreview } from '../features/schedules/cronPreview';
 import { scheduleTemplateById, scheduleTemplates } from '../features/schedules/scheduleTemplates';
 import { scheduleHealth } from '../features/schedules/scheduleHealth';
 
@@ -206,7 +205,6 @@ export function SchedulePage({
   formatDate,
   relativeTimestamps = true,
   scheduleTimeZone,
-  displayTimeZone = "",
   navigationTarget,
   onNavigationTargetHandled
 }: {
@@ -237,7 +235,6 @@ export function SchedulePage({
   // seeds them and remounts the group so the choice a template makes is the one shown.
   const [policySeed, setPolicySeed] = useState<Pick<ScheduledExecution, "onlyWhenNoPlayers" | "waitForPlayersToLeave"> | null>(null);
   const [appliedTemplateId, setAppliedTemplateId] = useState("");
-  const [draggingStepId, setDraggingStepId] = useState<string | null>(null);
   const [stepReorderMessage, setStepReorderMessage] = useState("");
   const [selectedRun, setSelectedRun] = useState<ScheduledRun | null>(null);
   const [historySchedule, setHistorySchedule] = useState<ScheduledExecution | null>(null);
@@ -247,14 +244,6 @@ export function SchedulePage({
   const runsFeedRef = useRef<HTMLDivElement>(null);
   const scheduleRowRefs = useRef(new Map<string, HTMLElement>());
   const runItemRefs = useRef(new Map<string, HTMLElement>());
-  const scheduleEditBodyRef = useRef<HTMLDivElement>(null);
-  const stepDraftsRef = useRef(stepDrafts);
-  const draggingStepIdRef = useRef<string | null>(null);
-  const dragPointerIdRef = useRef<number | null>(null);
-  const dragPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
-  const dragScrollFrameRef = useRef<number | null>(null);
-  const dragScrollSpeedRef = useRef(0);
-  stepDraftsRef.current = stepDrafts;
 
   useEffect(() => {
     if (!formMode) {
@@ -265,11 +254,7 @@ export function SchedulePage({
       setNameValue("");
       setPolicySeed(null);
       setAppliedTemplateId("");
-      setDraggingStepId(null);
       setStepReorderMessage("");
-      draggingStepIdRef.current = null;
-      dragPointerIdRef.current = null;
-      stopStepAutoScroll();
       return;
     }
     const steps = formMode.type === "create" ? [] : formMode.schedule.steps;
@@ -283,11 +268,7 @@ export function SchedulePage({
     setNameValue(formMode.type === "edit" ? formMode.schedule.name : formMode.type === "duplicate" ? `${formMode.schedule.name} copy` : "");
     setPolicySeed(null);
     setAppliedTemplateId("");
-    setDraggingStepId(null);
     setStepReorderMessage("");
-    draggingStepIdRef.current = null;
-    dragPointerIdRef.current = null;
-    stopStepAutoScroll();
   }, [formMode]);
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
@@ -370,10 +351,6 @@ export function SchedulePage({
     return () => window.clearInterval(interval);
   }, []);
 
-  useEffect(() => () => {
-    if (dragScrollFrameRef.current !== null) window.cancelAnimationFrame(dragScrollFrameRef.current);
-  }, []);
-
   function schedulePatchFromForm(form: FormData): SchedulePatch {
     const playerOnlinePolicy = String(form.get("playerOnlinePolicy") ?? "run");
     const steps: ScheduleStep[] = stepDrafts.map((draft) => draft.type === "command"
@@ -435,118 +412,16 @@ export function SchedulePage({
     }
     setStepDrafts((steps) => {
       const reordered = reorderScheduleSteps(steps, movedId, targetId);
-      stepDraftsRef.current = reordered;
       return reordered;
     });
     setStepReorderMessage(`Step moved to position ${targetIndex + 1}.`);
   }
 
-  /** Explicit controls, because a drag handle is unusable on touch and needs a keyboard otherwise. */
+  /** Explicit controls keep step reordering predictable for pointer, touch, and keyboard users. */
   function nudgeStep(stepId: string, direction: -1 | 1) {
     const index = stepDrafts.findIndex((step) => step.id === stepId);
     const target = stepDrafts[index + direction];
     if (target) moveStep(stepId, target.id);
-  }
-
-  function moveDraggedStepAtPoint(clientX: number, clientY: number) {
-    const movedId = draggingStepIdRef.current;
-    const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-schedule-step-id]");
-    const targetId = target?.dataset.scheduleStepId;
-    if (!movedId || !targetId || movedId === targetId) return;
-    setStepDrafts((steps) => {
-      const movedIndex = steps.findIndex((step) => step.id === movedId);
-      const targetIndex = steps.findIndex((step) => step.id === targetId);
-      if (scheduleStepMoveBlocked(steps, movedIndex, targetIndex)) return steps;
-      const reordered = reorderScheduleSteps(steps, movedId, targetId);
-      stepDraftsRef.current = reordered;
-      return reordered;
-    });
-  }
-
-  function stopStepAutoScroll() {
-    dragScrollSpeedRef.current = 0;
-    if (dragScrollFrameRef.current !== null) window.cancelAnimationFrame(dragScrollFrameRef.current);
-    dragScrollFrameRef.current = null;
-  }
-
-  function updateStepAutoScroll(clientY: number) {
-    const scrollArea = scheduleEditBodyRef.current;
-    if (!scrollArea) return;
-    const bounds = scrollArea.getBoundingClientRect();
-    const edgeSize = Math.min(64, bounds.height / 4);
-    const topDistance = bounds.top + edgeSize - clientY;
-    const bottomDistance = clientY - (bounds.bottom - edgeSize);
-    const speed = topDistance > 0
-      ? -Math.min(18, Math.max(4, Math.ceil(topDistance / 3)))
-      : bottomDistance > 0
-        ? Math.min(18, Math.max(4, Math.ceil(bottomDistance / 3)))
-        : 0;
-    dragScrollSpeedRef.current = speed;
-    if (!speed) {
-      stopStepAutoScroll();
-      return;
-    }
-    if (dragScrollFrameRef.current !== null) return;
-    const scroll = () => {
-      const body = scheduleEditBodyRef.current;
-      const point = dragPointerPositionRef.current;
-      if (!body || !point || !draggingStepIdRef.current || !dragScrollSpeedRef.current) {
-        dragScrollFrameRef.current = null;
-        return;
-      }
-      body.scrollTop += dragScrollSpeedRef.current;
-      moveDraggedStepAtPoint(point.x, point.y);
-      dragScrollFrameRef.current = window.requestAnimationFrame(scroll);
-    };
-    dragScrollFrameRef.current = window.requestAnimationFrame(scroll);
-  }
-
-  function startStepDrag(event: PointerEvent<HTMLButtonElement>, stepId: string) {
-    if (event.button !== 0) return;
-    dragPointerIdRef.current = event.pointerId;
-    draggingStepIdRef.current = stepId;
-    dragPointerPositionRef.current = { x: event.clientX, y: event.clientY };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDraggingStepId(stepId);
-    setStepReorderMessage("Dragging step. Move it over another step to change its position.");
-  }
-
-  function dragStep(event: PointerEvent<HTMLButtonElement>) {
-    if (dragPointerIdRef.current !== event.pointerId || !draggingStepIdRef.current) return;
-    event.preventDefault();
-    dragPointerPositionRef.current = { x: event.clientX, y: event.clientY };
-    moveDraggedStepAtPoint(event.clientX, event.clientY);
-    updateStepAutoScroll(event.clientY);
-  }
-
-  function finishStepDrag(event: PointerEvent<HTMLButtonElement>) {
-    if (dragPointerIdRef.current !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    const movedId = draggingStepIdRef.current;
-    const finalIndex = stepDraftsRef.current.findIndex((step) => step.id === movedId);
-    draggingStepIdRef.current = null;
-    dragPointerIdRef.current = null;
-    dragPointerPositionRef.current = null;
-    stopStepAutoScroll();
-    setDraggingStepId(null);
-    if (finalIndex >= 0) setStepReorderMessage(`Step placed at position ${finalIndex + 1}.`);
-  }
-
-  function handleStepReorderKey(event: KeyboardEvent<HTMLButtonElement>, stepId: string) {
-    const currentIndex = stepDrafts.findIndex((step) => step.id === stepId);
-    if (currentIndex < 0) return;
-    const targetIndex = event.key === "ArrowUp"
-      ? currentIndex - 1
-      : event.key === "ArrowDown"
-        ? currentIndex + 1
-        : event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? stepDrafts.length - 1
-            : currentIndex;
-    if (targetIndex === currentIndex || targetIndex < 0 || targetIndex >= stepDrafts.length) return;
-    event.preventDefault();
-    moveStep(stepId, stepDrafts[targetIndex].id);
   }
 
   const modalSchedule = formMode && formMode.type !== "create" ? formMode.schedule : null;
@@ -591,12 +466,6 @@ export function SchedulePage({
 
   const cronError = cronValue.trim() ? validateCronExpression(cronValue) : null;
   const cronDescription = cronValue.trim() && !cronError ? describeCronExpression(cronValue) : null;
-  // Recomputed on every keystroke rather than memoised: the search stops at the third match, and
-  // the dialog is the only place it runs.
-  const cronPreview = cronDescription
-    ? buildCronPreview(cronValue, scheduleTimeZone, displayTimeZone, (value) => formatDate(value))
-    : null;
-
   return (
     <section className="tabPage schedulePage scheduleWorkspacePage layoutWide">
       <Toolbar
@@ -868,7 +737,7 @@ export function SchedulePage({
                 <AppIcon name="x" />
               </Button>
             </div>
-            <div className="userModalBody scheduleEditBody" ref={scheduleEditBodyRef}>
+            <div className="userModalBody scheduleEditBody">
               <fieldset disabled={disabled} className="scheduleEditFieldset">
               {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
 
@@ -1002,59 +871,25 @@ export function SchedulePage({
                 {cronError
                   ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
                   : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
-                {/* Day-of-month against day-of-week is the classic way to write a cron that parses
-                    and still fires on the wrong days, and a description alone cannot show that.
-                    Three real datestamps can. */}
-                {cronPreview && (
-                  <div className="scheduleCronPreview">
-                    <span className="scheduleCronPreviewLabel">Next runs</span>
-                    <ol className="scheduleCronPreviewList">
-                      {cronPreview.occurrences.map((occurrence) => (
-                        <li key={occurrence}>{occurrence}</li>
-                      ))}
-                      <li className="scheduleCronPreviewZone">{scheduleTimeZone}</li>
-                    </ol>
-                    {cronPreview.viewerNote && (
-                      <small className="scheduleCronPreviewNote">{cronPreview.viewerNote}</small>
-                    )}
-                  </div>
-                )}
               </section>
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="drag" /></span><div><h3 id="schedule-steps-heading">Steps</h3></div></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="switch" /></span><div><h3 id="schedule-steps-heading">Steps</h3></div></div>
                 </div>
                 <div className="commandStack scheduleCommandStack">
                   <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
                   <div className="scheduleCommandList">
                     {stepDrafts.map((draft, index) => (
-                      <div key={draft.id} className={`scheduleStepCard ${draggingStepId === draft.id ? "isDragging" : ""}`.trim()} data-schedule-step-id={draft.id}>
+                      <div key={draft.id} className="scheduleStepCard">
                         <div className="scheduleStepHeader">
                           <div className="scheduleStepIdentity">
-                            <Button
-                              variant="ghost"
-                              iconOnly
-                              compact
-                              className="scheduleStepDragHandle"
-                              onPointerDown={(event) => startStepDrag(event, draft.id)}
-                              onPointerMove={dragStep}
-                              onPointerUp={finishStepDrag}
-                              onPointerCancel={finishStepDrag}
-                              onKeyDown={(event) => handleStepReorderKey(event, draft.id)}
-                              aria-label={`Reorder step ${index + 1}. Drag or use the arrow keys.`}
-                              title="Drag to reorder. You can also use the arrow, Home, and End keys."
-                            >
-                              <AppIcon name="drag" />
-                            </Button>
                             <strong>Step {index + 1}</strong>
                             <span className="scheduleStepOffset" title={`Runs ${formatScheduleOffset(stepOffsets[index])}.`}>
                               {scheduleOffsetBadge(stepOffsets[index])}
                             </span>
                           </div>
                           <div className="scheduleStepControls">
-                            {/* The drag handle cannot be used on a touch screen and needs a keyboard
-                                otherwise, so reordering also has controls that are just buttons. */}
                             <Button
                               variant="ghost"
                               iconOnly
@@ -1115,9 +950,11 @@ export function SchedulePage({
                               <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
                             </label>
                           ) : (
-                            // The Type control names the procedure, so this states what it does
-                            // rather than repeating the choice in a second dropdown.
-                            <p className="scheduleStepValue scheduleStepProcedure">{scheduleProcedureDescription[draft.procedure]} This has to be the final step.</p>
+                            <div className="scheduleStepValue scheduleStepProcedure">
+                              <AppIcon name="server" />
+                              <p>{scheduleProcedureDescription[draft.procedure]}</p>
+                              <strong>Final step</strong>
+                            </div>
                           )}
                           <label className="scheduleCommandDelay">
                             <span>Delay before step</span>

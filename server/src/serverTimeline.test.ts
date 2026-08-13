@@ -107,6 +107,31 @@ describe("server timeline resource points", () => {
     expect(points.map((point) => point.cpuUtilizationPercent)).toEqual([20, 10]);
   });
 
+  it("holds the network rate across a repeated stats read and measures the next one from that read", () => {
+    // A remote node serves stats from a cached observation, so the collector can file the same
+    // read twice. Both counter deltas belong to the interval between the two distinct reads.
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { readAt: new Date(0).toISOString() }),
+      sample(5_000, 5_000, 10_000, { readAt: new Date(5_000).toISOString() }),
+      sample(10_000, 5_000, 10_000, { readAt: new Date(5_000).toISOString() }),
+      sample(15_000, 15_000, 30_000, { readAt: new Date(15_000).toISOString() })
+    ], 0, 15_000, 100);
+    expect(points.map((point) => point.networkRxBytesPerSecond)).toEqual([null, 1_000, 1_000, 1_000]);
+    expect(points.map((point) => point.networkTxBytesPerSecond)).toEqual([null, 2_000, 2_000, 2_000]);
+  });
+
+  it("stops holding a network rate once the reading it came from is older than the gap threshold", () => {
+    const stalled = new Date(5_000).toISOString();
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { readAt: new Date(0).toISOString() }),
+      sample(5_000, 5_000, 5_000, { readAt: stalled }),
+      sample(10_000, 5_000, 5_000, { readAt: stalled }),
+      sample(40_000, 5_000, 5_000, { readAt: stalled })
+    ], 0, 40_000, 100);
+    expect(points.map((point) => point.networkRxBytesPerSecond)).toEqual([null, 1_000, 1_000, null]);
+    expect(points.at(-1)?.cpuUtilizationPercent).toBe(5);
+  });
+
   it("preserves network reset gaps while aggregating", () => {
     const points = timelineResourcePoints([
       sample(0, 100, 100),
@@ -121,36 +146,36 @@ describe("server timeline resource points", () => {
 });
 
 describe("server timeline schedule markers", () => {
-  const schedule = {
-    id: "schedule-1",
-    name: "Maintenance",
-    cron: "* * * * *",
-    steps: [{ type: "command" as const, command: "save-all", delaySeconds: 0 }],
-    onlyWhenNoPlayers: false,
-    waitForPlayersToLeave: false,
-    enabled: true,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z"
-  };
+  const schedule = { id: "schedule-1", name: "Maintenance" };
 
-  it("combines actual, active, and upcoming runs", () => {
+  it("combines completed and active runs", () => {
     const from = new Date("2026-01-01T00:00:00.000Z").getTime();
     const result = timelineScheduleMarkers({
-      schedules: [schedule],
       runs: [{ id: "run-1", scheduleId: schedule.id, scheduleName: schedule.name, status: "failed", ranAt: "2026-01-01T00:01:00.000Z" }],
       activeRuns: [{ id: "active-1", scheduleId: schedule.id, scheduleName: schedule.name, status: "running", startedAt: "2026-01-01T00:02:00.000Z", stepCount: 1, cancellable: true }],
       from,
       to: from + 5 * 60_000,
       now: from + 2 * 60_000
     });
-    expect(result.markers.map((marker) => marker.kind)).toEqual(expect.arrayContaining(["run", "active", "upcoming"]));
+    expect(result.markers.map((marker) => marker.kind)).toEqual(["run", "active"]);
     expect(result.markers.find((marker) => marker.kind === "run")?.status).toBe("failed");
+  });
+
+  it("does not project runs that have not happened yet", () => {
+    const from = new Date("2026-01-01T00:00:00.000Z").getTime();
+    const result = timelineScheduleMarkers({
+      runs: [{ id: "run-1", scheduleId: schedule.id, scheduleName: schedule.name, status: "success", ranAt: "2026-01-01T00:01:00.000Z" }],
+      activeRuns: [],
+      from,
+      to: from + 60 * 60_000,
+      now: from + 2 * 60_000
+    });
+    expect(result.markers.map((marker) => marker.id)).toEqual(["run:run-1"]);
   });
 
   it("keeps an active run visible after its start falls outside the window", () => {
     const from = new Date("2026-01-01T04:00:00.000Z").getTime();
     const result = timelineScheduleMarkers({
-      schedules: [],
       runs: [],
       activeRuns: [{ id: "active-long", scheduleId: schedule.id, scheduleName: schedule.name, status: "running", startedAt: "2026-01-01T00:00:00.000Z", stepCount: 1, cancellable: true }],
       from,
@@ -166,9 +191,22 @@ describe("server timeline schedule markers", () => {
     }]);
   });
 
-  it("reports truncation for pathological recurrence counts", () => {
+  it("reports truncation once the run count passes the marker limit", () => {
     const from = new Date("2026-01-01T00:00:00.000Z").getTime();
-    const result = timelineScheduleMarkers({ schedules: [schedule], runs: [], activeRuns: [], from, to: from + 60 * 60_000, now: from, limit: 3 });
+    const result = timelineScheduleMarkers({
+      runs: Array.from({ length: 8 }, (_, index) => ({
+        id: `run-${index}`,
+        scheduleId: schedule.id,
+        scheduleName: schedule.name,
+        status: "success",
+        ranAt: new Date(from + index * 60_000).toISOString()
+      })),
+      activeRuns: [],
+      from,
+      to: from + 60 * 60_000,
+      now: from + 60 * 60_000,
+      limit: 3
+    });
     expect(result.markers).toHaveLength(3);
     expect(result.truncated).toBe(true);
   });

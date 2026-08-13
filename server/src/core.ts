@@ -245,7 +245,6 @@ export function safeInstalledModFilename(name?: string) {
 export {
   cronMatches,
   nextCronRun,
-  parseCronField,
   timeZoneMinuteKey,
   validateCron
 } from "@serversentinel/contracts";

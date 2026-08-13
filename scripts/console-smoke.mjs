@@ -18,6 +18,8 @@
  *   can see is selected and its native copy has nothing to act on.
  * - The compact tablet shell added its header above a 100vh console and hid the command line.
  * - xterm exposed its disabled input helper as an invisible keyboard and screen-reader target.
+ * - The visible DOM renderer was replaced by WebGL one second later, changing the log drawing
+ *   width and making wrapped output resize after the user had started reading it.
  */
 
 import assert from "node:assert/strict";
@@ -31,6 +33,7 @@ const harness = await startDemoHarness({
 const { baseUrl } = harness;
 
 let browser;
+let rendererBrowser;
 
 /** Rows xterm has actually drawn, blank ones dropped so trailing viewport padding is not compared. */
 async function terminalRows(page) {
@@ -372,6 +375,55 @@ async function createConsolePage(context, viewport) {
   return { page, browserErrors };
 }
 
+/** The renderer chosen for the first visible frame must remain the renderer after startup settles. */
+async function assertRendererIsStableAfterReveal(context) {
+  const { page, browserErrors } = await createConsolePage(context, { width: 1440, height: 900 });
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await waitForAppShell(page);
+  await page.getByRole("button", { name: /console/i }).first().click();
+  await page.locator(".minecraftTerminal .xterm").waitFor({ state: "visible" });
+  await page.locator(".consolePromptInput").waitFor();
+  // Let the renderer commit the dimensions selected during initialization before sampling it.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+
+  const initial = await page.evaluate(() => {
+    const screen = document.querySelector(".minecraftTerminal .xterm-screen");
+    const surface = screen?.querySelector("canvas") ?? screen?.querySelector(".xterm-rows");
+    window.__consoleRendererSurface = surface;
+    const bounds = screen?.getBoundingClientRect();
+    return {
+      height: bounds?.height ?? 0,
+      surface: surface?.tagName ?? "",
+      width: bounds?.width ?? 0
+    };
+  });
+
+  await page.waitForTimeout(1_250);
+  const settled = await page.evaluate(() => {
+    const screen = document.querySelector(".minecraftTerminal .xterm-screen");
+    const surface = screen?.querySelector("canvas") ?? screen?.querySelector(".xterm-rows");
+    const bounds = screen?.getBoundingClientRect();
+    return {
+      height: bounds?.height ?? 0,
+      sameSurface: window.__consoleRendererSurface === surface,
+      surface: surface?.tagName ?? "",
+      width: bounds?.width ?? 0
+    };
+  });
+
+  assert(
+    settled.sameSurface && settled.surface === initial.surface,
+    `The console replaced its visible renderer after opening: ${JSON.stringify({ initial, settled })}`
+  );
+  assert.deepEqual(
+    { width: settled.width, height: settled.height },
+    { width: initial.width, height: initial.height },
+    `The console changed its drawing size after opening: ${JSON.stringify({ initial, settled })}`
+  );
+  assert.deepEqual(browserErrors, [], `Renderer stability browser errors: ${browserErrors.join("\n")}`);
+  await page.close();
+}
+
 try {
   // The GPU renderer draws into a canvas, where the drawn text cannot be read back. Forcing the DOM
   // renderer exposes the rows xterm produced from its buffer, and every property asserted here —
@@ -424,8 +476,16 @@ try {
   assert.deepEqual(mobile.browserErrors, [], `Mobile browser errors: ${mobile.browserErrors.join("\n")}`);
   await mobile.page.close();
 
-  console.log("Console smoke passed: output-only terminal, usable command line, unseen-output jump, compact landscape layout, ordered output, and navigation survival.");
+  // Exercise the ordinary renderer path separately: the main behavioural suite disables WebGL so
+  // its text rows remain inspectable, but the delayed renderer swap only exists when WebGL works.
+  rendererBrowser = await launchBrowser(chromium);
+  const rendererContext = await rendererBrowser.newContext({ locale: "en-US", timezoneId: "UTC" });
+  await signInThroughApi(rendererContext, baseUrl);
+  await assertRendererIsStableAfterReveal(rendererContext);
+
+  console.log("Console smoke passed: stable renderer, output-only terminal, usable command line, unseen-output jump, compact landscape layout, ordered output, and navigation survival.");
 } finally {
   if (browser) await browser.close();
+  if (rendererBrowser) await rendererBrowser.close();
   await harness.stop();
 }

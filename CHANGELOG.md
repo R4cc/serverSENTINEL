@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 26.8.7 - 2026-08-13
+
+- Kept the network in and network out timeline series continuous on remote nodes, where sharing one cached stats reading across several collections previously drew the rate as alternating zeroes and spikes.
+- Aged remote node observations against the panel's own clock and kept the newest reading when responses arrive out of order, so a node whose clock differs from the panel's no longer forces a fresh round trip on every read.
+- Removed the timeline's planned-schedule layer, from the "Planned schedules" toggle down to the per-request cron projection behind it, now that the viewport stops at the present and no window can contain a future run; upcoming runs remain on the Schedules panel.
+
+## 26.8.6 - 2026-08-13
+
+- Kept console logs at a stable size by settling the accelerated renderer before revealing output.
+- Spread cached player-head refreshes across a rolling daily schedule while keeping visible-player requests responsive.
+- Removed the obsolete export-retention setting now that successful export archives remain until replaced.
+- Reduced repeat downloads and panel CPU use with stable vendor chunks, font preloads, and precompressed web assets.
+
+## 26.8.5 - 2026-08-13
+
+- Reduced player-head checks to once every 24 hours and shortened the integration explanation.
+
+## 26.8.4 - 2026-08-13
+
+- Removed the redundant Chromium liquid-glass outline while preserving the refractive glass effect, and kept the file-editor scrollbar visibly styled instead of allowing Windows to collapse it into an auto-hidden overlay.
+
 ## 26.8.3 - 2026-08-13
 
 - Kept Chromium liquid-glass rims aligned with their surfaces and restored a visible file-editor scrollbar.

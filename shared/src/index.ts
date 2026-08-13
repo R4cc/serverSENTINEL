@@ -713,8 +713,10 @@ export type ServerTimelineScheduleMarker = {
   scheduleId: string;
   scheduleName: string;
   occurredAt: number;
-  kind: "run" | "active" | "upcoming";
-  status: "success" | "failed" | "skipped" | "cancelled" | "running" | "upcoming" | "unknown";
+  // The timeline viewport is clamped to the present, so every marker describes a run that already
+  // started. Runs that have not happened yet are listed on the Schedules panel instead.
+  kind: "run" | "active";
+  status: "success" | "failed" | "skipped" | "cancelled" | "running" | "unknown";
   runId?: string;
   message?: string;
 };

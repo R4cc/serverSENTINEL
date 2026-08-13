@@ -113,6 +113,30 @@ describe("OperationsRepository", () => {
     expect(operations.find(succeeded.id)).toMatchObject({ status: "succeeded" });
   });
 
+  it("preserves selected resumable operations during startup recovery", async () => {
+    const operations = await createRepository();
+    const waiting = operations.create({
+      type: "schedule.run",
+      serverId: "server-id",
+      result: { kind: "schedule.wait-for-empty", version: 1 }
+    });
+    const interrupted = operations.create({ type: "server.restart" });
+    operations.start(waiting.id);
+    operations.start(interrupted.id);
+
+    expect(operations.listActiveByType("schedule.run")).toEqual([
+      expect.objectContaining({ id: waiting.id, result: { kind: "schedule.wait-for-empty", version: 1 } })
+    ]);
+    expect(operations.failIncompleteOnStartup(
+      "Recovered after restart",
+      "2026-01-01T00:00:00.000Z",
+      [waiting.id]
+    )).toBe(1);
+
+    expect(operations.find(waiting.id)).toMatchObject({ status: "running" });
+    expect(operations.find(interrupted.id)).toMatchObject({ status: "failed", errorMessage: "Recovered after restart" });
+  });
+
   it("lists operations by server and status", async () => {
     const operations = await createRepository();
     const first = operations.create({ type: "mod.update", serverId: "server-a", createdAt: "2026-01-01T00:00:00.000Z" });

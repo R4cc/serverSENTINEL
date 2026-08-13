@@ -3,7 +3,6 @@ import type {
 } from "./resourceStatsCollector.js";
 import type {
   ScheduledActiveRun,
-  ScheduledExecution,
   ScheduledRun,
   PlayerSnapshot,
   ServerTimelineEvent,
@@ -12,7 +11,6 @@ import type {
   ServerTimelineResourcePoint,
   ServerTimelineScheduleMarker
 } from "./types.js";
-import { nextCronRun } from "./core.js";
 
 // The collector targets five-second samples, but remote node calls can occasionally
 // arrive late without the underlying stats becoming unavailable. Only break the
@@ -178,6 +176,39 @@ function rate(current: number | undefined, previous: number | undefined, elapsed
   return (current - previous) / elapsedSeconds;
 }
 
+type NetworkRates = { rx: number | null; tx: number | null };
+
+const unknownNetworkRates: NetworkRates = { rx: null, tx: null };
+
+/**
+ * Milliseconds between two network counter readings, measured on the clock that took them.
+ *
+ * `readAt` is stamped when the container stats were actually read; `sampledAt` is stamped when the
+ * panel filed the sample. For a local container those coincide, but a remote node serves stats from
+ * a cached observation, so several collections can share one stats read and a counter delta does
+ * not cover the interval between collections. Dividing by the collection interval reported a rate
+ * of zero for the repeated read and roughly double the true rate for the one that followed it.
+ */
+function readingIntervalMs(sample: ResourceStatsSample, baseline: ResourceStatsSample) {
+  const current = Date.parse(sample.readAt);
+  const previous = Date.parse(baseline.readAt);
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return sample.sampledAt - baseline.sampledAt;
+  return current - previous;
+}
+
+function networkRates(sample: ResourceStatsSample, baseline: ResourceStatsSample | undefined, held: NetworkRates): NetworkRates {
+  if (!baseline || sample.sampledAt - baseline.sampledAt > gapThresholdMs) return unknownNetworkRates;
+  const elapsedMs = readingIntervalMs(sample, baseline);
+  // The counters were never re-read, so they cannot have advanced. Holding the last measured rate
+  // keeps the series continuous instead of claiming the server went quiet.
+  if (elapsedMs === 0) return held;
+  if (elapsedMs < 0) return unknownNetworkRates;
+  return {
+    rx: rate(sample.networkRxBytes, baseline.networkRxBytes, elapsedMs / 1000),
+    tx: rate(sample.networkTxBytes, baseline.networkTxBytes, elapsedMs / 1000)
+  };
+}
+
 function utilizationPercent(value: number, capacity: number | undefined) {
   if (!Number.isFinite(value) || !Number.isFinite(capacity) || !capacity || capacity <= 0) return null;
   return Math.max(0, Math.min(100, value / capacity));
@@ -185,7 +216,8 @@ function utilizationPercent(value: number, capacity: number | undefined) {
 
 function point(
   sample: ResourceStatsSample,
-  previous?: ResourceStatsSample,
+  previous: ResourceStatsSample | undefined,
+  rates: NetworkRates,
   fallbackCpuCapacityCores?: number,
   cachedPlayersOnline: number | null = null
 ): ServerTimelineResourcePoint {
@@ -203,8 +235,8 @@ function point(
     memoryLimitBytes: valid ? finite(sample.memoryLimitBytes) : null,
     memoryUtilizationPercent: valid ? utilizationPercent(sample.memoryUsageBytes * 100, sample.memoryLimitBytes) : null,
     playersOnline: valid ? verifiedPlayersOnline ?? cachedPlayersOnline : null,
-    networkRxBytesPerSecond: ratesValid ? rate(sample.networkRxBytes, previous.networkRxBytes, elapsedMs / 1000) : null,
-    networkTxBytesPerSecond: ratesValid ? rate(sample.networkTxBytes, previous.networkTxBytes, elapsedMs / 1000) : null
+    networkRxBytesPerSecond: ratesValid ? rates.rx : null,
+    networkTxBytesPerSecond: ratesValid ? rates.tx : null
   };
 }
 
@@ -246,13 +278,28 @@ export function timelineResourcePoints(samples: ResourceStatsSample[], from: num
   const output: ServerTimelineResourcePoint[] = [];
   const cpuCapacityCores = [...samples].reverse().find((sample) => sample.cpuCapacityCores)?.cpuCapacityCores ?? fallbackCpuCapacityCores;
   let cachedPlayersOnline: number | null = null;
+  // The last sample whose counters came from a distinct stats read, plus the rate it produced.
+  // Rates are measured against that reading rather than the previous sample so a repeated remote
+  // observation neither reports a false zero nor doubles the rate of the collection after it.
+  let networkBaseline: ResourceStatsSample | undefined;
+  let heldNetworkRates = unknownNetworkRates;
   for (let index = 0; index < samples.length; index += 1) {
     const sample = samples[index];
     const previous = samples[index - 1];
     if (sample.sampledAt > to) break;
     const containsLongGap = Boolean(previous && sample.sampledAt - previous.sampledAt > gapThresholdMs);
-    if (containsLongGap || !sample.available || !sample.running) cachedPlayersOnline = null;
-    const current = point(sample, previous, cpuCapacityCores, cachedPlayersOnline);
+    const running = sample.available && sample.running;
+    if (containsLongGap || !running) {
+      cachedPlayersOnline = null;
+      networkBaseline = undefined;
+      heldNetworkRates = unknownNetworkRates;
+    }
+    const rates = networkRates(sample, networkBaseline, heldNetworkRates);
+    if (running) {
+      if (!networkBaseline || readingIntervalMs(sample, networkBaseline) !== 0) networkBaseline = sample;
+      heldNetworkRates = rates;
+    }
+    const current = point(sample, previous, rates, cpuCapacityCores, cachedPlayersOnline);
     if (current.playersOnline !== null) cachedPlayersOnline = current.playersOnline;
     if (sample.sampledAt < from) continue;
     if (containsLongGap) {
@@ -287,8 +334,14 @@ function runStatus(status: string): ServerTimelineScheduleMarker["status"] {
   return "unknown";
 }
 
+/**
+ * Schedule annotations for a timeline window.
+ *
+ * Only runs that already started are projected. The viewport is clamped to the present, so a
+ * window that contains a future cron occurrence cannot be requested; the Schedules panel is where
+ * upcoming runs are listed.
+ */
 export function timelineScheduleMarkers(input: {
-  schedules: ScheduledExecution[];
   runs: ScheduledRun[];
   activeRuns: ScheduledActiveRun[];
   from: number;
@@ -320,22 +373,6 @@ export function timelineScheduleMarkers(input: {
     // including when they began before the current viewport.
     if (!Number.isFinite(occurredAt) || occurredAt > input.to || now < input.from) continue;
     if (!add({ id: `active:${run.id}`, scheduleId: run.scheduleId, scheduleName: run.scheduleName, occurredAt, kind: "active", status: "running", runId: run.id, message: run.message })) break;
-  }
-  const upcomingFrom = Math.max(input.from, now);
-  for (const schedule of input.schedules) {
-    if (!schedule.enabled || markers.length >= limit) continue;
-    let cursor = new Date(upcomingFrom - 60_000);
-    while (markers.length < limit) {
-      const next = nextCronRun(schedule.cron, cursor, 2);
-      if (!next) break;
-      const occurredAt = next.getTime();
-      if (occurredAt > input.to) break;
-      if (occurredAt >= upcomingFrom) {
-        add({ id: `upcoming:${schedule.id}:${occurredAt}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt, kind: "upcoming", status: "upcoming" });
-      }
-      cursor = next;
-    }
-    if (markers.length >= limit) truncated = true;
   }
   markers.sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
   return { markers, truncated };

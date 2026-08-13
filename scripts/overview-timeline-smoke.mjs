@@ -179,12 +179,12 @@ async function assertPlayerSectionDisclosure(page) {
 async function assertSchedulePopoverIconContrast(page) {
   await selectRange(page, "6h");
   const trigger = page.locator(".timelineAnnotationCluster").filter({
-    has: page.locator(".timelineAnnotationClusterIcon.tone-automation, .timelineAnnotationClusterIcon.tone-planned")
+    has: page.locator(".timelineAnnotationClusterIcon.tone-automation")
   }).first();
   assert(await trigger.count(), "The timeline is missing its schedule marker");
   await trigger.click();
 
-  const glyph = page.locator(".serverTimelineAnnotationPopoverItem:is(.tone-automation, .tone-planned) .serverTimelineAnnotationPopoverGlyph").first();
+  const glyph = page.locator(".serverTimelineAnnotationPopoverItem.tone-automation .serverTimelineAnnotationPopoverGlyph").first();
   await glyph.waitFor();
   const appearance = await glyph.locator("svg").evaluate((icon) => {
     const iconStyles = getComputedStyle(icon);
@@ -608,16 +608,22 @@ async function assertLiquidGlassAndEditorScrollbar(context) {
           .filter((child) => ["screen", "overlay"].includes(getComputedStyle(child).mixBlendMode));
         return {
           surfaceRadius: surface ? getComputedStyle(surface).borderRadius : "",
-          overlayRadii: overlays.map((overlay) => getComputedStyle(overlay).borderRadius)
+          overlays: overlays.map((overlay) => ({
+            display: getComputedStyle(overlay).display,
+            mixBlendMode: getComputedStyle(overlay).mixBlendMode,
+            radius: getComputedStyle(overlay).borderRadius
+          }))
         };
       };
       return { sidebar: read(".sidebar"), strip: read(".activeServerStrip") };
     });
 
     assert.equal(geometry.strip.surfaceRadius, "18px", `Server-strip radius changed: ${JSON.stringify(geometry)}`);
-    assert(geometry.strip.overlayRadii.length >= 2 && geometry.strip.overlayRadii.every((radius) => radius === geometry.strip.surfaceRadius), `Server-strip liquid-glass rims do not follow the surface: ${JSON.stringify(geometry)}`);
+    assert.equal(geometry.strip.overlays.filter((overlay) => overlay.display !== "none").length, 1, `Server strip renders more than one liquid-glass rim: ${JSON.stringify(geometry)}`);
+    assert(geometry.strip.overlays.every((overlay) => overlay.radius === geometry.strip.surfaceRadius), `Server-strip liquid-glass rims do not follow the surface: ${JSON.stringify(geometry)}`);
     assert.equal(geometry.sidebar.surfaceRadius, "0px", `Desktop sidebar radius changed: ${JSON.stringify(geometry)}`);
-    assert(geometry.sidebar.overlayRadii.length >= 2 && geometry.sidebar.overlayRadii.every((radius) => radius === geometry.sidebar.surfaceRadius), `Sidebar liquid-glass rims do not follow the surface: ${JSON.stringify(geometry)}`);
+    assert.equal(geometry.sidebar.overlays.filter((overlay) => overlay.display !== "none").length, 1, `Sidebar renders more than one liquid-glass rim: ${JSON.stringify(geometry)}`);
+    assert(geometry.sidebar.overlays.every((overlay) => overlay.radius === geometry.sidebar.surfaceRadius), `Sidebar liquid-glass rims do not follow the surface: ${JSON.stringify(geometry)}`);
 
     await page.getByRole("button", { name: "Files", exact: true }).click();
     await page.getByRole("rowheader", { name: "config", exact: true }).dblclick();
@@ -627,19 +633,28 @@ async function assertLiquidGlassAndEditorScrollbar(context) {
     await page.locator(".fileCodeEditor .cm-content").fill(Array.from({ length: 180 }, (_, index) => `setting_${index}=true`).join("\n"));
     const scrollbar = await page.locator(".fileCodeEditor .cm-scroller").evaluate((scroller) => {
       const style = getComputedStyle(scroller);
+      const webkitScrollbar = getComputedStyle(scroller, "::-webkit-scrollbar");
+      const webkitTrack = getComputedStyle(scroller, "::-webkit-scrollbar-track");
+      const webkitThumb = getComputedStyle(scroller, "::-webkit-scrollbar-thumb");
       return {
         canScroll: scroller.scrollHeight > scroller.clientHeight,
         overflowY: style.overflowY,
         scrollbarColor: style.scrollbarColor,
         scrollbarGutter: style.scrollbarGutter,
-        scrollbarWidth: style.scrollbarWidth
+        scrollbarWidth: style.scrollbarWidth,
+        webkitWidth: webkitScrollbar.width,
+        webkitTrackBackground: webkitTrack.backgroundColor,
+        webkitThumbBackground: webkitThumb.backgroundColor
       };
     });
     assert(scrollbar.canScroll, `Long file content does not overflow the editor: ${JSON.stringify(scrollbar)}`);
-    assert.equal(scrollbar.overflowY, "auto", `File editor no longer owns scrolling: ${JSON.stringify(scrollbar)}`);
+    assert.equal(scrollbar.overflowY, "scroll", `File editor does not keep its vertical scrollbar present: ${JSON.stringify(scrollbar)}`);
     assert(scrollbar.scrollbarGutter.includes("stable"), `File editor does not reserve its scrollbar: ${JSON.stringify(scrollbar)}`);
-    assert.equal(scrollbar.scrollbarWidth, "thin", `File editor scrollbar is not visibly styled: ${JSON.stringify(scrollbar)}`);
-    assert(scrollbar.scrollbarColor !== "auto", `File editor scrollbar colors are not applied: ${JSON.stringify(scrollbar)}`);
+    assert.equal(scrollbar.scrollbarWidth, "auto", `Standard scrollbar width still overrides Chromium styling: ${JSON.stringify(scrollbar)}`);
+    assert.equal(scrollbar.scrollbarColor, "auto", `Standard scrollbar colors still override Chromium styling: ${JSON.stringify(scrollbar)}`);
+    assert.equal(scrollbar.webkitWidth, "10px", `Chromium scrollbar width is not applied: ${JSON.stringify(scrollbar)}`);
+    assert(!["", "rgba(0, 0, 0, 0)", "transparent"].includes(scrollbar.webkitTrackBackground), `Chromium scrollbar track is transparent: ${JSON.stringify(scrollbar)}`);
+    assert(!["", "rgba(0, 0, 0, 0)", "transparent"].includes(scrollbar.webkitThumbBackground), `Chromium scrollbar thumb is transparent: ${JSON.stringify(scrollbar)}`);
     assert.deepEqual(browserErrors, [], `Liquid-glass/editor browser errors: ${browserErrors.join("\n")}`);
   } finally {
     await page.close();
@@ -756,6 +771,22 @@ async function assertActiveSchedulePresentation(context, viewport) {
 
 try {
   browser = await launchBrowser(chromium);
+  const materialOnly = process.env.SERVERSENTINEL_OVERVIEW_MATERIAL_ONLY === "true";
+  if (materialOnly) {
+    const materialContext = await browser.newContext({
+      locale: "en-US",
+      timezoneId: "UTC",
+      colorScheme: "dark",
+      reducedMotion: "no-preference"
+    });
+    try {
+      await signInThroughApi(materialContext, baseUrl);
+      await assertLiquidGlassAndEditorScrollbar(materialContext);
+    } finally {
+      await materialContext.close();
+    }
+    console.log("Overview material smoke passed: one visible Chromium liquid-glass rim and an always-visible styled file-editor scrollbar.");
+  } else {
   const context = await browser.newContext({
     locale: "en-US",
     timezoneId: "UTC",
@@ -828,6 +859,7 @@ try {
   }
 
   console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline and server-strip geometry; aligned liquid-glass contours; visible file-editor scrolling; active schedule ranges and card previews; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
+  }
 } finally {
   if (browser) await browser.close();
   await harness.stop();

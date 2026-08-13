@@ -117,6 +117,8 @@ describe("SettingsPage", () => {
     expect(html).toContain("Manage integrations permission is required");
     expect(html).toContain("Player heads");
     expect(html).toContain("MCHeads");
+    expect(html).toContain("cached heads refresh on a rolling daily schedule");
+    expect(html).not.toContain("12 hours");
     expect(html).toContain("0 cached heads · 0 B");
     expect(html).toContain('aria-label="Show player heads on Overview"');
   });

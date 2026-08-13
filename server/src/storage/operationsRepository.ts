@@ -28,6 +28,7 @@ type OperationCreateInput = {
   progress?: number;
   task?: string;
   createdAt?: string;
+  result?: unknown;
 };
 
 type OperationPatch = {
@@ -84,7 +85,7 @@ export class OperationsRepository {
       INSERT INTO operations (
         id, type, status, server_id, node_id, created_by, progress,
         task, created_at, started_at, finished_at, error_message, result_json, log_summary
-      ) VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)
+      ) VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, NULL)
     `).run(
       id,
       input.type,
@@ -93,7 +94,8 @@ export class OperationsRepository {
       input.createdBy ?? null,
       clampProgress(input.progress ?? 0),
       input.task ?? null,
-      now
+      now,
+      resultJson(input.result)
     );
     return this.find(id)!;
   }
@@ -142,6 +144,14 @@ export class OperationsRepository {
       ORDER BY created_at DESC
       LIMIT ?
     `).all(serverId, safeLimit).map(operationFromRow);
+  }
+
+  listActiveByType(type: OperationType) {
+    return this.storage.connection.prepare<[string], OperationRow>(`
+      SELECT * FROM operations
+      WHERE type = ? AND status IN ('queued', 'running')
+      ORDER BY created_at ASC, rowid ASC
+    `).all(type).map(operationFromRow);
   }
 
   countActive() {
@@ -265,15 +275,30 @@ export class OperationsRepository {
     return this.find(id);
   }
 
-  failIncompleteOnStartup(message = "Operation did not complete before serverSENTINEL restarted", now = new Date().toISOString()) {
-    return this.storage.connection.prepare(`
+  failIncompleteOnStartup(
+    message = "Operation did not complete before serverSENTINEL restarted",
+    now = new Date().toISOString(),
+    preserveIds: readonly string[] = []
+  ) {
+    const preserved = new Set(preserveIds);
+    const incomplete = this.storage.connection.prepare<[], { id: string }>(`
+      SELECT id FROM operations WHERE status IN ('queued', 'running')
+    `).all();
+    const fail = this.storage.connection.prepare(`
       UPDATE operations
       SET status = 'failed',
           finished_at = ?,
           error_message = ?,
           task = COALESCE(task, ?)
-      WHERE status IN ('queued', 'running')
-    `).run(now, message, message).changes;
+      WHERE id = ? AND status IN ('queued', 'running')
+    `);
+    return this.storage.transaction(() => {
+      let changed = 0;
+      for (const operation of incomplete) {
+        if (!preserved.has(operation.id)) changed += fail.run(now, message, message, operation.id).changes;
+      }
+      return changed;
+    });
   }
 
   listExportOperations() {

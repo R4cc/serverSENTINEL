@@ -9,9 +9,18 @@ export const htmlCacheControl = "no-cache, no-transform";
 export const immutableAssetCacheControl = "public, max-age=31536000, immutable";
 export const publicAssetCacheControl = "public, max-age=3600, must-revalidate";
 
+/**
+ * A precompressed hit is served from the sibling `.br`/`.gz` file, so the path this sees carries the
+ * encoding suffix. The policy belongs to the resource, not to the encoding it arrived in.
+ */
+function withoutEncodingSuffix(path: string) {
+  return path.replace(/\.(?:br|gz)$/, "");
+}
+
 export function frontendCacheControl(webDist: string, path: string) {
-  if (basename(path) === "index.html") return htmlCacheControl;
-  const relativePath = relative(webDist, path).replace(/\\/g, "/");
+  const resourcePath = withoutEncodingSuffix(path);
+  if (basename(resourcePath) === "index.html") return htmlCacheControl;
+  const relativePath = relative(webDist, resourcePath).replace(/\\/g, "/");
   return relativePath.startsWith("assets/") ? immutableAssetCacheControl : publicAssetCacheControl;
 }
 
@@ -24,6 +33,11 @@ export async function registerStaticFrontend(app: FastifyInstance) {
     prefix: "/",
     wildcard: false,
     cacheControl: false,
+    // The build writes a maximum-quality `.br` and `.gz` beside every text asset. Serving those
+    // sends a smaller body than the request-time encoder can produce and spends no CPU doing it;
+    // `@fastify/compress` leaves a reply alone once `Content-Encoding` is set. A build without the
+    // siblings, or a client that asked for neither encoding, falls back to the plain file.
+    preCompressed: true,
     setHeaders(reply, path) {
       // HTML must revalidate and must not be transformed by Cloudflare, which also
       // keeps Browser Insights injection disabled. Vite fingerprints /assets files,

@@ -322,7 +322,7 @@ describe("Fastify application factory", () => {
     }
   });
 
-  it("retains downloads after the legacy export retention window", async () => {
+  it("retains successful export downloads indefinitely", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-expired-export-"));
     temporaryDirectories.push(dataDir);
     process.env = {
@@ -332,7 +332,6 @@ describe("Fastify application factory", () => {
       SERVERSENTINEL_ENABLE_DEMO: "false",
       SERVERSENTINEL_TRUST_PROXY: "false",
       SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
-      SERVERSENTINEL_EXPORT_RETENTION_HOURS: "1",
       LOG_LEVEL: "silent",
       PORT: "18082",
       TZ: "UTC"

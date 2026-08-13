@@ -347,7 +347,6 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
   const scheduleAnnotationsAvailable = hasPermission(user, "schedules.view");
   const scheduleResult = scheduleAnnotationsAvailable
     ? timelineScheduleMarkers({
-        schedules: server.schedules ?? [],
         runs: services.serversRepository.scheduledRunsInRange(server.id, from, to),
         activeRuns: (server.schedules ?? []).flatMap((schedule) => activeScheduledRunsFor(server.id, schedule.id)),
         from,

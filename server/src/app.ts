@@ -76,7 +76,7 @@ import { readLocalPlayerObservation, resourceStatsHistoryWindow, serverOverviewD
 import { localServerStorage } from "./servers/storageSpace.js";
 import { createManagedServer } from "./servers/provisioning.js";
 import { localCreateFolder, localDeleteFile, localDeleteServer, localDownloadArchive, localDownloadFile, localDuplicateFile, localExtractArchive, localListFiles, localMoveFile, localPlanArchiveExtraction, localPreviewFile, localReadEditableFile, localRenameFile, localSendConsoleCommand, localServerLogs, localServerStatus, localStreamConsole, localUpdateServer, localUploadFile, localWriteEditableFile } from "./servers/localRuntimeAdapter.js";
-import { scheduleFromBody, startScheduleExecution, tickSchedules } from "./schedules/engine.js";
+import { resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, startScheduleExecution, tickSchedules } from "./schedules/engine.js";
 
 const resourceStatsPollMs = 5_000;
 const timelineEventPollMs = 10_000;
@@ -193,7 +193,14 @@ services.exportArtifactMaintenance = new ExportArtifactMaintenance(
   operationRetentionMs,
   operationRetentionMaxRows
 );
-const recoveredOperations = services.operationsRepository.failIncompleteOnStartup();
+const resumableScheduleWaits = resumableScheduleWaitOperations(
+  services.operationsRepository.listActiveByType("schedule.run")
+);
+const recoveredOperations = services.operationsRepository.failIncompleteOnStartup(
+  undefined,
+  undefined,
+  resumableScheduleWaits.map((operation) => operation.id)
+);
 if (recoveredOperations > 0) {
   logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
 }
@@ -558,6 +565,11 @@ app.addHook("onClose", async () => {
   services.timelineEventCollector?.stop();
   services.playerSnapshotCoordinator?.stop();
 });
+
+const resumedScheduleWaits = resumeWaitingScheduleExecutions(resumableScheduleWaits);
+if (resumedScheduleWaits > 0) {
+  logInfo({ scheduleRunCount: resumedScheduleWaits }, "Resumed schedules waiting for players to leave");
+}
 
 await registerStaticFrontend(app);
 

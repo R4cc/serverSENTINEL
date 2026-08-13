@@ -15,6 +15,12 @@ describe("frontendCacheControl", () => {
     expect(immutableAssetCacheControl).toBe("public, max-age=31536000, immutable");
   });
 
+  it("keeps a precompressed hit on the policy of the resource it encodes", () => {
+    expect(frontendCacheControl(webDist, `${webDist}/assets/index-Ab12Cd34.js.br`)).toBe(immutableAssetCacheControl);
+    expect(frontendCacheControl(webDist, `${webDist}/assets/index-Ef56Gh78.css.gz`)).toBe(immutableAssetCacheControl);
+    expect(frontendCacheControl(webDist, `${webDist}/index.html.br`)).toBe(htmlCacheControl);
+  });
+
   it("uses a short revalidated policy for stable public filenames", () => {
     expect(frontendCacheControl(webDist, `${webDist}/logo-40.webp`)).toBe(publicAssetCacheControl);
     expect(frontendCacheControl(webDist, `${webDist}/robots.txt`)).toBe(publicAssetCacheControl);

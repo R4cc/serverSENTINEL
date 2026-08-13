@@ -149,7 +149,6 @@ export type TimelinePalette = {
   leave: string;
   server: string;
   automation: string;
-  planned: string;
   accent: string;
   text: string;
   textMuted: string;
@@ -168,7 +167,6 @@ export const defaultTimelinePalette: TimelinePalette = {
   leave: "#df3d72",
   server: "#f28b16",
   automation: "#7a42e8",
-  planned: "#7a42e8",
   accent: "#4169ff",
   text: "#1f2530",
   textMuted: "#697386",

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Response } from "undici";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PlayerHeadService, playerHeadFreshMs } from "./playerHeadService.js";
+import { PlayerHeadService, playerHeadFreshMs, playerHeadRefreshAfter } from "./playerHeadService.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
 import { PlayerHeadCacheRepository } from "./storage/playerHeadCacheRepository.js";
 import { SettingsRepository } from "./storage/settingsRepository.js";
@@ -39,6 +39,24 @@ async function harness(fetch: typeof globalThis.fetch = vi.fn(async () => new Re
 }
 
 describe("PlayerHeadService", () => {
+  it("checks cached player heads every 24 hours", () => {
+    expect(playerHeadFreshMs).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("distributes the first refresh of a player population across a rolling day", () => {
+    const refreshedAt = Date.UTC(2026, 7, 13);
+    const refreshTimes = Array.from({ length: 100 }, (_, index) => playerHeadRefreshAfter(`player${index}`, refreshedAt));
+    expect(refreshTimes.every((refreshAfter) => refreshAfter >= refreshedAt + playerHeadFreshMs)).toBe(true);
+    expect(refreshTimes.every((refreshAfter) => refreshAfter < refreshedAt + (2 * playerHeadFreshMs))).toBe(true);
+    const occupiedHours = new Set(refreshTimes.map((refreshAfter) => Math.floor((refreshAfter - refreshedAt - playerHeadFreshMs) / (60 * 60 * 1000))));
+    expect(occupiedHours.size).toBeGreaterThan(20);
+
+    const previous = { fetchedAt: refreshedAt, refreshAfter: refreshTimes[0] };
+    expect(playerHeadRefreshAfter("player0", refreshTimes[0], previous)).toBe(refreshTimes[0] + playerHeadFreshMs);
+    const legacy = { fetchedAt: refreshedAt - playerHeadFreshMs, refreshAfter: refreshedAt - (playerHeadFreshMs / 2) };
+    expect(playerHeadRefreshAfter("player0", refreshedAt, legacy)).toBe(refreshTimes[0]);
+  });
+
   it("does not contact MCHeads while disabled or undecided", async () => {
     const test = await harness();
     expect(test.settings.get()).toMatchObject({ playerHeadsEnabled: false, playerHeadsOnboardingCompleted: false });
@@ -115,6 +133,39 @@ describe("PlayerHeadService", () => {
     expect(starts).toHaveLength(8);
     expect(starts.slice(1).every((start, index) => start - starts[index] >= 7)).toBe(true);
     service.close();
+  });
+
+  it("paces stale background refreshes across the day while foreground heads stay prompt", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const starts: Array<{ player: string; at: number }> = [];
+    const fetch = vi.fn(async (url: string) => {
+      starts.push({ player: decodeURIComponent(url.split("/").at(-2) ?? ""), at: Date.now() });
+      return new Response(png, { status: 200, headers: { "content-type": "image/png" } });
+    }) as unknown as typeof globalThis.fetch;
+    const test = await harness(fetch);
+    test.service.close();
+    for (let index = 0; index < 4; index += 1) {
+      test.cache.set({ key: `player${index}`, playerName: `Player${index}`, bytes: png, fetchedAt: -2, refreshAfter: -1, lastAccessedAt: -2 });
+    }
+    const service = new PlayerHeadService({ settings: test.settings, cache: test.cache, fetch: fetch as never, requestIntervalMs: 0 });
+    services.push(service);
+    service.setEnabled(true);
+
+    await Promise.all(Array.from({ length: 4 }, (_, index) => service.head(`Player${index}`)));
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    await service.head("NewPlayer");
+    await vi.runAllTimersAsync();
+
+    const hour = 60 * 60 * 1000;
+    const fivePlayerInterval = playerHeadFreshMs / 5;
+    expect(starts).toEqual([
+      { player: "Player0", at: 0 },
+      { player: "NewPlayer", at: hour },
+      { player: "Player1", at: 6 * hour },
+      { player: "Player2", at: (6 * hour) + fivePlayerInterval },
+      { player: "Player3", at: (6 * hour) + (2 * fivePlayerInterval) }
+    ]);
   });
 
   it("cancels active and queued work when disabled", async () => {
