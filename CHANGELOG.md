@@ -6,7 +6,7 @@
 
 - Kept the network in and network out timeline series continuous on remote nodes, where sharing one cached stats reading across several collections previously drew the rate as alternating zeroes and spikes.
 - Aged remote node observations against the panel's own clock and kept the newest reading when responses arrive out of order, so a node whose clock differs from the panel's no longer forces a fresh round trip on every read.
-- Removed the timeline's "Planned schedules" toggle, which could no longer draw anything now that the viewport stops at the present; upcoming runs remain on the Schedules panel.
+- Removed the timeline's planned-schedule layer, from the "Planned schedules" toggle down to the per-request cron projection behind it, now that the viewport stops at the present and no window can contain a future run; upcoming runs remain on the Schedules panel.
 
 ## 26.8.6 - 2026-08-13
 

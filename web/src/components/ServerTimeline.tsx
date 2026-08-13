@@ -97,7 +97,7 @@ export type TimelineMarker = {
   id: string;
   occurredAt: number;
   label: string;
-  tone: "server" | "automation" | "planned";
+  tone: "server" | "automation";
   event?: ServerTimelineEvent;
   occurrences?: number;
   restart?: {
@@ -400,8 +400,8 @@ export function timelineMarkers(data: ServerTimelineResponse | null): TimelineMa
     ...data.schedules.map((schedule) => ({
       id: schedule.id,
       occurredAt: schedule.occurredAt,
-      label: schedule.kind === "upcoming" ? `${schedule.scheduleName} scheduled` : `${schedule.scheduleName}: ${schedule.status}`,
-      tone: schedule.kind === "upcoming" ? "planned" as const : "automation" as const,
+      label: `${schedule.scheduleName}: ${schedule.status}`,
+      tone: "automation" as const,
       schedule
     }))
   ].sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
@@ -468,7 +468,7 @@ export function timelineMarkerDisplayLabel(marker: TimelineMarker): TimelineMark
   if (event?.eventType === "mod_disabled") return { primary: "Mod disabled", secondary: event.subject };
   if (marker.schedule) return {
     primary: marker.schedule.scheduleName,
-    secondary: marker.schedule.kind === "upcoming" ? "Scheduled" : capitalizeTimelineLabel(marker.schedule.status)
+    secondary: capitalizeTimelineLabel(marker.schedule.status)
   };
   return { primary: marker.label };
 }
@@ -547,10 +547,6 @@ function timelineEventIdentity(event: ServerTimelineEvent) {
 }
 
 export function mergeTimelineResponses(current: ServerTimelineResponse, incoming: ServerTimelineResponse, from: number, to: number): ServerTimelineResponse {
-  const incomingGeneratedAt = new Date(incoming.generatedAt).getTime();
-  const retainedSchedules = Number.isFinite(incomingGeneratedAt)
-    ? current.schedules.filter((marker) => marker.kind !== "upcoming" || marker.occurredAt > incomingGeneratedAt)
-    : current.schedules;
   const incomingOnlinePlayers = new Set(
     incoming.playerActivity?.onlineNames.map((player) => player.trim().toLocaleLowerCase()) ?? []
   );
@@ -590,7 +586,7 @@ export function mergeTimelineResponses(current: ServerTimelineResponse, incoming
       .filter((event) => event.occurredAt >= from && event.occurredAt <= to)
       .sort((left, right) => left.occurredAt - right.occurredAt),
     schedules: incoming.scheduleAnnotationsAvailable
-      ? uniqueBy([...retainedSchedules, ...incoming.schedules], (marker) => marker.id)
+      ? uniqueBy([...current.schedules, ...incoming.schedules], (marker) => marker.id)
           .filter((marker) => marker.occurredAt >= from && marker.occurredAt <= to)
           .sort((left, right) => left.occurredAt - right.occurredAt)
       : [],
@@ -629,7 +625,6 @@ function readTimelinePalette(element: HTMLElement): TimelinePalette {
     leave: read("--timeline-leave", defaultTimelinePalette.leave),
     server: read("--timeline-server", defaultTimelinePalette.server),
     automation: read("--timeline-schedule", defaultTimelinePalette.automation),
-    planned: read("--timeline-schedule", defaultTimelinePalette.planned),
     accent: read("--accent", defaultTimelinePalette.accent),
     text: read("--text", defaultTimelinePalette.text),
     textMuted: read("--text-muted", defaultTimelinePalette.textMuted),
@@ -1020,13 +1015,7 @@ export function ServerTimeline({
   }, []);
 
   const allMarkers = useMemo(() => timelineMarkers(data), [data]);
-  // The viewport is clamped to the present, so a planned run is never inside a window the chart can
-  // show. The layer had a toggle of its own that could only ever draw an empty rail; upcoming runs
-  // are listed on the Schedules panel instead.
-  const markers = useMemo(
-    () => allMarkers.filter((marker) => marker.schedule?.kind !== "active" && marker.tone !== "planned" && annotationEnabled[marker.tone]),
-    [allMarkers, annotationEnabled]
-  );
+  const markers = useMemo(() => allMarkers.filter((marker) => marker.schedule?.kind !== "active" && annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
   const activeScheduleRanges = useMemo(
     () => annotationEnabled.automation
       ? timelineActiveScheduleRanges(allMarkers, viewport.from, viewport.to, clockNow)
@@ -1437,7 +1426,7 @@ export function ServerTimeline({
               </div>
             )}
             {!visibleEventCount && !loading && (
-              <span className="serverTimelineEventRailEmpty">No server events, automation runs, or planned schedules here</span>
+              <span className="serverTimelineEventRailEmpty">No server events or automation runs here</span>
             )}
             {selectedCluster && selectedPosition && (
               <section

@@ -3,7 +3,6 @@ import type {
 } from "./resourceStatsCollector.js";
 import type {
   ScheduledActiveRun,
-  ScheduledExecution,
   ScheduledRun,
   PlayerSnapshot,
   ServerTimelineEvent,
@@ -12,7 +11,6 @@ import type {
   ServerTimelineResourcePoint,
   ServerTimelineScheduleMarker
 } from "./types.js";
-import { nextCronRun } from "./core.js";
 
 // The collector targets five-second samples, but remote node calls can occasionally
 // arrive late without the underlying stats becoming unavailable. Only break the
@@ -336,8 +334,14 @@ function runStatus(status: string): ServerTimelineScheduleMarker["status"] {
   return "unknown";
 }
 
+/**
+ * Schedule annotations for a timeline window.
+ *
+ * Only runs that already started are projected. The viewport is clamped to the present, so a
+ * window that contains a future cron occurrence cannot be requested; the Schedules panel is where
+ * upcoming runs are listed.
+ */
 export function timelineScheduleMarkers(input: {
-  schedules: ScheduledExecution[];
   runs: ScheduledRun[];
   activeRuns: ScheduledActiveRun[];
   from: number;
@@ -369,22 +373,6 @@ export function timelineScheduleMarkers(input: {
     // including when they began before the current viewport.
     if (!Number.isFinite(occurredAt) || occurredAt > input.to || now < input.from) continue;
     if (!add({ id: `active:${run.id}`, scheduleId: run.scheduleId, scheduleName: run.scheduleName, occurredAt, kind: "active", status: "running", runId: run.id, message: run.message })) break;
-  }
-  const upcomingFrom = Math.max(input.from, now);
-  for (const schedule of input.schedules) {
-    if (!schedule.enabled || markers.length >= limit) continue;
-    let cursor = new Date(upcomingFrom - 60_000);
-    while (markers.length < limit) {
-      const next = nextCronRun(schedule.cron, cursor, 2);
-      if (!next) break;
-      const occurredAt = next.getTime();
-      if (occurredAt > input.to) break;
-      if (occurredAt >= upcomingFrom) {
-        add({ id: `upcoming:${schedule.id}:${occurredAt}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt, kind: "upcoming", status: "upcoming" });
-      }
-      cursor = next;
-    }
-    if (markers.length >= limit) truncated = true;
   }
   markers.sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id));
   return { markers, truncated };

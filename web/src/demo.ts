@@ -856,13 +856,8 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
       const occurredAt = new Date(run.startedAt).getTime();
       if (Number.isFinite(occurredAt) && occurredAt <= to && now >= from) markers.push({ id: `active:${run.id}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt, kind: "active", status: "running", runId: run.id, message: run.message });
     }
-    const upcomingAt = schedule.nextRunAt ? new Date(schedule.nextRunAt).getTime() : NaN;
-    if (Number.isFinite(upcomingAt) && upcomingAt >= from && upcomingAt <= to) markers.push({ id: `upcoming:${schedule.id}:${upcomingAt}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt: upcomingAt, kind: "upcoming", status: "upcoming" });
     return markers;
   });
-  if (schedules[0] && now + 3 * 60_000 >= from && now + 3 * 60_000 <= to) {
-    scheduleMarkers.push({ id: "upcoming:demo-near", scheduleId: schedules[0].id, scheduleName: schedules[0].name, occurredAt: now + 3 * 60_000, kind: "upcoming", status: "upcoming" });
-  }
   return {
     from,
     to,

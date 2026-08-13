@@ -122,7 +122,7 @@ function response(): ServerTimelineResponse {
       { id: "leave", eventType: "player_left", type: "info", severity: "info", text: "Alex left", message: "Alex left", timestamp: "2026-01-01T00:00:11.000Z", occurredAt: 11_000, signature: "player_left:alex", source: "logs/latest.log", subject: "Alex" },
       { id: "started", eventType: "server_started", type: "success", severity: "success", text: "Server started", message: "Server started", timestamp: "2026-01-01T00:00:20.000Z", occurredAt: 20_000, signature: "server_started", source: "logs/latest.log" }
     ],
-    schedules: [{ id: "schedule", scheduleId: "schedule-1", scheduleName: "Restart", occurredAt: 50_000, kind: "upcoming", status: "upcoming" }],
+    schedules: [{ id: "schedule", scheduleId: "schedule-1", scheduleName: "Restart", occurredAt: 50_000, kind: "run", status: "success", runId: "run-1" }],
     scheduleAnnotationsAvailable: true,
     truncated: { schedules: false }
   };
@@ -213,8 +213,8 @@ describe("server timeline markers", () => {
 
   it("maps lifecycle and schedule annotations while omitting player messages", () => {
     const markers = timelineMarkers(response());
-    expect(markers.map((marker) => marker.label)).toEqual(["Server started", "Restart scheduled"]);
-    expect(markers.map((marker) => marker.tone)).toEqual(["server", "planned"]);
+    expect(markers.map((marker) => marker.label)).toEqual(["Server started", "Restart: success"]);
+    expect(markers.map((marker) => marker.tone)).toEqual(["server", "automation"]);
     expect(markers.every((marker) => marker.event?.eventType !== "player_joined" && marker.event?.eventType !== "player_left")).toBe(true);
   });
 
@@ -272,9 +272,9 @@ describe("server timeline markers", () => {
     const markers = timelineMarkers(response());
     markers[1].occurredAt = 21_000;
     const cluster = clusterTimelineMarkers(markers, 0, 60_000, 6)[0];
-    expect(cluster.markers.map((marker) => marker.label)).toEqual(["Server started", "Restart scheduled"]);
+    expect(cluster.markers.map((marker) => marker.label)).toEqual(["Server started", "Restart: success"]);
     expect(timelineClusterOccurrenceCount(cluster)).toBe(2);
-    expect(timelineClusterIconMarkers(cluster).map((marker) => marker.tone)).toEqual(["server", "planned"]);
+    expect(timelineClusterIconMarkers(cluster).map((marker) => marker.tone)).toEqual(["server", "automation"]);
   });
 
   it("uses a calendar glyph for scheduled runs", () => {
@@ -443,11 +443,10 @@ describe("server timeline markers", () => {
     expect(mergeTimelineResponses(current, incoming, 0, 60_000).events.map((event) => event.id)).toEqual(["logs-198-new"]);
   });
 
-  it("removes an upcoming marker after its scheduled time passes", () => {
+  it("drops every schedule marker when the viewer cannot see schedule annotations", () => {
     const current = response();
-    current.schedules = [{ id: "upcoming", scheduleId: "schedule-1", scheduleName: "Restart", occurredAt: 50_000, kind: "upcoming", status: "upcoming" }];
     const incoming = response();
-    incoming.generatedAt = new Date(60_000).toISOString();
+    incoming.scheduleAnnotationsAvailable = false;
     incoming.schedules = [];
 
     expect(mergeTimelineResponses(current, incoming, 0, 60_000).schedules).toEqual([]);

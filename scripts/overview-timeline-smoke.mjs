@@ -179,12 +179,12 @@ async function assertPlayerSectionDisclosure(page) {
 async function assertSchedulePopoverIconContrast(page) {
   await selectRange(page, "6h");
   const trigger = page.locator(".timelineAnnotationCluster").filter({
-    has: page.locator(".timelineAnnotationClusterIcon.tone-automation, .timelineAnnotationClusterIcon.tone-planned")
+    has: page.locator(".timelineAnnotationClusterIcon.tone-automation")
   }).first();
   assert(await trigger.count(), "The timeline is missing its schedule marker");
   await trigger.click();
 
-  const glyph = page.locator(".serverTimelineAnnotationPopoverItem:is(.tone-automation, .tone-planned) .serverTimelineAnnotationPopoverGlyph").first();
+  const glyph = page.locator(".serverTimelineAnnotationPopoverItem.tone-automation .serverTimelineAnnotationPopoverGlyph").first();
   await glyph.waitFor();
   const appearance = await glyph.locator("svg").evaluate((icon) => {
     const iconStyles = getComputedStyle(icon);
