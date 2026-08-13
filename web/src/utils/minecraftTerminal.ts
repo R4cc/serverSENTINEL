@@ -39,6 +39,10 @@ export function consumeTerminalTouchScroll(remainder: number, pixelDelta: number
   };
 }
 
+export function terminalViewportAtBottom(viewportY: number, baseY: number) {
+  return viewportY >= baseY;
+}
+
 export function recallPreviousCommand(history: string[], state: TerminalHistoryState): TerminalHistoryState {
   if (!history.length) return state;
   const historyIndex = state.historyIndex === null ? history.length - 1 : Math.max(0, state.historyIndex - 1);

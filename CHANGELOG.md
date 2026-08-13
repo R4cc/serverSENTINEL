@@ -12,8 +12,10 @@
 - Added a View runs action to each schedule, showing every run the panel has kept for it rather than the eight most recent across all schedules.
 - Replaced the repeated field captions on narrow screens with a schedule card, which returns roughly 40% of the row width to the values.
 
-## 1.12.3 - 2026-08-13
+## 1.13.0 - 2026-08-13
 
+- Replaced the Server Properties saving banner and always-visible header actions with a compact bottom action dock that appears only for unsaved changes and animates progress inside the Save button.
+- Added a compact New output action when console lines arrive while the reader is scrolled up, preserving their position until they choose to jump back to the live edge.
 - Kept the console connected while a newly imported local server is waiting for its first Docker container, retained its startup log history, and stopped repeated reattach notices while the server is stopped.
 - Kept the Server Properties Advanced hover surface aligned with its rounded card border in both collapsed and expanded states.
 

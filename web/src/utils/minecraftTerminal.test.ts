@@ -7,6 +7,7 @@ import {
   recallNextCommand,
   recallPreviousCommand,
   shouldCopyTerminalSelection,
+  terminalViewportAtBottom,
   type TerminalHistoryState
 } from "./minecraftTerminal";
 
@@ -51,6 +52,12 @@ describe("Minecraft terminal helpers", () => {
     expect(consumeTerminalTouchScroll(0, 8, 20)).toEqual({ lines: 0, remainder: 8 });
     expect(consumeTerminalTouchScroll(8, 17, 20)).toEqual({ lines: 1, remainder: 5 });
     expect(consumeTerminalTouchScroll(-8, -17, 20)).toEqual({ lines: -1, remainder: -5 });
+  });
+
+  it("distinguishes the live edge from older console output", () => {
+    expect(terminalViewportAtBottom(40, 40)).toBe(true);
+    expect(terminalViewportAtBottom(41, 40)).toBe(true);
+    expect(terminalViewportAtBottom(39, 40)).toBe(false);
   });
 
   it("converts Minecraft formatting codes into ANSI SGR sequences for xterm", () => {

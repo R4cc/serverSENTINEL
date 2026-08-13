@@ -1802,12 +1802,12 @@ export default function App() {
 
   async function updateServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || serverSettingsSaving || !canEditServerSettings) return;
-    if (!activeServer) return;
+    if (isProvisioning || serverSettingsSaving || !canEditServerSettings) return false;
+    if (!activeServer) return false;
     if (serverRequiresStoppedForMutableConfig) {
       setNotice(stoppedServerMutationMessage);
       notify("warning", stoppedServerMutationMessage);
-      return;
+      return false;
     }
     setNotice("");
     const formElement = event.currentTarget;
@@ -1817,11 +1817,11 @@ export default function App() {
       setNotice(message);
       notify("error", message);
     })) {
-      return;
+      return false;
     }
     if (activeServerIsDemo) {
       notify("success", `Updated ${String(form.get("displayName") || activeServer.displayName)} in demo mode`);
-      return;
+      return true;
     }
     setServerSettingsSaving(true);
     const editRuntimeType = form.get("runtimeType") === "paper" ? "paper" : "fabric";
@@ -1849,9 +1849,11 @@ export default function App() {
       notify("success", `Updated ${server.displayName}`);
       await refreshApp();
       await refreshStatus(server.id);
+      return true;
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
+      return false;
     } finally {
       setServerSettingsSaving(false);
     }
@@ -2455,6 +2457,7 @@ export default function App() {
                     onSubmit={updateServer}
                     disabled={serverSettingsLocked || serverSettingsSaving}
                     disabledReason={serverSettingsLockedReason}
+                    saving={serverSettingsSaving}
                     exportPanel={canExportServers ? (
                       <ExportServerPanel
                         server={activeServer}
