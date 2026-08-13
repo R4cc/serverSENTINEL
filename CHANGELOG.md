@@ -6,6 +6,11 @@
 - Added the reader's own clock to that preview whenever the display time zone differs from the one schedules run in, which resolves a schedule written as 04:00 being listed as 06:00.
 - Added a repeat builder to the schedule editor covering every few minutes or hours, every day, and chosen weekdays, so a schedule no longer has to be written as a cron expression. Advanced keeps the expression field, and an expression the builder cannot express opens there untouched.
 - Added the offset from the scheduled start to each step, and a line stating when the last one runs, so a restart with warning commands can be read without adding the delays up.
+- Added three schedule templates covering a nightly restart with warnings, an hourly save, and a weekly restart that waits for an empty server, as starting points a new schedule can be built from.
+- Added Move up and Move down controls to each schedule step, so steps can be reordered on a touch screen and without a pointer.
+- Showed the Restart rules while a schedule is built: Restart is offered only on the final step, and a reorder that would move it away from the end is refused instead of failing when saved.
+- Added a View runs action to each schedule, showing every run the panel has kept for it rather than the eight most recent across all schedules.
+- Replaced the repeated field captions on narrow screens with a schedule card, which returns roughly 40% of the row width to the values.
 
 ## 1.12.3 - 2026-08-13
 

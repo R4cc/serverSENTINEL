@@ -9,9 +9,12 @@ import {
   SchedulePage,
   SchedulePlayerPolicyOptions,
   ScheduleRunDetailsDialog,
+  ScheduleRunHistoryDialog,
   resolveScheduleNavigationTarget,
   reorderScheduleSteps,
   scheduleDescription,
+  scheduleStepMoveBlocked,
+  scheduleStepTypeAvailability,
   scheduleRunFeedKey,
   scheduleRunItems
 } from "./SchedulesPage";
@@ -55,6 +58,38 @@ describe("schedule step summaries", () => {
     expect(reorderScheduleSteps(steps, "three", "one").map((step) => step.id)).toEqual(["three", "one", "two"]);
     expect(reorderScheduleSteps(steps, "one", "three").map((step) => step.id)).toEqual(["two", "three", "one"]);
     expect(steps.map((step) => step.id)).toEqual(["one", "two", "three"]);
+  });
+
+  // Both Restart rules were enforced only at submit, so the Type control offered Action on step 1
+  // of 3 and then the save was rejected.
+  it("offers Restart only where one could legally go", () => {
+    const steps = [
+      { id: "one", type: "command" as const },
+      { id: "two", type: "command" as const }
+    ];
+
+    expect(scheduleStepTypeAvailability(steps, "one").canBecomeRestart).toBe(false);
+    expect(scheduleStepTypeAvailability(steps, "one").reason).toBe("Restart has to be the last step.");
+    expect(scheduleStepTypeAvailability(steps, "two").canBecomeRestart).toBe(true);
+
+    const withRestart = [steps[0], { id: "two", type: "action" as const }];
+    expect(scheduleStepTypeAvailability(withRestart, "two").canBecomeRestart).toBe(true);
+    // A second Restart is not available anywhere, including the step that already is one.
+    expect(scheduleStepTypeAvailability([...withRestart, { id: "three", type: "command" as const }], "three").canBecomeRestart).toBe(false);
+  });
+
+  it("refuses a reorder that would leave Restart anywhere but last", () => {
+    const steps = [
+      { type: "command" as const },
+      { type: "command" as const },
+      { type: "action" as const }
+    ];
+
+    expect(scheduleStepMoveBlocked(steps, 2, 1)).toBe(true);
+    expect(scheduleStepMoveBlocked(steps, 0, 2)).toBe(true);
+    expect(scheduleStepMoveBlocked(steps, 0, 1)).toBe(false);
+    // Without a Restart step every move is fine.
+    expect(scheduleStepMoveBlocked([{ type: "command" as const }, { type: "command" as const }], 1, 0)).toBe(false);
   });
 
   it("describes mixed commands, restart actions, and delays", () => {
@@ -218,6 +253,44 @@ describe("schedule workspace rendering", () => {
 
     expect(html).toContain("Every weekday at 04:00");
     expect(html).not.toContain("Weekly on 1-5");
+  });
+});
+
+describe("schedule run history", () => {
+  // The panel retains 25 runs per schedule; the feed beside the table mixes every schedule together
+  // and stops at eight, so most of that history had nowhere to be read.
+  it("lists every retained run for one schedule, newest first", () => {
+    const runs = [
+      { id: "run-old", scheduleId: "schedule-1", scheduleName: "Nightly maintenance", status: "failed", message: "Command failed", ranAt: "2026-07-10T04:00:00.000Z" },
+      { id: "run-new", scheduleId: "schedule-1", scheduleName: "Nightly maintenance", status: "skipped", message: "Skipped because 3 players are online", ranAt: "2026-07-14T04:00:00.000Z" }
+    ];
+
+    const html = renderToStaticMarkup(createElement(ScheduleRunHistoryDialog, {
+      schedule: { ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), recentRuns: runs },
+      formatDate: (value: string | number | Date) => new Date(value).toISOString(),
+      relativeTimestamps: false,
+      relativeNow: Date.parse("2026-07-14T12:00:00.000Z"),
+      onSelectRun: () => undefined,
+      onClose: () => undefined
+    }));
+
+    expect(html).toContain("2 recorded runs");
+    expect(html).toContain("Skipped because 3 players are online");
+    expect(html).toContain("Command failed");
+    expect(html.indexOf("run at 2026-07-14")).toBeLessThan(html.indexOf("run at 2026-07-10"));
+  });
+
+  it("says so when a schedule has never run", () => {
+    const html = renderToStaticMarkup(createElement(ScheduleRunHistoryDialog, {
+      schedule: schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]),
+      formatDate: (value: string | number | Date) => new Date(value).toISOString(),
+      relativeNow: Date.now(),
+      onSelectRun: () => undefined,
+      onClose: () => undefined
+    }));
+
+    expect(html).toContain("No runs recorded");
+    expect(html).toContain("0 recorded runs");
   });
 });
 

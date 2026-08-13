@@ -24,6 +24,7 @@ import { validateCommandList, validateCronExpression } from '../utils/validation
 import { formatScheduleOffset, scheduleDelayParts, scheduleDelayToSeconds, scheduleOffsetBadge, scheduleStepOffsets } from '../features/schedules/scheduleDelays';
 import { describeCronExpression } from '../features/schedules/cronDescription';
 import { buildCronPreview } from '../features/schedules/cronPreview';
+import { scheduleTemplateById, scheduleTemplates } from '../features/schedules/scheduleTemplates';
 
 type ScheduleFormMode =
   | { type: "create" }
@@ -96,7 +97,7 @@ function stepDraftFromStep(step: ScheduleStep): StepDraft {
   };
 }
 
-export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: ScheduledExecution }) {
+export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Pick<ScheduledExecution, "onlyWhenNoPlayers" | "waitForPlayersToLeave"> }) {
   return (
     <div className="schedulePlayerPolicy" role="radiogroup" aria-labelledby="schedule-player-policy-label">
       <strong id="schedule-player-policy-label">Players online at start</strong>
@@ -117,6 +118,34 @@ export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Scheduled
       <small className="schedulePlayerPolicyNote">Waiting has no timeout. Later matches are ignored so runs never stack up; cancel the active run at any time.</small>
     </div>
   );
+}
+
+/**
+ * A schedule may hold one Restart, and it has to be last. Both rules were enforced only when the
+ * form was submitted, so the Type control happily offered Action on step 1 of 3 and then rejected
+ * the save. Reporting the state per step lets the control say so while the schedule is built.
+ */
+export function scheduleStepTypeAvailability(steps: readonly { id: string; type: StepDraft["type"] }[], stepId: string) {
+  const restartIndex = steps.findIndex((step) => step.type === "action");
+  const index = steps.findIndex((step) => step.id === stepId);
+  const isRestart = restartIndex === index && restartIndex >= 0;
+  const isLast = index === steps.length - 1;
+  return {
+    // Only the final step may become the Restart, and only when no other step already is.
+    canBecomeRestart: isRestart || (isLast && restartIndex < 0),
+    reason: isRestart || isLast ? "" : "Restart has to be the last step."
+  };
+}
+
+/**
+ * Restart must stay last, so a move that would put another step after it is refused rather than
+ * silently reordered into a schedule the server will reject.
+ */
+export function scheduleStepMoveBlocked(steps: readonly { type: StepDraft["type"] }[], from: number, to: number) {
+  const restartIndex = steps.findIndex((step) => step.type === "action");
+  if (restartIndex < 0) return false;
+  if (from === restartIndex) return to !== steps.length - 1;
+  return to >= restartIndex;
 }
 
 export function reorderScheduleSteps<T extends { id: string }>(steps: readonly T[], movedId: string, targetId: string): T[] {
@@ -169,9 +198,15 @@ export function SchedulePage({
   const [formError, setFormError] = useState("");
   const [cronValue, setCronValue] = useState("");
   const [cronMode, setCronMode] = useState<CronScheduleMode>("daily");
+  const [nameValue, setNameValue] = useState("");
+  // Applying a template has to move the player policy too, and those radios are uncontrolled; this
+  // seeds them and remounts the group so the choice a template makes is the one shown.
+  const [policySeed, setPolicySeed] = useState<Pick<ScheduledExecution, "onlyWhenNoPlayers" | "waitForPlayersToLeave"> | null>(null);
+  const [appliedTemplateId, setAppliedTemplateId] = useState("");
   const [draggingStepId, setDraggingStepId] = useState<string | null>(null);
   const [stepReorderMessage, setStepReorderMessage] = useState("");
   const [selectedRun, setSelectedRun] = useState<ScheduledRun | null>(null);
+  const [historySchedule, setHistorySchedule] = useState<ScheduledExecution | null>(null);
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [relativeNow, setRelativeNow] = useState(() => Date.now());
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
@@ -193,6 +228,9 @@ export function SchedulePage({
       setFormError("");
       setCronValue("");
       setCronMode("daily");
+      setNameValue("");
+      setPolicySeed(null);
+      setAppliedTemplateId("");
       setDraggingStepId(null);
       setStepReorderMessage("");
       draggingStepIdRef.current = null;
@@ -208,6 +246,9 @@ export function SchedulePage({
     const initialCron = formMode.type === "edit" ? formMode.schedule.cron : defaultDailyCron;
     setCronValue(initialCron);
     setCronMode(schedulePlanFromCron(initialCron).mode);
+    setNameValue(formMode.type === "edit" ? formMode.schedule.name : "");
+    setPolicySeed(null);
+    setAppliedTemplateId("");
     setDraggingStepId(null);
     setStepReorderMessage("");
     draggingStepIdRef.current = null;
@@ -264,11 +305,13 @@ export function SchedulePage({
     runsFeedRef.current?.scrollTo({ top: 0 });
   }, [recentRunsKey]);
 
+  // Checked against every retained run rather than the eight the feed shows, because the history
+  // dialog can open a run far older than the feed reaches and this would close it again at once.
   useEffect(() => {
-    if (selectedRun && !runItems.some((run) => run.kind === "completed" && run.id === selectedRun.id)) {
-      setSelectedRun(null);
+    if (selectedRun && !schedules.some((schedule) => schedule.recentRuns?.some((run) => run.id === selectedRun.id))) {
+      if (!runItems.some((run) => run.kind === "completed" && run.id === selectedRun.id)) setSelectedRun(null);
     }
-  }, [runItems, selectedRun]);
+  }, [runItems, schedules, selectedRun]);
 
   useEffect(() => {
     if (!navigationTarget) return;
@@ -350,8 +393,13 @@ export function SchedulePage({
   }
 
   function moveStep(movedId: string, targetId: string) {
+    const movedIndex = stepDrafts.findIndex((step) => step.id === movedId);
     const targetIndex = stepDrafts.findIndex((step) => step.id === targetId);
     if (targetIndex < 0 || movedId === targetId) return;
+    if (scheduleStepMoveBlocked(stepDrafts, movedIndex, targetIndex)) {
+      setStepReorderMessage("Restart has to be the last step, so this move was not made.");
+      return;
+    }
     setStepDrafts((steps) => {
       const reordered = reorderScheduleSteps(steps, movedId, targetId);
       stepDraftsRef.current = reordered;
@@ -360,12 +408,22 @@ export function SchedulePage({
     setStepReorderMessage(`Step moved to position ${targetIndex + 1}.`);
   }
 
+  /** Explicit controls, because a drag handle is unusable on touch and needs a keyboard otherwise. */
+  function nudgeStep(stepId: string, direction: -1 | 1) {
+    const index = stepDrafts.findIndex((step) => step.id === stepId);
+    const target = stepDrafts[index + direction];
+    if (target) moveStep(stepId, target.id);
+  }
+
   function moveDraggedStepAtPoint(clientX: number, clientY: number) {
     const movedId = draggingStepIdRef.current;
     const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-schedule-step-id]");
     const targetId = target?.dataset.scheduleStepId;
     if (!movedId || !targetId || movedId === targetId) return;
     setStepDrafts((steps) => {
+      const movedIndex = steps.findIndex((step) => step.id === movedId);
+      const targetIndex = steps.findIndex((step) => step.id === targetId);
+      if (scheduleStepMoveBlocked(steps, movedIndex, targetIndex)) return steps;
       const reordered = reorderScheduleSteps(steps, movedId, targetId);
       stepDraftsRef.current = reordered;
       return reordered;
@@ -471,6 +529,22 @@ export function SchedulePage({
 
   const stepOffsets = scheduleStepOffsets(stepDrafts.map((draft) => scheduleDelayToSeconds(draft.delayValue, draft.delayUnit)));
   const totalStepSeconds = stepOffsets.at(-1) ?? 0;
+  const stepTypeAvailability = stepDrafts.map((draft) => scheduleStepTypeAvailability(stepDrafts, draft.id));
+  // Followed through the polled list rather than held as a snapshot, so a run finishing while the
+  // dialog is open appears in it. Falls back to the captured schedule if it has been deleted.
+  const liveHistorySchedule = historySchedule ? schedules.find((candidate) => candidate.id === historySchedule.id) : undefined;
+
+  function applyScheduleTemplate(templateId: string) {
+    const template = scheduleTemplateById(templateId);
+    if (!template) return;
+    setNameValue(template.name);
+    setCronValue(template.cron);
+    setCronMode(schedulePlanFromCron(template.cron).mode);
+    setStepDrafts(template.steps.map(stepDraftFromStep));
+    setPolicySeed({ onlyWhenNoPlayers: template.onlyWhenNoPlayers, waitForPlayersToLeave: template.waitForPlayersToLeave });
+    setAppliedTemplateId(templateId);
+    setFormError("");
+  }
 
   function applySchedulePlan(plan: CronSchedulePlan) {
     setCronValue(cronFromSchedulePlan(plan));
@@ -643,6 +717,16 @@ export function SchedulePage({
                               : disabled ? disabledReason || "Schedule runs are unavailable right now." : `Run ${schedule.name} now`
                           },
                           {
+                            id: "view-runs",
+                            label: "View runs",
+                            icon: <AppIcon name="hourglass" />,
+                            onSelect: () => setHistorySchedule(schedule),
+                            disabled: !schedule.recentRuns?.length,
+                            title: schedule.recentRuns?.length
+                              ? `View the run history for ${schedule.name}`
+                              : `${schedule.name} has not run yet`
+                          },
+                          {
                             id: "edit",
                             label: "Edit",
                             icon: <AppIcon name="edit" />,
@@ -738,6 +822,30 @@ export function SchedulePage({
               <fieldset disabled={disabled} className="scheduleEditFieldset">
               {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
 
+              {/* Only offered for a new schedule, and only as a first draft: a template fills the
+                  fields below and saves nothing, so everything it chose stays visible and editable. */}
+              {formMode.type === "create" && (
+                <section className="scheduleEditorSection scheduleTemplateSection" aria-labelledby="schedule-templates-heading">
+                  <div className="scheduleEditorSectionHeader">
+                    <div><h3 id="schedule-templates-heading">Start from a template</h3><p>Optional. Fills the form below with a common setup you can then change.</p></div>
+                  </div>
+                  <div className="scheduleTemplateChoices">
+                    {scheduleTemplates.map((template) => (
+                      <button
+                        type="button"
+                        key={template.id}
+                        className={`scheduleTemplateCard ${appliedTemplateId === template.id ? "applied" : ""}`.trim()}
+                        onClick={() => applyScheduleTemplate(template.id)}
+                        aria-pressed={appliedTemplateId === template.id}
+                      >
+                        <strong>{template.name}</strong>
+                        <small>{template.summary}</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <section className="scheduleEditorSection" aria-labelledby="schedule-details-heading">
                 <div className="scheduleEditorSectionHeader">
                   <div><h3 id="schedule-details-heading">Details</h3><p>Name the automation and choose when it runs.</p></div>
@@ -746,7 +854,7 @@ export function SchedulePage({
                 <div className="userModalFields scheduleEditFields">
                   <label>
                     Name
-                    <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
+                    <input name="name" value={nameValue} onChange={(event) => setNameValue(event.target.value)} placeholder="Nightly maintenance" required maxLength={80} />
                   </label>
                   <label className="scheduleRepeatField">
                     Repeat
@@ -863,7 +971,7 @@ export function SchedulePage({
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-steps-heading">Steps</h3><p>Commands and lifecycle actions run from top to bottom. Drag the handles to reorder them.</p></div>
+                  <div><h3 id="schedule-steps-heading">Steps</h3><p>Steps run from top to bottom. Reorder them with the arrow buttons, or by dragging a handle.</p></div>
                 </div>
                 <div className="commandStack scheduleCommandStack">
                   <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
@@ -892,18 +1000,55 @@ export function SchedulePage({
                               {scheduleOffsetBadge(stepOffsets[index])}
                             </span>
                           </div>
-                          {stepDrafts.length > 1 && (
-                            <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
-                              <AppIcon name="x" />
+                          <div className="scheduleStepControls">
+                            {/* The drag handle cannot be used on a touch screen and needs a keyboard
+                                otherwise, so reordering also has controls that are just buttons. */}
+                            <Button
+                              variant="ghost"
+                              iconOnly
+                              compact
+                              className="scheduleStepMove"
+                              onClick={() => nudgeStep(draft.id, -1)}
+                              disabled={index === 0 || scheduleStepMoveBlocked(stepDrafts, index, index - 1)}
+                              aria-label={`Move step ${index + 1} up`}
+                              title={`Move step ${index + 1} up`}
+                            >
+                              <AppIcon name="chevronUp" />
                             </Button>
-                          )}
+                            <Button
+                              variant="ghost"
+                              iconOnly
+                              compact
+                              className="scheduleStepMove"
+                              onClick={() => nudgeStep(draft.id, 1)}
+                              disabled={index === stepDrafts.length - 1 || scheduleStepMoveBlocked(stepDrafts, index, index + 1)}
+                              aria-label={`Move step ${index + 1} down`}
+                              title={`Move step ${index + 1} down`}
+                            >
+                              <AppIcon name="chevronDown" />
+                            </Button>
+                            {stepDrafts.length > 1 && (
+                              <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
+                                <AppIcon name="x" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                         <div className="scheduleStepFields">
                           <label className="scheduleStepType">
                             <span>Type</span>
-                            <select value={draft.type} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))} aria-label={`Type for step ${index + 1}`}>
+                            <select
+                              value={draft.type}
+                              onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))}
+                              aria-label={`Type for step ${index + 1}`}
+                              title={stepTypeAvailability[index].reason || undefined}
+                            >
                               <option value="command">Command</option>
-                              <option value="action">Action</option>
+                              {/* Offered only where a Restart could legally go, so the rule is
+                                  visible while the schedule is built rather than at save time. */}
+                              <option value="action" disabled={!stepTypeAvailability[index].canBecomeRestart}>
+                                Restart{stepTypeAvailability[index].canBecomeRestart ? "" : " (last step only)"}
+                              </option>
                             </select>
                           </label>
                           {draft.type === "command" ? (
@@ -912,12 +1057,9 @@ export function SchedulePage({
                               <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
                             </label>
                           ) : (
-                            <label className="scheduleStepValue">
-                              <span>Procedure</span>
-                              <select value={draft.procedure} onChange={() => undefined} aria-label={`Procedure for step ${index + 1}`}>
-                                <option value="restart">Restart</option>
-                              </select>
-                            </label>
+                            // Restart is the only procedure, and the Type control already names it,
+                            // so this states what happens instead of offering a choice of one.
+                            <p className="scheduleStepValue scheduleStepProcedure">Gracefully restarts the Minecraft server. This has to be the final step.</p>
                           )}
                           <label className="scheduleCommandDelay">
                             <span>Delay before step</span>
@@ -951,7 +1093,7 @@ export function SchedulePage({
                   <div><h3 id="schedule-options-heading">Options</h3><p>Choose what happens at the scheduled start time.</p></div>
                 </div>
                 <div className="scheduleEditOptions">
-                  <SchedulePlayerPolicyOptions schedule={modalSchedule ?? undefined} />
+                  <SchedulePlayerPolicyOptions key={appliedTemplateId} schedule={policySeed ?? modalSchedule ?? undefined} />
                   <label className="scheduleOptionToggle scheduleEnabledOption">
                     <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
                     <span className="scheduleOptionCopy"><strong>Enabled</strong><small>Allow cron matches to start this schedule.</small></span>
@@ -968,8 +1110,24 @@ export function SchedulePage({
         </DialogSurface>
       )}
 
+      {historySchedule && !selectedRun && (
+        <ScheduleRunHistoryDialog
+          schedule={liveHistorySchedule ?? historySchedule}
+          formatDate={formatDate}
+          relativeTimestamps={relativeTimestamps}
+          relativeNow={relativeNow}
+          onSelectRun={setSelectedRun}
+          onClose={() => setHistorySchedule(null)}
+        />
+      )}
+
       {selectedRun && (
-        <ScheduleRunDetailsDialog run={selectedRun} formatDate={formatDate} onLoadRunLogs={onLoadRunLogs} onClose={() => setSelectedRun(null)} />
+        <ScheduleRunDetailsDialog
+          run={selectedRun}
+          formatDate={formatDate}
+          onLoadRunLogs={onLoadRunLogs}
+          onClose={() => setSelectedRun(null)}
+        />
       )}
     </section>
   );
@@ -984,6 +1142,69 @@ export function scheduleRunLogsPending(run: ScheduledRun) {
   return (run.details?.steps ?? []).some((step) => (
     step.type === "command" && step.logCaptureStatus === "captured" && step.logs === undefined
   ));
+}
+
+/**
+ * Every run the panel still holds for one schedule. The feed beside the table mixes all schedules
+ * and stops at eight, so most of the retained history had nowhere to be read; the runs are already
+ * in the payload the page polls, so this only has to render them.
+ */
+export function ScheduleRunHistoryDialog({
+  schedule,
+  formatDate,
+  relativeTimestamps = true,
+  relativeNow,
+  onSelectRun,
+  onClose
+}: {
+  schedule: ScheduledExecution;
+  formatDate: (value: string | number | Date) => string;
+  relativeTimestamps?: boolean;
+  relativeNow: number;
+  onSelectRun: (run: ScheduledRun) => void;
+  onClose: () => void;
+}) {
+  const runs = [...(schedule.recentRuns ?? [])].sort((a, b) => new Date(b.ranAt).getTime() - new Date(a.ranAt).getTime());
+  return (
+    <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel scheduleHistoryPanel" labelledBy="schedule-history-title" describedBy="schedule-history-description" onClose={onClose}>
+      <div className="userModalHeader scheduleRunModalHeader">
+        <div>
+          <h2 id="schedule-history-title">{schedule.name}</h2>
+          <p id="schedule-history-description">{runs.length} recorded {runs.length === 1 ? "run" : "runs"}</p>
+        </div>
+        <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClose} aria-label="Close run history" title="Close run history">
+          <AppIcon name="x" />
+        </Button>
+      </div>
+      <div className="scheduleRunModalBody">
+        {runs.length ? (
+          <div className="scheduleHistoryList">
+            {runs.map((run) => (
+              <article key={run.id} className={`scheduleHistoryRow ${statusTone(run.status)}`}>
+                <span className="scheduledRunMarker" aria-hidden="true"></span>
+                <div className="scheduleHistoryDetails">
+                  <strong>{statusLabel(run.status)}</strong>
+                  {run.message && <small title={run.message}>{run.message}</small>}
+                </div>
+                <div className="scheduleHistoryTime">
+                  <span>{relativeTimestamps ? lastRunRelativeTime(run.ranAt, relativeNow) : formatScheduleTime(run.ranAt, formatDate)}</span>
+                  {relativeTimestamps && <small>{formatScheduleTime(run.ranAt, formatDate)}</small>}
+                </div>
+                <Button variant="secondary" compact onClick={() => onSelectRun(run)} aria-label={`View details for the run at ${formatScheduleTime(run.ranAt, formatDate)}`}>
+                  Details
+                </Button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState compact title="No runs recorded" message="Runs appear here once this schedule has executed." />
+        )}
+      </div>
+      <div className="userModalFooter scheduleRunModalFooter">
+        <Button variant="secondary" onClick={onClose}>Close</Button>
+      </div>
+    </DialogSurface>
+  );
 }
 
 export function ScheduleRunDetailsDialog({

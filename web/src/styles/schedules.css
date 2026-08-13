@@ -840,6 +840,112 @@
   outline-offset: 2px;
 }
 
+.scheduleHistoryList {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.scheduleHistoryRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.scheduleHistoryDetails {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.scheduleHistoryDetails strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+}
+
+.scheduleHistoryDetails small,
+.scheduleHistoryTime small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduleHistoryTime {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.scheduleTemplateChoices {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2);
+}
+
+.scheduleTemplateCard {
+  min-width: 0;
+  padding: var(--space-2);
+  display: grid;
+  /* Without an explicit track the implicit column sizes to the summary's max-content and the text
+     runs straight out of the card and across its neighbours. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: left;
+  /* Buttons inherit nowrap here, and this one holds a sentence. */
+  white-space: normal;
+  cursor: pointer;
+}
+
+.scheduleTemplateCard strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+}
+
+.scheduleTemplateCard small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.35;
+}
+
+.scheduleTemplateCard:hover {
+  border-color: var(--accent);
+}
+
+.scheduleTemplateCard.applied {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.scheduleStepControls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.scheduleStepProcedure {
+  margin: 0;
+  align-self: center;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.35;
+}
+
 .scheduleStepOffset {
   color: var(--text-muted);
   font-size: var(--type-badge-size);
@@ -908,7 +1014,9 @@
 .scheduleStepCard {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+  /* Capped rather than auto: the header holds the step number, its offset, and three controls, and
+     letting it size to content took width away from the fields the step is actually made of. */
+  grid-template-columns: minmax(76px, 136px) minmax(0, 1fr);
   align-items: end;
   gap: var(--space-2);
   padding: var(--space-2);
@@ -930,6 +1038,7 @@
   min-width: 0;
   min-height: var(--control-height);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-1);
@@ -1275,9 +1384,25 @@
     overflow: visible;
   }
 
+  /* Nothing scrolls inside these once the rows become cards, and the clipping they inherit is what
+     cuts a row's action menu in half: the compact card is shorter than the menu, so the menu cannot
+     be contained by it in either direction. */
+  .scheduleTableFrame,
+  .panel.scheduleTableCard {
+    overflow: visible;
+  }
+
+  /* A card, not a stack of label/value pairs: the labels repeated down the left edge cost about
+     40% of a phone's width to say what the values already say. Name and schedule carry themselves,
+     so only the two timestamps keep a caption. */
   .scheduleTableRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-2);
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "name    name    enabled"
+      "cron    cron    cron"
+      "lastrun nextrun actions";
+    align-items: start;
+    gap: var(--space-2) var(--space-2);
     min-height: 0;
     padding: var(--space-3);
   }
@@ -1288,22 +1413,39 @@
   .scheduleRowActions {
     min-width: 0;
     display: grid;
-    grid-template-columns: 104px minmax(0, 1fr);
     align-items: center;
-    gap: var(--space-3);
     justify-self: stretch;
   }
 
-  .scheduleNameCell::before,
-  .scheduleCell::before,
-  .scheduleEnabledCell::before,
-  .scheduleRowActions::before {
+  .scheduleNameCell { grid-area: name; }
+  .scheduleCell[data-label="Schedule"] { grid-area: cron; }
+  .scheduleCell[data-label="Last run"] { grid-area: lastrun; }
+  .scheduleCell[data-label="Next run"] { grid-area: nextrun; }
+
+  .scheduleEnabledCell {
+    grid-area: enabled;
+    justify-self: end;
+  }
+
+  .scheduleRowActions {
+    grid-area: actions;
+    justify-self: end;
+  }
+
+  .scheduleCell[data-label="Last run"]::before,
+  .scheduleCell[data-label="Next run"]::before {
     content: attr(data-label);
     color: var(--text-muted);
-    font-size: var(--type-meta-size);
+    font-size: var(--type-badge-size);
     font-weight: var(--weight-meta);
     letter-spacing: var(--tracking-label);
     text-transform: uppercase;
+  }
+
+  .scheduleCell[data-label="Schedule"] .scheduleCellValue {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-2);
   }
 
   .scheduleNameValue strong,
@@ -1314,14 +1456,9 @@
     white-space: normal;
   }
 
-  .scheduleEnabledCell,
-  .scheduleRowActions {
-    justify-self: stretch;
-  }
-
   .scheduleEnabledCell .scheduleCellValue,
   .scheduleRowActions .scheduleCellValue {
-    justify-items: start;
+    justify-items: end;
   }
 
   .scheduleStepFields {
@@ -1342,16 +1479,25 @@
 }
 
 @media (max-width: 720px) {
+  /* Upward and leftward, because the frame and the panel both clip their overflow: the menu has to
+     stay inside the card it belongs to, and the card layout puts its trigger in the bottom-right. */
   .scheduleActionMenu .actionMenuPopover {
     top: auto;
-    right: auto;
+    right: 0;
     bottom: calc(100% + var(--space-2));
-    left: 0;
+    left: auto;
   }
 
   .scheduleTableRow:has(.scheduleActionMenu .actionMenuPopover) {
     position: relative;
     z-index: 2;
+  }
+
+  /* The open menu now leaves its own card, so the card has to outrank the Scheduled Runs panel,
+     which is a later sibling and would otherwise paint over it. */
+  .panel.scheduleTableCard:has(.scheduleActionMenu .actionMenuPopover) {
+    position: relative;
+    z-index: 3;
   }
 }
 
@@ -1384,12 +1530,8 @@
     padding: var(--space-3);
   }
 
-  .scheduleNameCell,
-  .scheduleCell,
-  .scheduleEnabledCell,
-  .scheduleRowActions {
-    grid-template-columns: 84px minmax(0, 1fr);
-    gap: var(--space-2);
+  .scheduleTableRow {
+    gap: var(--space-2) var(--space-1);
   }
 
   .scheduledRunsFeed {
