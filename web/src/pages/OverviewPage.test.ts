@@ -614,7 +614,7 @@ describe("upcoming schedule summary", () => {
     expect(unavailableHtml).not.toContain("uiEmptyState");
   });
 
-  it("renders at most four upcoming schedules and summarizes the rest", () => {
+  it("prioritizes active runs within the four-row schedule preview and summarizes the rest", () => {
     const html = renderToStaticMarkup(createElement(SchedulePanel, {
       schedules: Array.from({ length: 10 }, (_, index) => schedule({
         id: `schedule-${index}`,
@@ -628,12 +628,15 @@ describe("upcoming schedule summary", () => {
     }));
 
     expect(html).toContain(">Schedules<");
-    expect(html).toContain("10 runs in the next 24 hours");
+    expect(html).toContain("1 active run");
     expect(html).not.toContain(">Next up<");
     expect((html.match(/overviewSupportListItem scheduleUpcomingItem/g) ?? []).length).toBe(4);
     expect((html.match(/overviewSupportListIcon/g) ?? []).length).toBe(4);
-    expect(html).toContain("6 more schedules");
+    expect(html).toContain("scheduleActiveItem");
+    expect(html).toContain("Saving world");
+    expect(html).toContain("View 7 more");
     expect(html).not.toContain(">Open Schedules</button>");
+    expect(html).not.toContain("Task 3");
     expect(html).not.toContain("Task 4");
     expect(html).not.toContain("Task 9");
     expect(html).not.toContain("Past activity");

@@ -357,6 +357,30 @@ export const initialDemoSchedules: ScheduledExecution[] = [{
   }]
 }];
 
+export function schedulesForDemoFixture(fixture: "default" | "active" = "default"): ScheduledExecution[] {
+  const schedules = initialDemoSchedules.map((schedule) => ({
+    ...schedule,
+    steps: schedule.steps.map((step) => ({ ...step })),
+    recentRuns: schedule.recentRuns?.map((run) => ({ ...run })),
+    activeRuns: schedule.activeRuns?.map((run) => ({ ...run }))
+  }));
+  if (fixture !== "active" || !schedules[0]) return schedules;
+  schedules[0] = {
+    ...schedules[0],
+    activeRuns: [{
+      id: "demo-active-wait-until-empty",
+      scheduleId: schedules[0].id,
+      scheduleName: schedules[0].name,
+      status: "running",
+      startedAt: new Date(demoStartedAt - 4 * 60 * 60_000).toISOString(),
+      stepCount: schedules[0].steps.length,
+      cancellable: true,
+      message: "Waiting for 2 players to leave"
+    }]
+  };
+  return schedules;
+}
+
 export const initialDemoMods: InstalledMod[] = [
   {
     filename: "distanthorizons-3.0.3-b-26.1.2-fabric-neoforge.jar",
@@ -827,6 +851,10 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
     for (const run of schedule.recentRuns ?? []) {
       const occurredAt = new Date(run.ranAt).getTime();
       if (occurredAt >= from && occurredAt <= to) markers.push({ id: `run:${run.id}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt, kind: "run", status: "success", runId: run.id, message: run.message });
+    }
+    for (const run of schedule.activeRuns ?? []) {
+      const occurredAt = new Date(run.startedAt).getTime();
+      if (Number.isFinite(occurredAt) && occurredAt <= to && now >= from) markers.push({ id: `active:${run.id}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt, kind: "active", status: "running", runId: run.id, message: run.message });
     }
     const upcomingAt = schedule.nextRunAt ? new Date(schedule.nextRunAt).getTime() : NaN;
     if (Number.isFinite(upcomingAt) && upcomingAt >= from && upcomingAt <= to) markers.push({ id: `upcoming:${schedule.id}:${upcomingAt}`, scheduleId: schedule.id, scheduleName: schedule.name, occurredAt: upcomingAt, kind: "upcoming", status: "upcoming" });

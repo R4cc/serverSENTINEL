@@ -14,6 +14,7 @@ import {
   ServerTimeline,
   TimelineAnnotationPopoverItem,
   timelineAnnotationGridTop,
+  timelineActiveScheduleRanges,
   timelineClusterIconMarkers,
   timelineClusterOccurrenceCount,
   timelineMarkers,
@@ -149,6 +150,34 @@ describe("server timeline event popover dismissal", () => {
 });
 
 describe("server timeline markers", () => {
+  it("turns active schedule markers into open duration ranges, including starts before the viewport", () => {
+    const value = response();
+    value.schedules = [{
+      id: "active:run-1",
+      scheduleId: "schedule-1",
+      scheduleName: "Nightly backup",
+      occurredAt: 0,
+      kind: "active",
+      status: "running",
+      runId: "run-1",
+      message: "Waiting for 2 players to leave"
+    }];
+    const markers = timelineMarkers(value);
+    const ranges = timelineActiveScheduleRanges(markers, 60 * 60_000, 4 * 60 * 60_000, 4 * 60 * 60_000);
+
+    expect(ranges).toMatchObject([{
+      leftPercent: 0,
+      widthPercent: 100,
+      clippedStart: true,
+      clippedEnd: false,
+      align: "start",
+      durationLabel: "4h 0m",
+      statusLabel: "Waiting for 2 players to leave"
+    }]);
+    expect(ranges[0].accessibleLabel).toContain("running for 4h 0m; still running");
+    expect(clusterTimelineMarkers(markers.filter((marker) => marker.schedule?.kind !== "active"), 60 * 60_000, 4 * 60 * 60_000)).toEqual([]);
+  });
+
   it("renders event popover rows as non-interactive entries with absolute timestamps", () => {
     const marker = timelineMarkers(response())[0];
     const html = renderToStaticMarkup(

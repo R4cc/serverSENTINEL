@@ -128,18 +128,18 @@ export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Pick<Sche
       <div className="schedulePlayerPolicyChoices">
         <label className="scheduleOptionToggle">
           <input name="playerOnlinePolicy" value="run" type="radio" defaultChecked={!schedule?.onlyWhenNoPlayers} />
-          <span className="scheduleOptionCopy"><strong>Run anyway</strong><small>Start on time, even while players are connected.</small></span>
+          <span className="scheduleOptionCopy"><strong>Run anyway</strong></span>
         </label>
         <label className="scheduleOptionToggle">
           <input name="playerOnlinePolicy" value="skip" type="radio" defaultChecked={Boolean(schedule?.onlyWhenNoPlayers && !schedule.waitForPlayersToLeave)} />
-          <span className="scheduleOptionCopy"><strong>Skip this run</strong><small>Skip this occurrence and try again at the next scheduled time.</small></span>
+          <span className="scheduleOptionCopy"><strong>Skip this run</strong></span>
         </label>
         <label className="scheduleOptionToggle">
           <input name="playerOnlinePolicy" value="wait" type="radio" defaultChecked={schedule?.waitForPlayersToLeave ?? false} />
-          <span className="scheduleOptionCopy"><strong>Wait until empty</strong><small>Keep one cancellable run waiting, then start once everyone leaves.</small></span>
+          <span className="scheduleOptionCopy"><strong>Wait until empty</strong></span>
         </label>
       </div>
-      <small className="schedulePlayerPolicyNote">Waiting has no timeout. Later matches are ignored so runs never stack up; cancel the active run at any time.</small>
+      <small className="schedulePlayerPolicyNote">Wait until empty creates one cancellable run with no timeout; later matches do not stack.</small>
     </div>
   );
 }
@@ -291,7 +291,6 @@ export function SchedulePage({
   }, [formMode]);
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
-  const activeRunCount = runItems.filter((run) => run.kind === "active").length;
   const recentRunsKey = scheduleRunFeedKey(runItems);
   const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
     {
@@ -551,7 +550,7 @@ export function SchedulePage({
   }
 
   const modalSchedule = formMode && formMode.type !== "create" ? formMode.schedule : null;
-  const modalTitle = formMode?.type === "edit" ? "Edit schedule" : formMode?.type === "duplicate" ? "Duplicate schedule" : "Add schedule";
+  const modalTitle = formMode?.type === "edit" ? "Edit schedule" : formMode?.type === "duplicate" ? "Duplicate schedule" : "Create schedule";
   const modalBusyTitle = saveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor";
   // The expression stays the single source of truth: the builder reads the plan back out of it on
   // every render and writes a new expression on every change, so the two can never disagree and an
@@ -626,7 +625,6 @@ export function SchedulePage({
           <PanelHeader
             className="scheduleCardHeader"
             title="Configured schedules"
-            description={`${schedules.length} schedule${schedules.length === 1 ? "" : "s"} for this server.`}
           />
 
           <div className="scheduleTableFrame" role="table" aria-label="Schedules">
@@ -809,7 +807,7 @@ export function SchedulePage({
         </section>
 
         <aside className="panel scheduledRunsCard">
-          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description={activeRunCount ? `${activeRunCount} active execution${activeRunCount === 1 ? "" : "s"} plus recent history.` : undefined} />
+          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" />
           {runItems.length ? (
             <div ref={runsFeedRef} className="scheduledRunsFeed">
               {runItems.map((run) => (
@@ -879,7 +877,7 @@ export function SchedulePage({
               {formMode.type === "create" && (
                 <section className="scheduleEditorSection scheduleTemplateSection" aria-labelledby="schedule-templates-heading">
                   <div className="scheduleEditorSectionHeader">
-                    <div><h3 id="schedule-templates-heading">Start from a template</h3><p>Optional. Fills the form below with a common setup you can then change.</p></div>
+                    <div><h3 id="schedule-templates-heading">Start from a template</h3></div>
                   </div>
                   <div className="scheduleTemplateChoices">
                     {scheduleTemplates.map((template) => (
@@ -1025,7 +1023,7 @@ export function SchedulePage({
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="drag" /></span><div><h3 id="schedule-steps-heading">Steps</h3><p>Steps run from top to bottom. Reorder them with the arrow buttons, or by dragging a handle.</p></div></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="drag" /></span><div><h3 id="schedule-steps-heading">Steps</h3></div></div>
                 </div>
                 <div className="commandStack scheduleCommandStack">
                   <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
@@ -1138,7 +1136,7 @@ export function SchedulePage({
                   </div>
                   <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => appendScheduleStep(steps, emptyStepDraft()))}>
                     <AppIcon name="plus" />
-                    <span>Additional step</span>
+                    <span>Add step</span>
                   </Button>
                   {totalStepSeconds > 0 && (
                     <small className="scheduleStepTotal">
@@ -1230,11 +1228,10 @@ export function ScheduleRunHistoryDialog({
 }) {
   const runs = [...(schedule.recentRuns ?? [])].sort((a, b) => new Date(b.ranAt).getTime() - new Date(a.ranAt).getTime());
   return (
-    <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel scheduleHistoryPanel" labelledBy="schedule-history-title" describedBy="schedule-history-description" onClose={onClose}>
+    <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel scheduleHistoryPanel" labelledBy="schedule-history-title" onClose={onClose}>
       <div className="userModalHeader scheduleRunModalHeader">
         <div>
           <h2 id="schedule-history-title">{schedule.name}</h2>
-          <p id="schedule-history-description">{runs.length} recorded {runs.length === 1 ? "run" : "runs"}</p>
         </div>
         <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClose} aria-label="Close run history" title="Close run history">
           <AppIcon name="x" />

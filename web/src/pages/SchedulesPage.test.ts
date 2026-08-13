@@ -170,7 +170,7 @@ describe("overview schedule navigation", () => {
 });
 
 describe("online-player schedule options", () => {
-  it("explains all three outcomes and selects the waiting policy", () => {
+  it("keeps the choices concise, preserves the important wait rule, and selects the waiting policy", () => {
     const value = {
       ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]),
       onlyWhenNoPlayers: true,
@@ -182,7 +182,9 @@ describe("online-player schedule options", () => {
     expect(html).toContain("Run anyway");
     expect(html).toContain("Skip this run");
     expect(html).toContain("Wait until empty");
-    expect(html).toContain("runs never stack up");
+    expect(html).toContain("later matches do not stack");
+    expect(html).not.toContain("Start on time, even while players are connected");
+    expect(html).not.toContain("Skip this occurrence and try again");
     expect(html).toMatch(/<input(?=[^>]+value="wait")(?=[^>]+checked)[^>]*>/);
     expect(html.match(/checked=""/g)).toHaveLength(1);
   });
@@ -289,7 +291,7 @@ describe("schedule run history", () => {
       onClose: () => undefined
     }));
 
-    expect(html).toContain("2 recorded runs");
+    expect(html).not.toContain("2 recorded runs");
     expect(html).toContain("Skipped because 3 players are online");
     expect(html).toContain("Command failed");
     expect(html.indexOf("run at 2026-07-14")).toBeLessThan(html.indexOf("run at 2026-07-10"));
@@ -305,7 +307,7 @@ describe("schedule run history", () => {
     }));
 
     expect(html).toContain("No runs recorded");
-    expect(html).toContain("0 recorded runs");
+    expect(html).not.toContain("0 recorded runs");
   });
 });
 

@@ -1278,9 +1278,16 @@
 }
 
 .scheduleOptionsSection .scheduleOptionToggle {
-  min-height: 0;
+  min-height: 44px;
   padding: var(--space-2);
   background: var(--surface-raised);
+}
+
+@media (min-width: 901px) {
+  .scheduleOptionsSection {
+    position: sticky;
+    top: 0;
+  }
 }
 
 .scheduleEnabledOption {
@@ -1394,7 +1401,7 @@
 }
 
 .scheduleEnabledOption {
-  min-height: 58px;
+  min-height: 44px;
 }
 
 /* Shared form utilities retained for runtime settings -------------------- */

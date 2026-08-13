@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.15.0 - 2026-08-13
+
+- Added live duration bars for active schedule runs to the Overview event timeline, including runs that began before the visible window, with direct navigation to the running execution.
+- Added active schedule runs and their current status to the Overview Schedules card while preserving its four-row preview layout.
+- Tightened the schedule create and edit workflow by removing redundant subtitles and compacting run-condition choices without hiding the wait-until-empty rules.
+
 ## 1.14.0 - 2026-08-13
 
 - Added a preview of the next three runs to the schedule editor, so an expression can be checked against real dates before it is saved.

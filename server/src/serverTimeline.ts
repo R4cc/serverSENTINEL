@@ -316,7 +316,9 @@ export function timelineScheduleMarkers(input: {
   }
   for (const run of input.activeRuns) {
     const occurredAt = new Date(run.startedAt).getTime();
-    if (!Number.isFinite(occurredAt) || occurredAt < input.from || occurredAt > input.to) continue;
+    // Active runs are open intervals. Keep them in every window they overlap,
+    // including when they began before the current viewport.
+    if (!Number.isFinite(occurredAt) || occurredAt > input.to || now < input.from) continue;
     if (!add({ id: `active:${run.id}`, scheduleId: run.scheduleId, scheduleName: run.scheduleName, occurredAt, kind: "active", status: "running", runId: run.id, message: run.message })) break;
   }
   const upcomingFrom = Math.max(input.from, now);
