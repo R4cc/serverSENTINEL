@@ -17,6 +17,7 @@ import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
 import { scheduleDelayParts, scheduleDelayToSeconds } from '../features/schedules/scheduleDelays';
 import { describeCronExpression } from '../features/schedules/cronDescription';
+import { buildCronPreview } from '../features/schedules/cronPreview';
 
 type ScheduleFormMode =
   | { type: "create" }
@@ -98,6 +99,7 @@ export function SchedulePage({
   formatDate,
   relativeTimestamps = true,
   scheduleTimeZone,
+  displayTimeZone = "",
   navigationTarget,
   onNavigationTargetHandled
 }: {
@@ -105,6 +107,7 @@ export function SchedulePage({
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
   scheduleTimeZone: string;
+  displayTimeZone?: string;
   navigationTarget?: ScheduleNavigationTarget | null;
   onNavigationTargetHandled?: () => void;
   onCreate: (patch: SchedulePatch) => boolean | void | Promise<boolean | void>;
@@ -408,6 +411,11 @@ export function SchedulePage({
   const modalBusyTitle = saveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor";
   const cronError = cronValue.trim() ? validateCronExpression(cronValue) : null;
   const cronDescription = cronValue.trim() && !cronError ? describeCronExpression(cronValue) : null;
+  // Recomputed on every keystroke rather than memoised: the search stops at the third match, and
+  // the dialog is the only place it runs.
+  const cronPreview = cronDescription
+    ? buildCronPreview(cronValue, scheduleTimeZone, displayTimeZone, (value) => formatDate(value))
+    : null;
 
   return (
     <section className="tabPage schedulePage scheduleWorkspacePage layoutWide">
@@ -686,6 +694,23 @@ export function SchedulePage({
                       : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
                   </label>
                 </div>
+                {/* Day-of-month against day-of-week is the classic way to write a cron that parses
+                    and still fires on the wrong days, and a description alone cannot show that.
+                    Three real datestamps can. */}
+                {cronPreview && (
+                  <div className="scheduleCronPreview">
+                    <span className="scheduleCronPreviewLabel">Next runs</span>
+                    <ol className="scheduleCronPreviewList">
+                      {cronPreview.occurrences.map((occurrence) => (
+                        <li key={occurrence}>{occurrence}</li>
+                      ))}
+                      <li className="scheduleCronPreviewZone">{scheduleTimeZone}</li>
+                    </ol>
+                    {cronPreview.viewerNote && (
+                      <small className="scheduleCronPreviewNote">{cronPreview.viewerNote}</small>
+                    )}
+                  </div>
+                )}
               </section>
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">

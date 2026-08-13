@@ -239,122 +239,16 @@ export function safeInstalledModFilename(name?: string) {
   return filename;
 }
 
-export function parseCronField(field: string, min: number, max: number) {
-  const values = new Set<number>();
-  for (const rawPart of field.split(",")) {
-    const part = rawPart.trim();
-    if (!part) return null;
-    const [rangePart, stepPart] = part.split("/", 2);
-    const step = stepPart === undefined ? 1 : Number(stepPart);
-    if (!Number.isInteger(step) || step < 1) return null;
-
-    let start = min;
-    let end = max;
-    if (rangePart !== "*") {
-      if (rangePart.includes("-")) {
-        const [rawStart, rawEnd] = rangePart.split("-", 2).map(Number);
-        if (!Number.isInteger(rawStart) || !Number.isInteger(rawEnd)) return null;
-        start = rawStart;
-        end = rawEnd;
-      } else {
-        const exact = Number(rangePart);
-        if (!Number.isInteger(exact)) return null;
-        start = exact;
-        end = exact;
-      }
-    }
-
-    if (start < min || end > max || start > end) return null;
-    for (let value = start; value <= end; value += step) {
-      values.add(value);
-    }
-  }
-  return values;
-}
-
-type ParsedCron = {
-  minutes: Set<number>;
-  hours: Set<number>;
-  daysOfMonth: Set<number>;
-  months: Set<number>;
-  daysOfWeek: Set<number>;
-};
-
-const parsedCronCache = new Map<string, ParsedCron | null>();
-const parsedCronCacheLimit = 500;
-
-function parseCron(cron: string) {
-  const cached = parsedCronCache.get(cron);
-  if (cached !== undefined) return cached;
-  const parts = cron.trim().split(/\s+/);
-  let parsed: ParsedCron | null = null;
-  if (parts.length === 5) {
-    const minutes = parseCronField(parts[0], 0, 59);
-    const hours = parseCronField(parts[1], 0, 23);
-    const daysOfMonth = parseCronField(parts[2], 1, 31);
-    const months = parseCronField(parts[3], 1, 12);
-    const daysOfWeek = parseCronField(parts[4], 0, 7);
-    if (minutes && hours && daysOfMonth && months && daysOfWeek) {
-      parsed = { minutes, hours, daysOfMonth, months, daysOfWeek };
-    }
-  }
-  if (parsedCronCache.size >= parsedCronCacheLimit) parsedCronCache.clear();
-  parsedCronCache.set(cron, parsed);
-  return parsed;
-}
-
-function cronDateMatches(parsed: ParsedCron, date: Date) {
-  const normalizedDay = date.getDay();
-  return parsed.minutes.has(date.getMinutes())
-    && parsed.hours.has(date.getHours())
-    && parsed.daysOfMonth.has(date.getDate())
-    && parsed.months.has(date.getMonth() + 1)
-    && (parsed.daysOfWeek.has(normalizedDay) || (normalizedDay === 0 && parsed.daysOfWeek.has(7)));
-}
-
-export function validateCron(cron: string) {
-  if (cron.trim().split(/\s+/).length !== 5) {
-    throw new Error("Cron schedule must use five fields: minute hour day month weekday");
-  }
-  if (!parseCron(cron)) {
-    throw new Error("Cron schedule contains an invalid field");
-  }
-}
-
-export function cronMatches(cron: string, date: Date) {
-  validateCron(cron);
-  return cronDateMatches(parseCron(cron)!, date);
-}
-
-export function timeZoneMinuteKey(date: Date, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23"
-  }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((candidate) => candidate.type === type)?.value ?? "00";
-  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
-}
-
-export function nextCronRun(cron: string, from = new Date(), maxDays = 366) {
-  validateCron(cron);
-  const parsed = parseCron(cron)!;
-  const cursor = new Date(from);
-  cursor.setSeconds(0, 0);
-  cursor.setMinutes(cursor.getMinutes() + 1);
-  const maxChecks = Math.max(1, maxDays * 24 * 60);
-  for (let checked = 0; checked < maxChecks; checked += 1) {
-    if (cronDateMatches(parsed, cursor)) {
-      return new Date(cursor);
-    }
-    cursor.setMinutes(cursor.getMinutes() + 1);
-  }
-  return null;
-}
+// Cron parsing, validation, matching, and next-run search live in @serversentinel/contracts so the
+// panel and the browser read one implementation. Re-exported here because the scheduler, the store,
+// and the timeline have always reached for them through core.
+export {
+  cronMatches,
+  nextCronRun,
+  parseCronField,
+  timeZoneMinuteKey,
+  validateCron
+} from "@serversentinel/contracts";
 
 export function parseDockerPorts(ports?: string) {
   const exposedPorts: Record<string, Record<string, never>> = {};

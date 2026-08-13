@@ -2430,6 +2430,7 @@ export default function App() {
                   formatDate={formatDisplayDate}
                   relativeTimestamps={relativeTimestamps}
                   scheduleTimeZone={panelTimeZone}
+                  displayTimeZone={displayTimeZone}
                   navigationTarget={scheduleNavigationTarget}
                   onNavigationTargetHandled={() => setScheduleNavigationTarget(null)}
                   onCreate={schedulesWorkspace.actions.create}

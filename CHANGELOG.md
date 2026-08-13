@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added a preview of the next three runs to the schedule editor, so an expression can be checked against real dates before it is saved.
+- Added the reader's own clock to that preview whenever the display time zone differs from the one schedules run in, which resolves a schedule written as 04:00 being listed as 06:00.
+
+## 1.12.3 - 2026-08-13
+
+- Kept the console connected while a newly imported local server is waiting for its first Docker container, retained its startup log history, and stopped repeated reattach notices while the server is stopped.
+
 ## 1.12.2 - 2026-08-13
 
 - Fixed schedules silently losing an occurrence when a server export was running at their scheduled minute. The run is now recorded as skipped with the reason, and a schedule set to wait for players to leave queues behind the export instead.

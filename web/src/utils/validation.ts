@@ -1,3 +1,4 @@
+import { cronExpressionError } from "@serversentinel/contracts";
 import { maxServerPort, minServerPort } from "./format";
 
 type FieldValidationError = {
@@ -79,17 +80,13 @@ export function validateJavaArgs(value: string): string | null {
   return null;
 }
 
+/**
+ * Delegates to the implementation the panel validates with, so the browser cannot accept an
+ * expression the API then rejects. This was a second copy of the field parser, kept in step with
+ * the server's by hand.
+ */
 export function validateCronExpression(value: string): string | null {
-  const parts = value.trim().split(/\s+/);
-  if (parts.length !== 5) return "Cron schedule must use five fields: minute hour day month weekday.";
-  const ranges: Array<[number, number]> = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
-  const labels = ["minute", "hour", "day of month", "month", "weekday"];
-  for (let index = 0; index < parts.length; index += 1) {
-    if (!isValidCronField(parts[index], ranges[index][0], ranges[index][1])) {
-      return `Cron ${labels[index]} field is invalid. Use *, a number, a range, a list, or a step within ${ranges[index][0]}-${ranges[index][1]}.`;
-    }
-  }
-  return null;
+  return cronExpressionError(value);
 }
 
 export function validateCommandList(commands: string[]): string | null {
@@ -138,31 +135,4 @@ function isValidPort(value: string) {
   if (!/^\d+$/.test(value)) return false;
   const port = Number(value);
   return port >= 1 && port <= 65535;
-}
-
-function isValidCronField(field: string, min: number, max: number) {
-  for (const rawPart of field.split(",")) {
-    const part = rawPart.trim();
-    if (!part) return false;
-    const [rangePart, stepPart] = part.split("/", 2);
-    const step = stepPart === undefined ? 1 : Number(stepPart);
-    if (!Number.isInteger(step) || step < 1) return false;
-    let start = min;
-    let end = max;
-    if (rangePart !== "*") {
-      if (rangePart.includes("-")) {
-        const [rawStart, rawEnd] = rangePart.split("-", 2).map(Number);
-        if (!Number.isInteger(rawStart) || !Number.isInteger(rawEnd)) return false;
-        start = rawStart;
-        end = rawEnd;
-      } else {
-        const exact = Number(rangePart);
-        if (!Number.isInteger(exact)) return false;
-        start = exact;
-        end = exact;
-      }
-    }
-    if (start < min || end > max || start > end) return false;
-  }
-  return true;
 }
