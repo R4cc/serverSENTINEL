@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStoredSignedIn, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredSignedIn } from "./appConfig";
+import { readStoredSignedIn, shouldLoadPlayerSnapshots, shouldShowApplicationLoadingSkeleton, shouldShowInitialOverviewLoading, writeStoredSignedIn } from "./appConfig";
 
 function memoryStorage(seed: Record<string, string> = {}) {
   const entries = new Map(Object.entries(seed));
@@ -24,6 +24,23 @@ describe("application loading layout", () => {
     expect(shouldShowInitialOverviewLoading(true, 2, 0)).toBe(false);
     expect(shouldShowInitialOverviewLoading(true, 0, 3)).toBe(false);
     expect(shouldShowInitialOverviewLoading(false, 0, 0)).toBe(false);
+  });
+});
+
+describe("player snapshot loading", () => {
+  it("loads for Nodes and every page whose server status bar can show the count", () => {
+    expect(shouldLoadPlayerSnapshots("nodes")).toBe(true);
+    expect(shouldLoadPlayerSnapshots("overview")).toBe(true);
+    expect(shouldLoadPlayerSnapshots("console")).toBe(true);
+    expect(shouldLoadPlayerSnapshots("files")).toBe(true);
+    expect(shouldLoadPlayerSnapshots("mods")).toBe(true);
+    expect(shouldLoadPlayerSnapshots("schedule")).toBe(true);
+    expect(shouldLoadPlayerSnapshots("properties")).toBe(true);
+  });
+
+  it("does not poll pages that have no player-count consumer", () => {
+    expect(shouldLoadPlayerSnapshots("create")).toBe(false);
+    expect(shouldLoadPlayerSnapshots("settings")).toBe(false);
   });
 });
 

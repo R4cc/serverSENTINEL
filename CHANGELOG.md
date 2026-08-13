@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.8.8 - 2026-08-13
+
+- Loaded player counts on every server workspace page, so the status bar no longer waits for a visit to Overview before showing online players.
+
 ## 26.8.7 - 2026-08-13
 
 - Kept the network in and network out timeline series continuous on remote nodes, where sharing one cached stats reading across several collections previously drew the rate as alternating zeroes and spikes.
