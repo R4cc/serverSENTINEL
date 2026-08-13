@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 26.8.5 - 2026-08-13
+
+- Reduced player-head checks to once every 24 hours and shortened the integration explanation.
+
+## 26.8.4 - 2026-08-13
+
+- Removed the redundant Chromium liquid-glass outline while preserving the refractive glass effect, and kept the file-editor scrollbar visibly styled instead of allowing Windows to collapse it into an auto-hidden overlay.
+
 ## 26.8.3 - 2026-08-13
 
 - Kept Chromium liquid-glass rims aligned with their surfaces and restored a visible file-editor scrollbar.

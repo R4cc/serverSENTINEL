@@ -144,6 +144,11 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiLiquidGlassEffect { position: absolute; z-index: 0; inset: 0; display: block; overflow: hidden; border-radius: inherit; pointer-events: none; opacity: 0.4; }
 .uiLiquidGlassEffect > div { width: 100%; height: 100%; border-radius: inherit; }
 .uiLiquidGlassFill { width: 100%; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--glass-tint-soft) 42%, transparent); }
+/* `liquid-glass-react` appends both a screen rim and a stronger overlay rim.
+   The surface already owns its physical border, so the overlay becomes a
+   second concentric outline in Chromium. Keep the displacement, tint and
+   softer specular rim, and suppress only that redundant final overlay. */
+.uiLiquidGlassEffect > span:last-child { display: none; }
 
 .uiPanelHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
 .uiPanelHeader--compact { gap: var(--space-2); }
