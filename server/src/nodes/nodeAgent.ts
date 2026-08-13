@@ -6,7 +6,6 @@ import { totalmem } from "node:os";
 import { Readable } from "node:stream";
 import http from "node:http";
 import WebSocket from "ws";
-import { fetch } from "undici";
 import { EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";

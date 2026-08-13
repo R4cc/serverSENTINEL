@@ -4,7 +4,6 @@ import { notFound } from "../http/errors.js";
 import { createHash } from "node:crypto";
 import { extname, join } from "node:path";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { fetch } from "undici";
 import { config } from "../config.js";
 import { appUserAgentFor } from "../buildInfo.js";
 import { logWarn, errorLogFields } from "../logging.js";

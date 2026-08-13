@@ -1,4 +1,3 @@
-import { fetch as undiciFetch } from "undici";
 import type { SettingsRepository } from "./storage/settingsRepository.js";
 import type { PlayerHeadCacheEntry, PlayerHeadCacheRepository } from "./storage/playerHeadCacheRepository.js";
 
@@ -14,7 +13,7 @@ const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 const defaultRateLimitCooldownMs = 5 * 60 * 1000;
 const failureCooldownsMs = [60_000, 5 * 60_000, 15 * 60_000];
 
-type Fetch = typeof undiciFetch;
+type Fetch = typeof globalThis.fetch;
 type Priority = "foreground" | "background";
 
 type QueueItem = {
@@ -119,7 +118,7 @@ export class PlayerHeadService {
   private pumpTimerPriority: Priority | undefined;
 
   constructor(private readonly options: PlayerHeadServiceOptions) {
-    this.fetch = options.fetch ?? undiciFetch;
+    this.fetch = options.fetch ?? globalThis.fetch;
     this.now = options.now ?? Date.now;
     this.requestIntervalMs = options.requestIntervalMs ?? playerHeadRequestIntervalMs;
     this.maxConcurrentRequests = options.maxConcurrentRequests ?? playerHeadMaxConcurrentRequests;

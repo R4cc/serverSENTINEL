@@ -1,29 +1,38 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { computeLineStarts, createScanner, SyntaxKind } from "typescript/unstable/ast";
 import { describe, expect, it } from "vitest";
 
 const storageDirectory = fileURLToPath(new URL(".", import.meta.url));
 const queryMethods = new Set(["exec", "pragma", "prepare"]);
 
 function dynamicQueryCalls(path: string) {
-  const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const source = readFileSync(path, "utf8");
+  const scanner = createScanner(true, undefined, source);
+  const lineStarts = computeLineStarts(source);
   const findings: string[] = [];
-
-  function visit(node: ts.Node) {
-    if (ts.isCallExpression(node)
-      && ts.isPropertyAccessExpression(node.expression)
-      && queryMethods.has(node.expression.name.text)) {
-      const query = node.arguments[0];
-      if (query && !ts.isStringLiteral(query) && !ts.isNoSubstitutionTemplateLiteral(query)) {
-        const position = source.getLineAndCharacterOfPosition(query.getStart(source));
-        findings.push(`${path}:${position.line + 1}:${position.character + 1}`);
+  let previous = SyntaxKind.Unknown;
+  for (let token = scanner.scan(); token !== SyntaxKind.EndOfFile; token = scanner.scan()) {
+    if ((previous === SyntaxKind.DotToken || previous === SyntaxKind.QuestionDotToken)
+      && token === SyntaxKind.Identifier
+      && queryMethods.has(scanner.getTokenValue())) {
+      let open = scanner.scan();
+      if (open === SyntaxKind.QuestionDotToken) open = scanner.scan();
+      if (open !== SyntaxKind.OpenParenToken) {
+        previous = open;
+        continue;
       }
+      const query = scanner.scan();
+      if (query !== SyntaxKind.StringLiteral && query !== SyntaxKind.NoSubstitutionTemplateLiteral) {
+        const offset = scanner.getTokenStart();
+        const line = lineStarts.findLastIndex((start) => start <= offset);
+        findings.push(`${path}:${line + 1}:${offset - lineStarts[line]! + 1}`);
+      }
+      previous = query;
+      continue;
     }
-    ts.forEachChild(node, visit);
+    previous = token;
   }
-
-  visit(source);
   return findings;
 }
 

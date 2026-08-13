@@ -1,4 +1,3 @@
-import { fetch } from "undici";
 import { appUserAgentFor } from "../buildInfo.js";
 import { assertModrinthUrl } from "../http/outboundUrls.js";
 import { httpError } from "../http/errors.js";

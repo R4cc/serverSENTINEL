@@ -32,10 +32,34 @@ function vendorChunk(id: string) {
   if (/[\\/]node_modules[\\/](?:@codemirror[\\/](?:lang-|legacy-modes)|@lezer[\\/](?:javascript|markdown|json|yaml|html|css)[\\/])/.test(id)) {
     return undefined;
   }
-  if (/[\\/]node_modules[\\/](@codemirror|@lezer|@uiw|style-mod|w3c-keyname|crelt)[\\/]/.test(id)) {
+  // The React wrapper stays with lazy CodeEditor; forcing it here creates an eager cycle via React.
+  if (/[\\/]node_modules[\\/](@codemirror|@lezer|style-mod|w3c-keyname|crelt)[\\/]/.test(id)) {
     return "codemirror-vendor";
   }
   return undefined;
+}
+
+/** Keeps the lazy editor out of Vite's initial dependency preloads. */
+function assertLazyCodeMirror(): Plugin {
+  return {
+    name: "serversentinel-assert-lazy-codemirror",
+    apply: "build",
+    enforce: "post",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        for (const [tag] of html.matchAll(/<link\b[^>]*>/g)) {
+          if (!/\brel=["']modulepreload["']/.test(tag)) continue;
+          const href = /\bhref=["']([^"']+)["']/.exec(tag)?.[1]?.replace(/^\//, "");
+          const chunk = href ? ctx.bundle?.[href] : undefined;
+          if (chunk?.type === "chunk" && Object.keys(chunk.modules).some((id) => /[\\/]node_modules[\\/](?:@codemirror|@uiw[\\/]react-codemirror)[\\/]/.test(id))) {
+            throw new Error(`CodeMirror must remain lazy, but ${href} is modulepreloaded by index.html`);
+          }
+        }
+        return html;
+      }
+    }
+  };
 }
 
 /**
@@ -136,7 +160,7 @@ function preloadFonts(base: string): Plugin {
 }
 
 export default defineConfig(({ command }) => ({
-  plugins: [react(), ...(command === "build" ? [preloadFonts("/"), precompressAssets()] : [])],
+  plugins: [react(), ...(command === "build" ? [preloadFonts("/"), assertLazyCodeMirror(), precompressAssets()] : [])],
   build: {
     rollupOptions: {
       output: {

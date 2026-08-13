@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 26.8.9 - 2026-08-13
+
+- Kept the file editor's CodeMirror runtime out of the initial page download and added a build-time guard against loading it before the editor opens.
+- Reduced production and development dependencies by using Node's built-in fetch, completing the TypeScript 7 migration, and removing redundant build overrides.
+
 ## 26.8.8 - 2026-08-13
 
 - Loaded player counts on every server workspace page, so the status bar no longer waits for a visit to Overview before showing online players.

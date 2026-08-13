@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Response } from "undici";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlayerHeadService, playerHeadFreshMs, playerHeadRefreshAfter } from "./playerHeadService.js";
 import { openStorageDatabase, type StorageDatabase } from "./storage/database.js";
