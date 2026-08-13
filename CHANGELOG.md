@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.12.2 - 2026-08-13
+
+- Fixed schedules silently losing an occurrence when a server export was running at their scheduled minute. The run is now recorded as skipped with the reason, and a schedule set to wait for players to leave queues behind the export instead.
+- Fixed deleting a schedule while one of its runs was in progress, which left the run sending commands with no way to cancel it. Deleting now cancels the run first, and is refused while a Restart step is still finishing.
+
 ## 1.12.1 - 2026-08-13
 
 - Fixed skipped and cancelled schedule runs being marked as failures in the Last run column, so a run that correctly skipped no longer looks like one that broke.

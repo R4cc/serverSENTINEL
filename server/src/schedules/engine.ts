@@ -64,6 +64,14 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
   });
   try {
     const runtime = runtimeForServer(server);
+    // A run allowed to wait already accepts an unbounded delay, and withScheduleMutation blocks it
+    // on the export further down. Every other policy used to be dropped by the tick before it even
+    // tested the cron match, which lost the occurrence with nothing recorded to explain it, so the
+    // export becomes a reported skip rather than a silent no-op.
+    if (!schedule.waitForPlayersToLeave && services.exportCoordinator.activeOperationId(server.id)) {
+      logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "export_in_progress" }, "Schedule skipped");
+      return { status: "skipped", message: "Skipped because a server export was running", details: details() };
+    }
     if (schedule.waitForPlayersToLeave) {
       throwIfScheduleCancelled(active.controller.signal);
       active.message = "Checking server status";
@@ -328,10 +336,19 @@ export async function executeMatchedSchedule(server: ManagedServer, schedule: Sc
   }
 }
 
-export function startScheduleExecution(server: ManagedServer, schedule: ScheduledExecution) {
+/**
+ * `requireAvailability` decides what an active export means. A person pressing Run now gets the
+ * refusal reported back to them, so the assertion stands; the scheduler asks for it to be relaxed
+ * because it has nobody to report to, and records the skip against the run history instead.
+ */
+export function startScheduleExecution(
+  server: ManagedServer,
+  schedule: ScheduledExecution,
+  { requireAvailability = true }: { requireAvailability?: boolean } = {}
+) {
   const key = scheduleExecutionKey(server.id, schedule.id);
   if (runningSchedules.has(key)) return undefined;
-  services.exportCoordinator.assertMutationAllowed(server.id);
+  if (requireAvailability) services.exportCoordinator.assertMutationAllowed(server.id);
 
   runningSchedules.add(key);
   void executeMatchedSchedule(server, schedule)
@@ -356,7 +373,6 @@ export async function tickSchedules() {
         ? timeZoneMinuteKey(lastRun, config.timeZone) === runKey
         : false;
       if (runningSchedules.has(key) || alreadyRanThisWallMinute) continue;
-      if (services.exportCoordinator.activeOperationId(server.id)) continue;
       try {
         if (!cronMatches(schedule.cron, now)) continue;
       } catch {
@@ -364,7 +380,10 @@ export async function tickSchedules() {
         continue;
       }
 
-      startScheduleExecution(server, schedule);
+      // Started even while an export holds the server. Cron matching is per wall-clock minute and
+      // never retroactive, so refusing here spent the occurrence with nothing to show for it; the
+      // run itself now decides whether to skip or wait, and either way it says so.
+      startScheduleExecution(server, schedule, { requireAvailability: false });
     }
   }
 }

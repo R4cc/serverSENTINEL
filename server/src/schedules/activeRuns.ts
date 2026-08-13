@@ -37,6 +37,20 @@ export function activeScheduledRunsFor(serverId: string, scheduleId: string) {
     .map(publicActiveScheduleRun);
 }
 
+/**
+ * Cancels every active run of one schedule, so removing the schedule cannot strand an execution
+ * that keeps sending commands with no row left in the UI to cancel it from. Reports false without
+ * cancelling anything when a run is past its point of no return, leaving the caller to refuse
+ * rather than delete the schedule out from under a restart that still has to finish.
+ */
+export function cancelActiveScheduleRunsForSchedule(serverId: string, scheduleId: string) {
+  const runs = [...activeScheduleExecutions.values()]
+    .filter((run) => run.serverId === serverId && run.scheduleId === scheduleId);
+  if (runs.some((run) => !run.cancellable)) return false;
+  for (const run of runs) cancelActiveScheduleRun(serverId, scheduleId, run.id);
+  return true;
+}
+
 export function cancelActiveScheduleRun(serverId: string, scheduleId: string, runId: string) {
   const active = activeScheduleExecutions.get(runId);
   if (!active || active.serverId !== serverId || active.scheduleId !== scheduleId) return undefined;

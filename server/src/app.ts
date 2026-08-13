@@ -12,7 +12,7 @@ import { findScheduledRun, getServer, listManagedServers, normalizeManagedServer
 import { publicServer } from "./servers/publicViews.js";
 import { supportsManagedMods } from "./servers/versions.js";
 import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExistingPath, localResolveWritablePath, toPublicPath } from "./files/fileService.js";
-import { cancelActiveScheduleRun } from "./schedules/activeRuns.js";
+import { cancelActiveScheduleRun, cancelActiveScheduleRunsForSchedule } from "./schedules/activeRuns.js";
 import { localNodeId, readNodes } from "./nodes/nodeService.js";
 import { buildUserPermissions, currentUserFromCookie, isDemoModeRequest, normalizeRolePreset, parseCookies, publicUser, readUsers, requireRequestPermission, sessionCookie, sessionCookieName, sessionMaxAgeSeconds, validatePassword } from "./auth/sessionService.js";
 import { isFullAccessUser } from "./permissions.js";
@@ -378,6 +378,7 @@ registerScheduleRoutes(app, {
   deleteSchedule: (serverId, scheduleId, updatedAt) => { services.serversRepository.deleteSchedule(serverId, scheduleId, updatedAt); },
   startScheduleExecution,
   cancelActiveScheduleRun,
+  cancelActiveScheduleRunsForSchedule,
   serverLogFields,
   logInfo,
   withServerMutation: (serverId, action) => services.exportCoordinator.withMutation(serverId, action)

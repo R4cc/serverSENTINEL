@@ -25,6 +25,7 @@ export type ScheduleRoutesContext = {
   deleteSchedule(serverId: string, scheduleId: string, serverUpdatedAt: string): void;
   startScheduleExecution(server: ManagedServer, schedule: ScheduledExecution): ScheduledActiveRun | undefined;
   cancelActiveScheduleRun(serverId: string, scheduleId: string, runId: string): ScheduledActiveRun | null | undefined;
+  cancelActiveScheduleRunsForSchedule(serverId: string, scheduleId: string): boolean;
   serverLogFields(server: ManagedServer): Record<string, unknown>;
   logInfo(fields: Record<string, unknown>, message: string): void;
   withServerMutation?<T>(serverId: string, action: () => Promise<T>): Promise<T>;
@@ -61,10 +62,15 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     return context.publicSchedule(server.id, updatedSchedule);
   });
 
-  app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", context.destructiveRateLimit, async (request) => {
+  app.delete<{ Params: { id: string; scheduleId: string } }>("/api/servers/:id/schedules/:scheduleId", context.destructiveRateLimit, async (request, reply) => {
     await context.requireRequestPermission(request, "schedules.manage");
     const server = await context.getServer(request.params.id);
     const scheduleId = validateScheduleId(request.params.scheduleId);
+    // Deleting the schedule takes away the only control that could have stopped its active run, so
+    // the run is cancelled first and the delete is refused outright when it cannot be.
+    if (!context.cancelActiveScheduleRunsForSchedule(server.id, scheduleId)) {
+      return reply.code(409).send(apiErrorResponse("SCHEDULE_RUN_NOT_CANCELLABLE", "The Restart step has started and must finish before this schedule can be deleted"));
+    }
     await withServerMutation(server.id, async () => { context.deleteSchedule(server.id, scheduleId, new Date().toISOString()); });
     context.logInfo({ ...context.serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
     return { ok: true };

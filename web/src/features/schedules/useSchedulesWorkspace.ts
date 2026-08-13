@@ -153,7 +153,9 @@ export function useSchedulesWorkspace({
     const confirmed = await requestConfirmation({
       title: `Delete ${schedule.name}?`,
       description: "Delete this schedule and its configured actions.",
-      warning: "This action cannot be undone.",
+      warning: schedule.activeRuns?.length
+        ? "This schedule is running now. Deleting it cancels that run, and cannot be undone."
+        : "This action cannot be undone.",
       confirmLabel: "Delete schedule",
       variant: "critical"
     });
