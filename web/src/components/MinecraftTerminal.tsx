@@ -112,10 +112,12 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
         disposeWebgl();
       }
     };
-    // Opening, fitting and painting xterm already costs the first console frame. Let the DOM
-    // renderer produce that frame, then upgrade to WebGL after the interaction has settled so GPU
-    // setup and shader compilation cannot turn the page switch into one long blocking task.
-    const webglStartTimer = window.setTimeout(() => void activateWebgl(), 1_000);
+    // A renderer change after the terminal is visible replaces the DOM rows with canvases. Although
+    // the buffer itself is unchanged, that replacement uses a different drawing width and makes
+    // wrapped logs visibly resize about a second after opening the page. Start the optional upgrade
+    // immediately and keep the terminal behind its initializing state until either WebGL or the DOM
+    // fallback is final, so the first visible frame is also the stable one.
+    const rendererReady = activateWebgl();
 
     const selectionChange = terminal.onSelectionChange(() => {
       selectionListenerRef.current?.({
@@ -185,15 +187,21 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     // console stays behind its skeleton: there is no width at which the output would be right, and
     // rewrapping it afterwards is the reflow this is here to avoid.
     let initialized = false;
+    let initializationPending = false;
     const initialize = () => {
-      if (!fit()) return;
-      initialized = true;
-      initialRenderCompleteRef.current = true;
-      writeEntries(entriesRef.current, true);
-      terminal.write("", () => {
-        if (terminalRef.current !== terminal) return;
-        terminal.scrollToBottom();
-        shellRef.current?.classList.remove("initializing");
+      if (initializationPending || !fit()) return;
+      initializationPending = true;
+      void rendererReady.then(() => {
+        initializationPending = false;
+        if (terminalDisposed || !fit()) return;
+        initialized = true;
+        initialRenderCompleteRef.current = true;
+        writeEntries(entriesRef.current, true);
+        terminal.write("", () => {
+          if (terminalRef.current !== terminal) return;
+          terminal.scrollToBottom();
+          shellRef.current?.classList.remove("initializing");
+        });
       });
     };
 
@@ -227,7 +235,6 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       container.removeEventListener("touchcancel", handleTouchEnd);
       visualViewport?.removeEventListener("resize", scheduleFit);
       window.removeEventListener("resize", scheduleFit);
-      window.clearTimeout(webglStartTimer);
       contextLoss?.dispose();
       selectionChange.dispose();
       scrollChange.dispose();

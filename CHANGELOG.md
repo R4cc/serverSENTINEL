@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 26.8.6 - 2026-08-13
+
+- Kept console logs at a stable size by settling the accelerated renderer before revealing output.
+- Spread cached player-head refreshes across a rolling daily schedule while keeping visible-player requests responsive.
+- Removed the obsolete export-retention setting now that successful export archives remain until replaced.
+
 ## 26.8.5 - 2026-08-13
 
 - Reduced player-head checks to once every 24 hours and shortened the integration explanation.

@@ -240,7 +240,7 @@ export function SettingsPage(props: SettingsPageProps) {
           </PreferenceRow>
           <PreferenceRow
             title="Player heads"
-            description={<>Show player skin heads on Overview. When enabled, this panel sends usernames shown in the active-player roster and retained player timeline to <a href="https://www.mc-heads.net/" target="_blank" rel="noreferrer">MCHeads</a> without an API key and caches the returned images. Disabling prevents all MCHeads traffic. Skin changes appear over time: serverSENTINEL rechecks every 12 hours, while MCHeads documents a skin cache of up to 24 hours.</>}
+            description={<>Show player heads through <a href="https://www.mc-heads.net/" target="_blank" rel="noreferrer">MCHeads</a>. Usernames are shared only when enabled; cached heads refresh on a rolling daily schedule.</>}
             className="settingsHubIntegrationRow"
           >
             <div className="settingsHubControlStack playerHeadsSettingsControl">

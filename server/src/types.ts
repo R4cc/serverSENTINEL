@@ -8,15 +8,10 @@ import type {
 } from "@serversentinel/contracts";
 
 export type {
-  CreateNodeResponse,
   JavaMajorVersion,
   ManagedServerPort,
   ModCompatibility,
   ModrinthInstallVersionStatus,
-  ModUpdatePlan,
-  ModUpdatePlanEntry,
-  ModUpdatePlanStatus,
-  NodeInstallInstructions,
   OperationRecord,
   OperationStatus,
   OperationType,
@@ -32,7 +27,6 @@ export type {
   RestartRequiredModSnapshot,
   RolePreset,
   RuntimeVersion,
-  SafeBatchUpdateResult,
   ServerRuntimeIssue,
   ScheduleProcedure,
   ScheduleStep,
