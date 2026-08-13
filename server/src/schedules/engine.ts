@@ -11,7 +11,78 @@ import { restartServerGracefully, sendConsoleCommandWithIntent, startServerWithI
 import { activeScheduleExecutions, activeScheduledRunsFor, runningSchedules, scheduleExecutionKey, type ActiveScheduleExecution } from "./activeRuns.js";
 import { sanitizeScheduleSteps, ScheduleCancellationError, throwIfScheduleCancelled, waitForCommandDelay } from "./steps.js";
 import type { NodeRuntime } from "../nodes/types.js";
-import type { ManagedServer, ScheduleProcedure, ScheduledExecution, ScheduledRun, ScheduledRunDetails, ScheduledRunStepDetails } from "../types.js";
+import type { ManagedServer, OperationRecord, ScheduleProcedure, ScheduledExecution, ScheduledRun, ScheduledRunDetails, ScheduledRunStepDetails } from "../types.js";
+
+const scheduleWaitRecoveryKind = "schedule.wait-for-empty";
+
+type ScheduleWaitRecovery = {
+  kind: typeof scheduleWaitRecoveryKind;
+  version: 1;
+  phase: "waiting" | "executing";
+  runId: string;
+  startedAt: string;
+  schedule: ScheduledExecution;
+};
+
+type ResumedScheduleExecution = {
+  operationId: string;
+  runId: string;
+  startedAt: string;
+};
+
+function recoveryScheduleSnapshot(schedule: ScheduledExecution): ScheduledExecution {
+  return {
+    id: schedule.id,
+    name: schedule.name,
+    cron: schedule.cron,
+    steps: schedule.steps,
+    onlyWhenNoPlayers: schedule.onlyWhenNoPlayers,
+    waitForPlayersToLeave: schedule.waitForPlayersToLeave,
+    enabled: schedule.enabled,
+    createdAt: schedule.createdAt,
+    updatedAt: schedule.updatedAt
+  };
+}
+
+function scheduleWaitRecovery(
+  schedule: ScheduledExecution,
+  runId: string,
+  startedAt: string,
+  phase: ScheduleWaitRecovery["phase"]
+): ScheduleWaitRecovery {
+  return {
+    kind: scheduleWaitRecoveryKind,
+    version: 1,
+    phase,
+    runId,
+    startedAt,
+    schedule: recoveryScheduleSnapshot(schedule)
+  };
+}
+
+function parseScheduleWaitRecovery(operation: OperationRecord): ScheduleWaitRecovery | undefined {
+  const value = operation.result;
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<ScheduleWaitRecovery>;
+  if (candidate.kind !== scheduleWaitRecoveryKind || candidate.version !== 1 || candidate.phase !== "waiting") return undefined;
+  if (typeof candidate.runId !== "string" || typeof candidate.startedAt !== "string") return undefined;
+  const schedule = candidate.schedule;
+  if (!schedule || typeof schedule !== "object"
+    || typeof schedule.id !== "string" || typeof schedule.name !== "string" || typeof schedule.cron !== "string"
+    || typeof schedule.onlyWhenNoPlayers !== "boolean" || schedule.waitForPlayersToLeave !== true
+    || typeof schedule.enabled !== "boolean" || typeof schedule.createdAt !== "string" || typeof schedule.updatedAt !== "string") {
+    return undefined;
+  }
+  try {
+    return { ...candidate, schedule: { ...schedule, steps: sanitizeScheduleSteps(schedule.steps) } } as ScheduleWaitRecovery;
+  } catch {
+    return undefined;
+  }
+}
+
+export function resumableScheduleWaitOperations(operations: readonly OperationRecord[]) {
+  return operations.filter((operation) => Boolean(operation.serverId && parseScheduleWaitRecovery(operation)));
+}
 export function scheduleFromBody(body: {
   name?: string;
   cron?: string;
@@ -74,12 +145,6 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     }
     if (schedule.waitForPlayersToLeave) {
       throwIfScheduleCancelled(active.controller.signal);
-      active.message = "Checking server status";
-      const initialStatus = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
-      if (!initialStatus.docker?.running) {
-        logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
-        return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
-      }
       const waitResult = await waitUntilServerIsEmpty(server, schedule, active);
       if (waitResult === "stopped") {
         logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline_while_waiting" }, "Schedule skipped");
@@ -107,6 +172,14 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
         logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, playersOnline: count, reason: "players_online" }, "Schedule skipped");
         return { status: "skipped", message: `Skipped because ${count} player${count === 1 ? "" : "s"} are online`, details: details() };
       }
+    }
+
+    if (schedule.waitForPlayersToLeave) {
+      // Player and export waits are safe to resume. Persist the phase change at the last possible
+      // point before step delays and side effects, so a restart never replays a command or action.
+      services.operationsRepository.update(active.operationId, {
+        result: scheduleWaitRecovery(schedule, active.id, active.startedAt, "executing")
+      });
     }
 
     for (const [index, step] of schedule.steps.entries()) {
@@ -223,7 +296,19 @@ export async function waitUntilServerIsEmpty(
   let lastMessage = "";
   while (true) {
     throwIfScheduleCancelled(active.controller.signal);
-    const status = await runtimeForServer(server).serverStatus(server) as { docker?: { running?: boolean } };
+    let status: { docker?: { running?: boolean } };
+    try {
+      status = await runtimeForServer(server).serverStatus(server) as { docker?: { running?: boolean } };
+    } catch (error) {
+      active.message = "Waiting for server status";
+      if (lastMessage !== active.message) {
+        lastMessage = active.message;
+        services.operationsRepository.update(active.operationId, { progress: 10, task: active.message });
+        logWarn({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_status_unavailable", ...errorLogFields(error) }, active.message);
+      }
+      await waitForCommandDelay(pollSeconds, active.controller.signal);
+      continue;
+    }
     if (!status.docker?.running) return "stopped" as const;
 
     const count = await services.playerSnapshotCoordinator!.freshOnlineCount(server);
@@ -296,27 +381,43 @@ export async function scheduledRunCommandLogCapture(runtime: NodeRuntime, server
   return captureScheduledCommandLogs(before, after);
 }
 
-export async function executeMatchedSchedule(server: ManagedServer, schedule: ScheduledExecution) {
+export async function executeMatchedSchedule(
+  server: ManagedServer,
+  schedule: ScheduledExecution,
+  resumed?: ResumedScheduleExecution
+) {
   logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length }, "Schedule matched");
-  const operation = services.operationsRepository.create({
-    type: "schedule.run",
-    serverId: server.id,
-    nodeId: server.nodeId,
-    task: `Running schedule ${schedule.name}`,
-    progress: 0
+  const runId = resumed?.runId ?? randomUUID();
+  const startedAt = resumed?.startedAt ?? new Date().toISOString();
+  const operation = resumed
+    ? services.operationsRepository.find(resumed.operationId)
+    : services.operationsRepository.create({
+        type: "schedule.run",
+        serverId: server.id,
+        nodeId: server.nodeId,
+        task: `Running schedule ${schedule.name}`,
+        progress: 0,
+        result: schedule.waitForPlayersToLeave
+          ? scheduleWaitRecovery(schedule, runId, startedAt, "waiting")
+          : undefined
+      });
+  if (!operation || (operation.status !== "queued" && operation.status !== "running")) {
+    throw new Error(`Schedule operation ${resumed?.operationId ?? "could not be created"} is not resumable`);
+  }
+  services.operationsRepository.start(operation.id, {
+    progress: 10,
+    task: resumed ? `Resuming schedule ${schedule.name}` : `Running schedule ${schedule.name}`
   });
-  services.operationsRepository.start(operation.id, { progress: 10, task: `Running schedule ${schedule.name}` });
-  const runId = randomUUID();
   const active: ActiveScheduleExecution = {
     id: runId,
     serverId: server.id,
     scheduleId: schedule.id,
     scheduleName: schedule.name,
     status: "running",
-    startedAt: new Date().toISOString(),
+    startedAt,
     stepCount: schedule.steps.length,
     cancellable: true,
-    message: "Starting",
+    message: resumed ? "Resuming after panel restart" : "Starting",
     operationId: operation.id,
     controller: new AbortController()
   };
@@ -394,6 +495,55 @@ export function startScheduleExecution(
     .finally(() => runningSchedules.delete(key));
 
   return activeScheduledRunsFor(server.id, schedule.id)[0];
+}
+
+export function resumeWaitingScheduleExecutions(operations: readonly OperationRecord[]) {
+  let resumed = 0;
+  for (const operation of operations) {
+    const recovery = parseScheduleWaitRecovery(operation);
+    const server = operation.serverId ? services.serversRepository.find(operation.serverId) : undefined;
+    const scheduleStillExists = server?.schedules?.some((schedule) => schedule.id === recovery?.schedule.id);
+    if (!recovery || !server || !scheduleStillExists) {
+      services.operationsRepository.fail(
+        operation.id,
+        "Waiting schedule could not be resumed after serverSENTINEL restarted",
+        { task: "Schedule recovery failed" }
+      );
+      continue;
+    }
+
+    const key = scheduleExecutionKey(server.id, recovery.schedule.id);
+    if (runningSchedules.has(key)) {
+      services.operationsRepository.fail(
+        operation.id,
+        "A newer execution of this schedule was already active after serverSENTINEL restarted",
+        { task: "Schedule recovery skipped" }
+      );
+      continue;
+    }
+
+    runningSchedules.add(key);
+    resumed += 1;
+    logInfo({
+      ...serverLogFields(server),
+      scheduleId: recovery.schedule.id,
+      runId: recovery.runId,
+      operationId: operation.id
+    }, "Resuming schedule that was waiting for players to leave");
+    void executeMatchedSchedule(server, recovery.schedule, {
+      operationId: operation.id,
+      runId: recovery.runId,
+      startedAt: recovery.startedAt
+    })
+      .catch((error) => {
+        logError({ ...serverLogFields(server), scheduleId: recovery.schedule.id, ...errorLogFields(error) }, "Waiting schedule could not be resumed");
+        services.operationsRepository.fail(operation.id, error instanceof Error ? error.message : "Schedule recovery failed", {
+          task: "Schedule recovery failed"
+        });
+      })
+      .finally(() => runningSchedules.delete(key));
+  }
+  return resumed;
 }
 
 export async function tickSchedules() {

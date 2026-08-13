@@ -2,15 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ManagedServer, OperationRecord, ScheduledExecution } from "../types.js";
 
 const operationsRepository = {
-  create: vi.fn((input: Record<string, unknown>) => ({ id: "operation-1", ...input } as unknown as OperationRecord)),
+  create: vi.fn((input: Record<string, unknown>) => ({ id: "operation-1", status: "queued", ...input } as unknown as OperationRecord)),
+  find: vi.fn(),
   start: vi.fn(),
   update: vi.fn(),
   cancel: vi.fn(),
   fail: vi.fn(),
   succeed: vi.fn()
 };
-const serversRepository = { recordScheduledRun: vi.fn() };
+const serversRepository = { find: vi.fn(), recordScheduledRun: vi.fn() };
 const serverStatus = vi.fn(async () => ({ docker: { running: true } }));
+const sendConsoleCommand = vi.fn(async () => ({}));
 const freshOnlineCount = vi.fn(async (): Promise<number | null> => 0);
 const exportCoordinator = {
   activeOperationId: vi.fn((): string | undefined => undefined),
@@ -20,10 +22,10 @@ const exportCoordinator = {
 
 vi.mock("../appServices.js", () => ({
   services: { operationsRepository, serversRepository, exportCoordinator, playerSnapshotCoordinator: { freshOnlineCount } },
-  runtimeForServer: () => ({ serverStatus, serverLogs: async () => ({ text: "" }) })
+  runtimeForServer: () => ({ serverStatus, sendConsoleCommand, serverLogs: async () => ({ text: "" }) })
 }));
 
-const { executeMatchedSchedule, scheduleFromBody, scheduleRequiresRunningServer, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
+const { executeMatchedSchedule, resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, scheduleRequiresRunningServer, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
 const { activeScheduleExecutions, cancelActiveScheduleRunsForSchedule, runningSchedules } = await import("./activeRuns.js");
 
 const server = { id: "server-1", nodeId: "local", displayName: "Survival" } as ManagedServer;
@@ -48,6 +50,8 @@ describe("scheduled run bookkeeping", () => {
     freshOnlineCount.mockResolvedValue(0);
     exportCoordinator.activeOperationId.mockReturnValue(undefined);
     exportCoordinator.withMutation.mockImplementation(async (_serverId: string, action: () => Promise<unknown>) => action());
+    operationsRepository.find.mockReturnValue(undefined);
+    serversRepository.find.mockReturnValue(undefined);
   });
 
   it("clears the active run and resolves the operation after a successful run", async () => {
@@ -98,6 +102,70 @@ describe("scheduled run bookkeeping", () => {
     expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({ status: "success" }));
   });
 
+  it("persists a resumable checkpoint only while waiting for the server to empty", async () => {
+    await executeMatchedSchedule(server, { ...schedule, onlyWhenNoPlayers: true, waitForPlayersToLeave: true });
+
+    expect(operationsRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      result: expect.objectContaining({
+        kind: "schedule.wait-for-empty",
+        version: 1,
+        phase: "waiting",
+        runId: expect.any(String),
+        schedule: expect.objectContaining({ id: schedule.id, waitForPlayersToLeave: true })
+      })
+    }));
+    expect(operationsRepository.update).toHaveBeenCalledWith("operation-1", expect.objectContaining({
+      result: expect.objectContaining({ kind: "schedule.wait-for-empty", phase: "executing" })
+    }));
+  });
+
+  it("restores a waiting execution and its duplicate guard after restart", async () => {
+    const persistedSchedule = {
+      ...schedule,
+      steps: [{ type: "command" as const, command: "save-all", delaySeconds: 0 }],
+      onlyWhenNoPlayers: true,
+      waitForPlayersToLeave: true
+    };
+    const waitingOperation = {
+      id: "operation-resume",
+      type: "schedule.run",
+      status: "running",
+      serverId: server.id,
+      nodeId: server.nodeId,
+      progress: 10,
+      createdAt: "2026-07-01T04:00:00.000Z",
+      result: {
+        kind: "schedule.wait-for-empty",
+        version: 1,
+        phase: "waiting",
+        runId: "run-resume",
+        startedAt: "2026-07-01T04:00:00.000Z",
+        schedule: persistedSchedule
+      }
+    } as OperationRecord;
+    operationsRepository.find.mockReturnValue(waitingOperation);
+    serversRepository.find.mockReturnValue({
+      ...server,
+      schedules: [persistedSchedule]
+    });
+
+    const recoverable = resumableScheduleWaitOperations([waitingOperation]);
+    expect(resumeWaitingScheduleExecutions(recoverable)).toBe(1);
+    expect(runningSchedules.has(`${server.id}:${schedule.id}`)).toBe(true);
+    expect(startScheduleExecution(server, schedule)).toBeUndefined();
+    await vi.waitFor(() => expect(runningSchedules.size).toBe(0));
+
+    expect(operationsRepository.create).not.toHaveBeenCalled();
+    expect(operationsRepository.start).toHaveBeenCalledWith(waitingOperation.id, expect.objectContaining({
+      task: `Resuming schedule ${schedule.name}`
+    }));
+    expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({
+      id: "run-resume",
+      ranAt: "2026-07-01T04:00:00.000Z",
+      status: "success"
+    }));
+  });
+
   it("updates the visible wait state as players leave", async () => {
     freshOnlineCount
       .mockResolvedValueOnce(3)
@@ -123,6 +191,37 @@ describe("scheduled run bookkeeping", () => {
     expect(operationsRepository.update).toHaveBeenCalledWith(active.operationId, expect.objectContaining({ task: "Waiting for 3 players to leave" }));
     expect(operationsRepository.update).toHaveBeenCalledWith(active.operationId, expect.objectContaining({ task: "Waiting for 1 player to leave" }));
     expect(active.message).toBe("Server is empty; preparing schedule");
+  });
+
+  it("keeps waiting while server status is temporarily unavailable after restart", async () => {
+    serverStatus
+      .mockRejectedValueOnce(new Error("Remote node is reconnecting"))
+      .mockResolvedValueOnce({ docker: { running: true } });
+    const active = {
+      id: "run-reconnecting",
+      serverId: server.id,
+      scheduleId: schedule.id,
+      scheduleName: schedule.name,
+      status: "running" as const,
+      startedAt: new Date().toISOString(),
+      stepCount: 0,
+      cancellable: true,
+      message: "Resuming after panel restart",
+      operationId: "operation-reconnecting",
+      controller: new AbortController()
+    };
+
+    await expect(waitUntilServerIsEmpty(
+      server,
+      { ...schedule, onlyWhenNoPlayers: true, waitForPlayersToLeave: true },
+      active,
+      0
+    )).resolves.toBe("empty");
+
+    expect(serverStatus).toHaveBeenCalledTimes(2);
+    expect(operationsRepository.update).toHaveBeenCalledWith(active.operationId, expect.objectContaining({
+      task: "Waiting for server status"
+    }));
   });
 
   // The tick used to refuse to start at all while an export held the server, and because cron
