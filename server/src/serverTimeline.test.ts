@@ -107,6 +107,31 @@ describe("server timeline resource points", () => {
     expect(points.map((point) => point.cpuUtilizationPercent)).toEqual([20, 10]);
   });
 
+  it("holds the network rate across a repeated stats read and measures the next one from that read", () => {
+    // A remote node serves stats from a cached observation, so the collector can file the same
+    // read twice. Both counter deltas belong to the interval between the two distinct reads.
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { readAt: new Date(0).toISOString() }),
+      sample(5_000, 5_000, 10_000, { readAt: new Date(5_000).toISOString() }),
+      sample(10_000, 5_000, 10_000, { readAt: new Date(5_000).toISOString() }),
+      sample(15_000, 15_000, 30_000, { readAt: new Date(15_000).toISOString() })
+    ], 0, 15_000, 100);
+    expect(points.map((point) => point.networkRxBytesPerSecond)).toEqual([null, 1_000, 1_000, 1_000]);
+    expect(points.map((point) => point.networkTxBytesPerSecond)).toEqual([null, 2_000, 2_000, 2_000]);
+  });
+
+  it("stops holding a network rate once the reading it came from is older than the gap threshold", () => {
+    const stalled = new Date(5_000).toISOString();
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { readAt: new Date(0).toISOString() }),
+      sample(5_000, 5_000, 5_000, { readAt: stalled }),
+      sample(10_000, 5_000, 5_000, { readAt: stalled }),
+      sample(40_000, 5_000, 5_000, { readAt: stalled })
+    ], 0, 40_000, 100);
+    expect(points.map((point) => point.networkRxBytesPerSecond)).toEqual([null, 1_000, 1_000, null]);
+    expect(points.at(-1)?.cpuUtilizationPercent).toBe(5);
+  });
+
   it("preserves network reset gaps while aggregating", () => {
     const points = timelineResourcePoints([
       sample(0, 100, 100),

@@ -3,7 +3,7 @@ import { compactNodeServerSpec, nodeAdvertisesCapability, nodeProtocolObservatio
 import type { ServerLogCursor, ServerObservationResultItem, ServerObservationSection } from "./protocol.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 
-type CachedSection = { value: unknown; observedAt: number };
+type CachedSection = { value: unknown; observedAt: number; sequence: number };
 type CachedServer = Partial<Record<ServerObservationSection, CachedSection>> & { logCursor?: ServerLogCursor; logText?: string };
 
 type ObservationCoordinatorOptions = {
@@ -30,6 +30,7 @@ export class RemoteObservationCoordinator {
   private readonly pollMs: number;
   private interval: NodeJS.Timeout | undefined;
   private tick = 0;
+  private sequence = 0;
 
   constructor(private readonly options: ObservationCoordinatorOptions) {
     this.pollMs = options.pollMs ?? 5_000;
@@ -145,6 +146,8 @@ export class RemoteObservationCoordinator {
     if (!node) throw new Error("Remote node was not found");
     for (let offset = 0; offset < servers.length; offset += nodeProtocolObservationBatchSize) {
       const chunk = servers.slice(offset, offset + nodeProtocolObservationBatchSize);
+      this.sequence += 1;
+      const sequence = this.sequence;
       const response = normalizeServerObservationResponse(await this.options.connections.request(node, "server.observe", {
         items: chunk.map((server) => {
           const sections = sectionsFor(server);
@@ -155,22 +158,30 @@ export class RemoteObservationCoordinator {
           };
         })
       }, 15_000));
-      const observedAt = Date.parse(response.observedAt) || Date.now();
-      for (const item of response.items) this.store(item, observedAt);
+      // `response.observedAt` comes off the node's wall clock while every reader ages the cache
+      // against the panel's. A node running even a second behind made every observation look stale
+      // on arrival, so each read forced its own round trip alongside the background tick.
+      const observedAt = Date.now();
+      for (const item of response.items) this.store(item, observedAt, sequence);
     }
   }
 
-  private store(item: ServerObservationResultItem, observedAt: number) {
+  private store(item: ServerObservationResultItem, observedAt: number, sequence: number) {
     const cached = this.cache.get(item.serverId) ?? {};
-    if (item.status !== undefined) cached.status = { value: item.status, observedAt };
-    if (item.stats !== undefined) cached.stats = { value: item.stats, observedAt };
-    if (item.players !== undefined) cached.players = { value: item.players, observedAt };
-    if (item.overviewFiles !== undefined) cached.overviewFiles = { value: item.overviewFiles, observedAt };
-    if (item.logs !== undefined) {
+    // A background tick and an on-demand read can be in flight together, and the older request can
+    // answer last. Counter-backed sections such as `stats` read as a reset when that happens, so
+    // the later-issued observation wins regardless of arrival order.
+    const superseded = (section: ServerObservationSection) => (cached[section]?.sequence ?? 0) > sequence;
+    const entry = (value: unknown) => ({ value, observedAt, sequence });
+    if (item.status !== undefined && !superseded("status")) cached.status = entry(item.status);
+    if (item.stats !== undefined && !superseded("stats")) cached.stats = entry(item.stats);
+    if (item.players !== undefined && !superseded("players")) cached.players = entry(item.players);
+    if (item.overviewFiles !== undefined && !superseded("overviewFiles")) cached.overviewFiles = entry(item.overviewFiles);
+    if (item.logs !== undefined && !superseded("logs")) {
       const combined = item.logs.reset ? item.logs.text : `${cached.logText ?? ""}${item.logs.text}`;
       cached.logText = combined.length > recentLogCacheBytes ? combined.slice(-recentLogCacheBytes) : combined;
       cached.logCursor = item.logs.cursor;
-      cached.logs = { value: { text: cached.logText, source: item.logs.source }, observedAt };
+      cached.logs = entry({ text: cached.logText, source: item.logs.source });
     }
     this.cache.set(item.serverId, cached);
   }

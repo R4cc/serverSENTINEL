@@ -41,6 +41,8 @@ describe("server timeline controls", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Reset view<\/button>/);
     expect(html).toContain("Player activity");
     expect(html).toContain("Server events");
+    // The viewport cannot reach the future, so the planned-schedule layer had nothing to draw.
+    expect(html).not.toContain("Planned schedules");
     expect(html).not.toContain("serverTimelineSummary");
   });
 

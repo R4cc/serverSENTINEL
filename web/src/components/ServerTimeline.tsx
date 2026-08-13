@@ -202,7 +202,7 @@ export function TimelineAnnotationPopoverItem({
   return <div className={`serverTimelineAnnotationPopoverItem tone-${marker.tone}`}>{content}</div>;
 }
 
-type AnnotationKey = "player" | "server" | "automation" | "planned";
+type AnnotationKey = "player" | "server" | "automation";
 
 type TimelineHoverTooltip = {
   x: number;
@@ -274,8 +274,7 @@ export function writeTimelineMetricLayers(
 const annotationOptions: Array<{ key: AnnotationKey; label: string }> = [
   { key: "player", label: "Player activity" },
   { key: "server", label: "Server events" },
-  { key: "automation", label: "Automation runs" },
-  { key: "planned", label: "Planned schedules" }
+  { key: "automation", label: "Automation runs" }
 ];
 
 function fallbackPlayerActivity(data: ServerTimelineResponse): ServerTimelinePlayerActivity {
@@ -844,8 +843,7 @@ export function ServerTimeline({
   const [annotationEnabled, setAnnotationEnabled] = useState<Record<AnnotationKey, boolean>>({
     player: true,
     server: true,
-    automation: true,
-    planned: true
+    automation: true
   });
   const panelRef = useRef<HTMLElement>(null);
   const visualizationRef = useRef<HTMLDivElement>(null);
@@ -1022,7 +1020,13 @@ export function ServerTimeline({
   }, []);
 
   const allMarkers = useMemo(() => timelineMarkers(data), [data]);
-  const markers = useMemo(() => allMarkers.filter((marker) => marker.schedule?.kind !== "active" && annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
+  // The viewport is clamped to the present, so a planned run is never inside a window the chart can
+  // show. The layer had a toggle of its own that could only ever draw an empty rail; upcoming runs
+  // are listed on the Schedules panel instead.
+  const markers = useMemo(
+    () => allMarkers.filter((marker) => marker.schedule?.kind !== "active" && marker.tone !== "planned" && annotationEnabled[marker.tone]),
+    [allMarkers, annotationEnabled]
+  );
   const activeScheduleRanges = useMemo(
     () => annotationEnabled.automation
       ? timelineActiveScheduleRanges(allMarkers, viewport.from, viewport.to, clockNow)
@@ -1313,7 +1317,7 @@ export function ServerTimeline({
           <div className="serverTimelineLayerGroup" role="group" aria-label="Event layers">
             <span className="serverTimelineLayerHeading">Events</span>
             <div className="serverTimelineSeries">
-              {annotationOptions.filter((annotation) => !["automation", "planned"].includes(annotation.key) || data?.scheduleAnnotationsAvailable).map((annotation) => (
+              {annotationOptions.filter((annotation) => annotation.key !== "automation" || data?.scheduleAnnotationsAvailable).map((annotation) => (
                 <button
                   type="button"
                   key={annotation.key}

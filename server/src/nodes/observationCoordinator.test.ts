@@ -131,4 +131,33 @@ describe("RemoteObservationCoordinator", () => {
     expect(sizes).toEqual([32, 1]);
     coordinator.stop();
   });
+
+  it("keeps the later-issued observation when an earlier request answers last", async () => {
+    const servers = [server(0)];
+    const delays = [40, 0];
+    const counters = [100, 500];
+    let issued = 0;
+    const connections = {
+      isConnected: () => true,
+      request: async (_node: ManagedNode, _command: string, payload: { items: Array<{ server: ManagedServer }> }) => {
+        const attempt = issued;
+        issued += 1;
+        await new Promise((resolve) => setTimeout(resolve, delays[attempt] ?? 0));
+        return {
+          observedAt: new Date().toISOString(),
+          items: payload.items.map(({ server: observed }) => ({ serverId: observed.id, stats: { networkRxBytes: counters[attempt] } }))
+        };
+      }
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => servers, lookupNode: async () => node(), connections, pollMs: 60_000 });
+
+    const slow = coordinator.refreshNode("node-1");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await coordinator.refreshNode("node-1");
+    await slow;
+
+    expect(issued).toBe(2);
+    expect(await coordinator.read(servers[0], "stats", 60_000)).toEqual({ networkRxBytes: 500 });
+    coordinator.stop();
+  });
 });
