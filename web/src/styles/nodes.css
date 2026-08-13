@@ -47,7 +47,7 @@
 }
 
 .nodesBoardHeader {
-  min-height: 62px;
+  min-height: 57px;
   padding: var(--space-3) var(--space-4);
   border-bottom: var(--border-subtle) solid var(--border-row);
 }

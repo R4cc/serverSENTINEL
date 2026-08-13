@@ -329,7 +329,6 @@ export function AddNodeModal({
       <header className="nodeModalHeader">
         <div>
           <h2 id="add-node-title">Add node</h2>
-          <p>Connect another computer to this ServerSentinel panel.</p>
         </div>
         <Button
           variant="secondary"
@@ -618,7 +617,6 @@ export function NodesPage({
             className="nodesBoardHeader"
             headingLevel={3}
             title="Connected nodes"
-            description="Hosts available to run and manage Minecraft servers."
           />
         )}
         {!hasNodes && (

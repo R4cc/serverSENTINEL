@@ -360,7 +360,6 @@ export function ServerEditForm({
             <section className="propertiesSection propertiesSectionGeneral">
               <PanelHeader
                 title="General"
-                description="Identity, versions, and startup behavior."
               />
               <div className="propertiesFieldGrid three">
                 <FormField htmlFor="properties-display-name" label="Display name" required>
@@ -399,7 +398,6 @@ export function ServerEditForm({
                 </span>
                 <span>
                   <strong>Start when node starts</strong>
-                  <small>Automatically start this Minecraft server whenever its assigned node starts.</small>
                 </span>
               </label>
             </section>
@@ -407,7 +405,6 @@ export function ServerEditForm({
             <section className="propertiesSection propertiesSectionResources">
               <PanelHeader
                 title="Resources"
-                description="Memory reserved for the Minecraft runtime."
               />
               <section className="resourceStepSection propertiesMemorySection" aria-label="Minecraft memory">
                 <div className="memoryRangeLayout">
@@ -452,7 +449,6 @@ export function ServerEditForm({
             <section className="propertiesSection propertiesSectionNetwork">
               <PanelHeader
                 title="Network"
-                description="Ports used by players and server status queries."
               />
               <MinecraftPortsSection
                 serverPort={serverPort}

@@ -124,13 +124,6 @@
   font-weight: var(--weight-title);
 }
 
-.propertiesStartupToggle small {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-strong);
-  line-height: 1.35;
-}
-
 .serverPropertiesForm fieldset:disabled .propertiesStartupToggle {
   cursor: default;
 }

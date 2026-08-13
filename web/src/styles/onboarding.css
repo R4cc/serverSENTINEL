@@ -76,7 +76,6 @@
   font-size: clamp(24px, 3vw, 34px);
 }
 
-.onboardingHeaderCopy p,
 .onboardingStageHeading p,
 .onboardingChoiceCard p,
 .onboardingActionCard p,
@@ -133,8 +132,7 @@
   gap: 2px;
 }
 
-.onboardingStepper strong,
-.onboardingStepper small {
+.onboardingStepper strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -142,11 +140,6 @@
 
 .onboardingStepper strong {
   font-size: var(--type-helper-size);
-}
-
-.onboardingStepper small {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
 }
 
 .onboardingStepper li.active {
@@ -379,10 +372,6 @@
     font-size: 24px;
   }
 
-  .onboardingHeaderCopy p {
-    display: none;
-  }
-
   .onboardingStepper {
     padding: var(--space-2) var(--space-3);
   }
@@ -395,10 +384,6 @@
 
   .onboardingStepper li > div {
     text-align: center;
-  }
-
-  .onboardingStepper small {
-    display: none;
   }
 
   .onboardingChoiceGrid,

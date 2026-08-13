@@ -50,8 +50,7 @@ export function ImportModal({
 
       <div className="modalBody exportModalBody">
         <p id={descriptionId} className="uiFormFieldDescription">
-          Restore an export archive. Every server in the archive is created as a new server; nothing
-          existing is overwritten.
+          Every server in the archive is created as a new server; nothing existing is overwritten.
         </p>
 
         <FormField label="Export archive" htmlFor={fileId} required>

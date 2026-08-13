@@ -126,7 +126,7 @@
 }
 
 .settingsHubSectionHeader {
-  min-height: 94px;
+  min-height: 78px;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
@@ -152,13 +152,6 @@
   color: var(--text);
   font-size: var(--type-section-title-size);
   line-height: 1.2;
-}
-
-.settingsHubSectionHeader p {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  line-height: 1.4;
 }
 
 .settingsHubSectionActions,
@@ -683,7 +676,7 @@
   }
 
   .settingsHubSectionHeader {
-    min-height: 82px;
+    min-height: 70px;
     grid-template-columns: 40px minmax(0, 1fr);
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);

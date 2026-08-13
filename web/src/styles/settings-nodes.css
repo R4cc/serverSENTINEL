@@ -661,12 +661,6 @@
   line-height: 1.2;
 }
 
-.createWizardStep small {
-  color: inherit;
-  font-size: 12px;
-  font-weight: var(--weight-strong);
-}
-
 .createWizardStep i {
   border-top: var(--border-subtle) solid var(--border-muted);
 }

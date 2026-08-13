@@ -171,7 +171,6 @@ export function OnboardingFlow({
       backdrop="onboardingBackdrop"
       className="modalPanel onboardingPanel"
       labelledBy="onboarding-title"
-      describedBy="onboarding-description"
       onClose={onClose}
       backdropDismiss={false}
       allowDocumentScrollOnPhone
@@ -181,7 +180,6 @@ export function OnboardingFlow({
         <div className="onboardingHeaderCopy">
           <span className="onboardingEyebrow">Initial setup</span>
           <h2 id="onboarding-title">Bring your first server online</h2>
-          <p id="onboarding-description">A short, resumable path through hosting, creation, and the first successful start.</p>
         </div>
         <Button variant="ghost" iconOnly onClick={onClose} aria-label="Continue setup later" title="Continue setup later"><AppIcon name="x" /></Button>
       </header>
@@ -193,7 +191,7 @@ export function OnboardingFlow({
           return (
             <li key={label} className={`${number === step ? "active" : ""} ${completed ? "completed" : ""}`.trim()} aria-current={number === step ? "step" : undefined}>
               <span>{completed ? <AppIcon name="check" /> : number}</span>
-              <div><strong>{label}</strong><small>{number === step ? stepDescription(number) : ""}</small></div>
+              <div><strong>{label}</strong></div>
             </li>
           );
         })}

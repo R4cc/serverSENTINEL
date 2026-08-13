@@ -23,7 +23,6 @@ export function PlayerHeadsOnboarding({
       <header className="modalHeader">
         <div>
           <h2 id="player-heads-onboarding-title">Player heads on Overview</h2>
-          <p>Choose whether this instance may use an external avatar service.</p>
         </div>
       </header>
       <div className="modalBody playerHeadsOnboardingBody">
