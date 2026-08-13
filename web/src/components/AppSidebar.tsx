@@ -102,7 +102,7 @@ export function AppSidebar({
 
   return (
     <aside className="sidebar uiGlassSurface uiGlassSurface--chrome" id="application-sidebar">
-      <GlassEffect variant="chrome" />
+      <GlassEffect variant="chrome" cornerRadius={0} />
       <div className="brandBlock">
         <div className="brandLockup">
           <BrandLogo />

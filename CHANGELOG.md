@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.8.3 - 2026-08-13
+
+- Kept Chromium liquid-glass rims aligned with their surfaces and restored a visible file-editor scrollbar.
+
 ## 26.8.2 - 2026-08-13
 
 - Removed the stray horizontal bands between the schedule editor's header, content, and footer.

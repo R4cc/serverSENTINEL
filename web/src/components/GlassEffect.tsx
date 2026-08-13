@@ -68,19 +68,23 @@ function useLiquidGlassSupport() {
 }
 
 const glassSettings: Record<GlassVariant, { blurAmount: number; cornerRadius: number; displacementScale: number; saturation: number }> = {
-  chrome: { blurAmount: 0.08, cornerRadius: 26, displacementScale: 24, saturation: 142 },
+  chrome: { blurAmount: 0.08, cornerRadius: 18, displacementScale: 24, saturation: 142 },
   floating: { blurAmount: 0.09, cornerRadius: 18, displacementScale: 28, saturation: 148 },
-  modal: { blurAmount: 0.1, cornerRadius: 28, displacementScale: 22, saturation: 140 }
+  modal: { blurAmount: 0.1, cornerRadius: 24, displacementScale: 22, saturation: 140 }
 };
+
+export function liquidGlassCornerRadius(variant: GlassVariant, cornerRadius?: number) {
+  return cornerRadius ?? glassSettings[variant].cornerRadius;
+}
 
 /**
  * Decorative-only refraction. The parent remains the semantic and interactive
  * surface; this layer never receives focus, pointer events, or accessible text.
  */
-export function GlassEffect({ variant }: { variant: GlassVariant }) {
+export function GlassEffect({ variant, cornerRadius }: { variant: GlassVariant; cornerRadius?: number }) {
   const supported = useLiquidGlassSupport();
   if (!supported) return null;
-  const settings = glassSettings[variant];
+  const settings = { ...glassSettings[variant], cornerRadius: liquidGlassCornerRadius(variant, cornerRadius) };
 
   return (
     <span className={`uiLiquidGlassEffect uiLiquidGlassEffect--${variant}`} aria-hidden="true">

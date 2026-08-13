@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { supportsLiquidGlass } from "./GlassEffect";
+import { liquidGlassCornerRadius, supportsLiquidGlass } from "./GlassEffect";
 
 const supportedEnvironment = {
   userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36",
@@ -19,5 +19,17 @@ describe("liquid glass capability gating", () => {
     expect(supportsLiquidGlass({ ...supportedEnvironment, backdropFilter: false })).toBe(false);
     expect(supportsLiquidGlass({ ...supportedEnvironment, reducedMotion: true })).toBe(false);
     expect(supportsLiquidGlass({ ...supportedEnvironment, reducedTransparency: true })).toBe(false);
+  });
+});
+
+describe("liquid glass surface geometry", () => {
+  it("matches the shared surface radii", () => {
+    expect(liquidGlassCornerRadius("chrome")).toBe(18);
+    expect(liquidGlassCornerRadius("floating")).toBe(18);
+    expect(liquidGlassCornerRadius("modal")).toBe(24);
+  });
+
+  it("supports square chrome without removing its refraction", () => {
+    expect(liquidGlassCornerRadius("chrome", 0)).toBe(0);
   });
 });
