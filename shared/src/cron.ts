@@ -244,6 +244,66 @@ export function nextCronRunsInTimeZone(
   return matches;
 }
 
+/**
+ * The shapes the schedule builder can express directly. Cron stays the stored format and the only
+ * thing the API sees; these are a lossless reading of the handful of expressions people actually
+ * write, with `advanced` carrying everything else unchanged.
+ */
+export type CronSchedulePlan =
+  | { mode: "minutes"; every: number }
+  | { mode: "hours"; every: number }
+  | { mode: "daily"; hour: number; minute: number }
+  | { mode: "weekly"; weekdays: number[]; hour: number; minute: number }
+  | { mode: "advanced"; cron: string };
+
+export type CronScheduleMode = CronSchedulePlan["mode"];
+
+export function cronFromSchedulePlan(plan: CronSchedulePlan): string {
+  if (plan.mode === "minutes") return `*/${plan.every} * * * *`;
+  if (plan.mode === "hours") return `0 */${plan.every} * * *`;
+  if (plan.mode === "daily") return `${plan.minute} ${plan.hour} * * *`;
+  if (plan.mode === "weekly") {
+    const weekdays = [...new Set(plan.weekdays)].sort((first, second) => first - second);
+    return `${plan.minute} ${plan.hour} * * ${weekdays.length ? weekdays.join(",") : "*"}`;
+  }
+  return plan.cron;
+}
+
+/**
+ * Reads an expression back into the builder. Anything outside the four simple shapes comes back as
+ * `advanced` rather than being approximated, so opening a schedule for editing can never quietly
+ * rewrite an expression its author tuned by hand.
+ */
+export function schedulePlanFromCron(cron: string): CronSchedulePlan {
+  const fields = cronFields(cron);
+  const advanced: CronSchedulePlan = { mode: "advanced", cron };
+  if (!fields || cronExpressionError(cron)) return advanced;
+  const [minute, hour, day, month, weekday] = fields;
+  if (day !== "*" || month !== "*") return advanced;
+
+  const minuteStep = stepValue(minute);
+  if (minuteStep !== null && hour === "*" && weekday === "*") return { mode: "minutes", every: minuteStep };
+  const hourStep = stepValue(hour);
+  if (minute === "0" && hourStep !== null && weekday === "*") return { mode: "hours", every: hourStep };
+
+  const exactMinute = exactNumber(minute);
+  const exactHour = exactNumber(hour);
+  if (exactMinute === null || exactHour === null) return advanced;
+  if (weekday === "*") return { mode: "daily", hour: exactHour, minute: exactMinute };
+
+  const weekdays = expandSimpleValues(weekday);
+  if (!weekdays?.length) return advanced;
+  // Cron accepts 7 for Sunday; the builder offers one Sunday checkbox.
+  const normalized = [...new Set(weekdays.map((value) => value === 7 ? 0 : value))].sort((first, second) => first - second);
+  return { mode: "weekly", weekdays: normalized, hour: exactHour, minute: exactMinute };
+}
+
+function stepValue(field: string) {
+  if (!field.startsWith("*/")) return null;
+  const step = Number(field.slice(2));
+  return Number.isInteger(step) && step > 0 ? step : null;
+}
+
 const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 

@@ -760,6 +760,98 @@
   line-height: 1.3;
 }
 
+.scheduleRepeatControls {
+  min-width: 0;
+  margin-top: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+}
+
+.scheduleRepeatInterval input,
+.scheduleRepeatTime input {
+  width: 100%;
+  max-width: 180px;
+}
+
+.scheduleRepeatInterval,
+.scheduleRepeatTime,
+.scheduleCronField {
+  min-width: 0;
+  flex: 1 1 180px;
+  display: grid;
+  gap: 4px;
+}
+
+.scheduleWeekdayPicker {
+  min-width: 0;
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.scheduleWeekdayPicker legend {
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--type-form-label-size);
+  font-weight: var(--weight-strong);
+}
+
+.scheduleWeekdayChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.scheduleWeekdayChoice {
+  position: relative;
+  min-width: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  text-align: center;
+  cursor: pointer;
+}
+
+.scheduleWeekdayChoice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scheduleWeekdayChoice.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--text);
+}
+
+.scheduleWeekdayChoice:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.scheduleStepOffset {
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.scheduleStepTotal {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
 .scheduleCronPreview {
   min-width: 0;
   margin-top: var(--space-2);

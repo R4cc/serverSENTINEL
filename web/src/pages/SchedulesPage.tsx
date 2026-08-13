@@ -6,6 +6,12 @@ import {
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
+import {
+  cronFromSchedulePlan,
+  schedulePlanFromCron,
+  type CronSchedulePlan,
+  type CronScheduleMode
+} from '@serversentinel/contracts';
 import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
@@ -15,7 +21,7 @@ import { DialogSurface } from '../components/DialogSurface';
 import { ActionMenu } from '../components/ActionMenu';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
-import { scheduleDelayParts, scheduleDelayToSeconds } from '../features/schedules/scheduleDelays';
+import { formatScheduleOffset, scheduleDelayParts, scheduleDelayToSeconds, scheduleOffsetBadge, scheduleStepOffsets } from '../features/schedules/scheduleDelays';
 import { describeCronExpression } from '../features/schedules/cronDescription';
 import { buildCronPreview } from '../features/schedules/cronPreview';
 
@@ -35,6 +41,44 @@ type StepDraft = {
 type ScheduledRunPanelItem =
   | (ScheduledActiveRun & { kind: "active"; sortAt: string })
   | (ScheduledRun & { kind: "completed"; sortAt: string });
+
+const defaultDailyCron = "0 4 * * *";
+
+const weekdayChoices = [
+  { value: 1, short: "Mon", label: "Monday" },
+  { value: 2, short: "Tue", label: "Tuesday" },
+  { value: 3, short: "Wed", label: "Wednesday" },
+  { value: 4, short: "Thu", label: "Thursday" },
+  { value: 5, short: "Fri", label: "Friday" },
+  { value: 6, short: "Sat", label: "Saturday" },
+  { value: 0, short: "Sun", label: "Sunday" }
+];
+
+function clampInterval(value: number, mode: "minutes" | "hours") {
+  const max = mode === "minutes" ? 59 : 23;
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(max, Math.max(1, Math.trunc(value)));
+}
+
+function padClock(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+/**
+ * Carries the time of day across a mode change wherever the new shape has somewhere to put it, so
+ * switching between Every day and On chosen weekdays does not silently reset a time already chosen.
+ */
+export function defaultSchedulePlan(mode: CronScheduleMode, current: CronSchedulePlan): CronSchedulePlan {
+  const hour = current.mode === "daily" || current.mode === "weekly" ? current.hour : 4;
+  const minute = current.mode === "daily" || current.mode === "weekly" ? current.minute : 0;
+  if (mode === "minutes") return { mode, every: current.mode === "hours" ? 1 : 15 };
+  if (mode === "hours") return { mode, every: current.mode === "minutes" ? 1 : 6 };
+  if (mode === "daily") return { mode, hour, minute };
+  if (mode === "weekly") {
+    return { mode, hour, minute, weekdays: current.mode === "weekly" && current.weekdays.length ? current.weekdays : [1, 2, 3, 4, 5] };
+  }
+  return { mode: "advanced", cron: cronFromSchedulePlan(current) };
+}
 
 function emptyStepDraft(): StepDraft {
   return { id: clientId(), type: "command", command: "", procedure: "restart", delayValue: 0, delayUnit: "seconds" };
@@ -124,6 +168,7 @@ export function SchedulePage({
   const [stepDrafts, setStepDrafts] = useState<StepDraft[]>(() => [emptyStepDraft()]);
   const [formError, setFormError] = useState("");
   const [cronValue, setCronValue] = useState("");
+  const [cronMode, setCronMode] = useState<CronScheduleMode>("daily");
   const [draggingStepId, setDraggingStepId] = useState<string | null>(null);
   const [stepReorderMessage, setStepReorderMessage] = useState("");
   const [selectedRun, setSelectedRun] = useState<ScheduledRun | null>(null);
@@ -147,6 +192,7 @@ export function SchedulePage({
       setStepDrafts([emptyStepDraft()]);
       setFormError("");
       setCronValue("");
+      setCronMode("daily");
       setDraggingStepId(null);
       setStepReorderMessage("");
       draggingStepIdRef.current = null;
@@ -157,7 +203,11 @@ export function SchedulePage({
     const steps = formMode.type === "edit" ? formMode.schedule.steps : [];
     setStepDrafts(steps.length ? steps.map(stepDraftFromStep) : [emptyStepDraft()]);
     setFormError("");
-    setCronValue(formMode.type === "edit" ? formMode.schedule.cron : "");
+    // A new schedule opens on the shape most of them have; an existing one opens on whichever shape
+    // its expression already is, so editing starts from what the author wrote rather than raw cron.
+    const initialCron = formMode.type === "edit" ? formMode.schedule.cron : defaultDailyCron;
+    setCronValue(initialCron);
+    setCronMode(schedulePlanFromCron(initialCron).mode);
     setDraggingStepId(null);
     setStepReorderMessage("");
     draggingStepIdRef.current = null;
@@ -255,7 +305,9 @@ export function SchedulePage({
       : { type: "action", procedure: "restart", delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) });
     return {
       name: String(form.get("name") ?? "").trim(),
-      cron: String(form.get("cron") ?? "").trim(),
+      // Read from state rather than the form: outside Advanced the expression is assembled by the
+      // builder and never exists as a field.
+      cron: cronValue.trim(),
       steps,
       onlyWhenNoPlayers: playerOnlinePolicy !== "run",
       waitForPlayersToLeave: playerOnlinePolicy === "wait",
@@ -409,6 +461,27 @@ export function SchedulePage({
   const modalSchedule = formMode?.type === "edit" ? formMode.schedule : null;
   const modalTitle = formMode?.type === "edit" ? "Edit schedule" : "Add schedule";
   const modalBusyTitle = saveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor";
+  // The expression stays the single source of truth: the builder reads the plan back out of it on
+  // every render and writes a new expression on every change, so the two can never disagree and an
+  // expression the builder cannot express survives editing untouched in Advanced.
+  const schedulePlan = useMemo<CronSchedulePlan>(
+    () => cronMode === "advanced" ? { mode: "advanced", cron: cronValue } : schedulePlanFromCron(cronValue),
+    [cronMode, cronValue]
+  );
+
+  const stepOffsets = scheduleStepOffsets(stepDrafts.map((draft) => scheduleDelayToSeconds(draft.delayValue, draft.delayUnit)));
+  const totalStepSeconds = stepOffsets.at(-1) ?? 0;
+
+  function applySchedulePlan(plan: CronSchedulePlan) {
+    setCronValue(cronFromSchedulePlan(plan));
+  }
+
+  function changeScheduleMode(mode: CronScheduleMode) {
+    setCronMode(mode);
+    if (mode === "advanced") return;
+    applySchedulePlan(defaultSchedulePlan(mode, schedulePlan));
+  }
+
   const cronError = cronValue.trim() ? validateCronExpression(cronValue) : null;
   const cronDescription = cronValue.trim() && !cronError ? describeCronExpression(cronValue) : null;
   // Recomputed on every keystroke rather than memoised: the search stops at the third match, and
@@ -675,25 +748,100 @@ export function SchedulePage({
                     Name
                     <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
                   </label>
-                  <label className="scheduleCronField">
-                    Cron schedule
-                    <input
-                      name="cron"
-                      value={cronValue}
-                      onChange={(event) => setCronValue(event.target.value)}
-                      placeholder="0 4 * * *"
-                      required
-                      aria-invalid={Boolean(cronError)}
-                      aria-describedby={cronError ? "schedule-cron-error" : "schedule-cron-description"}
-                      title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
-                    />
-                    {/* One feedback line in every state: the format hint holds the slot until
-                        the expression parses, so the field never changes height as it is typed. */}
-                    {cronError
-                      ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
-                      : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
+                  <label className="scheduleRepeatField">
+                    Repeat
+                    <select
+                      value={schedulePlan.mode}
+                      onChange={(event) => changeScheduleMode(event.target.value as CronScheduleMode)}
+                      aria-label="How often this schedule repeats"
+                    >
+                      <option value="minutes">Every few minutes</option>
+                      <option value="hours">Every few hours</option>
+                      <option value="daily">Every day</option>
+                      <option value="weekly">On chosen weekdays</option>
+                      <option value="advanced">Advanced (cron)</option>
+                    </select>
                   </label>
                 </div>
+
+                <div className="scheduleRepeatControls">
+                  {schedulePlan.mode === "minutes" || schedulePlan.mode === "hours" ? (
+                    <label className="scheduleRepeatInterval">
+                      <span>{schedulePlan.mode === "minutes" ? "Minutes between runs" : "Hours between runs"}</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max={schedulePlan.mode === "minutes" ? 59 : 23}
+                        step="1"
+                        value={schedulePlan.every}
+                        onChange={(event) => applySchedulePlan({ ...schedulePlan, every: clampInterval(Number(event.target.value), schedulePlan.mode) })}
+                      />
+                    </label>
+                  ) : null}
+
+                  {schedulePlan.mode === "daily" || schedulePlan.mode === "weekly" ? (
+                    <label className="scheduleRepeatTime">
+                      <span>Time of day</span>
+                      <input
+                        type="time"
+                        value={`${padClock(schedulePlan.hour)}:${padClock(schedulePlan.minute)}`}
+                        onChange={(event) => {
+                          const [hour, minute] = event.target.value.split(":").map(Number);
+                          if (!Number.isInteger(hour) || !Number.isInteger(minute)) return;
+                          applySchedulePlan({ ...schedulePlan, hour, minute });
+                        }}
+                      />
+                    </label>
+                  ) : null}
+
+                  {schedulePlan.mode === "weekly" && (
+                    <fieldset className="scheduleWeekdayPicker">
+                      <legend>Days</legend>
+                      <div className="scheduleWeekdayChoices">
+                        {weekdayChoices.map((choice) => {
+                          const selected = schedulePlan.weekdays.includes(choice.value);
+                          return (
+                            <label key={choice.value} className={`scheduleWeekdayChoice ${selected ? "selected" : ""}`.trim()}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => applySchedulePlan({
+                                  ...schedulePlan,
+                                  weekdays: selected
+                                    ? schedulePlan.weekdays.filter((day) => day !== choice.value)
+                                    : [...schedulePlan.weekdays, choice.value]
+                                })}
+                                aria-label={choice.label}
+                              />
+                              <span aria-hidden="true">{choice.short}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  )}
+
+                  {schedulePlan.mode === "advanced" && (
+                    <label className="scheduleCronField">
+                      <span>Cron expression</span>
+                      <input
+                        value={cronValue}
+                        onChange={(event) => setCronValue(event.target.value)}
+                        placeholder="0 4 * * *"
+                        required
+                        aria-invalid={Boolean(cronError)}
+                        aria-describedby={cronError ? "schedule-cron-error" : "schedule-cron-description"}
+                        title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* One feedback line in every state: the format hint holds the slot until the
+                    expression parses, so the section never changes height as it is edited. */}
+                {cronError
+                  ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
+                  : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
                 {/* Day-of-month against day-of-week is the classic way to write a cron that parses
                     and still fires on the wrong days, and a description alone cannot show that.
                     Three real datestamps can. */}
@@ -740,6 +888,9 @@ export function SchedulePage({
                               <AppIcon name="drag" />
                             </Button>
                             <strong>Step {index + 1}</strong>
+                            <span className="scheduleStepOffset" title={`Runs ${formatScheduleOffset(stepOffsets[index])}.`}>
+                              {scheduleOffsetBadge(stepOffsets[index])}
+                            </span>
                           </div>
                           {stepDrafts.length > 1 && (
                             <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
@@ -787,6 +938,11 @@ export function SchedulePage({
                     <AppIcon name="plus" />
                     <span>Additional step</span>
                   </Button>
+                  {totalStepSeconds > 0 && (
+                    <small className="scheduleStepTotal">
+                      The last step runs {formatScheduleOffset(totalStepSeconds)} after the scheduled time.
+                    </small>
+                  )}
                 </div>
               </section>
 

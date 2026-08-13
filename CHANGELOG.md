@@ -4,10 +4,13 @@
 
 - Added a preview of the next three runs to the schedule editor, so an expression can be checked against real dates before it is saved.
 - Added the reader's own clock to that preview whenever the display time zone differs from the one schedules run in, which resolves a schedule written as 04:00 being listed as 06:00.
+- Added a repeat builder to the schedule editor covering every few minutes or hours, every day, and chosen weekdays, so a schedule no longer has to be written as a cron expression. Advanced keeps the expression field, and an expression the builder cannot express opens there untouched.
+- Added the offset from the scheduled start to each step, and a line stating when the last one runs, so a restart with warning commands can be read without adding the delays up.
 
 ## 1.12.3 - 2026-08-13
 
 - Kept the console connected while a newly imported local server is waiting for its first Docker container, retained its startup log history, and stopped repeated reattach notices while the server is stopped.
+- Kept the Server Properties Advanced hover surface aligned with its rounded card border in both collapsed and expanded states.
 
 ## 1.12.2 - 2026-08-13
 
