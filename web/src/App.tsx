@@ -47,6 +47,7 @@ import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
+import { useNodeUpdateVisitNotification } from "./features/nodes/useNodeUpdateVisitNotification";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
 import { uiCacheLocalBlockedReason, useUiCacheClear } from "./features/settings/useUiCacheClear";
@@ -506,6 +507,12 @@ export default function App() {
     notify,
     requestConfirmation,
     refreshApp
+  });
+  useNodeUpdateVisitNotification({
+    ready: applicationReady && (demoMode || Boolean(authSession?.authenticated)),
+    nodes: contextNodes,
+    panelVersion,
+    panelBuildId
   });
   const exportServer = effectiveAppState.servers.find((server) => server.id === exportWorkspace.exportServerId);
   const {

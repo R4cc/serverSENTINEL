@@ -69,6 +69,64 @@ describe("Fastify application factory", () => {
     await rebuiltApp.close();
   });
 
+  it("persists node update notification settings through the node API", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-node-notifications-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18093",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+
+    try {
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(login.statusCode, login.body).toBe(200);
+      const cookie = sessionCookieFrom(login);
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/nodes",
+        headers: { ...csrf, cookie },
+        payload: { name: "Update test node" }
+      });
+      expect(created.statusCode, created.body).toBe(200);
+      const nodeId = created.json().node.id as string;
+      expect(created.json().node.updateNotificationsEnabled).toBe(true);
+
+      const disabled = await app.inject({
+        method: "PUT",
+        url: `/api/nodes/${nodeId}/update-notifications`,
+        headers: { ...csrf, cookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect(disabled.json().node.updateNotificationsEnabled).toBe(false);
+
+      const listed = await app.inject({ method: "GET", url: "/api/nodes", headers: { ...csrf, cookie } });
+      expect(listed.statusCode, listed.body).toBe(200);
+      expect(listed.json().nodes).toContainEqual(expect.objectContaining({
+        id: nodeId,
+        updateNotificationsEnabled: false
+      }));
+    } finally {
+      await app.close();
+    }
+  });
+
   it("assembles an import archive from bounded multipart chunks", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-chunked-import-"));
     temporaryDirectories.push(dataDir);

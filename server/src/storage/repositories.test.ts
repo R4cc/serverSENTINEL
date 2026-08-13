@@ -9,6 +9,7 @@ import { NodesRepository } from "./nodesRepository.js";
 import { SessionsRepository } from "./sessionsRepository.js";
 import { SettingsRepository } from "./settingsRepository.js";
 import { UsersRepository } from "./usersRepository.js";
+import { nodeUpdateNotificationsEnabled, setNodeUpdateNotificationsEnabled } from "../nodes/nodeUpdateNotifications.js";
 
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
@@ -144,6 +145,16 @@ describe("SQLite repositories", () => {
 
     nodes.deleteWithServers(node.id, false);
     expect(nodes.list()).toEqual([]);
+  });
+
+  it("stores per-node update notification preferences without changing the node schema", async () => {
+    const storage = await createStorage();
+
+    expect(nodeUpdateNotificationsEnabled(storage, "node-id")).toBe(true);
+    setNodeUpdateNotificationsEnabled(storage, "node-id", false);
+    expect(nodeUpdateNotificationsEnabled(storage, "node-id")).toBe(false);
+    setNodeUpdateNotificationsEnabled(storage, "node-id", true);
+    expect(nodeUpdateNotificationsEnabled(storage, "node-id")).toBe(true);
   });
 
   it("stores panel settings without creating JSON state", async () => {

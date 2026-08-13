@@ -742,6 +742,33 @@ button .buttonIcon {
   filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--overlay) 25%, transparent));
 }
 
+.sonnerToast [data-button] {
+  min-height: 30px !important;
+  height: auto !important;
+  padding: 5px 10px !important;
+  border: var(--border-subtle) solid color-mix(in srgb, var(--toast-severity) 42%, var(--border-row)) !important;
+  border-radius: var(--radius-sm) !important;
+  background: color-mix(in srgb, var(--toast-severity) 10%, var(--surface-raised)) !important;
+  color: color-mix(in srgb, var(--toast-severity) 48%, var(--text)) !important;
+  font-family: var(--font-sans) !important;
+  font-weight: var(--weight-strong) !important;
+}
+
+.sonnerToast [data-button]:hover {
+  background: color-mix(in srgb, var(--toast-severity) 17%, var(--surface-raised)) !important;
+}
+
+.sonnerToast [data-button]:focus-visible {
+  outline: 2px solid var(--toast-severity) !important;
+  outline-offset: 2px !important;
+}
+
+@media (max-width: 600px) {
+  .sonnerToast [data-button] {
+    min-height: 44px !important;
+  }
+}
+
 /* Custom styling for Sonner toast close button to place it in the top right, non-colored */
 .sonnerToast [data-close-button] {
   position: absolute !important;

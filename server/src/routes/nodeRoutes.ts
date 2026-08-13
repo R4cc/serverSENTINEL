@@ -5,13 +5,14 @@ import { panelNodeConnections, services } from "../appServices.js";
 import { config } from "../config.js";
 import { appBuildId, appVersion } from "../buildInfo.js";
 import { destructiveRateLimit, nodeJoinRateLimit } from "../http/rateLimits.js";
-import { optionalNodeDataMount, optionalNodePanelUrl, validateDockerImageName, validateNodeName } from "../http/validation.js";
+import { optionalNodeDataMount, optionalNodePanelUrl, requireStrictBoolean, validateDockerImageName, validateNodeName } from "../http/validation.js";
 import { apiErrorResponse, operationInProgress } from "../http/errors.js";
 import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
 import { compareVersionStrings } from "../servers/versions.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
 
-import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateImageForBuild, optionalNodeTotalMemory, publicNode, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
+import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateImageForBuild, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
+import { setNodeUpdateNotificationsEnabled } from "../nodes/nodeUpdateNotifications.js";
 
 import { listManagedServers } from "../servers/store.js";
 import { logDebug, logInfo, logWarn, errorLogFields } from "../logging.js";
@@ -47,7 +48,7 @@ async function createNode(request: FastifyRequest<CreateNodeRoute>): Promise<Cre
   };
   services.nodesRepository.create(node);
   return {
-    node: publicNode(node),
+    node: publicNodeWithSettings(node),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
     install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName })
@@ -92,7 +93,7 @@ app.post<{ Params: { nodeId: string }; Body: { tokenTtlMinutes?: number; dataMou
     };
   });
   return {
-    node: publicNode(updatedNode),
+    node: publicNodeWithSettings(updatedNode),
     joinToken: token.joinToken,
     expiresAt: token.expiresAt,
     install: nodeInstallInstructions({ panelUrl, joinToken: token.joinToken, dataMount, nodeName: updatedNode.name })
@@ -106,9 +107,19 @@ app.get<{ Params: { nodeId: string }; Querystring: { panelUrl?: string; dataMoun
   const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
   if (!node) nodeNotFound(request.params.nodeId);
   return {
-    node: publicNode(node),
+    node: publicNodeWithSettings(node),
     install: nodeInstallInstructions({ panelUrl, dataMount, nodeName: node.name })
   };
+});
+
+app.put<{ Params: { nodeId: string }; Body: { enabled?: boolean } }>("/api/nodes/:nodeId/update-notifications", async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  if (!node) nodeNotFound(request.params.nodeId);
+  const enabled = requireStrictBoolean(request.body?.enabled, "enabled");
+  setNodeUpdateNotificationsEnabled(services.storageDatabase, node.id, enabled);
+  logInfo({ action: "configure_node_update_notifications", nodeId: node.id, enabled, status: "succeeded" }, "Node update notification setting changed");
+  return { ok: true, node: publicNodeWithSettings(node) };
 });
 
 app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:nodeId/update", destructiveRateLimit, async (request) => {

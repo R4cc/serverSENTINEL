@@ -264,6 +264,24 @@ export function useNodesWorkspace({
     }
   }
 
+  async function updateNodeNotifications(node: NodeView, enabled: boolean) {
+    if (!canManageNodes) return;
+    setBusyNodeId(node.id);
+    try {
+      const result = await api<{ ok: boolean; node: ManagedNode }>(`/api/nodes/${node.id}/update-notifications`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled })
+      });
+      setNodeDetails((current) => current?.id === node.id ? result.node : current);
+      notify("success", `Update notifications ${enabled ? "enabled" : "disabled"} for ${node.name}`);
+      await refreshApp({ silent: true });
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not update node notification settings."));
+    } finally {
+      setBusyNodeId("");
+    }
+  }
+
   async function restartNode(node: NodeView) {
     if (!canManageNodes) return;
     const confirmed = await requestConfirmation({
@@ -425,6 +443,7 @@ export function useNodesWorkspace({
     onShowInstall: showNodeInstall,
     onRotateToken: rotateNodeToken,
     onUpdateNode: updateNodeImage,
+    onUpdateNotifications: updateNodeNotifications,
     onRestartNode: restartNode,
     onRemoveNode: removeNode,
     onCloseDetails: () => setNodeDetails(null),

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.12.0 - 2026-08-13
+
+- Added page-visit notifications for available node updates, with one combined fleet alert, a three-day browser mute, and persistent per-node notification controls.
+
 ## 1.11.1 - 2026-08-13
 
 - Fixed large server export imports being rejected with HTTP 413 by uploading archives in resumable, proxy-safe chunks.

@@ -2330,6 +2330,35 @@
   font-size: var(--type-row-title-size);
 }
 
+.nodeUpdateNotificationSetting {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 54px;
+  cursor: pointer;
+}
+
+.nodeUpdateNotificationSetting > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.nodeUpdateNotificationSetting strong {
+  color: var(--text);
+  font-size: var(--type-helper-size);
+}
+
+.nodeUpdateNotificationSetting small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.4;
+}
+
+.nodeUpdateNotificationSetting:has(input:disabled) {
+  cursor: not-allowed;
+}
+
 .nodeDrawerFacts {
   display: grid;
   margin: 0;

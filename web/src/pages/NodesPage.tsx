@@ -6,6 +6,7 @@ import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
+import { nodeBuildUpdateAvailable as hasNodeBuildUpdate, nodeUpdateAvailable as hasNodeUpdate, nodeVersionState as getNodeVersionState } from "../utils/nodeUpdates";
 import { NodeDetailsDrawer } from "./NodeDetailsDrawer";
 
 export type AddNodeInput = {
@@ -68,22 +69,6 @@ function PlayerIcon() {
 function playerCountLabel(snapshot?: PlayerSnapshot) {
   if (!snapshot || snapshot.state === "unavailable") return "-";
   return snapshot.maxPlayers ? `${snapshot.online}/${snapshot.maxPlayers}` : String(snapshot.online);
-}
-
-function compareVersions(left?: string, right?: string) {
-  if (!left || !right) return null;
-  const parse = (value: string) => {
-    const match = value.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
-    return match ? [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)] : null;
-  };
-  const leftParts = parse(left);
-  const rightParts = parse(right);
-  if (!leftParts || !rightParts) return left === right ? 0 : null;
-  for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] > rightParts[index]) return 1;
-    if (leftParts[index] < rightParts[index]) return -1;
-  }
-  return 0;
 }
 
 function nodePanelAddressHostProblem(hostname: string) {
@@ -465,6 +450,7 @@ export function NodesPage({
   onShowInstall,
   onRotateToken,
   onUpdateNode,
+  onUpdateNotifications,
   onRestartNode,
   onRemoveNode,
   onCloseDetails,
@@ -504,6 +490,7 @@ export function NodesPage({
   onShowInstall: (node: NodeView) => void;
   onRotateToken: (node: NodeView) => void;
   onUpdateNode: (node: NodeView) => void;
+  onUpdateNotifications: (node: NodeView, enabled: boolean) => void;
   onRestartNode: (node: NodeView) => void;
   onRemoveNode: (node: ContextNode, force?: boolean) => void;
   onCloseDetails: () => void;
@@ -519,21 +506,9 @@ export function NodesPage({
 }) {
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
-  const nodeVersionState = (node: NodeView) => {
-    if (node.isInternal || !node.agentVersion) return "unknown";
-    const comparison = compareVersions(node.agentVersion, panelVersion);
-    if (comparison === 0) return "current";
-    if (comparison === -1) return "older";
-    if (comparison === 1) return "newer";
-    return "mismatch";
-  };
-  const nodeBuildUpdateAvailable = (node: NodeView) => (
-    !node.isInternal
-    && Boolean(panelBuildId)
-    && nodeVersionState(node) === "current"
-    && node.buildId !== panelBuildId
-  );
-  const nodeUpdateAvailable = (node: NodeView) => nodeVersionState(node) === "older" || nodeBuildUpdateAvailable(node);
+  const nodeVersionState = (node: NodeView) => getNodeVersionState(node, panelVersion);
+  const nodeBuildUpdateAvailable = (node: NodeView) => hasNodeBuildUpdate(node, panelVersion, panelBuildId);
+  const nodeUpdateAvailable = (node: NodeView) => hasNodeUpdate(node, panelVersion, panelBuildId);
   const nodePanelUpdateRequired = (node: NodeView) => nodeVersionState(node) === "newer";
   const nodeVersionMismatch = (node: NodeView) => nodeVersionState(node) === "mismatch";
   const nodeCanPanelUpdate = (node: NodeView) => node.status === "online";
@@ -803,6 +778,7 @@ export function NodesPage({
             onShowInstall={onShowInstall}
             onRotateToken={onRotateToken}
             onUpdateNode={onUpdateNode}
+            onUpdateNotifications={onUpdateNotifications}
             onRefresh={onRefresh}
             onRestartNode={onRestartNode}
             onRemoveNode={onRemoveNode}

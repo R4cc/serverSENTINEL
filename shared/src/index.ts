@@ -516,6 +516,8 @@ export type ManagedNodeCore = {
 /** A managed node exactly as the panel API serializes it. */
 export type PublicNode = ManagedNodeCore & {
   hasPendingJoinToken?: boolean;
+  /** Whether page-visit notifications should include available updates for this node. */
+  updateNotificationsEnabled?: boolean;
 };
 
 /**

@@ -162,6 +162,34 @@ async function assertModsToolbarVisible(page, label) {
   assert(result.coveredActions.length === 0, `${label}: mods toolbar actions are covered: ${JSON.stringify(result.coveredActions)}`);
 }
 
+async function assertNodeUpdateToast(page, label) {
+  const toast = page.locator(".sonnerToast").filter({ hasText: "Multiple nodes have an update available." });
+  await toast.waitFor();
+  const mute = toast.getByRole("button", { name: "Mute for 3 days", exact: true });
+  const geometry = await toast.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const action = element.querySelector("[data-button]");
+    const actionRect = action?.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      actionWidth: actionRect?.width ?? 0,
+      actionHeight: actionRect?.height ?? 0
+    };
+  });
+  assert(geometry.left >= 0 && geometry.right <= geometry.viewportWidth && geometry.top >= 0 && geometry.bottom <= geometry.viewportHeight, `${label}: node update toast leaves the viewport: ${JSON.stringify(geometry)}`);
+  assert(geometry.actionWidth >= 44 && geometry.actionHeight >= 44, `${label}: node update mute action is smaller than 44px: ${JSON.stringify(geometry)}`);
+  await mute.click();
+  await page.reload();
+  await page.locator(".appShell").waitFor();
+  await page.waitForTimeout(100);
+  assert(await page.getByText("Multiple nodes have an update available.", { exact: true }).count() === 0, `${label}: muted node update toast returned after reload`);
+}
+
 async function assertModsRowsAligned(page, label) {
   const rows = await page.locator(".modsWorkspaceRow:not(.modsWorkspaceSkeletonRow)").evaluateAll((elements) => elements.map((row) => {
     const rect = (selector) => {
@@ -483,6 +511,8 @@ async function runProfile(engine, profile, label) {
     });
     await signInThroughForm(page, baseUrl);
 
+    await assertNodeUpdateToast(page, label);
+
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
     await assertNavigationOverlay(page, label);
@@ -532,6 +562,9 @@ async function runProfile(engine, profile, label) {
     await nodeDetails.click();
     await page.locator(".nodeDetailsDrawer").waitFor();
     await assertTargets(page, [".nodeDrawerClose"], `${label} node drawer`);
+    const notificationToggle = page.getByRole("checkbox", { name: /Node update notifications for/ });
+    assert(await notificationToggle.count() === 1, `${label}: per-node update notification toggle is missing`);
+    assert(await notificationToggle.isChecked(), `${label}: per-node update notifications should default to enabled`);
     await page.getByRole("button", { name: "Close node details" }).click();
     await page.locator(".nodeDetailsDrawer").waitFor({ state: "detached" });
     await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Details", null, { timeout: 2_000 });

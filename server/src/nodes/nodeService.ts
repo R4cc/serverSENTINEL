@@ -11,6 +11,7 @@ import { throwHttp } from "../http/errors.js";
 import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
 import { normalizeNode } from "../storage/nodesRepository.js";
 import type { ManagedNode, ManagedServer, PublicNode } from "../types.js";
+import { nodeUpdateNotificationsEnabled } from "./nodeUpdateNotifications.js";
 
 export const localNodeId = "local";
 export const nodeImageRepository = "nl2109/serversentinel";
@@ -106,13 +107,18 @@ function persistedNodeSnapshot(node: ManagedNode) {
   return JSON.stringify(normalizeNode(node));
 }
 
-export function publicNode(node: ManagedNode): PublicNode {
+export function publicNode(node: ManagedNode, updateNotificationsEnabled = true): PublicNode {
   const normalized = normalizeNode(node);
   const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
   return {
     ...publicFields,
-    hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now())
+    hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now()),
+    updateNotificationsEnabled
   };
+}
+
+export function publicNodeWithSettings(node: ManagedNode) {
+  return publicNode(node, nodeUpdateNotificationsEnabled(services.storageDatabase, node.id));
 }
 
 export function nodeWithLiveConnectionStatus(node: ManagedNode, connected: boolean): ManagedNode {
@@ -126,7 +132,7 @@ export async function publicNodes(nodes: ManagedNode[], detectedInternalTotalMem
     ? await detectedTotalMemory()
     : undefined);
   return nodes.map((node) => {
-    const publicFields = publicNode(nodeWithLiveConnectionStatus(node, panelNodeConnections.isConnected(node.id)));
+    const publicFields = publicNodeWithSettings(nodeWithLiveConnectionStatus(node, panelNodeConnections.isConnected(node.id)));
     return (node.id === localNodeId || node.isInternal) && internalTotalMemory
       ? { ...publicFields, totalMemory: internalTotalMemory }
       : publicFields;
