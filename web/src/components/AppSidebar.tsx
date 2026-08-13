@@ -60,7 +60,7 @@ export function AppSidebar({
     const selected = server.id === activeServer?.id;
     const lockedByDemo = demoMode && server.id !== demoServerId;
     const minecraftVersion = versionValue(minecraftVersionInfo(server));
-    const statusTone = selected ? serverCommandTone : server.runtimeIntent === "running" ? "running" : server.runtimeIntent === "restarting" ? "starting" : server.runtimeIntent === "stopped" ? "stopped" : "unknown";
+    const statusTone = server.runtimeIssues?.length ? "warning" : selected ? serverCommandTone : server.runtimeIntent === "running" ? "running" : server.runtimeIntent === "restarting" ? "starting" : server.runtimeIntent === "stopped" ? "stopped" : "unknown";
     return {
       id: server.id,
       active: selected,
@@ -72,7 +72,7 @@ export function AppSidebar({
           <span className={`serverSwitcherOptionDot ${statusTone}`} aria-hidden="true" />
           <span className="serverSwitcherOptionCopy">
             <strong>{server.displayName}</strong>
-            <small>{server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
+            <small>{server.runtimeIssues?.length ? "Unresolved port conflict" : server.nodeName || (minecraftVersion === "Unknown" ? "Version unknown" : `Minecraft ${minecraftVersion}`)}</small>
           </span>
           {selected && <span className="serverSwitcherCurrent">Current</span>}
         </span>
@@ -139,7 +139,7 @@ export function AppSidebar({
                   <span className="serverSwitcherCopy">
                     <small>Managed server</small>
                     <strong>{activeServer?.displayName ?? "Select a server"}</strong>
-                    <span>{activeServer?.nodeName || (activeServer ? "Server workspace" : "Choose a workspace")}</span>
+                    <span>{activeServer?.runtimeIssues?.length ? "Unresolved port conflict" : activeServer?.nodeName || (activeServer ? "Server workspace" : "Choose a workspace")}</span>
                   </span>
                   <ChevronDown className="serverSwitcherChevron" strokeWidth={2.25} aria-hidden="true" />
                 </>

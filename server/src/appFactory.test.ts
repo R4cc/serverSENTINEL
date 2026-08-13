@@ -927,6 +927,83 @@ describe("Fastify application factory", () => {
     }
   });
 
+  it("rejects every start path for an imported server with an unresolved port conflict", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-import-port-guard-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "all-in-one",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18094",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    const app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const now = "2026-01-01T00:00:00.000Z";
+    const profile: ManagedServer["runtimeProfile"] = {
+      minecraftVersion: "1.21.4",
+      runtimeType: "fabric",
+      runtimeVersion: "0.16.10",
+      javaMajorVersion: 21,
+      jarProvider: "mcjars",
+      jarArtifact: { filename: "fabric-server-launch.jar" },
+      compatibilityStatus: "compatible",
+      resolvedAt: now
+    };
+    const existing: ManagedServer = {
+      id: "11111111-1111-4111-8111-111111111111",
+      nodeId: "local",
+      displayName: "Survival",
+      serverDir: join(dataDir, "servers", "existing"),
+      runtimeProfile: profile,
+      dockerPorts: "25565:25565/tcp",
+      runtimeIntent: "stopped",
+      createdAt: now,
+      updatedAt: now
+    };
+    const imported: ManagedServer = {
+      ...existing,
+      id: "22222222-2222-4222-8222-222222222222",
+      displayName: "Imported Survival",
+      serverDir: join(dataDir, "servers", "imported"),
+      portConflictUnresolved: true
+    };
+    services.serversRepository.create(existing);
+    services.serversRepository.create(imported);
+
+    try {
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      const cookie = sessionCookieFrom(login);
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/servers/${imported.id}/start`,
+        headers: { ...csrf, cookie },
+        payload: {}
+      });
+
+      expect(response.statusCode, response.body).toBe(409);
+      expect(response.json().error).toMatchObject({
+        code: "PORT_CONFLICT",
+        message: expect.stringContaining('25565/tcp is already used on this node by "Survival"')
+      });
+      expect(services.serversRepository.find(imported.id)?.runtimeIntent).toBe("stopped");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("compresses JSON replies but leaves the export artifact download intact", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-compression-"));
     temporaryDirectories.push(dataDir);

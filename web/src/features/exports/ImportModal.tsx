@@ -21,6 +21,8 @@ export function ImportModal({
   const nodeId = useId();
   const validation = workspace.importValidation;
   const canApply = Boolean(validation?.valid) && !workspace.importBusy;
+  const portConflicts = validation?.warnings.filter((warning) => warning.code === "conflicting_port") ?? [];
+  const otherWarnings = validation?.warnings.filter((warning) => warning.code !== "conflicting_port") ?? [];
 
   return (
     <DialogSurface
@@ -118,11 +120,19 @@ export function ImportModal({
           />
         ) : null}
 
-        {validation?.warnings.length ? (
+        {portConflicts.length ? (
+          <Banner
+            tone="warning"
+            title="Imported servers will need a port change"
+            message={`${portConflicts.map((warning) => warning.message).join(" ")} The files will still import now. Affected servers appear with an Unresolved port conflict status and cannot start until you change the port in Properties.`}
+          />
+        ) : null}
+
+        {otherWarnings.length ? (
           <Banner
             tone="info"
             title="Before you import"
-            message={validation.warnings.map((warning) => warning.message).join(" ")}
+            message={otherWarnings.map((warning) => warning.message).join(" ")}
           />
         ) : null}
 
@@ -139,7 +149,7 @@ export function ImportModal({
             ? "Import is still running."
             : validation ? validation.valid ? undefined : "Fix the archive issues listed above before importing." : "Choose an export archive first."}
         >
-          {workspace.importBusy ? "Importing…" : "Import"}
+          {workspace.importBusy ? "Importing…" : portConflicts.length ? "Import with unresolved issue" : "Import"}
         </Button>
       </footer>
     </DialogSurface>

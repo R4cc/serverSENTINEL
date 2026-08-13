@@ -34,6 +34,7 @@ type ImportOperationResult = {
   imported?: Array<{ serverId: string; displayName: string }>;
   contentFailures?: Array<{ serverName: string; filename: string; reason: string }>;
   runtimeJarFailures?: Array<{ serverName: string; reason: string }>;
+  warnings?: Array<{ code: string; message: string }>;
 };
 
 const pollIntervalMs = 1000;
@@ -384,12 +385,15 @@ export function useExportWorkspace(
       const result = (finished.result ?? {}) as ImportOperationResult;
       const contentFailures = result.contentFailures ?? [];
       const jarFailures = result.runtimeJarFailures ?? [];
+      const portConflicts = (result.warnings ?? []).filter((warning) => warning.code === "conflicting_port");
       // A missing runtime jar leaves a server that cannot start at all, so it outranks content that
       // merely failed to come back.
       if (jarFailures.length) {
         notify("error", `Imported, but the runtime could not be downloaded for ${jarFailures.map((failure) => failure.serverName).join(", ")}. Re-save the server's runtime settings to retry.`);
       } else if (contentFailures.length) {
         notify("info", `Imported with ${contentFailures.length} mod/plugin file(s) that could not be re-downloaded.`);
+      } else if (portConflicts.length) {
+        notify("info", `Imported ${result.imported?.length ?? 0} server(s). Affected servers cannot start until their port conflict is resolved in Properties.`);
       } else {
         notify("success", `Imported ${result.imported?.length ?? 0} server(s).`);
       }

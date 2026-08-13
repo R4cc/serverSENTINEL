@@ -1640,6 +1640,11 @@ button .buttonIcon {
   background: var(--sentinel-warning);
 }
 
+.serverCommandStatusDot.warning {
+  background: var(--sentinel-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-warning) 14%, transparent);
+}
+
 .serverCommandStatusDot.neutral {
   background: var(--text-soft);
 }
@@ -1672,6 +1677,12 @@ button .buttonIcon {
   border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-raised));
   color: color-mix(in srgb, var(--sentinel-warning) 74%, var(--text));
+}
+
+.activeServerStrip .runtimeBadge.warning {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 40%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface-raised));
+  color: color-mix(in srgb, var(--sentinel-warning) 82%, var(--text));
 }
 
 .activeServerStrip .runtimeBadge.offline {
@@ -1799,6 +1810,11 @@ button .buttonIcon {
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.serverRuntimeAlertCopy .uiButton {
+  justify-self: start;
+  margin-top: var(--space-2);
 }
 
 .activeServerStrip .serverRuntimeAlert.compact {

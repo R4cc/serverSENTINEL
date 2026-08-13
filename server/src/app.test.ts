@@ -22,7 +22,7 @@ import {
 import { normalizeNode } from "./storage/nodesRepository.js";
 import { parseCookies, sessionExpired, sessionMaxAgeSeconds } from "./auth/sessionService.js";
 import { dockerHostPortBindings } from "./core.js";
-import { allocateQueryPort, findExistingServerPortConflict, normalizeCreateServerPorts } from "./servers/ports.js";
+import { allocateQueryPort, findExistingServerPortConflict, normalizeCreateServerPorts, unresolvedServerPortIssues } from "./servers/ports.js";
 import {
   assertDownloadSize,
   assertFileRevision,
@@ -981,6 +981,24 @@ describe("server port conflict detection", () => {
     expect(findExistingServerPortConflict(servers, "node-b", "25565:25566/tcp", "server-2")).toBeNull();
     expect(findExistingServerPortConflict(servers, "node-a", "25566:25565/tcp")).toBeNull();
     expect(findExistingServerPortConflict(servers, "node-a", "25565:25565/udp", "server-1")).toBeNull();
+  });
+
+  it("describes the exact server and port blocking a quarantined import", () => {
+    const imported = {
+      ...servers[1],
+      id: "imported",
+      nodeId: "node-a",
+      displayName: "Imported Creative",
+      portConflictUnresolved: true
+    };
+    expect(unresolvedServerPortIssues(imported, [...servers, imported])).toEqual([{
+      code: "port_conflict",
+      message: "Port 25565/tcp is also assigned to Survival.",
+      port: 25565,
+      protocol: "tcp",
+      conflictingServerId: "server-1",
+      conflictingServerName: "Survival"
+    }]);
   });
 
   it("adds a required non-removable advanced Query UDP port when creating a server", () => {

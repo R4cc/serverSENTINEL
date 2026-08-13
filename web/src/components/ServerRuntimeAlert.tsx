@@ -1,10 +1,13 @@
+import type { ReactNode } from "react";
+
 type ServerRuntimeAlertProps = {
   title: string;
   message?: string;
   compact?: boolean;
+  action?: ReactNode;
 };
 
-export function ServerRuntimeAlert({ title, message, compact = false }: ServerRuntimeAlertProps) {
+export function ServerRuntimeAlert({ title, message, compact = false, action }: ServerRuntimeAlertProps) {
   return (
     <section className={`serverRuntimeAlert${compact ? " compact" : ""}`} role="alert">
       <span className="serverRuntimeAlertIcon" aria-hidden="true">
@@ -17,6 +20,7 @@ export function ServerRuntimeAlert({ title, message, compact = false }: ServerRu
       <span className="serverRuntimeAlertCopy">
         <strong>{title}</strong>
         {message && <span>{message}</span>}
+        {action}
       </span>
     </section>
   );

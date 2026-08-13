@@ -34,8 +34,10 @@ export function ActiveServerStrip({
   controlAvailableFallback,
   controlsDisabled,
   controlsDisabledReason,
+  startupDisabledReason,
   onRuntimeAction,
   onRetryConnection,
+  onResolveRuntimeIssue,
   refreshDisabled,
   refreshDisabledReason
 }: {
@@ -56,8 +58,10 @@ export function ActiveServerStrip({
   controlAvailableFallback: boolean;
   controlsDisabled: boolean;
   controlsDisabledReason: string;
+  startupDisabledReason?: string;
   onRuntimeAction: (action: "start" | "stop" | "restart") => void;
   onRetryConnection: () => void;
+  onResolveRuntimeIssue?: () => void;
   refreshDisabled: boolean;
   refreshDisabledReason: string;
 }) {
@@ -119,6 +123,7 @@ export function ActiveServerStrip({
             controlAvailableFallback={controlAvailableFallback}
             isProvisioning={controlsDisabled}
             disabledReason={controlsDisabledReason}
+            startupDisabledReason={startupDisabledReason}
             busyAction={runtimeAction}
             onAction={onRuntimeAction}
             className="runtimeControlsCompact"
@@ -136,7 +141,13 @@ export function ActiveServerStrip({
           </Button>
         </div>
       </div>
-      {alert && <ServerRuntimeAlert title={alert.title} message={alert.message} />}
+      {alert && <ServerRuntimeAlert
+        title={alert.title}
+        message={alert.message}
+        action={server.runtimeIssues?.length && onResolveRuntimeIssue
+          ? <Button variant="secondary" onClick={onResolveRuntimeIssue}>Open Properties</Button>
+          : undefined}
+      />}
     </div>
   );
 }

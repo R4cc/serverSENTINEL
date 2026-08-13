@@ -89,6 +89,7 @@ export async function localUpdateServer(serverId: string, input: unknown) {
       managedPorts,
       javaArgs,
       startOnNodeStart,
+      portConflictUnresolved: false,
       updatedAt: new Date().toISOString()
     };
 

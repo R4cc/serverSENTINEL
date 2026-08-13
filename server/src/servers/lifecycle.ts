@@ -5,6 +5,8 @@ import { logWarn, errorLogFields } from "../logging.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 
 import { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason } from "./mutableConfigurationGate.js";
+import { unresolvedServerPortIssues } from "./ports.js";
+import { conflict as requestConflict } from "../http/errors.js";
 
 import type { ForegroundOperationInput } from "../operations/operationService.js";
 import type { ManagedServer, OperationRecord } from "../types.js";
@@ -79,8 +81,24 @@ export async function waitForRuntimeState(server: ManagedServer, running: boolea
   return false;
 }
 
+export function requireResolvedServerPorts(server: ManagedServer) {
+  if (!server.portConflictUnresolved) return;
+  const issues = unresolvedServerPortIssues(server, services.serversRepository.list());
+  if (issues.length === 0) {
+    server.portConflictUnresolved = false;
+    services.serversRepository.clearPortConflictUnresolved(server.id);
+    return;
+  }
+  const conflict = issues[0];
+  requestConflict(
+    `Port ${conflict.port}/${conflict.protocol} is already used on this node by "${conflict.conflictingServerName}". Change the imported server's port in Properties before starting it.`,
+    { code: "PORT_CONFLICT", details: { port: conflict.port, protocol: conflict.protocol, conflictingServerId: conflict.conflictingServerId } }
+  );
+}
+
 export async function startServerWithIntent(server: ManagedServer) {
   return withLifecycleLock(server, async () => {
+    requireResolvedServerPorts(server);
     services.playerSnapshotCoordinator?.invalidate(server.id);
     const previous = server.runtimeIntent ?? "stopped";
     setRuntimeLifecycle(server, {
@@ -123,6 +141,7 @@ export async function stopServerWithIntent(server: ManagedServer) {
 
 export async function restartServerGracefully(server: ManagedServer) {
   return withLifecycleLock(server, async () => {
+    requireResolvedServerPorts(server);
     services.playerSnapshotCoordinator?.invalidate(server.id);
     setRuntimeLifecycle(server, {
       runtimeIntent: "restarting",

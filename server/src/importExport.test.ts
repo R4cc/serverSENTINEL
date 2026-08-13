@@ -557,7 +557,7 @@ describe("import manifest validation", () => {
     expect(remote.issues[0].message).toMatch(/only be restored onto the local node/);
   });
 
-  it("reports port conflicts on the target node and renames colliding display names", () => {
+  it("quarantines port conflicts without blocking the import and renames colliding display names", () => {
     const existing = managedServer({ id: "00000000-0000-4000-8000-000000000808" });
     const result = validateImportArchive(manifestFixture(), {
       targetNodeId: nodeId,
@@ -567,10 +567,12 @@ describe("import manifest validation", () => {
       tmpDir: "tmp"
     });
 
-    expect(result.valid).toBe(false);
-    expect(result.issues.map((issue) => issue.code)).toContain("conflicting_port");
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings.map((warning) => warning.code)).toContain("conflicting_port");
     expect(result.warnings.map((warning) => warning.code)).toContain("display_name_renamed");
     expect(result.plan.servers[0].displayName).toBe("Survival (2)");
+    expect(result.plan.servers[0].portConflicts).toHaveLength(1);
   });
 
   it("warns that lockfile content will be re-downloaded", () => {
@@ -590,6 +592,33 @@ describe("import manifest validation", () => {
 });
 
 describe("import application", () => {
+  it("registers a conflicting import as stopped with an unresolved port issue", async () => {
+    const root = await tempRoot("serversentinel-import-conflict-");
+    const source = await tempRoot("serversentinel-import-source-");
+    await seedServerDirectory(source);
+    const repositories = await createRepositories(root);
+    const existing = managedServer({ id: "00000000-0000-4000-8000-000000000808" });
+    const { written } = await buildArchive(root, [managedServer({ serverDir: source })]);
+    const manifest = await readExportManifest(written.path);
+
+    const result = await applyImportArchive(written.path, manifest, {
+      targetNodeId: nodeId,
+      localNodeId: nodeId,
+      existingServers: [existing],
+      serversDir: join(root, "servers"),
+      tmpDir: join(root, "tmp"),
+      storage: repositories.storage,
+      serversRepository: repositories.serversRepository,
+      modPreferencesRepository: repositories.modPreferencesRepository
+    });
+
+    expect(result.warnings.map((warning) => warning.code)).toContain("conflicting_port");
+    expect(repositories.serversRepository.list()[0]).toMatchObject({
+      runtimeIntent: "stopped",
+      portConflictUnresolved: true
+    });
+  });
+
   it("restores files and registers a server with fresh identifiers", async () => {
     const root = await tempRoot("serversentinel-import-apply-");
     const source = await tempRoot("serversentinel-import-source-");

@@ -52,4 +52,29 @@ describe("RuntimeControls", () => {
     expect(html).toMatch(/data-action="restart"[^>]*data-busy="true"/);
     expect(html).toContain('aria-label="Stop unavailable: Runtime restart is already in progress."');
   });
+
+  it("disables startup while leaving stop available for an unresolved issue", () => {
+    const stopped = renderToStaticMarkup(
+      <RuntimeControls
+        status={status(false)}
+        isProvisioning={false}
+        startupDisabledReason="Resolve the port conflict."
+        busyAction={null}
+        onAction={vi.fn()}
+      />
+    );
+    expect(stopped).toContain('aria-label="Start unavailable: Resolve the port conflict."');
+
+    const running = renderToStaticMarkup(
+      <RuntimeControls
+        status={status(true)}
+        isProvisioning={false}
+        startupDisabledReason="Resolve the port conflict."
+        busyAction={null}
+        onAction={vi.fn()}
+      />
+    );
+    expect(running).toContain('aria-label="Stop"');
+    expect(running).toContain('aria-label="Restart unavailable: Resolve the port conflict."');
+  });
 });

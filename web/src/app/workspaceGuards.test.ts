@@ -32,6 +32,15 @@ const stripDefaults = {
 };
 
 describe("resolveServerStripStatus", () => {
+  const runtimeIssue = {
+    code: "port_conflict" as const,
+    message: "Port 25565/tcp is also assigned to Survival.",
+    port: 25565,
+    protocol: "tcp" as const,
+    conflictingServerId: "server-2",
+    conflictingServerName: "Survival"
+  };
+
   it("reports no alert and no health line when the server is healthy", () => {
     expect(resolveServerStripStatus(stripDefaults)).toEqual({ alert: null, health: null });
   });
@@ -44,6 +53,13 @@ describe("resolveServerStripStatus", () => {
       activeNodeBlockMessage: "Node unreachable. Check the agent connection."
     });
     expect(alert).toEqual({ title: "Node unreachable", message: "Check the agent connection." });
+  });
+
+  it("shows an imported port conflict ahead of runtime health", () => {
+    expect(resolveServerStripStatus({ ...stripDefaults, runtimeIssue, statusError: "unreachable" }).alert).toEqual({
+      title: "Unresolved port conflict",
+      message: "Port 25565/tcp is also assigned to Survival. Choose a different port in Properties before starting this server."
+    });
   });
 
   it("suppresses the health line whenever an alert is showing", () => {
@@ -138,6 +154,20 @@ describe("resolveRuntimeGuards", () => {
   it("names the offline node when no block message is supplied", () => {
     expect(resolveRuntimeGuards({ ...runtimeDefaults, nodeOfflineDetected: true, activeNodeName: "edge-1" }).runtimeControlsDisabledReason)
       .toBe("edge-1 is offline. Runtime controls will return when it reconnects.");
+  });
+
+  it("blocks startup with the exact imported port conflict", () => {
+    expect(resolveRuntimeGuards({
+      ...runtimeDefaults,
+      runtimeIssue: {
+        code: "port_conflict",
+        message: "Port 25565/tcp is also assigned to Survival.",
+        port: 25565,
+        protocol: "tcp",
+        conflictingServerId: "server-2",
+        conflictingServerName: "Survival"
+      }
+    }).runtimeControlsDisabledReason).toContain("Port 25565/tcp is also assigned to Survival");
   });
 
   it("explains a missing Docker socket only for internal nodes", () => {

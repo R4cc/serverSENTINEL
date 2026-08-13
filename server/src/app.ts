@@ -70,7 +70,7 @@ import { errorStatusCode, publicApiError, throwHttp } from "./http/errors.js";
 import { authRateLimit, destructiveRateLimit } from "./http/rateLimits.js";
 import { registerResponseCompression } from "./http/responseCompression.js";
 import { ensureWritableResolvedInsideServer } from "./core.js";
-import { activeLifecycleActions, blockingRuntimeOperations, recordOperation, restartServerGracefully, runtimeResultRunning, setRuntimeLifecycle, stopServerWithIntent, withLifecycleLock } from "./servers/lifecycle.js";
+import { activeLifecycleActions, blockingRuntimeOperations, recordOperation, restartServerGracefully, runtimeResultRunning, setRuntimeLifecycle, startServerWithIntent, stopServerWithIntent } from "./servers/lifecycle.js";
 import { activeModMutations } from "./mods/managedContent.js";
 import { readLocalPlayerObservation, resourceStatsHistoryWindow, serverOverviewData, timelineHistoryWindow } from "./servers/overview.js";
 import { localServerStorage } from "./servers/storageSpace.js";
@@ -479,7 +479,7 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
     task: "Restoring server after runtime reconnect",
     successTask: "Server runtime restored",
     restartEffect: (status) => runtimeResultRunning(status) ? "clear" : undefined
-  }, () => withLifecycleLock(server, () => runtimeForServer(server).lifecycle(server, "start"))),
+  }, () => startServerWithIntent(server)),
   restartServer: (server) => recordOperation({
     type: "server.restart",
     serverId: server.id,

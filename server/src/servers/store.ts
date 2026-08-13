@@ -230,6 +230,7 @@ export function normalizeManagedServer(value: unknown): ManagedServer {
     crashNextRetryAt: optionalString(server.crashNextRetryAt, "server.crashNextRetryAt"),
     crashLoopSince: optionalString(server.crashLoopSince, "server.crashLoopSince"),
     crashStableSince: optionalString(server.crashStableSince, "server.crashStableSince"),
+    portConflictUnresolved: optionalStrictBoolean(server.portConflictUnresolved, "server.portConflictUnresolved", false),
     restartRequiredSince: optionalString(server.restartRequiredSince, "server.restartRequiredSince"),
     restartRequiredChanges,
     restartRequiredModBaseline,

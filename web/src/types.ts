@@ -59,6 +59,7 @@ export type {
   ServerTimelineResponse,
   ServerTimelineScheduleMarker,
   ServerRuntimeProfile,
+  ServerRuntimeIssue,
   ServerStorageSummary,
   VersionResolution,
   VersionSource

@@ -551,12 +551,23 @@ export type ManagedServerCore = {
   updatedAt: string;
 };
 
+export type ServerRuntimeIssue = {
+  code: "port_conflict";
+  message: string;
+  port: number;
+  protocol: "tcp" | "udp";
+  conflictingServerId: string;
+  conflictingServerName: string;
+};
+
 /** A managed server exactly as the panel API serializes it. */
 export type PublicServer = ManagedServerCore & {
   directoryLabel: string;
   hasDockerContainer: boolean;
   nodeName?: string;
   resolvedVersions?: ResolvedServerVersions;
+  /** Configuration problems that must be fixed before this server can start. */
+  runtimeIssues?: ServerRuntimeIssue[];
 };
 
 export type NodeInstallInstructions = {
@@ -932,6 +943,7 @@ export type ImportPlanServer = {
   fileCount: number;
   totalBytes: number;
   lockfileCount: number;
+  portConflicts: ImportIssue[];
 };
 
 export type ImportValidationResult = {

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ServerRuntimeAlert } from "./ServerRuntimeAlert";
+import { Button } from "./UiPrimitives";
 
 describe("ServerRuntimeAlert", () => {
   it("renders a prominent accessible runtime failure notice", () => {
@@ -25,5 +26,12 @@ describe("ServerRuntimeAlert", () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain("Node offline");
     expect(html).not.toContain("serverRuntimeAlertCopy\"><strong>Node offline</strong><span>");
+  });
+
+  it("can offer a direct remediation action", () => {
+    const html = renderToStaticMarkup(
+      <ServerRuntimeAlert title="Unresolved port conflict" action={<Button>Open Properties</Button>} />
+    );
+    expect(html).toContain("Open Properties");
   });
 });

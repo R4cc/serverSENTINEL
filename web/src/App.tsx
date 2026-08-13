@@ -405,8 +405,11 @@ export default function App() {
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
   const lifecycleTransitionRunning = activeStatus?.lifecycle.state === "stopping" || activeStatus?.lifecycle.state === "starting";
   const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || nodeOfflineDetected || lifecycleTransitionRunning || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
-  const serverCommandTone = runtimeTone(activeStatus, activeServerDockerSocketMounted);
-  const lastKnownRuntimeLabel = serverCommandTone === "running"
+  const activeRuntimeIssue = activeServer?.runtimeIssues?.[0];
+  const serverCommandTone = activeRuntimeIssue ? "warning" : runtimeTone(activeStatus, activeServerDockerSocketMounted);
+  const lastKnownRuntimeLabel = activeRuntimeIssue
+    ? "Needs attention"
+    : serverCommandTone === "running"
     ? "Running"
     : serverCommandTone === "starting"
       ? "Starting"
@@ -423,7 +426,8 @@ export default function App() {
     consoleConnectionState,
     consoleError,
     consoleLoading,
-    activeStatus
+    activeStatus,
+    runtimeIssue: activeRuntimeIssue
   });
   const { runtimeControlsDisabledReason, serverRequiresStoppedForMutableConfig } = resolveRuntimeGuards({
     authOperationalLock,
@@ -439,7 +443,8 @@ export default function App() {
     activeStatus,
     runtimeAction,
     exportMutationLocked,
-    exportMutationBlockedReason
+    exportMutationBlockedReason,
+    runtimeIssue: activeRuntimeIssue
   });
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
 
@@ -2312,8 +2317,10 @@ export default function App() {
               controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
               controlsDisabled={isProvisioning || !canBasic || dockerOperationalLock || exportMutationLocked}
               controlsDisabledReason={runtimeControlsDisabledReason}
+              startupDisabledReason={activeRuntimeIssue ? runtimeControlsDisabledReason : undefined}
               onRuntimeAction={runContainerAction}
               onRetryConnection={() => { void retryActiveConnection(); }}
+              onResolveRuntimeIssue={() => setActivePage("properties")}
               refreshDisabled={isProvisioning}
               refreshDisabledReason={provisioningNavigationReason}
             />

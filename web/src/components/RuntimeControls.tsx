@@ -17,6 +17,7 @@ export function RuntimeControls({
   isProvisioning,
   controlAvailableFallback = false,
   disabledReason,
+  startupDisabledReason,
   busyAction,
   onAction,
   className = ""
@@ -25,6 +26,7 @@ export function RuntimeControls({
   isProvisioning: boolean;
   controlAvailableFallback?: boolean;
   disabledReason?: string;
+  startupDisabledReason?: string;
   busyAction: "start" | "stop" | "restart" | null;
   onAction: (action: "start" | "stop" | "restart") => void;
   className?: string;
@@ -49,10 +51,13 @@ export function RuntimeControls({
       data-busy-action={busyAction || undefined}
     >
       {([mainAction, "restart"] as const).map((action) => {
-        const actionDisabled = disabled || (action === "restart" && !isRunning);
-        const actionReason = action === "restart" && !isRunning
-          ? "Start the server before restarting it."
-          : baseDisabledReason;
+        const startupBlocked = action !== "stop" && Boolean(startupDisabledReason);
+        const actionDisabled = disabled || startupBlocked || (action === "restart" && !isRunning);
+        const actionReason = startupBlocked
+          ? startupDisabledReason
+          : action === "restart" && !isRunning
+            ? "Start the server before restarting it."
+            : baseDisabledReason;
         return (
           <Button
             key={action}

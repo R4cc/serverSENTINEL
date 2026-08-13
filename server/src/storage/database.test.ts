@@ -51,7 +51,7 @@ describe("SQLite storage", () => {
     expect(columnNames(storage.connection, "player_head_cache")).toEqual(["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"]);
   });
 
-  it("opens the 1.6.2 schema idempotently", async () => {
+  it("opens the current schema idempotently", async () => {
     const path = await temporaryDatabasePath();
     openStorageDatabase(path).close();
 
@@ -61,14 +61,35 @@ describe("SQLite storage", () => {
       .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
   });
 
+  it("migrates schema 20 for quarantined import port conflicts", async () => {
+    const path = await temporaryDatabasePath();
+    openStorageDatabase(path).close();
+    const old = new Database(path);
+    old.exec(`
+      ALTER TABLE servers DROP COLUMN port_conflict_unresolved;
+      CREATE UNIQUE INDEX managed_ports_node_port_unique
+        ON managed_ports(node_id, external_port, protocol);
+      UPDATE schema_migrations SET version = 20;
+    `);
+    old.close();
+
+    const migrated = openStorageDatabase(path);
+    openDatabases.push(migrated);
+    expect(columnNames(migrated.connection, "servers")).toContain("port_conflict_unresolved");
+    expect(migrated.connection.prepare("SELECT version FROM schema_migrations").get())
+      .toEqual({ version: currentSchemaVersion });
+    expect(migrated.connection.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'managed_ports_node_port_unique'").get())
+      .toBeUndefined();
+  });
+
   it("rejects schemas older than the 1.6.2 floor without changing history", async () => {
     const path = await temporaryDatabasePath();
-    seedSchemaHistory(path, currentSchemaVersion - 1);
+    seedSchemaHistory(path, currentSchemaVersion - 2);
 
     expect(() => openStorageDatabase(path)).toThrow(/1\.6\.2 first/);
     const unchanged = new Database(path, { readonly: true });
     expect(unchanged.prepare("SELECT version, name FROM schema_migrations").get())
-      .toEqual({ version: currentSchemaVersion - 1, name: currentSchemaName });
+      .toEqual({ version: currentSchemaVersion - 2, name: currentSchemaName });
     unchanged.close();
   });
 
