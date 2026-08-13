@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.8.2 - 2026-08-13
+
+- Removed the stray horizontal bands between the schedule editor's header, content, and footer.
+
 ## 26.8.1 - 2026-08-13
 
 - Adopted calendar versions in the `YY.M.N` format, starting at `26.8.1`, with the release number incrementing within each month and resetting when the year or month changes.
