@@ -1,4 +1,4 @@
-ARG SS_VERSION=26.8.9
+ARG SS_VERSION=26.8.10
 FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
@@ -11,7 +11,16 @@ FROM dependency-base AS production-dependencies
 COPY package*.json ./
 COPY shared/package.json shared/package.json
 COPY server/package.json server/package.json
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev --workspace server; else npm install --omit=dev --workspace server; fi
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev --workspace server; else npm install --omit=dev --workspace server; fi \
+  && test -f node_modules/better-sqlite3/prebuilds/linux-x64.node \
+  && find node_modules/better-sqlite3/prebuilds -type f ! -name linux-x64.node -delete \
+  && rm -rf node_modules/better-sqlite3/build \
+    node_modules/better-sqlite3/deps \
+    node_modules/better-sqlite3/src \
+    node_modules/better-sqlite3/binding.gyp \
+    node_modules/node-addon-api \
+  && test "$(find node_modules/better-sqlite3/prebuilds -type f | wc -l)" -eq 1 \
+  && node -e "const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.exec('SELECT 1'); db.close()"
 
 FROM dependency-base AS build
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.8.10 - 2026-08-13
+
+- Reduced the container image by retaining only the production Linux x64 SQLite binary and removing native build sources and unused platform binaries.
+
 ## 26.8.9 - 2026-08-13
 
 - Kept the file editor's CodeMirror runtime out of the initial page download and added a build-time guard against loading it before the editor opens.
