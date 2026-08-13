@@ -128,6 +128,41 @@ async function assertScheduleActionMenuVisible(page, label) {
   await page.keyboard.press("Escape");
 }
 
+async function assertScheduleEditorLayout(page, label) {
+  const result = await page.evaluate(() => {
+    const panel = document.querySelector(".scheduleModalPanel");
+    const header = document.querySelector(".scheduleModalHeader");
+    const body = document.querySelector(".scheduleModalPanel .scheduleEditBody");
+    const layout = document.querySelector(".scheduleEditorLayout");
+    const footer = document.querySelector(".scheduleModalFooter");
+    if (!(panel instanceof HTMLElement) || !(header instanceof HTMLElement) || !(body instanceof HTMLElement) || !(layout instanceof HTMLElement) || !(footer instanceof HTMLElement)) return { missing: true };
+    const panelRect = panel.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    return {
+      missing: false,
+      panel: { left: panelRect.left, right: panelRect.right, top: panelRect.top, bottom: panelRect.bottom },
+      footer: { left: footerRect.left, right: footerRect.right, top: footerRect.top, bottom: footerRect.bottom },
+      surfaceGaps: {
+        headerToBody: bodyRect.top - headerRect.bottom,
+        bodyToFooter: footerRect.top - bodyRect.bottom
+      },
+      viewport: { width: innerWidth, height: innerHeight },
+      bodyHorizontalOverflow: body.scrollWidth - body.clientWidth,
+      columns: getComputedStyle(layout).gridTemplateColumns,
+      sectionCount: layout.querySelectorAll(".scheduleEditorSection").length
+    };
+  });
+  assert(!result.missing, `${label}: schedule editor surfaces are missing`);
+  assert(result.panel.left >= 0 && result.panel.right <= result.viewport.width && result.panel.top >= 0 && result.panel.bottom <= result.viewport.height, `${label}: schedule editor leaves the viewport: ${JSON.stringify(result)}`);
+  assert(result.footer.left >= 0 && result.footer.right <= result.viewport.width && result.footer.bottom <= result.viewport.height, `${label}: schedule editor footer leaves the viewport: ${JSON.stringify(result)}`);
+  assert(result.surfaceGaps.headerToBody <= 1 && result.surfaceGaps.bodyToFooter <= 1, `${label}: schedule editor has visible gaps between its header, body, or footer: ${JSON.stringify(result)}`);
+  assert(result.bodyHorizontalOverflow <= 1, `${label}: schedule editor body overflows horizontally: ${JSON.stringify(result)}`);
+  assert(!result.columns.includes(" "), `${label}: schedule editor did not collapse to one column: ${JSON.stringify(result)}`);
+  assert(result.sectionCount === 3, `${label}: schedule editor is missing a workflow section: ${JSON.stringify(result)}`);
+}
+
 async function assertModsToolbarVisible(page, label) {
   const result = await page.evaluate(() => {
     const toolbar = document.querySelector(".modsWorkspaceToolbar");
@@ -160,6 +195,34 @@ async function assertModsToolbarVisible(page, label) {
   assert(!result.missing, `${label}: mods toolbar surfaces are missing`);
   assert(result.installedTop >= result.toolbarBottom, `${label}: installed mods overlaps the toolbar (${result.installedTop} < ${result.toolbarBottom})`);
   assert(result.coveredActions.length === 0, `${label}: mods toolbar actions are covered: ${JSON.stringify(result.coveredActions)}`);
+}
+
+async function assertNodeUpdateToast(page, label) {
+  const toast = page.locator(".sonnerToast").filter({ hasText: "Multiple nodes have an update available." });
+  await toast.waitFor();
+  const mute = toast.getByRole("button", { name: "Mute for 3 days", exact: true });
+  const geometry = await toast.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const action = element.querySelector("[data-button]");
+    const actionRect = action?.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      actionWidth: actionRect?.width ?? 0,
+      actionHeight: actionRect?.height ?? 0
+    };
+  });
+  assert(geometry.left >= 0 && geometry.right <= geometry.viewportWidth && geometry.top >= 0 && geometry.bottom <= geometry.viewportHeight, `${label}: node update toast leaves the viewport: ${JSON.stringify(geometry)}`);
+  assert(geometry.actionWidth >= 44 && geometry.actionHeight >= 44, `${label}: node update mute action is smaller than 44px: ${JSON.stringify(geometry)}`);
+  await mute.click();
+  await page.reload();
+  await page.locator(".appShell").waitFor();
+  await page.waitForTimeout(100);
+  assert(await page.getByText("Multiple nodes have an update available.", { exact: true }).count() === 0, `${label}: muted node update toast returned after reload`);
 }
 
 async function assertModsRowsAligned(page, label) {
@@ -483,6 +546,8 @@ async function runProfile(engine, profile, label) {
     });
     await signInThroughForm(page, baseUrl);
 
+    await assertNodeUpdateToast(page, label);
+
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
     await assertNavigationOverlay(page, label);
@@ -523,6 +588,7 @@ async function runProfile(engine, profile, label) {
     await assertEditableFontSizes(page, `${label} schedule dialog`);
     await assertTargets(page, [".scheduleModalPanel .modalCloseButton"], `${label} schedule dialog`);
     await assertDialogScrollLock(page, ".scheduleModalBackdrop", ".scheduleModalPanel .scheduleEditBody", `${label} schedule dialog`);
+    await assertScheduleEditorLayout(page, `${label} schedule dialog`);
     await page.keyboard.press("Escape");
     await page.locator(".scheduleModalPanel").waitFor({ state: "detached" });
     await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Add schedule", null, { timeout: 2_000 });
@@ -532,6 +598,9 @@ async function runProfile(engine, profile, label) {
     await nodeDetails.click();
     await page.locator(".nodeDetailsDrawer").waitFor();
     await assertTargets(page, [".nodeDrawerClose"], `${label} node drawer`);
+    const notificationToggle = page.getByRole("checkbox", { name: /Node update notifications for/ });
+    assert(await notificationToggle.count() === 1, `${label}: per-node update notification toggle is missing`);
+    assert(await notificationToggle.isChecked(), `${label}: per-node update notifications should default to enabled`);
     await page.getByRole("button", { name: "Close node details" }).click();
     await page.locator(".nodeDetailsDrawer").waitFor({ state: "detached" });
     await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Details", null, { timeout: 2_000 });

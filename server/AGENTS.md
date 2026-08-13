@@ -19,3 +19,7 @@ The root `AGENTS.md` still applies. Use this table to enter the backend through 
 
 - Keep colocated `*.test.ts` coverage with the module being changed. Run focused server tests with the root command documented in `AGENTS.md`.
 - For runtime or node-protocol changes, also read `docs/runtime-architecture.md` or `docs/panel-node-protocol.md`, respectively.
+
+# Versioning
+
+- The root `AGENTS.md` calendar-versioning policy applies to server changes. Use `YY.M.N`, increment the release number within the current month, and reset it to `1` when the year or month changes; do not classify changes as SemVer major, minor, or patch bumps.

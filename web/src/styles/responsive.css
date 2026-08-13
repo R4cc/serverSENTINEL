@@ -860,7 +860,9 @@ button:disabled,
 }
 
 .serverSwitcherStatus.starting,
-.serverSwitcherOptionDot.starting {
+.serverSwitcherOptionDot.starting,
+.serverSwitcherStatus.warning,
+.serverSwitcherOptionDot.warning {
   background: var(--sentinel-warning);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-warning) 14%, transparent);
 }

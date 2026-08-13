@@ -147,6 +147,25 @@ describe("server timeline schedule markers", () => {
     expect(result.markers.find((marker) => marker.kind === "run")?.status).toBe("failed");
   });
 
+  it("keeps an active run visible after its start falls outside the window", () => {
+    const from = new Date("2026-01-01T04:00:00.000Z").getTime();
+    const result = timelineScheduleMarkers({
+      schedules: [],
+      runs: [],
+      activeRuns: [{ id: "active-long", scheduleId: schedule.id, scheduleName: schedule.name, status: "running", startedAt: "2026-01-01T00:00:00.000Z", stepCount: 1, cancellable: true }],
+      from,
+      to: from + 60 * 60_000,
+      now: from + 30 * 60_000
+    });
+
+    expect(result.markers).toMatchObject([{
+      id: "active:active-long",
+      occurredAt: new Date("2026-01-01T00:00:00.000Z").getTime(),
+      kind: "active",
+      status: "running"
+    }]);
+  });
+
   it("reports truncation for pathological recurrence counts", () => {
     const from = new Date("2026-01-01T00:00:00.000Z").getTime();
     const result = timelineScheduleMarkers({ schedules: [schedule], runs: [], activeRuns: [], from, to: from + 60 * 60_000, now: from, limit: 3 });

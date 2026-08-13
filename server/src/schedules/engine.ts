@@ -7,11 +7,11 @@ import { durationSince, logError, logInfo, logWarn, errorLogFields } from "../lo
 import { captureScheduledCommandLogs } from "./runLogCapture.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import { listManagedServers } from "../servers/store.js";
-import { restartServerGracefully, sendConsoleCommandWithIntent } from "../servers/lifecycle.js";
+import { restartServerGracefully, sendConsoleCommandWithIntent, startServerWithIntent, stopServerWithIntent } from "../servers/lifecycle.js";
 import { activeScheduleExecutions, activeScheduledRunsFor, runningSchedules, scheduleExecutionKey, type ActiveScheduleExecution } from "./activeRuns.js";
 import { sanitizeScheduleSteps, ScheduleCancellationError, throwIfScheduleCancelled, waitForCommandDelay } from "./steps.js";
 import type { NodeRuntime } from "../nodes/types.js";
-import type { ManagedServer, ScheduledExecution, ScheduledRun, ScheduledRunDetails, ScheduledRunStepDetails } from "../types.js";
+import type { ManagedServer, ScheduleProcedure, ScheduledExecution, ScheduledRun, ScheduledRunDetails, ScheduledRunStepDetails } from "../types.js";
 export function scheduleFromBody(body: {
   name?: string;
   cron?: string;
@@ -64,6 +64,14 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
   });
   try {
     const runtime = runtimeForServer(server);
+    // A run allowed to wait already accepts an unbounded delay, and withScheduleMutation blocks it
+    // on the export further down. Every other policy used to be dropped by the tick before it even
+    // tested the cron match, which lost the occurrence with nothing recorded to explain it, so the
+    // export becomes a reported skip rather than a silent no-op.
+    if (!schedule.waitForPlayersToLeave && services.exportCoordinator.activeOperationId(server.id)) {
+      logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "export_in_progress" }, "Schedule skipped");
+      return { status: "skipped", message: "Skipped because a server export was running", details: details() };
+    }
     if (schedule.waitForPlayersToLeave) {
       throwIfScheduleCancelled(active.controller.signal);
       active.message = "Checking server status";
@@ -83,7 +91,7 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     throwIfScheduleCancelled(active.controller.signal);
     active.message = "Checking server status";
     const status = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
-    if (!status.docker?.running) {
+    if (!status.docker?.running && scheduleRequiresRunningServer(schedule)) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
       return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
     }
@@ -104,20 +112,23 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     for (const [index, step] of schedule.steps.entries()) {
       throwIfScheduleCancelled(active.controller.signal);
       const delaySeconds = step.delaySeconds;
-      const label = step.type === "command" ? step.command : "Restart";
+      const label = step.type === "command" ? step.command : scheduleProcedureLabel[step.procedure];
       terminalStepIndex = index;
       terminalStep = label;
       active.currentStepIndex = index;
       active.currentStep = label;
       active.waitingDelaySeconds = delaySeconds || undefined;
       active.waitingUntil = delaySeconds ? new Date(Date.now() + delaySeconds * 1000).toISOString() : undefined;
+      const runningMessage = step.type === "command"
+        ? `Sending command ${index + 1} of ${schedule.steps.length}`
+        : scheduleProcedureRunningMessage[step.procedure];
       active.message = delaySeconds
         ? `Waiting before step ${index + 1} of ${schedule.steps.length}`
-        : step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
+        : runningMessage;
       await waitForCommandDelay(delaySeconds, active.controller.signal);
       active.waitingDelaySeconds = undefined;
       active.waitingUntil = undefined;
-      active.message = step.type === "command" ? `Sending command ${index + 1} of ${schedule.steps.length}` : "Restarting server";
+      active.message = runningMessage;
       throwIfScheduleCancelled(active.controller.signal);
       const stepDetails: ScheduledRunStepDetails = {
         stepIndex: index,
@@ -144,8 +155,8 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
       } else {
         active.cancellable = false;
         try {
-          await restartServerGracefully(server);
-          active.message = "Server restarted";
+          await runScheduleProcedure(server, step.procedure);
+          active.message = scheduleProcedureCompletedMessage[step.procedure];
         } catch (error) {
           stepDetails.status = "failed";
           throw error;
@@ -166,6 +177,39 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
     logError({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
     return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed", details: details() };
   }
+}
+
+export const scheduleProcedureLabel: Record<ScheduleProcedure, string> = {
+  restart: "Restart",
+  stop: "Stop",
+  start: "Start"
+};
+
+const scheduleProcedureRunningMessage: Record<ScheduleProcedure, string> = {
+  restart: "Restarting server",
+  stop: "Stopping server",
+  start: "Starting server"
+};
+
+const scheduleProcedureCompletedMessage: Record<ScheduleProcedure, string> = {
+  restart: "Server restarted",
+  stop: "Server stopped",
+  start: "Server started"
+};
+
+function runScheduleProcedure(server: ManagedServer, procedure: ScheduleProcedure) {
+  if (procedure === "restart") return restartServerGracefully(server);
+  if (procedure === "stop") return stopServerWithIntent(server);
+  return startServerWithIntent(server);
+}
+
+/**
+ * Whether the run needs a running server to mean anything. Commands cannot reach a stopped server
+ * and neither Restart nor Stop has anything to act on, so those runs are skipped rather than failed.
+ * A schedule whose only action is Start is the exception: a stopped server is precisely its purpose.
+ */
+export function scheduleRequiresRunningServer(schedule: Pick<ScheduledExecution, "steps">) {
+  return schedule.steps.some((step) => step.type === "command" || step.procedure !== "start");
 }
 
 export const schedulePlayerWaitPollSeconds = 30;
@@ -328,10 +372,19 @@ export async function executeMatchedSchedule(server: ManagedServer, schedule: Sc
   }
 }
 
-export function startScheduleExecution(server: ManagedServer, schedule: ScheduledExecution) {
+/**
+ * `requireAvailability` decides what an active export means. A person pressing Run now gets the
+ * refusal reported back to them, so the assertion stands; the scheduler asks for it to be relaxed
+ * because it has nobody to report to, and records the skip against the run history instead.
+ */
+export function startScheduleExecution(
+  server: ManagedServer,
+  schedule: ScheduledExecution,
+  { requireAvailability = true }: { requireAvailability?: boolean } = {}
+) {
   const key = scheduleExecutionKey(server.id, schedule.id);
   if (runningSchedules.has(key)) return undefined;
-  services.exportCoordinator.assertMutationAllowed(server.id);
+  if (requireAvailability) services.exportCoordinator.assertMutationAllowed(server.id);
 
   runningSchedules.add(key);
   void executeMatchedSchedule(server, schedule)
@@ -356,7 +409,6 @@ export async function tickSchedules() {
         ? timeZoneMinuteKey(lastRun, config.timeZone) === runKey
         : false;
       if (runningSchedules.has(key) || alreadyRanThisWallMinute) continue;
-      if (services.exportCoordinator.activeOperationId(server.id)) continue;
       try {
         if (!cronMatches(schedule.cron, now)) continue;
       } catch {
@@ -364,7 +416,10 @@ export async function tickSchedules() {
         continue;
       }
 
-      startScheduleExecution(server, schedule);
+      // Started even while an export holds the server. Cron matching is per wall-clock minute and
+      // never retroactive, so refusing here spent the occurrence with nothing to show for it; the
+      // run itself now decides whether to skip or wait, and either way it says so.
+      startScheduleExecution(server, schedule, { requireAvailability: false });
     }
   }
 }

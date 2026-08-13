@@ -238,6 +238,15 @@
   color: var(--sentinel-danger);
 }
 
+.scheduleStatusIcon.skipped,
+.scheduleStatusIcon.cancelled {
+  color: var(--sentinel-warning);
+}
+
+.scheduleStatusIcon.unknown {
+  color: var(--text-muted);
+}
+
 .scheduleEnabledCell,
 .scheduleRowActions {
   justify-self: center;
@@ -649,7 +658,7 @@
 /* Schedule editor -------------------------------------------------------- */
 
 .modalPanel.scheduleModalPanel {
-  width: min(840px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   overflow: clip;
@@ -659,6 +668,7 @@
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
+  gap: 0;
   overflow: clip;
 }
 
@@ -684,9 +694,29 @@
   min-width: 0;
   display: grid;
   gap: var(--space-2);
-  padding: 0;
-  border: 0;
-  background: transparent;
+  padding: var(--space-3);
+  border: var(--border-subtle) solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.scheduleTemplateSection {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 28%, var(--surface-raised));
+}
+
+.scheduleEditorLayout {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.scheduleEditorMain {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
 }
 
 .scheduleEditorSectionHeader {
@@ -699,6 +729,33 @@
 
 .scheduleEditorSectionHeader > div {
   min-width: 0;
+}
+
+.scheduleEditorSectionTitle {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.scheduleEditorSectionIndex {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--swiss-white);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+.scheduleEditorSectionIndex .buttonIcon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
 }
 
 .scheduleEditorSectionHeader h3 {
@@ -751,6 +808,321 @@
   line-height: 1.3;
 }
 
+.scheduleRepeatControls {
+  min-width: 0;
+  margin-top: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+}
+
+.scheduleRepeatInterval input,
+.scheduleRepeatTime input {
+  width: 100%;
+  max-width: 180px;
+}
+
+.scheduleRepeatInterval,
+.scheduleRepeatTime,
+.scheduleCronField {
+  min-width: 0;
+  flex: 1 1 180px;
+  display: grid;
+  gap: 4px;
+}
+
+.scheduleWeekdayPicker {
+  min-width: 0;
+  flex: 1 1 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.scheduleWeekdayPicker legend {
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--type-form-label-size);
+  font-weight: var(--weight-strong);
+}
+
+.scheduleWeekdayChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.scheduleWeekdayChoice {
+  position: relative;
+  min-width: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  text-align: center;
+  cursor: pointer;
+}
+
+.scheduleWeekdayChoice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scheduleWeekdayChoice.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--text);
+}
+
+.scheduleWeekdayChoice:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.scheduleHealthBadge {
+  width: fit-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-label);
+}
+
+.scheduleHealthBadge .buttonIcon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3;
+}
+
+.scheduleHealthBadge.failed {
+  background: color-mix(in srgb, var(--sentinel-danger) 14%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.scheduleHealthBadge.skipped {
+  background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface));
+  color: var(--sentinel-warning);
+}
+
+.scheduleAttentionList {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.scheduleAttentionItem {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--sentinel-danger) 30%, transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.scheduleAttentionItem.skipped {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 30%, transparent);
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
+}
+
+.scheduleAttentionItem strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+}
+
+.scheduleAttentionItem small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.scheduleHistoryList {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.scheduleHistoryRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.scheduleHistoryDetails {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.scheduleHistoryDetails strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+}
+
+.scheduleHistoryDetails small,
+.scheduleHistoryTime small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduleHistoryTime {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.scheduleTemplateChoices {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2);
+}
+
+.scheduleTemplateCard {
+  min-width: 0;
+  padding: var(--space-2);
+  display: grid;
+  /* Without an explicit track the implicit column sizes to the summary's max-content and the text
+     runs straight out of the card and across its neighbours. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  text-align: left;
+  /* Buttons inherit nowrap here, and this one holds a sentence. */
+  white-space: normal;
+  cursor: pointer;
+}
+
+.scheduleTemplateCard strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+}
+
+.scheduleTemplateCard small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.35;
+}
+
+.scheduleTemplateCard:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--sentinel-accent-soft) 42%, var(--surface-raised));
+  color: var(--text);
+}
+
+.scheduleTemplateCard.applied {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.scheduleTemplateCard.applied:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+.scheduleStepControls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.scheduleStepProcedure {
+  margin: 0;
+  align-self: center;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.35;
+}
+
+.scheduleStepOffset {
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.scheduleStepTotal {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.scheduleCronPreview {
+  min-width: 0;
+  margin-top: var(--space-2);
+  display: grid;
+  gap: 2px;
+}
+
+.scheduleCronPreviewLabel {
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.scheduleCronPreviewList {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.scheduleCronPreviewList li + li::before {
+  content: "·";
+  margin-right: var(--space-2);
+  color: var(--text-muted);
+}
+
+.scheduleCronPreviewZone {
+  color: var(--text-muted);
+  font-variant-numeric: normal;
+}
+
+.scheduleCronPreviewNote {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
 .commandStack,
 .scheduleCommandStack,
 .scheduleCommandList {
@@ -762,7 +1134,9 @@
 .scheduleStepCard {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+  /* Capped rather than auto: the header holds the step number, its offset, and three controls, and
+     letting it size to content took width away from the fields the step is actually made of. */
+  grid-template-columns: minmax(76px, 136px) minmax(0, 1fr);
   align-items: end;
   gap: var(--space-2);
   padding: var(--space-2);
@@ -770,6 +1144,13 @@
   border-radius: var(--radius-md);
   background: var(--surface-muted);
   transition: box-shadow var(--control-transition), opacity var(--control-transition), background var(--control-transition);
+}
+
+.scheduleEditorMain .scheduleStepCard {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-1);
+  background: var(--surface-raised);
 }
 
 .scheduleStepCard.isDragging {
@@ -784,6 +1165,7 @@
   min-width: 0;
   min-height: var(--control-height);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-1);
@@ -892,6 +1274,39 @@
   gap: var(--space-3);
 }
 
+.scheduleOptionsSection .schedulePlayerPolicyChoices {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.scheduleOptionsSection .scheduleOptionToggle {
+  min-height: 44px;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+}
+
+@media (min-width: 901px) {
+  .scheduleOptionsSection {
+    position: sticky;
+    top: 0;
+  }
+}
+
+.scheduleEnabledOption {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border-row));
+}
+
+.scheduleModalFooter {
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.scheduleModalFooterActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .schedulePlayerPolicy {
   min-width: 0;
   display: grid;
@@ -987,7 +1402,7 @@
 }
 
 .scheduleEnabledOption {
-  min-height: 58px;
+  min-height: 44px;
 }
 
 /* Shared form utilities retained for runtime settings -------------------- */
@@ -1129,9 +1544,25 @@
     overflow: visible;
   }
 
+  /* Nothing scrolls inside these once the rows become cards, and the clipping they inherit is what
+     cuts a row's action menu in half: the compact card is shorter than the menu, so the menu cannot
+     be contained by it in either direction. */
+  .scheduleTableFrame,
+  .panel.scheduleTableCard {
+    overflow: visible;
+  }
+
+  /* A card, not a stack of label/value pairs: the labels repeated down the left edge cost about
+     40% of a phone's width to say what the values already say. Name and schedule carry themselves,
+     so only the two timestamps keep a caption. */
   .scheduleTableRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-2);
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "name    name    enabled"
+      "cron    cron    cron"
+      "lastrun nextrun actions";
+    align-items: start;
+    gap: var(--space-2) var(--space-2);
     min-height: 0;
     padding: var(--space-3);
   }
@@ -1142,22 +1573,39 @@
   .scheduleRowActions {
     min-width: 0;
     display: grid;
-    grid-template-columns: 104px minmax(0, 1fr);
     align-items: center;
-    gap: var(--space-3);
     justify-self: stretch;
   }
 
-  .scheduleNameCell::before,
-  .scheduleCell::before,
-  .scheduleEnabledCell::before,
-  .scheduleRowActions::before {
+  .scheduleNameCell { grid-area: name; }
+  .scheduleCell[data-label="Schedule"] { grid-area: cron; }
+  .scheduleCell[data-label="Last run"] { grid-area: lastrun; }
+  .scheduleCell[data-label="Next run"] { grid-area: nextrun; }
+
+  .scheduleEnabledCell {
+    grid-area: enabled;
+    justify-self: end;
+  }
+
+  .scheduleRowActions {
+    grid-area: actions;
+    justify-self: end;
+  }
+
+  .scheduleCell[data-label="Last run"]::before,
+  .scheduleCell[data-label="Next run"]::before {
     content: attr(data-label);
     color: var(--text-muted);
-    font-size: var(--type-meta-size);
+    font-size: var(--type-badge-size);
     font-weight: var(--weight-meta);
     letter-spacing: var(--tracking-label);
     text-transform: uppercase;
+  }
+
+  .scheduleCell[data-label="Schedule"] .scheduleCellValue {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-2);
   }
 
   .scheduleNameValue strong,
@@ -1168,14 +1616,9 @@
     white-space: normal;
   }
 
-  .scheduleEnabledCell,
-  .scheduleRowActions {
-    justify-self: stretch;
-  }
-
   .scheduleEnabledCell .scheduleCellValue,
   .scheduleRowActions .scheduleCellValue {
-    justify-items: start;
+    justify-items: end;
   }
 
   .scheduleStepFields {
@@ -1193,19 +1636,36 @@
     min-height: 28px;
     justify-content: space-between;
   }
+
+  .scheduleEditorLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scheduleOptionsSection .schedulePlayerPolicyChoices {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
+  /* Upward and leftward, because the frame and the panel both clip their overflow: the menu has to
+     stay inside the card it belongs to, and the card layout puts its trigger in the bottom-right. */
   .scheduleActionMenu .actionMenuPopover {
     top: auto;
-    right: auto;
+    right: 0;
     bottom: calc(100% + var(--space-2));
-    left: 0;
+    left: auto;
   }
 
   .scheduleTableRow:has(.scheduleActionMenu .actionMenuPopover) {
     position: relative;
     z-index: 2;
+  }
+
+  /* The open menu now leaves its own card, so the card has to outrank the Scheduled Runs panel,
+     which is a later sibling and would otherwise paint over it. */
+  .panel.scheduleTableCard:has(.scheduleActionMenu .actionMenuPopover) {
+    position: relative;
+    z-index: 3;
   }
 }
 
@@ -1238,12 +1698,8 @@
     padding: var(--space-3);
   }
 
-  .scheduleNameCell,
-  .scheduleCell,
-  .scheduleEnabledCell,
-  .scheduleRowActions {
-    grid-template-columns: 84px minmax(0, 1fr);
-    gap: var(--space-2);
+  .scheduleTableRow {
+    gap: var(--space-2) var(--space-1);
   }
 
   .scheduledRunsFeed {
@@ -1301,8 +1757,24 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .scheduleOptionsSection .schedulePlayerPolicyChoices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .scheduleOptionToggle {
     min-height: 0;
+  }
+
+  .scheduleEditorSection {
+    padding: var(--space-2);
+  }
+
+  .scheduleModalFooterActions {
+    width: 100%;
+  }
+
+  .scheduleModalFooterActions .uiButton {
+    flex: 1 1 0;
   }
 }
 

@@ -29,7 +29,7 @@ export type ModIconResult = {
 
 export type NodeRuntime = {
   readonly nodeId: string;
-  publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer>;
+  publicServer(server: ManagedServer, nodes?: ManagedNode[], servers?: ManagedServer[]): Promise<PublicServer>;
   createServer(input: unknown, report?: RuntimeProgressReporter, jobId?: string): Promise<ManagedServer>;
   updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer>;
   deleteServer(server: ManagedServer, input: unknown): Promise<unknown>;

@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+## 26.8.2 - 2026-08-13
+
+- Removed the stray horizontal bands between the schedule editor's header, content, and footer.
+
+## 26.8.1 - 2026-08-13
+
+- Adopted calendar versions in the `YY.M.N` format, starting at `26.8.1`, with the release number incrementing within each month and resetting when the year or month changes.
+
+## 1.15.0 - 2026-08-13
+
+- Added live duration bars for active schedule runs to the Overview event timeline, including runs that began before the visible window, with direct navigation to the running execution.
+- Added active schedule runs and their current status to the Overview Schedules card while preserving its four-row preview layout.
+- Tightened the schedule create and edit workflow by removing redundant subtitles and compacting run-condition choices without hiding the wait-until-empty rules.
+
+## 1.14.0 - 2026-08-13
+
+- Added a preview of the next three runs to the schedule editor, so an expression can be checked against real dates before it is saved.
+- Added the reader's own clock to that preview whenever the display time zone differs from the one schedules run in, which resolves a schedule written as 04:00 being listed as 06:00.
+- Added a repeat builder to the schedule editor covering every few minutes or hours, every day, and chosen weekdays, so a schedule no longer has to be written as a cron expression. Advanced keeps the expression field, and an expression the builder cannot express opens there untouched.
+- Added the offset from the scheduled start to each step, and a line stating when the last one runs, so a restart with warning commands can be read without adding the delays up.
+- Added three schedule templates covering a nightly restart with warnings, an hourly save, and a weekly restart that waits for an empty server, as starting points a new schedule can be built from.
+- Added Move up and Move down controls to each schedule step, so steps can be reordered on a touch screen and without a pointer.
+- Showed the Restart rules while a schedule is built: Restart is offered only on the final step, and a reorder that would move it away from the end is refused instead of failing when saved.
+- Added a View runs action to each schedule, showing every run the panel has kept for it rather than the eight most recent across all schedules.
+- Replaced the repeated field captions on narrow screens with a schedule card, which returns roughly 40% of the row width to the values.
+- Added Stop and Start schedule steps alongside Restart, so a server can be stopped overnight and started again in the morning. A schedule whose only action is Start now runs against a stopped server instead of being skipped, and existing Restart schedules are unaffected.
+- Added a warning to schedules that have failed or skipped their last three runs, on the schedule itself and on the Overview, because a schedule quietly doing nothing otherwise reads exactly like one that is working.
+- Added a Duplicate action to each schedule, which opens a pre-filled editor rather than saving a copy outright.
+- Added a new schedule step above the closing Restart instead of after it, where it could not have run.
+- Reworked the schedule create, edit, and duplicate modal into a wider, clearly grouped workflow that keeps timing, steps, and run conditions easy to scan across desktop and mobile layouts without repetitive helper copy.
+
+## 1.13.0 - 2026-08-13
+
+- Replaced the Server Properties saving banner and always-visible header actions with a compact bottom action dock that appears only for unsaved changes and animates progress inside the Save button.
+- Added a compact New output action when console lines arrive while the reader is scrolled up, preserving their position until they choose to jump back to the live edge.
+- Kept the console connected while a newly imported local server is waiting for its first Docker container, retained its startup log history, and stopped repeated reattach notices while the server is stopped.
+- Kept the Server Properties Advanced hover surface aligned with its rounded card border in both collapsed and expanded states.
+
+## 1.12.2 - 2026-08-13
+
+- Fixed schedules silently losing an occurrence when a server export was running at their scheduled minute. The run is now recorded as skipped with the reason, and a schedule set to wait for players to leave queues behind the export instead.
+- Fixed deleting a schedule while one of its runs was in progress, which left the run sending commands with no way to cancel it. Deleting now cancels the run first, and is refused while a Restart step is still finishing.
+
+## 1.12.1 - 2026-08-13
+
+- Fixed skipped and cancelled schedule runs being marked as failures in the Last run column, so a run that correctly skipped no longer looks like one that broke.
+- Fixed the Schedules table describing cron expressions differently from the schedule editor, which printed raw cron fields such as "Weekly on 1-5" back at you.
+- Fixed the Scheduled Runs feed scrolling itself back to the top every time the page refreshed its data.
+- Renamed the schedule "Test now" action to "Run now" and added a confirmation for schedules that restart the server, because running one on demand performs every step for real.
+
+## 1.12.0 - 2026-08-13
+
+- Added page-visit notifications for available node updates, with one combined fleet alert, a three-day browser mute, and persistent per-node notification controls.
+
+## 1.11.1 - 2026-08-13
+
+- Fixed large server export imports being rejected with HTTP 413 by uploading archives in resumable, proxy-safe chunks.
+
 ## 1.11.0 - 2026-08-12
 
 - Added a schedule start policy that can wait without timeout for all players to leave, keeps one cancellable run active, and ignores later matches instead of stacking them.

@@ -58,6 +58,7 @@ function props(overrides: Partial<NodeDetailsDrawerProps> = {}): NodeDetailsDraw
     onShowInstall: vi.fn(),
     onRotateToken: vi.fn(),
     onUpdateNode: vi.fn(),
+    onUpdateNotifications: vi.fn(),
     onRefresh: vi.fn(),
     onRestartNode: vi.fn(),
     onRemoveNode: vi.fn(),
@@ -97,11 +98,23 @@ describe("NodeDetailsDrawer", () => {
     expect(html).toContain('title="Close node details"');
     expect(html).toContain("Node online");
     expect(html).toContain("Health and runtime");
+    expect(html).toContain("Node update notifications");
+    expect(html).toContain('aria-label="Node update notifications for mc-node-01"');
+    expect(html).toMatch(/type="checkbox"[^>]*checked=""/);
     expect(html).toContain("Agent version");
     expect(html).toContain('<details class="nodeTechnicalDetails">');
     expect(html).toContain("2 capabilities");
     expect(html).toContain('aria-label="More node actions"');
     expect(html).not.toContain("Update node</button>");
+  });
+
+  it("renders a disabled per-node notification preference", () => {
+    const html = renderToStaticMarkup(<NodeDetailsDrawer {...props({
+      node: node({ updateNotificationsEnabled: false })
+    })} />);
+
+    expect(html).toContain("Node update notifications");
+    expect(html).not.toMatch(/type="checkbox"[^>]*checked=""/);
   });
 
   it("keeps update progress in the permanent status area and suppresses the expected offline warning", () => {

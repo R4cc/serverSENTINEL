@@ -4,14 +4,20 @@ import { describe, expect, it } from "vitest";
 import type { ScheduledActiveRun, ScheduledExecution } from "../types";
 import {
   activeRunStatus,
+  appendScheduleStep,
   lastRunRelativeTime,
   nextRunRelativeTime,
   SchedulePage,
   SchedulePlayerPolicyOptions,
   ScheduleRunDetailsDialog,
+  ScheduleRunHistoryDialog,
   resolveScheduleNavigationTarget,
   reorderScheduleSteps,
-  scheduleDescription
+  scheduleDescription,
+  scheduleStepMoveBlocked,
+  scheduleStepTypeAvailability,
+  scheduleRunFeedKey,
+  scheduleRunItems
 } from "./SchedulesPage";
 
 function schedule(steps: ScheduledExecution["steps"]): ScheduledExecution {
@@ -55,11 +61,57 @@ describe("schedule step summaries", () => {
     expect(steps.map((step) => step.id)).toEqual(["one", "two", "three"]);
   });
 
+  // Both Restart rules were enforced only at submit, so the Type control offered Action on step 1
+  // of 3 and then the save was rejected.
+  it("offers Restart only where one could legally go", () => {
+    const steps = [
+      { id: "one", type: "command" as const },
+      { id: "two", type: "command" as const }
+    ];
+
+    expect(scheduleStepTypeAvailability(steps, "one").canBecomeRestart).toBe(false);
+    expect(scheduleStepTypeAvailability(steps, "one").reason).toBe("A lifecycle action has to be the last step.");
+    expect(scheduleStepTypeAvailability(steps, "two").canBecomeRestart).toBe(true);
+
+    const withRestart = [steps[0], { id: "two", type: "action" as const }];
+    expect(scheduleStepTypeAvailability(withRestart, "two").canBecomeRestart).toBe(true);
+    // A second Restart is not available anywhere, including the step that already is one.
+    expect(scheduleStepTypeAvailability([...withRestart, { id: "three", type: "command" as const }], "three").canBecomeRestart).toBe(false);
+  });
+
+  // Appending after a lifecycle action left the schedule invalid with nothing showing it until the
+  // save was rejected, and a step added to a schedule that ends in Restart belongs before it.
+  it("adds a step before the lifecycle action rather than after it", () => {
+    type Draft = { id: string; type: "command" | "action" };
+    const command: Draft = { id: "one", type: "command" };
+    const action: Draft = { id: "two", type: "action" };
+    const added: Draft = { id: "new", type: "command" };
+
+    expect(appendScheduleStep([command, action], added).map((step) => step.id)).toEqual(["one", "new", "two"]);
+    expect(appendScheduleStep([action], added).map((step) => step.id)).toEqual(["new", "two"]);
+    expect(appendScheduleStep([command], added).map((step) => step.id)).toEqual(["one", "new"]);
+    expect(appendScheduleStep([], added).map((step) => step.id)).toEqual(["new"]);
+  });
+
+  it("refuses a reorder that would leave Restart anywhere but last", () => {
+    const steps = [
+      { type: "command" as const },
+      { type: "command" as const },
+      { type: "action" as const }
+    ];
+
+    expect(scheduleStepMoveBlocked(steps, 2, 1)).toBe(true);
+    expect(scheduleStepMoveBlocked(steps, 0, 2)).toBe(true);
+    expect(scheduleStepMoveBlocked(steps, 0, 1)).toBe(false);
+    // Without a Restart step every move is fine.
+    expect(scheduleStepMoveBlocked([{ type: "command" as const }, { type: "command" as const }], 1, 0)).toBe(false);
+  });
+
   it("describes mixed commands, restart actions, and delays", () => {
     expect(scheduleDescription(schedule([
       { type: "command", command: "say restarting", delaySeconds: 0 },
       { type: "action", procedure: "restart", delaySeconds: 300 }
-    ]))).toBe("1 command, 1 Restart action, 1 delayed");
+    ]))).toBe("1 command, Restart action, 1 delayed");
   });
 
   it("shows a single command verbatim", () => {
@@ -118,7 +170,7 @@ describe("overview schedule navigation", () => {
 });
 
 describe("online-player schedule options", () => {
-  it("explains all three outcomes and selects the waiting policy", () => {
+  it("keeps the choices concise, preserves the important wait rule, and selects the waiting policy", () => {
     const value = {
       ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]),
       onlyWhenNoPlayers: true,
@@ -130,7 +182,9 @@ describe("online-player schedule options", () => {
     expect(html).toContain("Run anyway");
     expect(html).toContain("Skip this run");
     expect(html).toContain("Wait until empty");
-    expect(html).toContain("runs never stack up");
+    expect(html).toContain("later matches do not stack");
+    expect(html).not.toContain("Start on time, even while players are connected");
+    expect(html).not.toContain("Skip this occurrence and try again");
     expect(html).toMatch(/<input(?=[^>]+value="wait")(?=[^>]+checked)[^>]*>/);
     expect(html.match(/checked=""/g)).toHaveLength(1);
   });
@@ -176,6 +230,84 @@ describe("schedule workspace rendering", () => {
     expect(html).not.toContain("Active runs");
     expect(html).toContain("No schedules added");
     expect(html).toContain("No runs yet");
+  });
+
+  // Skipping is the expected outcome of two of the three player policies, so the last-run mark has
+  // to separate it from a failure. It shipped once as the same red cross a thrown run gets.
+  it("gives a skipped last run its own mark instead of the failure one", () => {
+    const lastRun = { lastRunAt: "2026-07-14T04:00:00.000Z" };
+    const skipped = renderSchedulePage([{ ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), ...lastRun, lastStatus: "skipped" }]);
+    const failed = renderSchedulePage([{ ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), ...lastRun, lastStatus: "failed" }]);
+
+    expect(skipped).toContain('class="scheduleStatusIcon skipped"');
+    expect(skipped).toContain('aria-label="Skipped"');
+    expect(skipped).not.toContain("scheduleStatusIcon failed");
+    expect(failed).toContain('class="scheduleStatusIcon failed"');
+    expect(failed).toContain('aria-label="Failed"');
+  });
+
+  // The feed resets its scroll position when this key changes, and the page is handed a brand new
+  // schedules array every time it polls. Keying on anything the poll rebuilds pulled the run the
+  // reader was looking at out from under them every 15 seconds.
+  it("identifies the runs feed by its contents, not by the array holding them", () => {
+    const run = { id: "run-1", scheduleId: "schedule-1", scheduleName: "Nightly maintenance", status: "success", ranAt: "2026-07-14T04:00:00.000Z" };
+    const polled = () => [{ ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), recentRuns: [{ ...run }] }];
+
+    const first = polled();
+    const second = polled();
+    expect(second).not.toBe(first);
+    expect(scheduleRunFeedKey(scheduleRunItems(second))).toBe(scheduleRunFeedKey(scheduleRunItems(first)));
+
+    const advanced = polled();
+    advanced[0].recentRuns = [{ ...run, id: "run-2", ranAt: "2026-07-15T04:00:00.000Z" }];
+    expect(scheduleRunFeedKey(scheduleRunItems(advanced))).not.toBe(scheduleRunFeedKey(scheduleRunItems(first)));
+  });
+
+  it("describes the cron column with the same describer the editor uses", () => {
+    const weekdays = { ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), cron: "0 4 * * 1-5" };
+
+    const html = renderSchedulePage([weekdays]);
+
+    expect(html).toContain("Every weekday at 04:00");
+    expect(html).not.toContain("Weekly on 1-5");
+  });
+});
+
+describe("schedule run history", () => {
+  // The panel retains 25 runs per schedule; the feed beside the table mixes every schedule together
+  // and stops at eight, so most of that history had nowhere to be read.
+  it("lists every retained run for one schedule, newest first", () => {
+    const runs = [
+      { id: "run-old", scheduleId: "schedule-1", scheduleName: "Nightly maintenance", status: "failed", message: "Command failed", ranAt: "2026-07-10T04:00:00.000Z" },
+      { id: "run-new", scheduleId: "schedule-1", scheduleName: "Nightly maintenance", status: "skipped", message: "Skipped because 3 players are online", ranAt: "2026-07-14T04:00:00.000Z" }
+    ];
+
+    const html = renderToStaticMarkup(createElement(ScheduleRunHistoryDialog, {
+      schedule: { ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), recentRuns: runs },
+      formatDate: (value: string | number | Date) => new Date(value).toISOString(),
+      relativeTimestamps: false,
+      relativeNow: Date.parse("2026-07-14T12:00:00.000Z"),
+      onSelectRun: () => undefined,
+      onClose: () => undefined
+    }));
+
+    expect(html).not.toContain("2 recorded runs");
+    expect(html).toContain("Skipped because 3 players are online");
+    expect(html).toContain("Command failed");
+    expect(html.indexOf("run at 2026-07-14")).toBeLessThan(html.indexOf("run at 2026-07-10"));
+  });
+
+  it("says so when a schedule has never run", () => {
+    const html = renderToStaticMarkup(createElement(ScheduleRunHistoryDialog, {
+      schedule: schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]),
+      formatDate: (value: string | number | Date) => new Date(value).toISOString(),
+      relativeNow: Date.now(),
+      onSelectRun: () => undefined,
+      onClose: () => undefined
+    }));
+
+    expect(html).toContain("No runs recorded");
+    expect(html).not.toContain("0 recorded runs");
   });
 });
 

@@ -173,6 +173,7 @@ function exportableServerRecord(server: ManagedServer, includePanelSettings: boo
     restartRequiredChanges: _restartRequiredChanges,
     restartRequiredModBaseline: _restartRequiredModBaseline,
     runtimeIntent: _runtimeIntent,
+    portConflictUnresolved: _portConflictUnresolved,
     ...retained
   } = server;
   if (includePanelSettings) return retained;
@@ -778,10 +779,12 @@ export function validateImportArchive(manifest: ExportManifest, context: ImportC
   const existingNames = new Set(context.existingServers.map((server) => server.displayName.toLowerCase()));
   const plannedNames = new Set<string>();
   const existingContainerNames = new Set(context.existingServers.map((server) => server.dockerContainer?.toLowerCase()).filter(Boolean));
-  const existingPortKeys = new Set<string>();
+  const portOwners = new Map<string, { id: string; displayName: string }>();
   for (const server of context.existingServers) {
     if (server.nodeId !== targetNodeId) continue;
-    for (const port of portKeysForServer(server)) existingPortKeys.add(port);
+    for (const port of portKeysForServer(server)) {
+      if (!portOwners.has(port)) portOwners.set(port, { id: server.id, displayName: server.displayName });
+    }
   }
 
   const plan: ImportValidationResult["plan"]["servers"] = [];
@@ -806,6 +809,7 @@ export function validateImportArchive(manifest: ExportManifest, context: ImportC
       });
     }
     let portKeys: string[] = [];
+    const portConflicts: ImportIssue[] = [];
     try {
       portKeys = portKeysForServer(source);
     } catch (error) {
@@ -817,14 +821,17 @@ export function validateImportArchive(manifest: ExportManifest, context: ImportC
     }
     for (const key of portKeys) {
       const [port, protocol] = key.split("/", 2);
-      if (existingPortKeys.has(key)) {
-        issues.push({
+      const owner = portOwners.get(key);
+      if (owner) {
+        const conflict = {
           code: "conflicting_port",
           serverName: source.displayName,
-          message: `Port ${port}/${protocol} already belongs to another server on this node`
-        });
+          message: `Port ${port}/${protocol} is already assigned to "${owner.displayName}". The imported server will stay stopped until you choose a different port.`
+        };
+        warnings.push(conflict);
+        portConflicts.push(conflict);
       }
-      existingPortKeys.add(key);
+      if (!owner) portOwners.set(key, { id: newId, displayName });
     }
     for (const file of entry.files) {
       try {
@@ -853,7 +860,8 @@ export function validateImportArchive(manifest: ExportManifest, context: ImportC
       serverDir: serverDirectory(context.serversDir, newId),
       fileCount: entry.files.length,
       totalBytes: entry.files.reduce((total, file) => total + file.size, 0),
-      lockfileCount: entry.lockfile.length
+      lockfileCount: entry.lockfile.length,
+      portConflicts
     });
   }
 
@@ -929,6 +937,7 @@ export async function applyImportArchive(archivePath: string, manifest: ExportMa
           displayName: plan.displayName,
           serverDir: plan.serverDir,
           storageName: plan.storageName,
+          portConflictUnresolved: plan.portConflicts.length > 0,
           now: new Date().toISOString()
         })
       });
@@ -1009,6 +1018,7 @@ function remapImportedServer(server: ManagedServer, input: {
   displayName: string;
   serverDir: string;
   storageName: string;
+  portConflictUnresolved: boolean;
   now: string;
 }): ManagedServer {
   const scheduleIdMap = new Map((server.schedules ?? []).map((schedule) => [schedule.id, randomUUID()]));
@@ -1025,6 +1035,7 @@ function remapImportedServer(server: ManagedServer, input: {
     dockerMountSource: config.serversDockerVolume || input.serverDir,
     dockerWorkingDir: config.serversDockerVolume ? `/data/servers/${input.storageName}` : undefined,
     runtimeIntent: "stopped",
+    portConflictUnresolved: input.portConflictUnresolved,
     schedules: (server.schedules ?? []).map((schedule) => {
       const scheduleId = scheduleIdMap.get(schedule.id) ?? randomUUID();
       return {

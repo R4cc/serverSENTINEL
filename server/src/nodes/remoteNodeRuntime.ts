@@ -18,7 +18,7 @@ import { validateServerId } from "../http/validation.js";
 import type { ConsoleUpstream } from "../servers/consoleChannel.js";
 
 type NodeLookup = (nodeId: string) => Promise<ManagedNode | undefined>;
-type PublicServerFn = (server: ManagedServer, nodes?: ManagedNode[]) => Promise<PublicServer>;
+type PublicServerFn = (server: ManagedServer, nodes?: ManagedNode[], servers?: ManagedServer[]) => Promise<PublicServer>;
 type PersistServerFn = (server: ManagedServer) => Promise<void>;
 type UpdateServerRecordFn = (server: ManagedServer) => Promise<void>;
 type DeleteServerRecordFn = (serverId: string) => Promise<void>;
@@ -64,8 +64,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     this.nodeId = nodeId;
   }
 
-  publicServer(server: ManagedServer, nodes?: ManagedNode[]) {
-    return this.publicServerFn(server, nodes);
+  publicServer(server: ManagedServer, nodes?: ManagedNode[], servers?: ManagedServer[]) {
+    return this.publicServerFn(server, nodes, servers);
   }
 
   async command(

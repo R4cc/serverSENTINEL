@@ -38,3 +38,7 @@ CSS is global. `src/styles.css` import order is load-bearing and asserted by `sr
 - Put feature breakpoints beside their base rules. `styles.test.ts` rejects feature-owned selectors in `responsive.css`.
 - Feature styles use theme tokens, not raw hex or `rgb()`, and must not redefine `ui*` primitives.
 - Keep `styles.test.ts` structural: test ownership, cascade, and retired classes, not declaration values. Use the browser smoke scripts for rendered behavior.
+
+# Versioning
+
+- The root `AGENTS.md` calendar-versioning policy applies to web changes. Use `YY.M.N`, increment the release number within the current month, and reset it to `1` when the year or month changes; do not classify changes as SemVer major, minor, or patch bumps.

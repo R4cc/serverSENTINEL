@@ -18,7 +18,7 @@ import {
   versionValue
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, FormField, PanelHeader, StatusBadge, Toolbar } from "../components/UiPrimitives";
+import { Banner, Button, FormField, PanelHeader, Spinner, StatusBadge } from "../components/UiPrimitives";
 import type { ServerExportState } from "../features/exports/useExportWorkspace";
 import {
   clampNumber,
@@ -39,11 +39,13 @@ import { MemoryNumberInput, MemoryRangeControl } from "./ServerSettingsShared";
 function AdditionalPortBindingsEditor({
   initialValue,
   serverPort,
-  queryPort
+  queryPort,
+  onChange
 }: {
   initialValue?: string;
   serverPort: string;
   queryPort: string;
+  onChange?: () => void;
 }) {
   const [bindings, setBindings] = useState(() => parseAdditionalPortBindings(initialValue, serverPort, queryPort));
   const serializedBindings = formatManagedPortBindings(serverPort, queryPort, bindings);
@@ -57,14 +59,17 @@ function AdditionalPortBindingsEditor({
   }, [serverPort, queryPort]);
 
   function updateBinding(id: string, patch: Partial<PortBindingRow>) {
+    onChange?.();
     setBindings((current) => current.map((binding) => binding.id === id ? { ...binding, ...patch } : binding));
   }
 
   function addBinding() {
+    onChange?.();
     setBindings((current) => [...current, { id: portBindingId(), hostPort: "", target: "" }]);
   }
 
   function removeBinding(id: string) {
+    onChange?.();
     setBindings((current) => current.filter((binding) => binding.id !== id));
   }
 
@@ -195,15 +200,17 @@ export function ServerEditForm({
   exportPanel,
   dangerZone,
   disabledReason = "",
-  disabled = false
+  disabled = false,
+  saving = false
 }: {
   server: ManagedServer;
   totalMemory: number;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | boolean | Promise<void | boolean>;
   exportPanel?: ReactNode;
   dangerZone?: ReactNode;
   disabledReason?: string;
   disabled?: boolean;
+  saving?: boolean;
 }) {
   const initialJavaArgs = server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs));
   const initialMemory = parseJavaMemoryArgs(initialJavaArgs);
@@ -235,6 +242,7 @@ export function ServerEditForm({
   const [queryPort, setQueryPort] = useState(() => queryPortForServer(server));
   const [startOnNodeStart, setStartOnNodeStart] = useState(server.startOnNodeStart ?? false);
   const [resetVersion, setResetVersion] = useState(0);
+  const [dirty, setDirty] = useState(false);
   const detectedMinecraftVersion = minecraftVersionInfo(server);
   const detectedRuntimeVersion = runtimeVersionInfo(server);
   const serverPortValid = isValidServerPort(serverPort);
@@ -246,7 +254,7 @@ export function ServerEditForm({
 
   useEffect(() => {
     resetFormState();
-  }, [server.id]);
+  }, [server.id, server.updatedAt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -317,6 +325,12 @@ export function ServerEditForm({
     setQueryPort(queryPortForServer(server));
     setStartOnNodeStart(server.startOnNodeStart ?? false);
     setResetVersion((current) => current + 1);
+    setDirty(false);
+  }
+
+  async function submitForm(event: FormEvent<HTMLFormElement>) {
+    const saved = await onSubmit(event);
+    if (saved === true) setDirty(false);
   }
 
   function updateMinimumHeap(value: number) {
@@ -338,27 +352,8 @@ export function ServerEditForm({
 
   return (
     <div className="serverPropertiesWorkspace">
-      <form id={formId} onSubmit={onSubmit} className="serverPropertiesForm">
-        {disabled && disabledReason && <Banner tone="warning" className="propertiesLockBanner" title={disabledReason} />}
-        <Toolbar
-          className="propertiesToolbar"
-          primary={(
-            <div className="propertiesToolbarCopy">
-              <strong>Server configuration</strong>
-              <span>Review the settings below, then save all changes together.</span>
-            </div>
-          )}
-          secondary={(
-            <div className="propertiesActionButtons">
-              <Button variant="secondary" onClick={resetFormState} disabled={disabled}>
-                Discard changes
-              </Button>
-              <Button type="submit" disabled={disabled || !serverPortValid || !queryPortValid || portConflict}>
-                Save changes
-              </Button>
-            </div>
-          )}
-        />
+      <form id={formId} onSubmit={submitForm} onChange={() => setDirty(true)} className="serverPropertiesForm">
+        {disabled && disabledReason && !saving && <Banner tone="warning" className="propertiesLockBanner" title={disabledReason} />}
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
           <section className="propertiesSettingsSurface">
@@ -533,12 +528,33 @@ export function ServerEditForm({
                   </FormField>
                 </div>
                 <div className="propertiesAdvancedPorts">
-                  <AdditionalPortBindingsEditor key={`${server.id}-${resetVersion}`} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} />
+                  <AdditionalPortBindingsEditor key={`${server.id}-${resetVersion}`} initialValue={server.dockerPorts} serverPort={serverPort} queryPort={queryPort} onChange={() => setDirty(true)} />
                 </div>
               </div>
             </details>
           </section>
         </fieldset>
+        {(dirty || saving) && (
+          <div className="propertiesSaveDock" aria-live="polite">
+            <div className="propertiesSaveDockCopy">
+              <strong>Unsaved changes</strong>
+              <span>Apply or discard your server configuration changes.</span>
+            </div>
+            <div className="propertiesActionButtons">
+              <Button variant="secondary" onClick={resetFormState} disabled={saving}>
+                Discard
+              </Button>
+              <Button
+                type="submit"
+                disabled={disabled || !serverPortValid || !queryPortValid || portConflict}
+                aria-busy={saving}
+                reserveLabel="Saving changes"
+              >
+                {saving ? <><Spinner size="xs" tone="current" />Saving changes</> : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        )}
       </form>
 
       {/* Both live outside the settings form so their own buttons cannot submit it. */}

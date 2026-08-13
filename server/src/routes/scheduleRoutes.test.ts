@@ -65,6 +65,7 @@ function testApp(options: {
   parsedSchedule?: ScheduledExecution;
   startResult?: ScheduledActiveRun | false;
   cancelResult?: ScheduledActiveRun | null | false;
+  cancelRunsForScheduleResult?: boolean;
 } = {}) {
   const app = Fastify();
   const permissions: Permission[] = [];
@@ -79,6 +80,7 @@ function testApp(options: {
   const findScheduledRun = vi.fn((_server: ManagedServer, scheduleId: string, runId: string) =>
     (options.schedules ?? [schedule()]).find((candidate) => candidate.id === scheduleId)?.recentRuns?.find((run) => run.id === runId));
   const startScheduleExecution = vi.fn(() => options.startResult === false ? undefined : options.startResult ?? activeRun());
+  const cancelActiveScheduleRunsForSchedule = vi.fn(() => options.cancelRunsForScheduleResult ?? true);
   const cancelActiveScheduleRun = vi.fn(() => options.cancelResult === false ? undefined : options.cancelResult === null ? null : options.cancelResult ?? activeRun());
   const logInfo = vi.fn();
 
@@ -100,6 +102,7 @@ function testApp(options: {
     deleteSchedule,
     startScheduleExecution,
     cancelActiveScheduleRun,
+    cancelActiveScheduleRunsForSchedule,
     serverLogFields: () => ({ serverId }),
     logInfo
   });
@@ -116,6 +119,7 @@ function testApp(options: {
     deleteSchedule,
     startScheduleExecution,
     cancelActiveScheduleRun,
+    cancelActiveScheduleRunsForSchedule,
     logInfo,
     destructiveRateLimitCalls: () => destructiveRateLimitCalls
   };
@@ -175,6 +179,28 @@ describe("schedule routes", () => {
     expect(response.json()).toEqual({ ok: true });
     expect(harness.permissions).toEqual(["schedules.manage"]);
     expect(harness.deleteSchedule).toHaveBeenCalledWith(serverId, scheduleId, expect.any(String));
+    expect(harness.cancelActiveScheduleRunsForSchedule).toHaveBeenCalledWith(serverId, scheduleId);
+  });
+
+  // Deleting the row takes away the active run's only cancel control, so the run has to be stopped
+  // with it. A run already past its point of no return blocks the delete instead of being stranded.
+  it("cancels the active runs of a schedule before deleting it", async () => {
+    const harness = testApp();
+
+    await harness.app.inject({ method: "DELETE", url: `/api/servers/${serverId}/schedules/${scheduleId}` });
+
+    expect(harness.cancelActiveScheduleRunsForSchedule.mock.invocationCallOrder[0])
+      .toBeLessThan(harness.deleteSchedule.mock.invocationCallOrder[0]);
+  });
+
+  it("refuses to delete a schedule whose Restart step has already started", async () => {
+    const harness = testApp({ cancelRunsForScheduleResult: false });
+
+    const response = await harness.app.inject({ method: "DELETE", url: `/api/servers/${serverId}/schedules/${scheduleId}` });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe("SCHEDULE_RUN_NOT_CANCELLABLE");
+    expect(harness.deleteSchedule).not.toHaveBeenCalled();
   });
 
   it("starts an injected tracked execution and returns 202", async () => {

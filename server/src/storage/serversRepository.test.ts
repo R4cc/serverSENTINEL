@@ -221,13 +221,20 @@ describe("ServersRepository", () => {
     });
   });
 
-  it("enforces per-node port uniqueness transactionally", async () => {
+  it("stores duplicate managed ports for a quarantined imported server", async () => {
     const { servers } = await createRepositories();
     const first = managedServer();
     servers.create(first);
 
-    expect(() => servers.create(managedServer("second-id"))).toThrow(/UNIQUE constraint failed/);
-    expect(servers.list()).toEqual([first]);
+    const imported = { ...managedServer("second-id"), portConflictUnresolved: true };
+    expect(() => servers.create(imported)).not.toThrow();
+    expect(servers.list()).toHaveLength(2);
+    expect(servers.list().find((server) => server.id === first.id)).toEqual(first);
+    expect(servers.list().find((server) => server.id === imported.id)).toMatchObject({
+      id: imported.id,
+      managedPorts: imported.managedPorts,
+      portConflictUnresolved: true
+    });
   });
 
   it("records schedule runs without overwriting a concurrent schedule edit", async () => {

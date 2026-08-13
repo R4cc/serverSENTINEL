@@ -11,6 +11,14 @@ export function scheduleValidationMessage(patch: SchedulePatch) {
   return commands.length ? validateCommandList(commands) ?? "" : "";
 }
 
+/**
+ * Whether starting this schedule by hand disconnects everyone. Running a schedule on demand is the
+ * real thing rather than a rehearsal, so the restart step is the one that has to be confirmed first.
+ */
+export function scheduleRestartsServer(schedule: Pick<ScheduledExecution, "steps">) {
+  return schedule.steps.some((step) => step.type === "action");
+}
+
 export function scheduleUpdateLabel(patch: Partial<ScheduledExecution>) {
   if (patch.enabled !== undefined && Object.keys(patch).length === 1) {
     return patch.enabled ? "Schedule enabled" : "Schedule disabled";

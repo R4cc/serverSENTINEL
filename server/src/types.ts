@@ -33,6 +33,8 @@ export type {
   RolePreset,
   RuntimeVersion,
   SafeBatchUpdateResult,
+  ServerRuntimeIssue,
+  ScheduleProcedure,
   ScheduleStep,
   ScheduledActiveRun,
   ScheduledExecution,
@@ -151,6 +153,8 @@ export type ManagedServer = ManagedServerCore & {
   serverDir: string;
   dockerMountSource?: string;
   dockerWorkingDir?: string;
+  /** Import quarantine marker; current conflicts are resolved dynamically from the node inventory. */
+  portConflictUnresolved?: boolean;
 };
 
 export type DockerState = "running" | "exited" | "created" | "paused" | "restarting" | "removing" | "dead" | "unknown";

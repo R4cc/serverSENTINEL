@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 20;
+export const currentSchemaVersion = 21;
 export const currentSchemaName = "current-schema-baseline";
 
 const applicationTableNames = [
@@ -30,7 +30,7 @@ const applicationTableNames = [
 ] as const;
 
 const currentNodeColumns = ["id", "name", "type", "status", "is_internal", "created_at", "updated_at", "last_seen_at", "connected_at", "agent_version", "protocol_version", "capabilities_json", "docker_status", "data_path_status", "total_memory", "secret_hash", "join_token_hash", "join_token_expires_at", "build_id"];
-const currentServerColumns = ["id", "node_id", "display_name", "server_dir", "storage_name", "runtime_profile_json", "docker_container", "docker_image", "docker_mount_source", "docker_working_dir", "docker_ports", "java_args", "start_on_node_start", "created_at", "updated_at", "restart_required_since", "restart_required_changes_json", "restart_required_mod_baseline_json", "runtime_intent", "restart_phase", "crash_attempts_json", "crash_next_retry_at", "crash_loop_since", "crash_stable_since"];
+const currentServerColumns = ["id", "node_id", "display_name", "server_dir", "storage_name", "runtime_profile_json", "docker_container", "docker_image", "docker_mount_source", "docker_working_dir", "docker_ports", "java_args", "start_on_node_start", "created_at", "updated_at", "restart_required_since", "restart_required_changes_json", "restart_required_mod_baseline_json", "runtime_intent", "restart_phase", "crash_attempts_json", "crash_next_retry_at", "crash_loop_since", "crash_stable_since", "port_conflict_unresolved"];
 const currentScheduleColumns = ["server_id", "id", "name", "cron", "steps_json", "only_when_no_players", "enabled", "created_at", "updated_at", "last_run_at", "last_status", "last_message"];
 const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   storage_metadata: ["key", "value"],
@@ -139,7 +139,8 @@ function createCurrentSchema(database: Database.Database) {
       crash_attempts_json TEXT NOT NULL DEFAULT '[]',
       crash_next_retry_at TEXT,
       crash_loop_since TEXT,
-      crash_stable_since TEXT
+      crash_stable_since TEXT,
+      port_conflict_unresolved INTEGER NOT NULL DEFAULT 0 CHECK (port_conflict_unresolved IN (0, 1))
     );
     CREATE INDEX servers_node_id_idx ON servers(node_id);
 
@@ -155,8 +156,7 @@ function createCurrentSchema(database: Database.Database) {
       required INTEGER NOT NULL,
       removable INTEGER NOT NULL,
       advanced INTEGER NOT NULL,
-      PRIMARY KEY (server_id, id),
-      UNIQUE (node_id, external_port, protocol)
+      PRIMARY KEY (server_id, id)
     );
     CREATE INDEX managed_ports_server_id_idx ON managed_ports(server_id);
 
@@ -317,6 +317,38 @@ function recordCurrentSchema(database: Database.Database) {
     .run(currentSchemaVersion, currentSchemaName, new Date().toISOString());
 }
 
+function migrateSchema20(database: Database.Database) {
+  database.transaction(() => {
+    database.exec(`
+      ALTER TABLE servers ADD COLUMN port_conflict_unresolved INTEGER NOT NULL DEFAULT 0
+        CHECK (port_conflict_unresolved IN (0, 1));
+
+      CREATE TABLE managed_ports_next (
+        server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE RESTRICT,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        protocol TEXT NOT NULL,
+        internal_port INTEGER NOT NULL,
+        external_port INTEGER NOT NULL,
+        required INTEGER NOT NULL,
+        removable INTEGER NOT NULL,
+        advanced INTEGER NOT NULL,
+        PRIMARY KEY (server_id, id)
+      );
+      INSERT INTO managed_ports_next
+        SELECT server_id, node_id, id, name, type, protocol, internal_port, external_port,
+          required, removable, advanced
+        FROM managed_ports;
+      DROP TABLE managed_ports;
+      ALTER TABLE managed_ports_next RENAME TO managed_ports;
+      CREATE INDEX managed_ports_server_id_idx ON managed_ports(server_id);
+    `);
+    recordCurrentSchema(database);
+  }).immediate();
+}
+
 function initializeSchema(database: Database.Database) {
   if (!tableExists(database, "schema_migrations")) {
     if (applicationTables(database).length !== 0) {
@@ -342,6 +374,12 @@ function initializeSchema(database: Database.Database) {
 
   const history = migrationHistory(database);
   if (isCurrentSchema(history)) {
+    assertCurrentSchemaLayout(database);
+    return;
+  }
+
+  if (history.length === 1 && history[0].version === 20 && history[0].name === currentSchemaName) {
+    migrateSchema20(database);
     assertCurrentSchemaLayout(database);
     return;
   }

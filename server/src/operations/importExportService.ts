@@ -383,7 +383,11 @@ export async function sweepAbandonedImports(now = Date.now(), maxAgeMs = config.
   }
   let removed = 0;
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.startsWith("import-") || !entry.name.endsWith(".zip")) continue;
+    if (
+      !entry.isFile()
+      || !entry.name.startsWith("import-")
+      || (!entry.name.endsWith(".zip") && !entry.name.endsWith(".upload"))
+    ) continue;
     const path = resolve(config.importsDir, entry.name);
     try {
       const info = await stat(path);

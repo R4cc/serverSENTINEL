@@ -234,7 +234,12 @@
   justify-content: space-between;
   gap: 9px;
   padding: var(--space-3) var(--space-4);
+  border-radius: calc(var(--radius-md) - 1px);
   color: var(--text);
+}
+
+.propertiesDisclosure.advancedResourceDisclosure[open] > summary {
+  border-radius: calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;
 }
 
 .propertiesDisclosure.advancedResourceDisclosure summary::after {
@@ -316,27 +321,47 @@
   stroke-linejoin: round;
 }
 
-.propertiesToolbar {
-  min-height: 57px;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-row);
+.propertiesSaveDock {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: min(520px, calc(100vw - 2 * var(--space-5)));
+  padding: var(--space-3);
+  border: 1px solid var(--border-row);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--shadow-elevated);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+  animation: propertiesSaveDockIn var(--motion-duration-base) var(--motion-ease-spring) both;
 }
 
-.propertiesToolbarCopy {
+.propertiesSaveDockCopy {
   display: grid;
-  gap: var(--space-1);
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
 }
 
-.propertiesToolbarCopy strong {
+.propertiesSaveDockCopy strong {
   color: var(--text);
-  font-size: var(--type-row-title-size);
+  font-size: var(--type-helper-size);
   font-weight: var(--weight-strong);
 }
 
-.propertiesToolbarCopy span {
+.propertiesSaveDockCopy span {
   color: var(--text-muted);
-  font-size: var(--type-helper-size);
-  line-height: 1.4;
+  font-size: var(--type-meta-size);
+  line-height: 1.35;
+}
+
+@keyframes propertiesSaveDockIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .propertiesActionButtons {
@@ -495,20 +520,6 @@
     padding: 0 var(--space-3) var(--space-3);
   }
 
-  .propertiesToolbar {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-
-  .propertiesActionButtons {
-    width: 100%;
-  }
-
-  .propertiesActionButtons .uiButton {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-
   /* Stacked side cards read as one column, so their single action fills the
      card the way the danger panel's already does. */
   .exportPanelActions .uiButton,
@@ -528,11 +539,22 @@
 }
 
 @media (max-width: 520px) {
-  .propertiesToolbarCopy span {
-    display: none;
+  .propertiesSaveDock {
+    right: var(--space-3);
+    bottom: var(--space-3);
+    left: var(--space-3);
+    width: auto;
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
   .propertiesActionButtons {
-    flex-direction: column-reverse;
+    width: 100%;
+  }
+
+  .propertiesActionButtons .uiButton {
+    flex: 1 1 0;
+    min-width: 0;
   }
 }

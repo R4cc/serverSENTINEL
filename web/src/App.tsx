@@ -47,6 +47,7 @@ import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
+import { useNodeUpdateVisitNotification } from "./features/nodes/useNodeUpdateVisitNotification";
 import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
 import { uiCacheLocalBlockedReason, useUiCacheClear } from "./features/settings/useUiCacheClear";
@@ -404,8 +405,11 @@ export default function App() {
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
   const lifecycleTransitionRunning = activeStatus?.lifecycle.state === "stopping" || activeStatus?.lifecycle.state === "starting";
   const dockerOperationalLock = authOperationalLock || activeNodeRuntimeBlocked || nodeOfflineDetected || lifecycleTransitionRunning || (activeServerUsesInternalNode && !effectiveAppState.dockerSocketMounted);
-  const serverCommandTone = runtimeTone(activeStatus, activeServerDockerSocketMounted);
-  const lastKnownRuntimeLabel = serverCommandTone === "running"
+  const activeRuntimeIssue = activeServer?.runtimeIssues?.[0];
+  const serverCommandTone = activeRuntimeIssue ? "warning" : runtimeTone(activeStatus, activeServerDockerSocketMounted);
+  const lastKnownRuntimeLabel = activeRuntimeIssue
+    ? "Needs attention"
+    : serverCommandTone === "running"
     ? "Running"
     : serverCommandTone === "starting"
       ? "Starting"
@@ -422,7 +426,8 @@ export default function App() {
     consoleConnectionState,
     consoleError,
     consoleLoading,
-    activeStatus
+    activeStatus,
+    runtimeIssue: activeRuntimeIssue
   });
   const { runtimeControlsDisabledReason, serverRequiresStoppedForMutableConfig } = resolveRuntimeGuards({
     authOperationalLock,
@@ -438,7 +443,8 @@ export default function App() {
     activeStatus,
     runtimeAction,
     exportMutationLocked,
-    exportMutationBlockedReason
+    exportMutationBlockedReason,
+    runtimeIssue: activeRuntimeIssue
   });
   const serverCreationBlocked = authOperationalLock || usableContextNodes.length === 0;
 
@@ -506,6 +512,12 @@ export default function App() {
     notify,
     requestConfirmation,
     refreshApp
+  });
+  useNodeUpdateVisitNotification({
+    ready: applicationReady && (demoMode || Boolean(authSession?.authenticated)),
+    nodes: contextNodes,
+    panelVersion,
+    panelBuildId
   });
   const exportServer = effectiveAppState.servers.find((server) => server.id === exportWorkspace.exportServerId);
   const {
@@ -1790,12 +1802,12 @@ export default function App() {
 
   async function updateServer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isProvisioning || serverSettingsSaving || !canEditServerSettings) return;
-    if (!activeServer) return;
+    if (isProvisioning || serverSettingsSaving || !canEditServerSettings) return false;
+    if (!activeServer) return false;
     if (serverRequiresStoppedForMutableConfig) {
       setNotice(stoppedServerMutationMessage);
       notify("warning", stoppedServerMutationMessage);
-      return;
+      return false;
     }
     setNotice("");
     const formElement = event.currentTarget;
@@ -1805,11 +1817,11 @@ export default function App() {
       setNotice(message);
       notify("error", message);
     })) {
-      return;
+      return false;
     }
     if (activeServerIsDemo) {
       notify("success", `Updated ${String(form.get("displayName") || activeServer.displayName)} in demo mode`);
-      return;
+      return true;
     }
     setServerSettingsSaving(true);
     const editRuntimeType = form.get("runtimeType") === "paper" ? "paper" : "fabric";
@@ -1837,9 +1849,11 @@ export default function App() {
       notify("success", `Updated ${server.displayName}`);
       await refreshApp();
       await refreshStatus(server.id);
+      return true;
     } catch (error) {
       setNotice((error as Error).message);
       notify("error", (error as Error).message);
+      return false;
     } finally {
       setServerSettingsSaving(false);
     }
@@ -2305,8 +2319,10 @@ export default function App() {
               controlAvailableFallback={activeServerDockerSocketMounted && activeServer.hasDockerContainer}
               controlsDisabled={isProvisioning || !canBasic || dockerOperationalLock || exportMutationLocked}
               controlsDisabledReason={runtimeControlsDisabledReason}
+              startupDisabledReason={activeRuntimeIssue ? runtimeControlsDisabledReason : undefined}
               onRuntimeAction={runContainerAction}
               onRetryConnection={() => { void retryActiveConnection(); }}
+              onResolveRuntimeIssue={() => setActivePage("properties")}
               refreshDisabled={isProvisioning}
               refreshDisabledReason={provisioningNavigationReason}
             />
@@ -2416,6 +2432,7 @@ export default function App() {
                   formatDate={formatDisplayDate}
                   relativeTimestamps={relativeTimestamps}
                   scheduleTimeZone={panelTimeZone}
+                  displayTimeZone={displayTimeZone}
                   navigationTarget={scheduleNavigationTarget}
                   onNavigationTargetHandled={() => setScheduleNavigationTarget(null)}
                   onCreate={schedulesWorkspace.actions.create}
@@ -2440,6 +2457,7 @@ export default function App() {
                     onSubmit={updateServer}
                     disabled={serverSettingsLocked || serverSettingsSaving}
                     disabledReason={serverSettingsLockedReason}
+                    saving={serverSettingsSaving}
                     exportPanel={canExportServers ? (
                       <ExportServerPanel
                         server={activeServer}

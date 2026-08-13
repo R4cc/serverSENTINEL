@@ -2,9 +2,10 @@ import { findServerNode, localNodeId, readNodes } from "../nodes/nodeService.js"
 import { publicSchedule } from "./store.js";
 import { resolveServerVersions, versionResolution } from "./versions.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { unresolvedServerPortIssues } from "./ports.js";
 import type { ManagedNode, ManagedServer, PublicServer } from "../types.js";
 
-export async function publicServer(server: ManagedServer, nodes?: ManagedNode[]): Promise<PublicServer> {
+export async function publicServer(server: ManagedServer, nodes?: ManagedNode[], servers: ManagedServer[] = [server]): Promise<PublicServer> {
   const availableNodes = nodes ?? await readNodes();
   const node = findServerNode(server, availableNodes);
   const target = runtimeTarget(server);
@@ -32,7 +33,8 @@ export async function publicServer(server: ManagedServer, nodes?: ManagedNode[])
     resolvedVersions: server.nodeId === localNodeId ? await resolveServerVersions(server) : {
       minecraftVersion: versionResolution(target.minecraftVersion, target.minecraftVersion ? "profile" : "unknown", resolvedAt),
       runtimeVersion: versionResolution(target.runtimeVersion, target.runtimeVersion ? "profile" : "unknown", resolvedAt)
-    }
+    },
+    runtimeIssues: unresolvedServerPortIssues(server, servers)
   };
 }
 

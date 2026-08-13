@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportRequestPayload, exportStatePollInterval, sameServerExportState, type ServerExportState } from "./useExportWorkspace";
+import { exportRequestPayload, exportStatePollInterval, sameServerExportState, smallerImportUploadChunk, type ServerExportState } from "./useExportWorkspace";
 
 const state = (status?: NonNullable<ServerExportState["latest"]>["status"]): ServerExportState => ({
   latest: status ? {
@@ -63,5 +63,13 @@ describe("export request payload", () => {
 
   it("omits the token when no completed estimate is available", () => {
     expect(exportRequestPayload("server-1", ["world"], "lockfile")).not.toHaveProperty("inventoryId");
+  });
+});
+
+describe("import upload chunk fallback", () => {
+  it("halves a rejected chunk until the proxy-safe floor", () => {
+    expect(smallerImportUploadChunk(16 * 1024 * 1024)).toBe(8 * 1024 * 1024);
+    expect(smallerImportUploadChunk(512 * 1024)).toBe(256 * 1024);
+    expect(smallerImportUploadChunk(256 * 1024)).toBeUndefined();
   });
 });

@@ -22,6 +22,7 @@ type ServerRow = {
   crash_next_retry_at: string | null;
   crash_loop_since: string | null;
   crash_stable_since: string | null;
+  port_conflict_unresolved: number;
   restart_required_since: string | null;
   restart_required_changes_json: string | null;
   restart_required_mod_baseline_json: string | null;
@@ -200,6 +201,7 @@ export class ServersRepository {
       crashNextRetryAt: row.crash_next_retry_at ?? undefined,
       crashLoopSince: row.crash_loop_since ?? undefined,
       crashStableSince: row.crash_stable_since ?? undefined,
+      ...(row.port_conflict_unresolved === 1 ? { portConflictUnresolved: true } : {}),
       restartRequiredSince: row.restart_required_since ?? undefined,
       restartRequiredChanges: row.restart_required_changes_json ? JSON.parse(row.restart_required_changes_json) as RestartRequiredChange[] : undefined,
       restartRequiredModBaseline: row.restart_required_mod_baseline_json ? JSON.parse(row.restart_required_mod_baseline_json) as RestartRequiredModSnapshot[] : undefined,
@@ -296,6 +298,14 @@ export class ServersRepository {
     `).run(now, nodeId).changes;
   }
 
+
+  clearPortConflictUnresolved(serverId: string, now = new Date().toISOString()) {
+    return this.storage.connection.prepare(`
+      UPDATE servers SET port_conflict_unresolved = 0, updated_at = ?
+      WHERE id = ? AND port_conflict_unresolved = 1
+    `).run(now, serverId).changes > 0;
+  }
+
   setRuntimeLifecycle(serverId: string, lifecycle: Pick<ManagedServer, "runtimeIntent" | "restartPhase" | "crashAttemptTimestamps" | "crashNextRetryAt" | "crashLoopSince" | "crashStableSince">, now = new Date().toISOString()) {
     const intent = lifecycle.runtimeIntent ?? "stopped";
     return this.storage.connection.prepare(`
@@ -386,8 +396,8 @@ export class ServersRepository {
         docker_container, docker_image, docker_mount_source, docker_working_dir,
         docker_ports, java_args, start_on_node_start, runtime_intent, restart_phase, crash_attempts_json,
         crash_next_retry_at, crash_loop_since, crash_stable_since, restart_required_since, restart_required_changes_json,
-        restart_required_mod_baseline_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        restart_required_mod_baseline_json, port_conflict_unresolved, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         node_id=excluded.node_id, display_name=excluded.display_name,
         server_dir=excluded.server_dir, storage_name=excluded.storage_name,
@@ -405,6 +415,7 @@ export class ServersRepository {
         restart_required_since=CASE WHEN ? THEN servers.restart_required_since ELSE excluded.restart_required_since END,
         restart_required_changes_json=CASE WHEN ? THEN servers.restart_required_changes_json ELSE excluded.restart_required_changes_json END,
         restart_required_mod_baseline_json=CASE WHEN ? THEN servers.restart_required_mod_baseline_json ELSE excluded.restart_required_mod_baseline_json END,
+        port_conflict_unresolved=excluded.port_conflict_unresolved,
         created_at=excluded.created_at, updated_at=excluded.updated_at
     `);
     const preserve = preserveRuntimeState ? 1 : 0;
@@ -419,6 +430,7 @@ export class ServersRepository {
       server.restartRequiredSince ?? null,
       server.restartRequiredChanges ? JSON.stringify(server.restartRequiredChanges) : null,
       server.restartRequiredModBaseline ? JSON.stringify(server.restartRequiredModBaseline) : null,
+      server.portConflictUnresolved ? 1 : 0,
       server.createdAt, server.updatedAt,
       preserve, preserve, preserve,
       preserve, preserve, preserve,

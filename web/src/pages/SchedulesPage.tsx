@@ -6,6 +6,13 @@ import {
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
+import {
+  cronFromSchedulePlan,
+  schedulePlanFromCron,
+  type CronSchedulePlan,
+  type CronScheduleMode,
+  type ScheduleProcedure
+} from '@serversentinel/contracts';
 import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from '../types';
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
@@ -15,25 +22,88 @@ import { DialogSurface } from '../components/DialogSurface';
 import { ActionMenu } from '../components/ActionMenu';
 import { clientId } from '../utils/files';
 import { validateCommandList, validateCronExpression } from '../utils/validation';
-import { scheduleDelayParts, scheduleDelayToSeconds } from '../features/schedules/scheduleDelays';
+import { formatScheduleOffset, scheduleDelayParts, scheduleDelayToSeconds, scheduleOffsetBadge, scheduleStepOffsets } from '../features/schedules/scheduleDelays';
 import { describeCronExpression } from '../features/schedules/cronDescription';
+import { buildCronPreview } from '../features/schedules/cronPreview';
+import { scheduleTemplateById, scheduleTemplates } from '../features/schedules/scheduleTemplates';
+import { scheduleHealth } from '../features/schedules/scheduleHealth';
 
+/**
+ * Duplicate carries a source schedule the way edit does, but creates the way create does: the copy
+ * exists only once the editor is submitted, so its name and anything else can be changed first.
+ */
 type ScheduleFormMode =
   | { type: "create" }
-  | { type: "edit"; schedule: ScheduledExecution };
+  | { type: "edit"; schedule: ScheduledExecution }
+  | { type: "duplicate"; schedule: ScheduledExecution };
 
 type SchedulePatch = Pick<ScheduledExecution, "name" | "cron" | "steps" | "onlyWhenNoPlayers" | "waitForPlayersToLeave" | "enabled">;
 type StepDraft = {
   id: string;
   type: "command" | "action";
   command: string;
-  procedure: "restart";
+  procedure: ScheduleProcedure;
   delayValue: number;
   delayUnit: "seconds" | "minutes" | "hours";
 };
 type ScheduledRunPanelItem =
   | (ScheduledActiveRun & { kind: "active"; sortAt: string })
   | (ScheduledRun & { kind: "completed"; sortAt: string });
+
+const defaultDailyCron = "0 4 * * *";
+
+const scheduleProcedureOptions: { value: ScheduleProcedure; label: string }[] = [
+  { value: "restart", label: "Restart" },
+  { value: "stop", label: "Stop" },
+  { value: "start", label: "Start" }
+];
+
+/** Older runs were recorded before the procedure was stored, and all of those were restarts. */
+function scheduleProcedureName(procedure: ScheduleProcedure | undefined) {
+  return scheduleProcedureOptions.find((option) => option.value === (procedure ?? "restart"))?.label ?? "Restart";
+}
+
+const scheduleProcedureDescription: Record<ScheduleProcedure, string> = {
+  restart: "Gracefully restarts the Minecraft server.",
+  stop: "Gracefully stops the Minecraft server, leaving it stopped.",
+  start: "Starts the Minecraft server. This is the one action that runs against a stopped server."
+};
+
+const weekdayChoices = [
+  { value: 1, short: "Mon", label: "Monday" },
+  { value: 2, short: "Tue", label: "Tuesday" },
+  { value: 3, short: "Wed", label: "Wednesday" },
+  { value: 4, short: "Thu", label: "Thursday" },
+  { value: 5, short: "Fri", label: "Friday" },
+  { value: 6, short: "Sat", label: "Saturday" },
+  { value: 0, short: "Sun", label: "Sunday" }
+];
+
+function clampInterval(value: number, mode: "minutes" | "hours") {
+  const max = mode === "minutes" ? 59 : 23;
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(max, Math.max(1, Math.trunc(value)));
+}
+
+function padClock(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+/**
+ * Carries the time of day across a mode change wherever the new shape has somewhere to put it, so
+ * switching between Every day and On chosen weekdays does not silently reset a time already chosen.
+ */
+export function defaultSchedulePlan(mode: CronScheduleMode, current: CronSchedulePlan): CronSchedulePlan {
+  const hour = current.mode === "daily" || current.mode === "weekly" ? current.hour : 4;
+  const minute = current.mode === "daily" || current.mode === "weekly" ? current.minute : 0;
+  if (mode === "minutes") return { mode, every: current.mode === "hours" ? 1 : 15 };
+  if (mode === "hours") return { mode, every: current.mode === "minutes" ? 1 : 6 };
+  if (mode === "daily") return { mode, hour, minute };
+  if (mode === "weekly") {
+    return { mode, hour, minute, weekdays: current.mode === "weekly" && current.weekdays.length ? current.weekdays : [1, 2, 3, 4, 5] };
+  }
+  return { mode: "advanced", cron: cronFromSchedulePlan(current) };
+}
 
 function emptyStepDraft(): StepDraft {
   return { id: clientId(), type: "command", command: "", procedure: "restart", delayValue: 0, delayUnit: "seconds" };
@@ -45,33 +115,71 @@ function stepDraftFromStep(step: ScheduleStep): StepDraft {
     id: clientId(),
     type: step.type,
     command: step.type === "command" ? step.command : "",
-    procedure: "restart",
+    procedure: step.type === "action" ? step.procedure : "restart",
     delayValue: delay.value,
     delayUnit: delay.unit
   };
 }
 
-export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: ScheduledExecution }) {
+export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Pick<ScheduledExecution, "onlyWhenNoPlayers" | "waitForPlayersToLeave"> }) {
   return (
     <div className="schedulePlayerPolicy" role="radiogroup" aria-labelledby="schedule-player-policy-label">
       <strong id="schedule-player-policy-label">Players online at start</strong>
       <div className="schedulePlayerPolicyChoices">
         <label className="scheduleOptionToggle">
           <input name="playerOnlinePolicy" value="run" type="radio" defaultChecked={!schedule?.onlyWhenNoPlayers} />
-          <span className="scheduleOptionCopy"><strong>Run anyway</strong><small>Start on time, even while players are connected.</small></span>
+          <span className="scheduleOptionCopy"><strong>Run anyway</strong></span>
         </label>
         <label className="scheduleOptionToggle">
           <input name="playerOnlinePolicy" value="skip" type="radio" defaultChecked={Boolean(schedule?.onlyWhenNoPlayers && !schedule.waitForPlayersToLeave)} />
-          <span className="scheduleOptionCopy"><strong>Skip this run</strong><small>Skip this occurrence and try again at the next scheduled time.</small></span>
+          <span className="scheduleOptionCopy"><strong>Skip this run</strong></span>
         </label>
         <label className="scheduleOptionToggle">
           <input name="playerOnlinePolicy" value="wait" type="radio" defaultChecked={schedule?.waitForPlayersToLeave ?? false} />
-          <span className="scheduleOptionCopy"><strong>Wait until empty</strong><small>Keep one cancellable run waiting, then start once everyone leaves.</small></span>
+          <span className="scheduleOptionCopy"><strong>Wait until empty</strong></span>
         </label>
       </div>
-      <small className="schedulePlayerPolicyNote">Waiting has no timeout. Later matches are ignored so runs never stack up; cancel the active run at any time.</small>
+      <small className="schedulePlayerPolicyNote">Wait until empty creates one cancellable run with no timeout; later matches do not stack.</small>
     </div>
   );
+}
+
+/**
+ * A schedule may hold one Restart, and it has to be last. Both rules were enforced only when the
+ * form was submitted, so the Type control happily offered Action on step 1 of 3 and then rejected
+ * the save. Reporting the state per step lets the control say so while the schedule is built.
+ */
+export function scheduleStepTypeAvailability(steps: readonly { id: string; type: StepDraft["type"] }[], stepId: string) {
+  const actionIndex = steps.findIndex((step) => step.type === "action");
+  const index = steps.findIndex((step) => step.id === stepId);
+  const isAction = actionIndex === index && actionIndex >= 0;
+  const isLast = index === steps.length - 1;
+  return {
+    // Only the final step may become a lifecycle action, and only when no other step already is one.
+    canBecomeRestart: isAction || (isLast && actionIndex < 0),
+    reason: isAction || isLast ? "" : "A lifecycle action has to be the last step."
+  };
+}
+
+/**
+ * Restart must stay last, so a move that would put another step after it is refused rather than
+ * silently reordered into a schedule the server will reject.
+ */
+export function scheduleStepMoveBlocked(steps: readonly { type: StepDraft["type"] }[], from: number, to: number) {
+  const restartIndex = steps.findIndex((step) => step.type === "action");
+  if (restartIndex < 0) return false;
+  if (from === restartIndex) return to !== steps.length - 1;
+  return to >= restartIndex;
+}
+
+/**
+ * Adds a step without stranding the lifecycle action. Appending after one left the schedule invalid
+ * in a way nothing showed until it was saved, and a step added to a schedule that ends in Restart is
+ * meant to happen before the restart, not after it.
+ */
+export function appendScheduleStep<T extends { type: StepDraft["type"] }>(steps: readonly T[], added: T): T[] {
+  const last = steps.at(-1);
+  return last?.type === "action" ? [...steps.slice(0, -1), added, last] : [...steps, added];
 }
 
 export function reorderScheduleSteps<T extends { id: string }>(steps: readonly T[], movedId: string, targetId: string): T[] {
@@ -98,6 +206,7 @@ export function SchedulePage({
   formatDate,
   relativeTimestamps = true,
   scheduleTimeZone,
+  displayTimeZone = "",
   navigationTarget,
   onNavigationTargetHandled
 }: {
@@ -105,6 +214,7 @@ export function SchedulePage({
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
   scheduleTimeZone: string;
+  displayTimeZone?: string;
   navigationTarget?: ScheduleNavigationTarget | null;
   onNavigationTargetHandled?: () => void;
   onCreate: (patch: SchedulePatch) => boolean | void | Promise<boolean | void>;
@@ -121,9 +231,16 @@ export function SchedulePage({
   const [stepDrafts, setStepDrafts] = useState<StepDraft[]>(() => [emptyStepDraft()]);
   const [formError, setFormError] = useState("");
   const [cronValue, setCronValue] = useState("");
+  const [cronMode, setCronMode] = useState<CronScheduleMode>("daily");
+  const [nameValue, setNameValue] = useState("");
+  // Applying a template has to move the player policy too, and those radios are uncontrolled; this
+  // seeds them and remounts the group so the choice a template makes is the one shown.
+  const [policySeed, setPolicySeed] = useState<Pick<ScheduledExecution, "onlyWhenNoPlayers" | "waitForPlayersToLeave"> | null>(null);
+  const [appliedTemplateId, setAppliedTemplateId] = useState("");
   const [draggingStepId, setDraggingStepId] = useState<string | null>(null);
   const [stepReorderMessage, setStepReorderMessage] = useState("");
   const [selectedRun, setSelectedRun] = useState<ScheduledRun | null>(null);
+  const [historySchedule, setHistorySchedule] = useState<ScheduledExecution | null>(null);
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [relativeNow, setRelativeNow] = useState(() => Date.now());
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
@@ -144,6 +261,10 @@ export function SchedulePage({
       setStepDrafts([emptyStepDraft()]);
       setFormError("");
       setCronValue("");
+      setCronMode("daily");
+      setNameValue("");
+      setPolicySeed(null);
+      setAppliedTemplateId("");
       setDraggingStepId(null);
       setStepReorderMessage("");
       draggingStepIdRef.current = null;
@@ -151,10 +272,17 @@ export function SchedulePage({
       stopStepAutoScroll();
       return;
     }
-    const steps = formMode.type === "edit" ? formMode.schedule.steps : [];
+    const steps = formMode.type === "create" ? [] : formMode.schedule.steps;
     setStepDrafts(steps.length ? steps.map(stepDraftFromStep) : [emptyStepDraft()]);
     setFormError("");
-    setCronValue(formMode.type === "edit" ? formMode.schedule.cron : "");
+    // A new schedule opens on the shape most of them have; an existing one opens on whichever shape
+    // its expression already is, so editing starts from what the author wrote rather than raw cron.
+    const initialCron = formMode.type === "create" ? defaultDailyCron : formMode.schedule.cron;
+    setCronValue(initialCron);
+    setCronMode(schedulePlanFromCron(initialCron).mode);
+    setNameValue(formMode.type === "edit" ? formMode.schedule.name : formMode.type === "duplicate" ? `${formMode.schedule.name} copy` : "");
+    setPolicySeed(null);
+    setAppliedTemplateId("");
     setDraggingStepId(null);
     setStepReorderMessage("");
     draggingStepIdRef.current = null;
@@ -163,8 +291,7 @@ export function SchedulePage({
   }, [formMode]);
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
-  const activeRunCount = runItems.filter((run) => run.kind === "active").length;
-  const recentRunsKey = runItems.map((run) => `${run.kind}:${run.id}:${run.kind === "active" ? run.waitingUntil ?? run.message ?? "" : run.ranAt}`).join("|");
+  const recentRunsKey = scheduleRunFeedKey(runItems);
   const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
     {
       id: "name",
@@ -204,15 +331,20 @@ export function SchedulePage({
   });
   const scheduleRows = scheduleTable.getRowModel().rows;
 
+  // Keyed on the run contents alone. The page refetches app state every 15 seconds, so depending on
+  // the `schedules` array identity scrolled the feed back to the top on every poll, whether or not
+  // a run had changed, and pulled whatever the reader was looking at out from under them.
   useEffect(() => {
     runsFeedRef.current?.scrollTo({ top: 0 });
-  }, [schedules, recentRunsKey]);
+  }, [recentRunsKey]);
 
+  // Checked against every retained run rather than the eight the feed shows, because the history
+  // dialog can open a run far older than the feed reaches and this would close it again at once.
   useEffect(() => {
-    if (selectedRun && !runItems.some((run) => run.kind === "completed" && run.id === selectedRun.id)) {
-      setSelectedRun(null);
+    if (selectedRun && !schedules.some((schedule) => schedule.recentRuns?.some((run) => run.id === selectedRun.id))) {
+      if (!runItems.some((run) => run.kind === "completed" && run.id === selectedRun.id)) setSelectedRun(null);
     }
-  }, [runItems, selectedRun]);
+  }, [runItems, schedules, selectedRun]);
 
   useEffect(() => {
     if (!navigationTarget) return;
@@ -246,10 +378,12 @@ export function SchedulePage({
     const playerOnlinePolicy = String(form.get("playerOnlinePolicy") ?? "run");
     const steps: ScheduleStep[] = stepDrafts.map((draft) => draft.type === "command"
       ? { type: "command", command: draft.command.trim(), delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) }
-      : { type: "action", procedure: "restart", delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) });
+      : { type: "action", procedure: draft.procedure, delaySeconds: scheduleDelayToSeconds(draft.delayValue, draft.delayUnit) });
     return {
       name: String(form.get("name") ?? "").trim(),
-      cron: String(form.get("cron") ?? "").trim(),
+      // Read from state rather than the form: outside Advanced the expression is assembled by the
+      // builder and never exists as a field.
+      cron: cronValue.trim(),
       steps,
       onlyWhenNoPlayers: playerOnlinePolicy !== "run",
       waitForPlayersToLeave: playerOnlinePolicy === "wait",
@@ -265,8 +399,8 @@ export function SchedulePage({
       : validateCronExpression(patch.cron)
         || (!patch.steps.length ? "At least one schedule step is required." : "")
         || (commands.length ? validateCommandList(commands) : "")
-        || (restartIndexes.length > 1 ? "A schedule can contain at most one Restart action." : "")
-        || (restartIndexes.length === 1 && restartIndexes[0] !== patch.steps.length - 1 ? "Restart must be the final schedule step." : "")
+        || (restartIndexes.length > 1 ? "A schedule can contain at most one lifecycle action." : "")
+        || (restartIndexes.length === 1 && restartIndexes[0] !== patch.steps.length - 1 ? "A lifecycle action must be the final schedule step." : "")
         || (patch.steps.some((step) => !Number.isInteger(step.delaySeconds) || step.delaySeconds < 0 || step.delaySeconds > 604_800)
           ? "Step delays must be whole values no longer than 7 days."
           : "");
@@ -282,7 +416,7 @@ export function SchedulePage({
       return;
     }
     setFormError("");
-    if (formMode.type === "create") {
+    if (formMode.type !== "edit") {
       const created = await onCreate(patch);
       if (created !== false) setFormMode(null);
       return;
@@ -292,8 +426,13 @@ export function SchedulePage({
   }
 
   function moveStep(movedId: string, targetId: string) {
+    const movedIndex = stepDrafts.findIndex((step) => step.id === movedId);
     const targetIndex = stepDrafts.findIndex((step) => step.id === targetId);
     if (targetIndex < 0 || movedId === targetId) return;
+    if (scheduleStepMoveBlocked(stepDrafts, movedIndex, targetIndex)) {
+      setStepReorderMessage("Restart has to be the last step, so this move was not made.");
+      return;
+    }
     setStepDrafts((steps) => {
       const reordered = reorderScheduleSteps(steps, movedId, targetId);
       stepDraftsRef.current = reordered;
@@ -302,12 +441,22 @@ export function SchedulePage({
     setStepReorderMessage(`Step moved to position ${targetIndex + 1}.`);
   }
 
+  /** Explicit controls, because a drag handle is unusable on touch and needs a keyboard otherwise. */
+  function nudgeStep(stepId: string, direction: -1 | 1) {
+    const index = stepDrafts.findIndex((step) => step.id === stepId);
+    const target = stepDrafts[index + direction];
+    if (target) moveStep(stepId, target.id);
+  }
+
   function moveDraggedStepAtPoint(clientX: number, clientY: number) {
     const movedId = draggingStepIdRef.current;
     const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-schedule-step-id]");
     const targetId = target?.dataset.scheduleStepId;
     if (!movedId || !targetId || movedId === targetId) return;
     setStepDrafts((steps) => {
+      const movedIndex = steps.findIndex((step) => step.id === movedId);
+      const targetIndex = steps.findIndex((step) => step.id === targetId);
+      if (scheduleStepMoveBlocked(steps, movedIndex, targetIndex)) return steps;
       const reordered = reorderScheduleSteps(steps, movedId, targetId);
       stepDraftsRef.current = reordered;
       return reordered;
@@ -400,11 +549,53 @@ export function SchedulePage({
     moveStep(stepId, stepDrafts[targetIndex].id);
   }
 
-  const modalSchedule = formMode?.type === "edit" ? formMode.schedule : null;
-  const modalTitle = formMode?.type === "edit" ? "Edit schedule" : "Add schedule";
+  const modalSchedule = formMode && formMode.type !== "create" ? formMode.schedule : null;
+  const modalTitle = formMode?.type === "edit" ? "Edit schedule" : formMode?.type === "duplicate" ? "Duplicate schedule" : "Create schedule";
   const modalBusyTitle = saveRunning ? disabledReason || "Schedule save is still running." : "Close schedule editor";
+  // The expression stays the single source of truth: the builder reads the plan back out of it on
+  // every render and writes a new expression on every change, so the two can never disagree and an
+  // expression the builder cannot express survives editing untouched in Advanced.
+  const schedulePlan = useMemo<CronSchedulePlan>(
+    () => cronMode === "advanced" ? { mode: "advanced", cron: cronValue } : schedulePlanFromCron(cronValue),
+    [cronMode, cronValue]
+  );
+
+  const stepOffsets = scheduleStepOffsets(stepDrafts.map((draft) => scheduleDelayToSeconds(draft.delayValue, draft.delayUnit)));
+  const totalStepSeconds = stepOffsets.at(-1) ?? 0;
+  const stepTypeAvailability = stepDrafts.map((draft) => scheduleStepTypeAvailability(stepDrafts, draft.id));
+  // Followed through the polled list rather than held as a snapshot, so a run finishing while the
+  // dialog is open appears in it. Falls back to the captured schedule if it has been deleted.
+  const liveHistorySchedule = historySchedule ? schedules.find((candidate) => candidate.id === historySchedule.id) : undefined;
+
+  function applyScheduleTemplate(templateId: string) {
+    const template = scheduleTemplateById(templateId);
+    if (!template) return;
+    setNameValue(template.name);
+    setCronValue(template.cron);
+    setCronMode(schedulePlanFromCron(template.cron).mode);
+    setStepDrafts(template.steps.map(stepDraftFromStep));
+    setPolicySeed({ onlyWhenNoPlayers: template.onlyWhenNoPlayers, waitForPlayersToLeave: template.waitForPlayersToLeave });
+    setAppliedTemplateId(templateId);
+    setFormError("");
+  }
+
+  function applySchedulePlan(plan: CronSchedulePlan) {
+    setCronValue(cronFromSchedulePlan(plan));
+  }
+
+  function changeScheduleMode(mode: CronScheduleMode) {
+    setCronMode(mode);
+    if (mode === "advanced") return;
+    applySchedulePlan(defaultSchedulePlan(mode, schedulePlan));
+  }
+
   const cronError = cronValue.trim() ? validateCronExpression(cronValue) : null;
   const cronDescription = cronValue.trim() && !cronError ? describeCronExpression(cronValue) : null;
+  // Recomputed on every keystroke rather than memoised: the search stops at the third match, and
+  // the dialog is the only place it runs.
+  const cronPreview = cronDescription
+    ? buildCronPreview(cronValue, scheduleTimeZone, displayTimeZone, (value) => formatDate(value))
+    : null;
 
   return (
     <section className="tabPage schedulePage scheduleWorkspacePage layoutWide">
@@ -434,7 +625,6 @@ export function SchedulePage({
           <PanelHeader
             className="scheduleCardHeader"
             title="Configured schedules"
-            description={`${schedules.length} schedule${schedules.length === 1 ? "" : "s"} for this server.`}
           />
 
           <div className="scheduleTableFrame" role="table" aria-label="Schedules">
@@ -463,6 +653,7 @@ export function SchedulePage({
               {scheduleRows.length ? scheduleRows.map((row) => {
                 const schedule = row.original;
                 const scheduleIsActive = Boolean(schedule.activeRuns?.length);
+                const health = scheduleHealth(schedule);
                 return (
                 <article
                   key={schedule.id}
@@ -478,6 +669,14 @@ export function SchedulePage({
                     <div className="scheduleCellValue scheduleNameValue">
                       <strong title={schedule.name}>{schedule.name}</strong>
                       <small title={scheduleDescription(schedule)}>{scheduleDescription(schedule)}</small>
+                      {/* A schedule that has failed or skipped its way through several occurrences
+                          in a row reads exactly like a working one everywhere else. */}
+                      {health && (
+                        <span className={`scheduleHealthBadge ${health.tone}`} title={health.detail}>
+                          <AppIcon name={health.tone === "failed" ? "x" : "minus"} />
+                          <span>{health.label}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="scheduleCell" data-label="Schedule" role="cell">
@@ -498,16 +697,16 @@ export function SchedulePage({
                             {relativeTimestamps ? lastRunRelativeTime(schedule.lastRunAt, relativeNow) : formatScheduleTime(schedule.lastRunAt, formatDate)}
                           </time>
                           <span
-                            className={`scheduleStatusIcon ${statusTone(schedule.lastStatus) === "success" ? "success" : "failed"}`}
+                            className={`scheduleStatusIcon ${statusTone(schedule.lastStatus)}`}
                             role="img"
                             aria-label={statusLabel(schedule.lastStatus)}
                             title={statusLabel(schedule.lastStatus)}
                           >
-                            <AppIcon name={statusTone(schedule.lastStatus) === "success" ? "check" : "x"} />
+                            <AppIcon name={statusIcon(schedule.lastStatus)} />
                           </span>
                         </div>
                       ) : (
-                        <><span>Never run</span><small>No execution yet</small></>
+                        <span>Never run</span>
                       )}
                     </div>
                   </div>
@@ -522,7 +721,7 @@ export function SchedulePage({
                           {relativeTimestamps ? nextRunRelativeTime(schedule.nextRunAt, relativeNow) : formatScheduleTime(schedule.nextRunAt, formatDate)}
                         </time>
                       ) : (
-                        <><span>{schedule.enabled ? "Not available" : "Disabled"}</span><small>{schedule.enabled ? "Waiting for a valid cron match" : "Enable to resume"}</small></>
+                        <><span>{schedule.enabled ? "Not available" : "Disabled"}</span>{schedule.enabled && <small>Waiting for a valid cron match</small>}</>
                       )}
                     </div>
                   </div>
@@ -549,20 +748,39 @@ export function SchedulePage({
                         disabled={disabled}
                         items={[
                           {
-                            id: "test-now",
-                            label: "Test now",
+                            id: "run-now",
+                            label: "Run now",
                             icon: <AppIcon name="refresh" />,
                             onSelect: () => { void onRunNow(schedule); },
                             disabled: disabled || scheduleIsActive,
                             title: scheduleIsActive
                               ? "This schedule already has an active run. Cancel it or wait for it to finish."
-                              : disabled ? disabledReason || "Schedule testing is unavailable right now." : `Test ${schedule.name} now`
+                              : disabled ? disabledReason || "Schedule runs are unavailable right now." : `Run ${schedule.name} now`
+                          },
+                          {
+                            id: "view-runs",
+                            label: "View runs",
+                            icon: <AppIcon name="hourglass" />,
+                            onSelect: () => setHistorySchedule(schedule),
+                            disabled: !schedule.recentRuns?.length,
+                            title: schedule.recentRuns?.length
+                              ? `View the run history for ${schedule.name}`
+                              : `${schedule.name} has not run yet`
                           },
                           {
                             id: "edit",
                             label: "Edit",
                             icon: <AppIcon name="edit" />,
                             onSelect: () => setFormMode({ type: "edit", schedule }),
+                            disabled
+                          },
+                          {
+                            id: "duplicate",
+                            label: "Duplicate",
+                            icon: <AppIcon name="copy" />,
+                            // Opens a filled editor rather than saving a copy outright, so the name
+                            // and whatever else differs can be changed before it exists.
+                            onSelect: () => setFormMode({ type: "duplicate", schedule }),
                             disabled
                           },
                           {
@@ -589,7 +807,7 @@ export function SchedulePage({
         </section>
 
         <aside className="panel scheduledRunsCard">
-          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" description={activeRunCount ? `${activeRunCount} active execution${activeRunCount === 1 ? "" : "s"} plus recent history.` : "Most recent scheduled executions."} />
+          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" />
           {runItems.length ? (
             <div ref={runsFeedRef} className="scheduledRunsFeed">
               {runItems.map((run) => (
@@ -644,7 +862,7 @@ export function SchedulePage({
       {formMode && (
         <DialogSurface backdrop="scheduleModalBackdrop" dismissible={!saveRunning} className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => setFormMode(null)}>
           <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
-            <div className="userModalHeader">
+            <div className="userModalHeader scheduleModalHeader">
               <h2 id="schedule-modal-title">{modalTitle}</h2>
               <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={() => setFormMode(null)} disabled={saveRunning} aria-label="Close schedule editor" title={modalBusyTitle}>
                 <AppIcon name="x" />
@@ -654,40 +872,158 @@ export function SchedulePage({
               <fieldset disabled={disabled} className="scheduleEditFieldset">
               {formError && <InlineState tone="error" title="Check schedule details" message={formError} />}
 
-              <section className="scheduleEditorSection" aria-labelledby="schedule-details-heading">
+              {/* Only offered for a new schedule, and only as a first draft: a template fills the
+                  fields below and saves nothing, so everything it chose stays visible and editable. */}
+              {formMode.type === "create" && (
+                <section className="scheduleEditorSection scheduleTemplateSection" aria-labelledby="schedule-templates-heading">
+                  <div className="scheduleEditorSectionHeader">
+                    <div><h3 id="schedule-templates-heading">Start from a template</h3></div>
+                  </div>
+                  <div className="scheduleTemplateChoices">
+                    {scheduleTemplates.map((template) => (
+                      <button
+                        type="button"
+                        key={template.id}
+                        className={`scheduleTemplateCard ${appliedTemplateId === template.id ? "applied" : ""}`.trim()}
+                        onClick={() => applyScheduleTemplate(template.id)}
+                        aria-pressed={appliedTemplateId === template.id}
+                      >
+                        <strong>{template.name}</strong>
+                        <small>{template.summary}</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <div className="scheduleEditorLayout">
+              <div className="scheduleEditorMain">
+              <section className="scheduleEditorSection scheduleDetailsSection" aria-labelledby="schedule-details-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-details-heading">Details</h3><p>Name the automation and choose when it runs.</p></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="hourglass" /></span><div><h3 id="schedule-details-heading">Timing</h3></div></div>
                   <span className="scheduleEditorMeta">Timezone: {scheduleTimeZone}</span>
                 </div>
                 <div className="userModalFields scheduleEditFields">
                   <label>
                     Name
-                    <input name="name" defaultValue={modalSchedule?.name ?? ""} placeholder="Nightly maintenance" required maxLength={80} />
+                    <input name="name" value={nameValue} onChange={(event) => setNameValue(event.target.value)} placeholder="Nightly maintenance" required maxLength={80} />
                   </label>
-                  <label className="scheduleCronField">
-                    Cron schedule
-                    <input
-                      name="cron"
-                      value={cronValue}
-                      onChange={(event) => setCronValue(event.target.value)}
-                      placeholder="0 4 * * *"
-                      required
-                      aria-invalid={Boolean(cronError)}
-                      aria-describedby={cronError ? "schedule-cron-error" : "schedule-cron-description"}
-                      title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
-                    />
-                    {/* One feedback line in every state: the format hint holds the slot until
-                        the expression parses, so the field never changes height as it is typed. */}
-                    {cronError
-                      ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
-                      : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
+                  <label className="scheduleRepeatField">
+                    Repeat
+                    <select
+                      value={schedulePlan.mode}
+                      onChange={(event) => changeScheduleMode(event.target.value as CronScheduleMode)}
+                      aria-label="How often this schedule repeats"
+                    >
+                      <option value="minutes">Every few minutes</option>
+                      <option value="hours">Every few hours</option>
+                      <option value="daily">Every day</option>
+                      <option value="weekly">On chosen weekdays</option>
+                      <option value="advanced">Advanced (cron)</option>
+                    </select>
                   </label>
                 </div>
+
+                <div className="scheduleRepeatControls">
+                  {schedulePlan.mode === "minutes" || schedulePlan.mode === "hours" ? (
+                    <label className="scheduleRepeatInterval">
+                      <span>{schedulePlan.mode === "minutes" ? "Minutes between runs" : "Hours between runs"}</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max={schedulePlan.mode === "minutes" ? 59 : 23}
+                        step="1"
+                        value={schedulePlan.every}
+                        onChange={(event) => applySchedulePlan({ ...schedulePlan, every: clampInterval(Number(event.target.value), schedulePlan.mode) })}
+                      />
+                    </label>
+                  ) : null}
+
+                  {schedulePlan.mode === "daily" || schedulePlan.mode === "weekly" ? (
+                    <label className="scheduleRepeatTime">
+                      <span>Time of day</span>
+                      <input
+                        type="time"
+                        value={`${padClock(schedulePlan.hour)}:${padClock(schedulePlan.minute)}`}
+                        onChange={(event) => {
+                          const [hour, minute] = event.target.value.split(":").map(Number);
+                          if (!Number.isInteger(hour) || !Number.isInteger(minute)) return;
+                          applySchedulePlan({ ...schedulePlan, hour, minute });
+                        }}
+                      />
+                    </label>
+                  ) : null}
+
+                  {schedulePlan.mode === "weekly" && (
+                    <fieldset className="scheduleWeekdayPicker">
+                      <legend>Days</legend>
+                      <div className="scheduleWeekdayChoices">
+                        {weekdayChoices.map((choice) => {
+                          const selected = schedulePlan.weekdays.includes(choice.value);
+                          return (
+                            <label key={choice.value} className={`scheduleWeekdayChoice ${selected ? "selected" : ""}`.trim()}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => applySchedulePlan({
+                                  ...schedulePlan,
+                                  weekdays: selected
+                                    ? schedulePlan.weekdays.filter((day) => day !== choice.value)
+                                    : [...schedulePlan.weekdays, choice.value]
+                                })}
+                                aria-label={choice.label}
+                              />
+                              <span aria-hidden="true">{choice.short}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  )}
+
+                  {schedulePlan.mode === "advanced" && (
+                    <label className="scheduleCronField">
+                      <span>Cron expression</span>
+                      <input
+                        value={cronValue}
+                        onChange={(event) => setCronValue(event.target.value)}
+                        placeholder="0 4 * * *"
+                        required
+                        aria-invalid={Boolean(cronError)}
+                        aria-describedby={cronError ? "schedule-cron-error" : "schedule-cron-description"}
+                        title={`Use five cron fields in ${scheduleTimeZone}: minute hour day month weekday.`}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* One feedback line in every state: the format hint holds the slot until the
+                    expression parses, so the section never changes height as it is edited. */}
+                {cronError
+                  ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
+                  : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
+                {/* Day-of-month against day-of-week is the classic way to write a cron that parses
+                    and still fires on the wrong days, and a description alone cannot show that.
+                    Three real datestamps can. */}
+                {cronPreview && (
+                  <div className="scheduleCronPreview">
+                    <span className="scheduleCronPreviewLabel">Next runs</span>
+                    <ol className="scheduleCronPreviewList">
+                      {cronPreview.occurrences.map((occurrence) => (
+                        <li key={occurrence}>{occurrence}</li>
+                      ))}
+                      <li className="scheduleCronPreviewZone">{scheduleTimeZone}</li>
+                    </ol>
+                    {cronPreview.viewerNote && (
+                      <small className="scheduleCronPreviewNote">{cronPreview.viewerNote}</small>
+                    )}
+                  </div>
+                )}
               </section>
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-steps-heading">Steps</h3><p>Commands and lifecycle actions run from top to bottom. Drag the handles to reorder them.</p></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="drag" /></span><div><h3 id="schedule-steps-heading">Steps</h3></div></div>
                 </div>
                 <div className="commandStack scheduleCommandStack">
                   <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
@@ -712,19 +1048,65 @@ export function SchedulePage({
                               <AppIcon name="drag" />
                             </Button>
                             <strong>Step {index + 1}</strong>
+                            <span className="scheduleStepOffset" title={`Runs ${formatScheduleOffset(stepOffsets[index])}.`}>
+                              {scheduleOffsetBadge(stepOffsets[index])}
+                            </span>
                           </div>
-                          {stepDrafts.length > 1 && (
-                            <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
-                              <AppIcon name="x" />
+                          <div className="scheduleStepControls">
+                            {/* The drag handle cannot be used on a touch screen and needs a keyboard
+                                otherwise, so reordering also has controls that are just buttons. */}
+                            <Button
+                              variant="ghost"
+                              iconOnly
+                              compact
+                              className="scheduleStepMove"
+                              onClick={() => nudgeStep(draft.id, -1)}
+                              disabled={index === 0 || scheduleStepMoveBlocked(stepDrafts, index, index - 1)}
+                              aria-label={`Move step ${index + 1} up`}
+                              title={`Move step ${index + 1} up`}
+                            >
+                              <AppIcon name="chevronUp" />
                             </Button>
-                          )}
+                            <Button
+                              variant="ghost"
+                              iconOnly
+                              compact
+                              className="scheduleStepMove"
+                              onClick={() => nudgeStep(draft.id, 1)}
+                              disabled={index === stepDrafts.length - 1 || scheduleStepMoveBlocked(stepDrafts, index, index + 1)}
+                              aria-label={`Move step ${index + 1} down`}
+                              title={`Move step ${index + 1} down`}
+                            >
+                              <AppIcon name="chevronDown" />
+                            </Button>
+                            {stepDrafts.length > 1 && (
+                              <Button variant="ghost" iconOnly compact className="iconDangerButton scheduleStepRemove" onClick={() => setStepDrafts((steps) => steps.filter((candidate) => candidate.id !== draft.id))} aria-label={`Remove step ${index + 1}`} title={`Remove step ${index + 1}`}>
+                                <AppIcon name="x" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                         <div className="scheduleStepFields">
                           <label className="scheduleStepType">
                             <span>Type</span>
-                            <select value={draft.type} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, type: event.target.value as StepDraft["type"] } : step))} aria-label={`Type for step ${index + 1}`}>
+                            <select
+                              value={draft.type === "command" ? "command" : draft.procedure}
+                              onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id
+                                ? event.target.value === "command"
+                                  ? { ...step, type: "command" }
+                                  : { ...step, type: "action", procedure: event.target.value as ScheduleProcedure }
+                                : step))}
+                              aria-label={`Type for step ${index + 1}`}
+                              title={stepTypeAvailability[index].reason || undefined}
+                            >
                               <option value="command">Command</option>
-                              <option value="action">Action</option>
+                              {/* Offered only where a lifecycle action could legally go, so the rule
+                                  is visible while the schedule is built rather than at save time. */}
+                              {scheduleProcedureOptions.map((option) => (
+                                <option key={option.value} value={option.value} disabled={!stepTypeAvailability[index].canBecomeRestart}>
+                                  {option.label}{stepTypeAvailability[index].canBecomeRestart ? "" : " (last step only)"}
+                                </option>
+                              ))}
                             </select>
                           </label>
                           {draft.type === "command" ? (
@@ -733,12 +1115,9 @@ export function SchedulePage({
                               <input value={draft.command} onChange={(event) => setStepDrafts((steps) => steps.map((step) => step.id === draft.id ? { ...step, command: event.target.value } : step))} placeholder={index === 0 ? "say Restarting in 5 minutes" : "save-all"} required title="Use one console command per step." />
                             </label>
                           ) : (
-                            <label className="scheduleStepValue">
-                              <span>Procedure</span>
-                              <select value={draft.procedure} onChange={() => undefined} aria-label={`Procedure for step ${index + 1}`}>
-                                <option value="restart">Restart</option>
-                              </select>
-                            </label>
+                            // The Type control names the procedure, so this states what it does
+                            // rather than repeating the choice in a second dropdown.
+                            <p className="scheduleStepValue scheduleStepProcedure">{scheduleProcedureDescription[draft.procedure]} This has to be the final step.</p>
                           )}
                           <label className="scheduleCommandDelay">
                             <span>Delay before step</span>
@@ -755,37 +1134,62 @@ export function SchedulePage({
                       </div>
                     ))}
                   </div>
-                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
+                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => appendScheduleStep(steps, emptyStepDraft()))}>
                     <AppIcon name="plus" />
-                    <span>Additional step</span>
+                    <span>Add step</span>
                   </Button>
+                  {totalStepSeconds > 0 && (
+                    <small className="scheduleStepTotal">
+                      The last step runs {formatScheduleOffset(totalStepSeconds)} after the scheduled time.
+                    </small>
+                  )}
                 </div>
               </section>
+              </div>
 
-              <section className="scheduleEditorSection" aria-labelledby="schedule-options-heading">
+              <section className="scheduleEditorSection scheduleOptionsSection" aria-labelledby="schedule-options-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div><h3 id="schedule-options-heading">Options</h3><p>Choose what happens at the scheduled start time.</p></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="shield" /></span><div><h3 id="schedule-options-heading">Run conditions</h3></div></div>
                 </div>
                 <div className="scheduleEditOptions">
-                  <SchedulePlayerPolicyOptions schedule={modalSchedule ?? undefined} />
                   <label className="scheduleOptionToggle scheduleEnabledOption">
                     <input name="enabled" type="checkbox" defaultChecked={modalSchedule?.enabled ?? true} />
-                    <span className="scheduleOptionCopy"><strong>Enabled</strong><small>Allow cron matches to start this schedule.</small></span>
+                    <span className="scheduleOptionCopy"><strong>Enabled</strong></span>
                   </label>
+                  <SchedulePlayerPolicyOptions key={appliedTemplateId} schedule={policySeed ?? modalSchedule ?? undefined} />
                 </div>
               </section>
+              </div>
               </fieldset>
             </div>
-            <div className="userModalFooter">
-              <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
-              <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
+            <div className="userModalFooter scheduleModalFooter">
+              <div className="scheduleModalFooterActions">
+                <Button variant="secondary" onClick={() => setFormMode(null)} disabled={saveRunning} title={saveRunning ? disabledReason || "Schedule save is still running." : "Cancel"}>Cancel</Button>
+                <Button type="submit" disabled={disabled} title={disabled ? disabledReason || "Schedule save is still running." : modalTitle} reserveLabel={formMode.type === "edit" ? "Save changes" : "Create schedule"}>{saveRunning ? "Saving..." : formMode.type === "edit" ? "Save changes" : "Create schedule"}</Button>
+              </div>
             </div>
           </form>
         </DialogSurface>
       )}
 
+      {historySchedule && !selectedRun && (
+        <ScheduleRunHistoryDialog
+          schedule={liveHistorySchedule ?? historySchedule}
+          formatDate={formatDate}
+          relativeTimestamps={relativeTimestamps}
+          relativeNow={relativeNow}
+          onSelectRun={setSelectedRun}
+          onClose={() => setHistorySchedule(null)}
+        />
+      )}
+
       {selectedRun && (
-        <ScheduleRunDetailsDialog run={selectedRun} formatDate={formatDate} onLoadRunLogs={onLoadRunLogs} onClose={() => setSelectedRun(null)} />
+        <ScheduleRunDetailsDialog
+          run={selectedRun}
+          formatDate={formatDate}
+          onLoadRunLogs={onLoadRunLogs}
+          onClose={() => setSelectedRun(null)}
+        />
       )}
     </section>
   );
@@ -800,6 +1204,68 @@ export function scheduleRunLogsPending(run: ScheduledRun) {
   return (run.details?.steps ?? []).some((step) => (
     step.type === "command" && step.logCaptureStatus === "captured" && step.logs === undefined
   ));
+}
+
+/**
+ * Every run the panel still holds for one schedule. The feed beside the table mixes all schedules
+ * and stops at eight, so most of the retained history had nowhere to be read; the runs are already
+ * in the payload the page polls, so this only has to render them.
+ */
+export function ScheduleRunHistoryDialog({
+  schedule,
+  formatDate,
+  relativeTimestamps = true,
+  relativeNow,
+  onSelectRun,
+  onClose
+}: {
+  schedule: ScheduledExecution;
+  formatDate: (value: string | number | Date) => string;
+  relativeTimestamps?: boolean;
+  relativeNow: number;
+  onSelectRun: (run: ScheduledRun) => void;
+  onClose: () => void;
+}) {
+  const runs = [...(schedule.recentRuns ?? [])].sort((a, b) => new Date(b.ranAt).getTime() - new Date(a.ranAt).getTime());
+  return (
+    <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel scheduleHistoryPanel" labelledBy="schedule-history-title" onClose={onClose}>
+      <div className="userModalHeader scheduleRunModalHeader">
+        <div>
+          <h2 id="schedule-history-title">{schedule.name}</h2>
+        </div>
+        <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClose} aria-label="Close run history" title="Close run history">
+          <AppIcon name="x" />
+        </Button>
+      </div>
+      <div className="scheduleRunModalBody">
+        {runs.length ? (
+          <div className="scheduleHistoryList">
+            {runs.map((run) => (
+              <article key={run.id} className={`scheduleHistoryRow ${statusTone(run.status)}`}>
+                <span className="scheduledRunMarker" aria-hidden="true"></span>
+                <div className="scheduleHistoryDetails">
+                  <strong>{statusLabel(run.status)}</strong>
+                  {run.message && <small title={run.message}>{run.message}</small>}
+                </div>
+                <div className="scheduleHistoryTime">
+                  <span>{relativeTimestamps ? lastRunRelativeTime(run.ranAt, relativeNow) : formatScheduleTime(run.ranAt, formatDate)}</span>
+                  {relativeTimestamps && <small>{formatScheduleTime(run.ranAt, formatDate)}</small>}
+                </div>
+                <Button variant="secondary" compact onClick={() => onSelectRun(run)} aria-label={`View details for the run at ${formatScheduleTime(run.ranAt, formatDate)}`}>
+                  Details
+                </Button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState compact title="No runs recorded" message="Runs appear here once this schedule has executed." />
+        )}
+      </div>
+      <div className="userModalFooter scheduleRunModalFooter">
+        <Button variant="secondary" onClick={onClose}>Close</Button>
+      </div>
+    </DialogSurface>
+  );
 }
 
 export function ScheduleRunDetailsDialog({
@@ -908,11 +1374,11 @@ function ScheduleRunStep({ step, logsLoading, logsError }: { step: ScheduledRunS
       <header>
         <div>
           <span className="scheduleRunStepNumber">Step {step.stepIndex + 1}</span>
-          <strong>{isCommand ? "Command" : "Restart action"}</strong>
+          <strong>{isCommand ? "Command" : `${scheduleProcedureName(step.procedure)} action`}</strong>
         </div>
         <span className={`scheduleRunStepStatus ${step.status}`}>{step.status === "success" ? "Completed" : "Failed"}</span>
       </header>
-      {isCommand ? <code>{step.command || "Command not recorded"}</code> : <p>Gracefully restart the Minecraft server.</p>}
+      {isCommand ? <code>{step.command || "Command not recorded"}</code> : <p>{scheduleProcedureDescription[step.procedure ?? "restart"]}</p>}
       {step.delaySeconds > 0 && <small>Waited {formatRunDelay(step.delaySeconds)} before this step.</small>}
       {isCommand && (
         <details className="scheduleRunLogs">
@@ -952,7 +1418,7 @@ function scheduleRuns(schedules: ScheduledExecution[]) {
     .slice(0, 8);
 }
 
-function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelItem[] {
+export function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelItem[] {
   const active = schedules.flatMap((schedule) => schedule.activeRuns ?? [])
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     .map((run) => ({ ...run, kind: "active" as const, sortAt: run.startedAt }));
@@ -961,6 +1427,17 @@ function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelIte
     .filter((run) => !activeIds.has(run.id))
     .map((run) => ({ ...run, kind: "completed" as const, sortAt: run.ranAt }));
   return [...active, ...completed.slice(0, Math.max(8 - active.length, 0))];
+}
+
+/**
+ * Identifies the runs feed by its contents rather than by the array holding them. The page refetches
+ * app state on a timer and gets a fresh `schedules` array every time, so anything keyed on identity
+ * fires on every poll; this key only changes when a run is added, removed, or advances.
+ */
+export function scheduleRunFeedKey(runItems: ScheduledRunPanelItem[]) {
+  return runItems
+    .map((run) => `${run.kind}:${run.id}:${run.kind === "active" ? run.waitingUntil ?? run.message ?? "" : run.ranAt}`)
+    .join("|");
 }
 
 export function resolveScheduleNavigationTarget(schedules: ScheduledExecution[], target: ScheduleNavigationTarget) {
@@ -983,7 +1460,11 @@ export function scheduleDescription(schedule: ScheduledExecution) {
     ? "waits until no players are online"
     : schedule.onlyWhenNoPlayers ? "skips while players are online" : "";
   if (schedule.steps.length > 1 || actions.length) {
-    const parts = [commands.length ? `${commands.length} command${commands.length === 1 ? "" : "s"}` : "", actions.length ? `${actions.length} Restart action` : ""].filter(Boolean);
+    const action = actions[0];
+    const parts = [
+      commands.length ? `${commands.length} command${commands.length === 1 ? "" : "s"}` : "",
+      action?.type === "action" ? `${scheduleProcedureName(action.procedure)} action` : ""
+    ].filter(Boolean);
     const steps = `${parts.join(", ")}${delayed ? `, ${delayed} delayed` : ""}`;
     return playerPolicy ? `${steps} · ${playerPolicy}` : steps;
   }
@@ -991,17 +1472,13 @@ export function scheduleDescription(schedule: ScheduledExecution) {
   return playerPolicy || "Console command automation";
 }
 
+/**
+ * The row and the editor have to read the same expression the same way. A private summariser here
+ * drifted from the editor's describer and printed raw cron fields back at the user, so the table
+ * now shares the describer and only supplies the wording for an expression it cannot parse.
+ */
 function cronSummary(cron: string) {
-  const [minute, hour, day, month, weekday] = cron.trim().split(/\s+/);
-  if (minute?.startsWith("*/") && hour === "*" && day === "*" && month === "*" && weekday === "*") return `Every ${minute.slice(2)} minutes`;
-  if (minute === "0" && hour?.startsWith("*/") && day === "*" && month === "*" && weekday === "*") return `Every ${hour.slice(2)} hours`;
-  if (day === "*" && month === "*" && weekday === "*") return `Daily at ${padTime(hour)}:${padTime(minute)}`;
-  if (day === "*" && month === "*" && weekday !== "*") return `Weekly on ${weekday} at ${padTime(hour)}:${padTime(minute)}`;
-  return "Custom schedule";
-}
-
-function padTime(value?: string) {
-  return /^\d+$/.test(value ?? "") ? String(value).padStart(2, "0") : value ?? "*";
+  return describeCronExpression(cron) ?? "Invalid cron expression";
 }
 
 function statusLabel(status?: string) {
@@ -1012,6 +1489,18 @@ function statusLabel(status?: string) {
   if (normalized === "cancelled") return "Cancelled";
   if (normalized === "running") return "In progress";
   return "Not run";
+}
+
+/**
+ * Skipping is the expected outcome of two of the three player policies, so a skipped run must not
+ * borrow the failure mark. Cancelled keeps the cross because the run really was stopped, and the
+ * tone class separates it from a failure.
+ */
+function statusIcon(status?: string): "check" | "x" | "minus" {
+  const tone = statusTone(status);
+  if (tone === "success") return "check";
+  if (tone === "failed" || tone === "cancelled") return "x";
+  return "minus";
 }
 
 function statusTone(status?: string) {

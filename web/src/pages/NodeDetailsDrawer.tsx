@@ -108,6 +108,7 @@ export type NodeDetailsDrawerProps = {
   onShowInstall: (node: NodeView) => void;
   onRotateToken: (node: NodeView) => void;
   onUpdateNode: (node: NodeView) => void;
+  onUpdateNotifications: (node: NodeView, enabled: boolean) => void;
   onRefresh: () => void;
   onRestartNode: (node: NodeView) => void;
   onRemoveNode: (node: ContextNode, force?: boolean) => void;
@@ -136,6 +137,7 @@ export function NodeDetailsDrawer({
   onShowInstall,
   onRotateToken,
   onUpdateNode,
+  onUpdateNotifications,
   onRefresh,
   onRestartNode,
   onRemoveNode,
@@ -289,6 +291,27 @@ export function NodeDetailsDrawer({
             <div><dt>Host memory</dt><dd>{node.totalMemory ? formatBytes(node.totalMemory) : "Unknown"}</dd></div>
             <div><dt>Last seen</dt><dd>{formatNodeDate(node.lastSeenAt ?? node.connectedAt, formatDate)}</dd></div>
           </dl>
+        </section>
+
+        <section className="nodeDrawerSection" aria-labelledby="node-notifications-title">
+          <h3 id="node-notifications-title">Notifications</h3>
+          <label className="nodeUpdateNotificationSetting">
+            <span>
+              <strong>Node update notifications</strong>
+              <small>Show a notification on page visits when an update is available for this node.</small>
+            </span>
+            <span className="switch">
+              <input
+                type="checkbox"
+                checked={node.updateNotificationsEnabled !== false}
+                onChange={(event) => onUpdateNotifications(node, event.target.checked)}
+                disabled={!canManageNodes || nodeBusy}
+                aria-label={`Node update notifications for ${node.name}`}
+                title={!canManageNodes ? "Manage nodes permission is required" : nodeBusy ? "This node is being updated" : undefined}
+              />
+              <span className="slider" />
+            </span>
+          </label>
         </section>
 
         <details className="nodeTechnicalDetails">

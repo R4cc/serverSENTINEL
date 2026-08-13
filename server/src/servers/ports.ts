@@ -2,7 +2,7 @@ import { maxServerPort, minServerPort } from "../config.js";
 
 import { dockerHostPortBindings, parseDockerPorts, type DockerHostPortBinding } from "../core.js";
 import { localNodeId } from "../nodes/nodeService.js";
-import type { ManagedServer, ManagedServerPort } from "../types.js";
+import type { ManagedServer, ManagedServerPort, ServerRuntimeIssue } from "../types.js";
 
 export type CreateServerInput = {
   nodeId?: string;
@@ -207,12 +207,37 @@ export function findExistingServerPortConflict(
       if (requestedKeys.has(port.key)) {
         return {
           port,
+          ownerId: server.id,
+          ownerDisplayName: server.displayName,
           ownerName: `managed server "${server.displayName}"`
         };
       }
     }
   }
   return null;
+}
+
+export function unresolvedServerPortIssues(server: ManagedServer, servers: ManagedServer[]): ServerRuntimeIssue[] {
+  if (!server.portConflictUnresolved) return [];
+  const issues = new Map<string, ServerRuntimeIssue>();
+  const requested = dockerHostPortBindings(server.dockerPorts || "25565:25565/tcp");
+  for (const candidate of servers) {
+    if (candidate.id === server.id || candidate.nodeId !== server.nodeId) continue;
+    const candidateKeys = new Set(dockerHostPortBindings(candidate.dockerPorts || "25565:25565/tcp").map((port) => port.key));
+    for (const port of requested) {
+      if (!candidateKeys.has(port.key)) continue;
+      const key = `${port.key}:${candidate.id}`;
+      issues.set(key, {
+        code: "port_conflict",
+        message: `Port ${port.port}/${port.protocol} is also assigned to ${candidate.displayName}.`,
+        port: Number(port.port),
+        protocol: port.protocol === "udp" ? "udp" : "tcp",
+        conflictingServerId: candidate.id,
+        conflictingServerName: candidate.displayName
+      });
+    }
+  }
+  return [...issues.values()];
 }
 
 export function findProvisionPortConflict(nodeId: string, dockerPorts: string, ignoreJobId?: string) {

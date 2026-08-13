@@ -1,4 +1,4 @@
-import type { ActivePage, ServerStatus } from "../types";
+import type { ActivePage, ServerRuntimeIssue, ServerStatus } from "../types";
 import type { ConsoleConnectionState } from "../utils/consolePipeline";
 import type { ManagedContentTerminology } from "../features/mods/contentTerminology";
 import type { ServerStripAlert, ServerStripHealth } from "../components/ActiveServerStrip";
@@ -21,17 +21,23 @@ export function resolveServerStripStatus(input: {
   consoleError: string;
   consoleLoading: boolean;
   activeStatus: ServerStatus | null;
+  runtimeIssue?: ServerRuntimeIssue;
 }): { alert: ServerStripAlert; health: ServerStripHealth } {
   const {
     activeNodeRuntimeBlocked, activeNodeStatus, activeNodeBlockReason, activeNodeBlockMessage,
-    statusError, activePage, consoleConnectionState, consoleError, consoleLoading, activeStatus
+    statusError, activePage, consoleConnectionState, consoleError, consoleLoading, activeStatus, runtimeIssue
   } = input;
 
   const blockDetail = activeNodeBlockReason && activeNodeBlockMessage.startsWith(`${activeNodeBlockReason}. `)
     ? activeNodeBlockMessage.slice(activeNodeBlockReason.length + 2)
     : activeNodeBlockMessage;
 
-  const alert: ServerStripAlert = activeNodeRuntimeBlocked && activeNodeStatus !== "offline"
+  const alert: ServerStripAlert = runtimeIssue
+    ? {
+        title: "Unresolved port conflict",
+        message: `${runtimeIssue.message} Choose a different port in Properties before starting this server.`
+      }
+    : activeNodeRuntimeBlocked && activeNodeStatus !== "offline"
     ? {
         title: activeNodeBlockReason || "Node unavailable",
         message: blockDetail
@@ -76,17 +82,20 @@ export function resolveRuntimeGuards(input: {
   runtimeAction: "start" | "stop" | "restart" | null;
   exportMutationLocked?: boolean;
   exportMutationBlockedReason?: string;
+  runtimeIssue?: ServerRuntimeIssue;
 }) {
   const {
     authOperationalLock, canBasic, activeNodeRuntimeBlocked, nodeOfflineDetected, activeNodeBlockMessage,
     activeNodeName, activeServerUsesInternalNode, dockerSocketMounted, lifecycleTransitionRunning,
-    isProvisioning, activeStatus, runtimeAction, exportMutationLocked = false, exportMutationBlockedReason = ""
+    isProvisioning, activeStatus, runtimeAction, exportMutationLocked = false, exportMutationBlockedReason = "", runtimeIssue
   } = input;
 
   const runtimeControlsDisabledReason = authOperationalLock
     ? "Sign in before using runtime controls."
     : !canBasic
       ? "Servers control permission is required."
+    : runtimeIssue
+      ? `${runtimeIssue.message} Choose a different port in Properties before starting this server.`
     : activeNodeRuntimeBlocked || nodeOfflineDetected
         ? activeNodeBlockMessage
           || `${activeNodeName} is offline. Runtime controls will return when it reconnects.`

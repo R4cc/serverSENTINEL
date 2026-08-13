@@ -165,7 +165,9 @@ export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstrea
   }
 
   let closed = false;
-  let attached = false;
+  let hasAttached = false;
+  let announceReattachOnOutput = false;
+  let nextTail = dockerFollowInitialTail;
   let request: http.ClientRequest | undefined;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -174,9 +176,7 @@ export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstrea
     retryTimer = setTimeout(() => {
       retryTimer = undefined;
       if (closed) return;
-      if (attached) upstream.notice("[serverSENTINEL] Reattached to the container log stream.");
-      attached = false;
-      follow(0);
+      follow(nextTail);
     }, dockerFollowRetryMs);
     retryTimer.unref?.();
   };
@@ -190,18 +190,34 @@ export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstrea
       },
       (response) => {
         if (response.statusCode !== 200) {
-          logWarn({ ...serverLogFields(server), source: "docker", statusCode: response.statusCode }, "Docker log stream returned non-OK status");
-          upstream.unavailable(`Docker logs returned ${response.statusCode}`);
+          response.resume();
+          if (response.statusCode === 404) {
+            // A newly imported/local server has no container until its first start. Keep the
+            // viewer attached and retain the initial history tail so startup output written while
+            // Docker creates the container is not lost between retries.
+            nextTail = dockerFollowInitialTail;
+          } else {
+            logWarn({ ...serverLogFields(server), source: "docker", statusCode: response.statusCode }, "Docker log stream returned non-OK status");
+            upstream.unavailable(`Docker logs returned ${response.statusCode}`, { retryable: true });
+          }
           reattach();
           return;
         }
-        attached = true;
+        announceReattachOnOutput ||= hasAttached;
+        hasAttached = true;
+        nextTail = 0;
         const decoder = new DockerLogDecoder();
         // No socket pausing here: the buffer is shared, so one viewer falling behind must not stop
         // the workload's output reaching everyone else. Memory stays bounded by the buffer's own
         // retention, and a viewer that falls too far behind is told its resume point was trimmed.
         response.on("data", (chunk: Buffer) => {
-          upstream.write(decoder.write(chunk).toString("utf8"));
+          const decoded = decoder.write(chunk).toString("utf8");
+          if (!decoded) return;
+          if (announceReattachOnOutput) {
+            announceReattachOnOutput = false;
+            upstream.notice("[serverSENTINEL] Reattached to the container log stream.");
+          }
+          upstream.write(decoded);
         });
         response.on("end", reattach);
         response.on("error", (error) => {

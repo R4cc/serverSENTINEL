@@ -160,7 +160,7 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
   return {
     serverId: server.id,
     runtimeProfile: nextProfile,
-    server: await runtimeForServer(updatedServer).publicServer(updatedServer),
+    server: await runtimeForServer(updatedServer).publicServer(updatedServer, undefined, await listManagedServers()),
     warnings: []
   };
 });

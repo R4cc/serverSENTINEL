@@ -4,6 +4,7 @@ import type {
   ManagedServer,
   ModUpdatePlan,
   PlayerSnapshot,
+  ScheduledActiveRun,
   ScheduledExecution,
   ScheduleNavigationTarget,
   ServerActivity,
@@ -20,6 +21,7 @@ import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
 import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
 import { playerHeadSource, playerHeadVersion } from '../utils/playerHeads';
+import { schedulesNeedingAttention } from '../features/schedules/scheduleHealth';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const activePlayerPreviewLimit = 8;
@@ -537,6 +539,21 @@ export function formatRelativeScheduleTime(value: string, now = new Date()) {
   return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }
 
+export function formatActiveScheduleDuration(startedAt: string, now = Date.now()) {
+  const started = new Date(startedAt).getTime();
+  if (!Number.isFinite(started)) return "just now";
+  const minutes = Math.max(0, Math.floor((now - started) / 60_000));
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+function activeScheduleStatus(run: ScheduledActiveRun) {
+  return run.message?.trim() || run.currentStep?.trim() || "Running";
+}
+
 export function SchedulePanel({
   schedules,
   canView = true,
@@ -550,17 +567,42 @@ export function SchedulePanel({
   relativeTimestamps?: boolean;
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
 }) {
-  const snapshot = buildUpcomingScheduleSnapshot(schedules);
+  const [now, setNow] = useState(() => Date.now());
+  const activeRuns = useMemo(() => schedules.flatMap((schedule) => (
+    (schedule.activeRuns ?? []).map((run) => ({ schedule, run }))
+  )).sort((left, right) => (
+    new Date(left.run.startedAt).getTime() - new Date(right.run.startedAt).getTime()
+      || left.run.id.localeCompare(right.run.id)
+  )), [schedules]);
+  useEffect(() => {
+    if (!activeRuns.length) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [activeRuns.length]);
+
+  const snapshot = buildUpcomingScheduleSnapshot(schedules, new Date(now));
+  const visibleActiveRuns = activeRuns.slice(0, overviewSupportCardSlotCount);
+  const visibleUpcomingSchedules = snapshot.schedules.slice(0, Math.max(0, overviewSupportCardSlotCount - visibleActiveRuns.length));
+  const hiddenScheduleCount = Math.max(0, activeRuns.length - visibleActiveRuns.length)
+    + snapshot.remainingInNext24Hours
+    + Math.max(0, snapshot.schedules.length - visibleUpcomingSchedules.length);
   const upcomingCount = snapshot.schedules.length + snapshot.remainingInNext24Hours;
+  // A schedule failing or skipping its way through several occurrences says nothing anywhere else,
+  // and the next run it advertises here is exactly as reassuring as a working one's.
+  const attention = canView ? schedulesNeedingAttention(schedules) : [];
   const description = !canView
     ? "Permission required"
-    : schedules.length === 0
-      ? "No schedules configured"
-      : snapshot.schedules.length === 0
-        ? "No upcoming runs"
-        : snapshot.remainingInNext24Hours > 0
-          ? `${upcomingCount} runs in the next 24 hours`
-          : `${upcomingCount} upcoming run${upcomingCount === 1 ? "" : "s"}`;
+    : activeRuns.length
+      ? `${activeRuns.length} active run${activeRuns.length === 1 ? "" : "s"}`
+      : attention.length
+      ? `${attention.length} schedule${attention.length === 1 ? "" : "s"} needs attention`
+      : schedules.length === 0
+        ? "No schedules configured"
+        : snapshot.schedules.length === 0
+          ? "No upcoming runs"
+          : snapshot.remainingInNext24Hours > 0
+            ? `${upcomingCount} runs in the next 24 hours`
+            : `${upcomingCount} upcoming run${upcomingCount === 1 ? "" : "s"}`;
 
   return (
     <OverviewCard
@@ -568,6 +610,22 @@ export function SchedulePanel({
       title="Schedules"
       description={description}
     >
+      {attention.length > 0 && (
+        <div className="scheduleAttentionList">
+          {attention.map(({ schedule, health }) => (
+            <button
+              key={schedule.id}
+              type="button"
+              className={`scheduleAttentionItem ${health.tone}`}
+              onClick={() => onOpenSchedules({ kind: "schedule", scheduleId: schedule.id })}
+              title={health.detail}
+            >
+              <strong>{schedule.name}</strong>
+              <small>{health.label}</small>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="overviewCardList overviewSupportList scheduleUpcomingList">{!canView ? (
         <OverviewCardState title="Schedules unavailable" message="View schedules permission is required." icon={<AppIcon name="shield" />} />
       ) : schedules.length === 0 ? (
@@ -578,7 +636,7 @@ export function SchedulePanel({
           onClick={() => onOpenSchedules()}
           ariaLabel="Open Schedules to create a schedule"
         />
-      ) : snapshot.schedules.length === 0 ? (
+      ) : activeRuns.length === 0 && snapshot.schedules.length === 0 ? (
         <OverviewCardState
           title="No upcoming schedules"
           message="Enabled schedules will appear here when their next run is planned."
@@ -587,9 +645,30 @@ export function SchedulePanel({
           ariaLabel="Open Schedules, no upcoming schedules"
         />
       ) : (
-        snapshot.schedules.map((schedule) => {
+        <>
+          {visibleActiveRuns.map(({ schedule, run }) => {
+            const duration = formatActiveScheduleDuration(run.startedAt, now);
+            const status = activeScheduleStatus(run);
+            return (
+              <button
+                key={`active:${run.id}`}
+                type="button"
+                className="overviewCardRow overviewSupportListItem scheduleUpcomingItem scheduleActiveItem"
+                onClick={() => onOpenSchedules({ kind: "active-run", scheduleId: schedule.id, runId: run.id })}
+                title={`Open ${schedule.name}, ${status}, running for ${duration}`}
+              >
+                <span className="overviewSupportListIcon scheduleActiveIcon" aria-hidden="true"><SidebarIcon name="schedule" /><i /></span>
+                <span className="overviewSupportListCopy">
+                  <strong title={schedule.name}>{schedule.name}</strong>
+                  <small><span>{status}</span><span aria-hidden="true">·</span><time dateTime={run.startedAt} title={formatDate(run.startedAt)}>{duration}</time></small>
+                </span>
+                <AppIcon name="chevronRight" />
+              </button>
+            );
+          })}
+          {visibleUpcomingSchedules.map((schedule) => {
           const nextRunAt = schedule.nextRunAt!;
-          const nextTime = relativeTimestamps ? formatRelativeScheduleTime(nextRunAt) : formatDate(nextRunAt);
+          const nextTime = relativeTimestamps ? formatRelativeScheduleTime(nextRunAt, new Date(now)) : formatDate(nextRunAt);
           return (
             <button
               key={schedule.id}
@@ -606,16 +685,17 @@ export function SchedulePanel({
               <AppIcon name="chevronRight" />
             </button>
           );
-        })
+          })}
+        </>
       )}</div>
-      {canView && snapshot.remainingInNext24Hours > 0 && (
+      {canView && hiddenScheduleCount > 0 && (
         <Button
           variant="ghost"
           compact
           className="overviewSupportMore scheduleUpcomingMore"
           onClick={() => onOpenSchedules()}
         >
-          {snapshot.remainingInNext24Hours} more {snapshot.remainingInNext24Hours === 1 ? "schedule" : "schedules"}
+          View {hiddenScheduleCount} more
         </Button>
       )}
     </OverviewCard>

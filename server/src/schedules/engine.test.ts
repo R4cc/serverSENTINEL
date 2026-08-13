@@ -23,8 +23,8 @@ vi.mock("../appServices.js", () => ({
   runtimeForServer: () => ({ serverStatus, serverLogs: async () => ({ text: "" }) })
 }));
 
-const { executeMatchedSchedule, scheduleFromBody, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
-const { activeScheduleExecutions, runningSchedules } = await import("./activeRuns.js");
+const { executeMatchedSchedule, scheduleFromBody, scheduleRequiresRunningServer, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
+const { activeScheduleExecutions, cancelActiveScheduleRunsForSchedule, runningSchedules } = await import("./activeRuns.js");
 
 const server = { id: "server-1", nodeId: "local", displayName: "Survival" } as ManagedServer;
 const schedule: ScheduledExecution = {
@@ -123,6 +123,94 @@ describe("scheduled run bookkeeping", () => {
     expect(operationsRepository.update).toHaveBeenCalledWith(active.operationId, expect.objectContaining({ task: "Waiting for 3 players to leave" }));
     expect(operationsRepository.update).toHaveBeenCalledWith(active.operationId, expect.objectContaining({ task: "Waiting for 1 player to leave" }));
     expect(active.message).toBe("Server is empty; preparing schedule");
+  });
+
+  // The tick used to refuse to start at all while an export held the server, and because cron
+  // matching is per wall-clock minute and never retroactive, the occurrence was spent with no run,
+  // no status, and nothing for the operator to read afterwards.
+  it("records an export collision as a skipped run instead of losing the occurrence", async () => {
+    exportCoordinator.activeOperationId.mockReturnValue("export-1");
+
+    await executeMatchedSchedule(server, schedule);
+
+    expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({
+      status: "skipped",
+      message: "Skipped because a server export was running"
+    }));
+    expect(exportCoordinator.withMutation).not.toHaveBeenCalled();
+  });
+
+  it("lets a waiting run queue behind the export rather than skipping it", async () => {
+    // Reports the export holding the server for the first checks, then releasing it.
+    exportCoordinator.activeOperationId
+      .mockReturnValueOnce("export-1")
+      .mockReturnValueOnce("export-1")
+      .mockReturnValue(undefined);
+
+    await executeMatchedSchedule(server, { ...schedule, onlyWhenNoPlayers: true, waitForPlayersToLeave: true });
+
+    // The wait policy already accepts an unbounded delay, so it reaches the mutation wait instead.
+    expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({ status: "success" }));
+    expect(exportCoordinator.withMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the manual run refusal while relaxing it for the scheduler", async () => {
+    exportCoordinator.activeOperationId.mockReturnValue("export-1");
+    exportCoordinator.assertMutationAllowed.mockImplementationOnce(() => {
+      throw new Error("An export is in progress");
+    });
+
+    expect(() => startScheduleExecution(server, schedule)).toThrow("An export is in progress");
+    expect(serversRepository.recordScheduledRun).not.toHaveBeenCalled();
+
+    expect(startScheduleExecution(server, schedule, { requireAvailability: false })).toBeDefined();
+    await vi.waitFor(() => expect(runningSchedules.size).toBe(0));
+
+    expect(exportCoordinator.assertMutationAllowed).toHaveBeenCalledTimes(1);
+    expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({ status: "skipped" }));
+  });
+
+  it("cancels every run of a schedule at once, or none when one cannot be stopped", () => {
+    const active = (id: string, cancellable: boolean) => ({
+      id,
+      serverId: server.id,
+      scheduleId: schedule.id,
+      scheduleName: schedule.name,
+      status: "running" as const,
+      startedAt: new Date().toISOString(),
+      stepCount: 1,
+      cancellable,
+      operationId: `operation-${id}`,
+      controller: new AbortController()
+    });
+
+    activeScheduleExecutions.set("run-a", active("run-a", true));
+    activeScheduleExecutions.set("run-b", active("run-b", false));
+    expect(cancelActiveScheduleRunsForSchedule(server.id, schedule.id)).toBe(false);
+    // Refusing has to leave the cancellable run alone, or the delete is half applied.
+    expect(activeScheduleExecutions.get("run-a")?.controller.signal.aborted).toBe(false);
+
+    activeScheduleExecutions.delete("run-b");
+    expect(cancelActiveScheduleRunsForSchedule(server.id, schedule.id)).toBe(true);
+    expect(activeScheduleExecutions.get("run-a")?.controller.signal.aborted).toBe(true);
+
+    // A schedule with nothing running is deletable.
+    expect(cancelActiveScheduleRunsForSchedule(server.id, "schedule-none")).toBe(true);
+  });
+
+  // A schedule whose only action is Start exists precisely for a stopped server, so the guard that
+  // skips a run against one has to let it through.
+  it("runs a start-only schedule against a stopped server, and skips every other kind", () => {
+    const stepsFor = (steps: ScheduledExecution["steps"]) => ({ steps });
+
+    expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "start", delaySeconds: 0 }]))).toBe(false);
+    expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "stop", delaySeconds: 0 }]))).toBe(true);
+    expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "restart", delaySeconds: 0 }]))).toBe(true);
+    // A command cannot reach a stopped server even when a Start follows it.
+    expect(scheduleRequiresRunningServer(stepsFor([
+      { type: "command", command: "save-all", delaySeconds: 0 },
+      { type: "action", procedure: "start", delaySeconds: 0 }
+    ]))).toBe(true);
   });
 
   it("does not stack another occurrence while one is waiting", async () => {

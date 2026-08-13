@@ -488,6 +488,7 @@ async function createOverviewPage(context, viewport, search = "") {
   await page.addInitScript(() => {
     localStorage.setItem("serversentinel-active-page", "overview");
     localStorage.setItem("serversentinel-demo-mode", "true");
+    localStorage.setItem("serversentinel-theme", "system");
     localStorage.setItem("serversentinel-date-locale", "en-US");
     localStorage.setItem("serversentinel-number-locale", "en-US");
     localStorage.setItem("serversentinel-display-time-zone", "utc");
@@ -639,6 +640,53 @@ async function assertSupportCardGeometry(context, viewport) {
   }
 }
 
+async function assertActiveSchedulePresentation(context, viewport) {
+  const { page, browserErrors } = await createOverviewPage(context, viewport, "?schedule-fixture=active");
+  try {
+    if (viewport.width >= 721) await waitForTimeline(page);
+    const metrics = await page.evaluate(() => {
+      const rail = document.querySelector(".serverTimelineEventRail");
+      const track = document.querySelector(".serverTimelineEventRailTrack");
+      const range = document.querySelector(".timelineActiveScheduleRun");
+      const cardRun = document.querySelector(".scheduleActiveItem");
+      const railRect = rail?.getBoundingClientRect();
+      const trackRect = track?.getBoundingClientRect();
+      const rangeRect = range?.getBoundingClientRect();
+      return {
+        cardText: cardRun?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        rangeText: range?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        rangeLabel: range?.getAttribute("aria-label") ?? "",
+        clippedStart: range?.classList.contains("is-clipped-start") ?? false,
+        railHeight: railRect?.height ?? 0,
+        trackWidth: trackRect?.width ?? 0,
+        rangeWidth: rangeRect?.width ?? 0,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth
+      };
+    });
+
+    assert(metrics.cardText.includes("Nightly backup"), `Active schedule is missing from the Overview card at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    assert(metrics.cardText.includes("Waiting for 2 players to leave"), `Active schedule status is missing from the Overview card at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    if (viewport.width >= 721) {
+      assert(metrics.rangeText.includes("Nightly backup"), `Active schedule range is missing from the Events rail at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+      assert(metrics.rangeLabel.includes("still running"), `Active schedule range does not expose its open state at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+      assert(metrics.clippedStart, `A run started before the live window is not clipped to its left edge at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+      assert(metrics.rangeWidth >= metrics.trackWidth - 2, `The open schedule range does not span the visible window at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+      assert(metrics.railHeight > 70, `The Events rail did not reserve room for the active schedule at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    } else {
+      assert.equal(metrics.rangeText, "", `Portrait Overview unexpectedly rendered the hidden timeline at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+    }
+    assert(metrics.documentWidth <= metrics.viewportWidth, `Active schedule UI causes horizontal overflow at ${viewport.width}px: ${JSON.stringify(metrics)}`);
+
+    await page.locator(viewport.width >= 721 ? ".timelineActiveScheduleRun" : ".scheduleActiveItem").click();
+    await page.getByRole("heading", { name: "Configured schedules", exact: true }).waitFor();
+    assert(await page.locator(".scheduledRunItem.active").evaluate((element) => element === document.activeElement), `Timeline active run did not focus its Schedules entry at ${viewport.width}px`);
+    assert.deepEqual(browserErrors, [], `Active-schedule browser errors at ${viewport.width}px: ${browserErrors.join("\n")}`);
+  } finally {
+    await page.close();
+  }
+}
+
 try {
   browser = await launchBrowser(chromium);
   const context = await browser.newContext({
@@ -694,7 +742,12 @@ try {
     { width: 390, height: 844 }
   ]) await assertSupportCardGeometry(context, viewport);
 
-  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline and server-strip geometry; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 }
+  ]) await assertActiveSchedulePresentation(context, viewport);
+
+  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline and server-strip geometry; active schedule ranges and card previews; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

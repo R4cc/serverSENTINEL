@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowDown } from "lucide-react";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import type { WebglAddon } from "@xterm/addon-webgl";
@@ -6,7 +7,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { terminalPreferenceOptions, type ConsoleFontSize, type ConsoleScrollback } from "../features/settings/settingsPreferences";
 import type { ConsoleLine } from "../types";
-import { consumeTerminalTouchScroll, minecraftLogToTerminalText } from "../utils/minecraftTerminal";
+import { consumeTerminalTouchScroll, minecraftLogToTerminalText, terminalViewportAtBottom } from "../utils/minecraftTerminal";
 
 /** What the console page needs of a terminal selection to copy it and to let go of it afterwards. */
 export type TerminalSelection = {
@@ -36,6 +37,7 @@ type TerminalTheme = ReturnType<typeof terminalTheme>;
  * output, and nothing to redraw at all.
  */
 export function MinecraftTerminal({ entries, generation, fontSize, scrollback, onSelectionChange }: MinecraftTerminalProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const selectionListenerRef = useRef(onSelectionChange);
@@ -45,6 +47,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
   const writtenGenerationRef = useRef(generation);
   const entriesRef = useRef(entries);
   const appliedThemeRef = useRef<TerminalTheme | null>(null);
+  const [newOutputAvailable, setNewOutputAvailable] = useState(false);
 
   entriesRef.current = entries;
   selectionListenerRef.current = onSelectionChange;
@@ -120,6 +123,11 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
         clear: () => terminal.clearSelection()
       });
     });
+    const scrollChange = terminal.onScroll((viewportY) => {
+      if (terminalViewportAtBottom(viewportY, terminal.buffer.active.baseY)) {
+        setNewOutputAvailable(false);
+      }
+    });
 
     let previousTouchY: number | null = null;
     let touchScrollRemainder = 0;
@@ -185,7 +193,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       terminal.write("", () => {
         if (terminalRef.current !== terminal) return;
         terminal.scrollToBottom();
-        container.classList.remove("initializing");
+        shellRef.current?.classList.remove("initializing");
       });
     };
 
@@ -222,6 +230,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
       window.clearTimeout(webglStartTimer);
       contextLoss?.dispose();
       selectionChange.dispose();
+      scrollChange.dispose();
       // Nothing is selected in a terminal that no longer exists, and the page must not be left
       // holding a selection whose clear() would reach into a disposed terminal.
       selectionListenerRef.current?.({ text: "", clear: () => {} });
@@ -304,8 +313,11 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     const fresh = reset ? nextEntries : nextEntries.filter((line) => line.seq > lastWrittenSeqRef.current);
     if (!fresh.length && !reset) return;
 
-    const wasAtBottom = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY;
-    if (reset) terminal.reset();
+    const wasAtBottom = terminalViewportAtBottom(terminal.buffer.active.viewportY, terminal.buffer.active.baseY);
+    if (reset) {
+      setNewOutputAvailable(false);
+      terminal.reset();
+    }
 
     // One write for the whole batch: thousands of lines cost a single parser pass rather than one
     // queued write each.
@@ -315,9 +327,31 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     // Reading a log line is not a reason to yank someone who scrolled up back to the newest
     // output; only follow the tail when they were already pinned to it.
     if (wasAtBottom) terminal.scrollToBottom();
+    else if (!reset && fresh.length) setNewOutputAvailable(true);
   }
 
-  return <div ref={containerRef} className="minecraftTerminal initializing" role="region" aria-label="Minecraft server console" />;
+  function jumpToBottom() {
+    terminalRef.current?.scrollToBottom();
+    setNewOutputAvailable(false);
+  }
+
+  return (
+    <div ref={shellRef} className="minecraftTerminal initializing" role="region" aria-label="Minecraft server console">
+      <div ref={containerRef} className="minecraftTerminalViewport" />
+      {newOutputAvailable && (
+        <button
+          type="button"
+          className="consoleJumpToBottom"
+          aria-label="Jump to bottom of console"
+          title="Jump to bottom"
+          onClick={jumpToBottom}
+        >
+          <ArrowDown aria-hidden="true" />
+          <span>New output</span>
+        </button>
+      )}
+    </div>
+  );
 }
 
 function cssVar(styles: CSSStyleDeclaration, name: string, fallback: string) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { demoFixtures, demoFixturesLoaded } from "../demoRuntime";
 import { readModsDemoFixture } from "../features/mods/modsDemoFixtures";
+import { readScheduleDemoFixture } from "../features/schedules/scheduleDemoFixtures";
 import type { DisplayTimeZonePreference, InstalledMod, RegionalFormatPreference, ScheduledExecution, ThemePreference } from "../types";
 import { readDisplayTimeZonePreference, readRegionalFormatPreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
 import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
@@ -37,7 +38,7 @@ export function usePreferencesState() {
   // and then calls resetDemoState(), which fills them in.
   const [demoFiles, setDemoFiles] = useState<Record<string, string>>(() => demoFixturesLoaded() ? { ...demoFixtures().initialDemoFiles } : {});
   const [demoInstalledMods, setDemoInstalledMods] = useState<InstalledMod[]>(() => demoFixturesLoaded() ? demoFixtures().modsForDemoFixture(readModsDemoFixture()) : []);
-  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => demoFixturesLoaded() ? demoFixtures().initialDemoSchedules.map((schedule) => ({ ...schedule })) : []);
+  const [demoSchedules, setDemoSchedules] = useState<ScheduledExecution[]>(() => demoFixturesLoaded() ? demoFixtures().schedulesForDemoFixture(readScheduleDemoFixture()) : []);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
 
   useEffect(() => {
@@ -87,7 +88,7 @@ export function usePreferencesState() {
     setDemoRunning(true);
     setDemoFiles({ ...demoFixtures().initialDemoFiles });
     setDemoInstalledMods(demoFixtures().modsForDemoFixture(readModsDemoFixture()));
-    setDemoSchedules(demoFixtures().initialDemoSchedules.map((schedule) => ({ ...schedule })));
+    setDemoSchedules(demoFixtures().schedulesForDemoFixture(readScheduleDemoFixture()));
   }
 
   return {

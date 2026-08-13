@@ -92,7 +92,7 @@ async function assertTerminalHelperIsNotInteractive(page) {
 }
 
 async function assertTerminalHasOnlyOneFrame(page) {
-  const nestedFrame = await page.locator(".minecraftTerminal > .terminal.xterm").evaluate((element) => {
+  const nestedFrame = await page.locator(".minecraftTerminalViewport > .terminal.xterm").evaluate((element) => {
     const style = getComputedStyle(element);
     return {
       borderTopWidth: style.borderTopWidth,
@@ -181,6 +181,53 @@ async function assertOutputIsAppendedInOrder(page) {
   );
 }
 
+async function assertJumpToBottomForUnseenOutput(page) {
+  const jump = page.getByRole("button", { name: "Jump to bottom of console" });
+  const input = page.locator(".consolePromptInput");
+  assert.equal(await jump.count(), 0, "The jump-to-bottom action appeared before output was missed");
+
+  // A tall desktop can hold the demo's whole initial transcript. Add ordinary command output until
+  // there is enough history to move away from the live edge, without depending on xterm's private
+  // virtual-scrollbar DOM (which is not a native scrollTop container in xterm 6).
+  for (let index = 0; index < 24; index += 1) {
+    const marker = `scrollback filler ${index}`;
+    await input.fill(`say ${marker}`);
+    await page.keyboard.press("Enter");
+    await page.waitForFunction((text) => [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
+      .some((row) => row.textContent.includes(text)), marker);
+  }
+
+  const liveRows = await terminalRows(page);
+  await page.locator(".minecraftTerminal").hover();
+  await page.mouse.wheel(0, -10_000);
+  await page.waitForFunction((liveFirstRow) => {
+    const firstRow = [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
+      .map((row) => row.textContent.replace(/[\sÂ ]+$/, ""))
+      .find((row) => row.length > 0);
+    return firstRow && firstRow !== liveFirstRow;
+  }, liveRows[0]);
+  const rowsBeingRead = await terminalRows(page);
+  assert.equal(await jump.count(), 0, "Merely scrolling up exposed the jump-to-bottom action");
+
+  await input.fill("list");
+  await page.keyboard.press("Enter");
+  await jump.waitFor({ state: "visible" });
+  assert.deepEqual(
+    await terminalRows(page),
+    rowsBeingRead,
+    "New output moved the reader away from the lines they were reading"
+  );
+
+  await jump.click();
+  await jump.waitFor({ state: "detached" });
+  await page.waitForFunction(() => {
+    return [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
+      .map((row) => row.textContent.replace(/[\sÂ ]+$/, ""))
+      .join("")
+      .includes("players online");
+  });
+}
+
 /** Arrow recall and Ctrl+C replace what a drawn prompt used to provide. */
 async function assertCommandLineShortcuts(page) {
   const input = page.locator(".consolePromptInput");
@@ -193,6 +240,7 @@ async function assertCommandLineShortcuts(page) {
   // Typing itself is exercised above. Establish this shortcut fixture atomically so a pending
   // controlled-input commit cannot collapse the selection between selectText() and Ctrl+C.
   await input.fill("say copy me");
+  await input.click();
   await input.selectText();
   await page.keyboard.press("Control+c");
   assert.equal(await input.inputValue(), "say copy me", "Ctrl+C abandoned selected command text instead of copying it");
@@ -357,6 +405,7 @@ try {
   await assertTerminalHasOnlyOneFrame(desktop.page);
   await assertTypingLeavesOutputAlone(desktop.page);
   await assertOutputIsAppendedInOrder(desktop.page);
+  await assertJumpToBottomForUnseenOutput(desktop.page);
   await assertCommandLineShortcuts(desktop.page);
   await assertTerminalSelectionCopiesOnCtrlC(desktop.page);
   await assertOutputDoesNotDisturbTheCommandLine(desktop.page);
@@ -371,10 +420,11 @@ try {
   await assertTerminalHelperIsNotInteractive(mobile.page);
   await assertTypingLeavesOutputAlone(mobile.page);
   await assertOutputIsAppendedInOrder(mobile.page);
+  await assertJumpToBottomForUnseenOutput(mobile.page);
   assert.deepEqual(mobile.browserErrors, [], `Mobile browser errors: ${mobile.browserErrors.join("\n")}`);
   await mobile.page.close();
 
-  console.log("Console smoke passed: output-only terminal, usable command line, compact landscape layout, ordered output, and navigation survival.");
+  console.log("Console smoke passed: output-only terminal, usable command line, unseen-output jump, compact landscape layout, ordered output, and navigation survival.");
 } finally {
   if (browser) await browser.close();
   await harness.stop();

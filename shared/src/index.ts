@@ -1,3 +1,5 @@
+export * from "./cron.js";
+
 export type RolePreset = "viewer" | "operator" | "maintainer" | "manager" | "admin" | "custom";
 
 export type Permission =
@@ -373,15 +375,22 @@ export type ServerRuntimeProfile = {
   resolvedAt: string;
 };
 
+/**
+ * The lifecycle actions a schedule step can perform. Additive by design: a panel that does not know
+ * a procedure refuses the schedule rather than misreading it, and stored steps are JSON, so adding
+ * one needs no migration.
+ */
+export type ScheduleProcedure = "restart" | "stop" | "start";
+
 export type ScheduleStep =
   | { type: "command"; command: string; delaySeconds: number }
-  | { type: "action"; procedure: "restart"; delaySeconds: number };
+  | { type: "action"; procedure: ScheduleProcedure; delaySeconds: number };
 
 export type ScheduledRunStepDetails = {
   stepIndex: number;
   type: "command" | "action";
   command?: string;
-  procedure?: "restart";
+  procedure?: ScheduleProcedure;
   delaySeconds: number;
   status: "success" | "failed";
   startedAt: string;
@@ -516,6 +525,8 @@ export type ManagedNodeCore = {
 /** A managed node exactly as the panel API serializes it. */
 export type PublicNode = ManagedNodeCore & {
   hasPendingJoinToken?: boolean;
+  /** Whether page-visit notifications should include available updates for this node. */
+  updateNotificationsEnabled?: boolean;
 };
 
 /**
@@ -549,12 +560,23 @@ export type ManagedServerCore = {
   updatedAt: string;
 };
 
+export type ServerRuntimeIssue = {
+  code: "port_conflict";
+  message: string;
+  port: number;
+  protocol: "tcp" | "udp";
+  conflictingServerId: string;
+  conflictingServerName: string;
+};
+
 /** A managed server exactly as the panel API serializes it. */
 export type PublicServer = ManagedServerCore & {
   directoryLabel: string;
   hasDockerContainer: boolean;
   nodeName?: string;
   resolvedVersions?: ResolvedServerVersions;
+  /** Configuration problems that must be fixed before this server can start. */
+  runtimeIssues?: ServerRuntimeIssue[];
 };
 
 export type NodeInstallInstructions = {
@@ -930,6 +952,7 @@ export type ImportPlanServer = {
   fileCount: number;
   totalBytes: number;
   lockfileCount: number;
+  portConflicts: ImportIssue[];
 };
 
 export type ImportValidationResult = {

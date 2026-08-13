@@ -30,11 +30,18 @@
 }
 
 .minecraftTerminal {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
   overflow: hidden;
   overscroll-behavior: contain;
+}
+
+.minecraftTerminalViewport {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .minecraftTerminal.initializing .xterm {
@@ -51,7 +58,7 @@
 
 /* xterm names its own root `.terminal`, which would otherwise inherit the app's
    framed terminal surface and draw a second rounded border above the prompt. */
-.minecraftTerminal > .terminal.xterm {
+.minecraftTerminalViewport > .terminal.xterm {
   border: 0;
   border-radius: 0;
 }
@@ -91,6 +98,43 @@
 .minecraftTerminal .xterm-scrollable-element > .scrollbar {
   opacity: 0 !important;
   pointer-events: none;
+}
+
+.consoleJumpToBottom {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid color-mix(in srgb, var(--terminal-text) 26%, var(--terminal-bg));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--terminal-bg) 88%, var(--sentinel-accent-muted));
+  box-shadow: 0 7px 20px color-mix(in srgb, var(--terminal-bg) 72%, transparent);
+  color: var(--terminal-text);
+  font-family: var(--font-sans);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.consoleJumpToBottom:hover {
+  background: color-mix(in srgb, var(--terminal-bg) 78%, var(--sentinel-accent-muted));
+}
+
+.consoleJumpToBottom:focus-visible {
+  outline: 2px solid var(--sentinel-accent-muted);
+  outline-offset: 2px;
+}
+
+.consoleJumpToBottom svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.2;
 }
 
 .consolePromptStatus {

@@ -107,6 +107,60 @@ export type TimelineMarker = {
   schedule?: ServerTimelineScheduleMarker;
 };
 
+export type TimelineActiveScheduleRange = {
+  marker: TimelineMarker;
+  leftPercent: number;
+  widthPercent: number;
+  clippedStart: boolean;
+  clippedEnd: boolean;
+  align: "start" | "center" | "end";
+  durationLabel: string;
+  statusLabel: string;
+  accessibleLabel: string;
+};
+
+const visibleActiveScheduleLimit = 4;
+const activeScheduleRowHeight = 32;
+const activeScheduleRowGap = 6;
+
+export function timelineActiveScheduleRanges(
+  markers: TimelineMarker[],
+  from: number,
+  to: number,
+  now = Date.now()
+): TimelineActiveScheduleRange[] {
+  const span = to - from;
+  if (!Number.isFinite(span) || span <= 0) return [];
+  const visibleEnd = Math.min(now, to);
+  if (visibleEnd < from) return [];
+
+  return markers
+    .filter((marker) => marker.schedule?.kind === "active" && marker.occurredAt <= visibleEnd)
+    .sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id))
+    .map((marker) => {
+      const clippedStart = marker.occurredAt < from;
+      const clippedEnd = now > to;
+      const start = Math.max(from, marker.occurredAt);
+      const leftPercent = (start - from) / span * 100;
+      const widthPercent = Math.max(0.25, (visibleEnd - start) / span * 100);
+      const rightPercent = leftPercent + widthPercent;
+      const durationLabel = formatTimelineDuration(Math.max(0, now - marker.occurredAt));
+      const statusLabel = marker.schedule?.message?.trim() || "Running";
+      const align = leftPercent < 16 ? "start" as const : rightPercent > 84 ? "end" as const : "center" as const;
+      return {
+        marker,
+        leftPercent,
+        widthPercent,
+        clippedStart,
+        clippedEnd,
+        align,
+        durationLabel,
+        statusLabel,
+        accessibleLabel: `${marker.schedule!.scheduleName}: ${statusLabel}; running for ${durationLabel}; still running`
+      };
+    });
+}
+
 export function TimelineAnnotationPopoverItem({
   marker,
   formatDate,
@@ -968,21 +1022,32 @@ export function ServerTimeline({
   }, []);
 
   const allMarkers = useMemo(() => timelineMarkers(data), [data]);
-  const markers = useMemo(() => allMarkers.filter((marker) => annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
+  const markers = useMemo(() => allMarkers.filter((marker) => marker.schedule?.kind !== "active" && annotationEnabled[marker.tone]), [allMarkers, annotationEnabled]);
+  const activeScheduleRanges = useMemo(
+    () => annotationEnabled.automation
+      ? timelineActiveScheduleRanges(allMarkers, viewport.from, viewport.to, clockNow)
+      : [],
+    [allMarkers, annotationEnabled.automation, clockNow, viewport.from, viewport.to]
+  );
+  const visibleActiveScheduleRanges = activeScheduleRanges.slice(0, visibleActiveScheduleLimit);
   const clusters = useMemo(() => clusterTimelineMarkers(markers, viewport.from, viewport.to), [markers, viewport.from, viewport.to]);
   const positionedClusters = useMemo(
     () => positionTimelineClusters(clusters, viewport.from, viewport.to, annotationRailWidth),
     [annotationRailWidth, clusters, viewport.from, viewport.to]
   );
   const visibleEventCount = useMemo(
-    () => clusters.reduce((total, cluster) => total + timelineClusterOccurrenceCount(cluster), 0),
-    [clusters]
+    () => activeScheduleRanges.length + clusters.reduce((total, cluster) => total + timelineClusterOccurrenceCount(cluster), 0),
+    [activeScheduleRanges.length, clusters]
   );
   const nextAnnotationGridTop = useMemo(() => timelineAnnotationGridTop(positionedClusters), [positionedClusters]);
   // Panning changes annotation clusters continuously. Keep their reserved rail
   // height fixed until the gesture ends so the chart does not bounce vertically.
   const stableAnnotationGridTopRef = useRef(nextAnnotationGridTop);
-  const annotationGridTop = chartInteracting ? stableAnnotationGridTopRef.current : nextAnnotationGridTop;
+  const baseAnnotationGridTop = chartInteracting ? stableAnnotationGridTopRef.current : nextAnnotationGridTop;
+  const activeScheduleGridHeight = visibleActiveScheduleRanges.length
+    ? activeScheduleRowGap + visibleActiveScheduleRanges.length * activeScheduleRowHeight
+    : 0;
+  const annotationGridTop = baseAnnotationGridTop + activeScheduleGridHeight;
   const selectedPosition = selectedCluster ? positionedClusters.find((cluster) => cluster.id === selectedCluster.id) : undefined;
   const query = useMemo<TimelineWindow>(() => data ? { from: data.from, to: data.to } : timelineQueryWindow(viewport, live), [data, live, viewport]);
   const labelGutter = Math.round(Math.max(180, Math.min(260, visualizationWidth * 0.17)));
@@ -1289,7 +1354,11 @@ export function ServerTimeline({
         >
           <div className="serverTimelineEventRailGutter" style={{ width: metricGrid.left }}>
             <strong>Events</strong>
-            <span>{visibleEventCount ? `${visibleEventCount} in this range` : "None in this range"}</span>
+            <span>{activeScheduleRanges.length
+              ? `${activeScheduleRanges.length} active · ${visibleEventCount} total`
+              : visibleEventCount
+                ? `${visibleEventCount} in this range`
+                : "None in this range"}</span>
           </div>
           <div className="serverTimelineEventRailTrack" style={{ marginRight: metricGrid.right }}>
             <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations">
@@ -1332,6 +1401,37 @@ export function ServerTimeline({
                 );
               })}
             </div>
+            {visibleActiveScheduleRanges.length > 0 && (
+              <div
+                className="serverTimelineActiveSchedules"
+                style={{ top: baseAnnotationGridTop + activeScheduleRowGap / 2 }}
+                aria-label="Active schedule runs"
+              >
+                {visibleActiveScheduleRanges.map((range, index) => (
+                  <button
+                    key={range.marker.id}
+                    type="button"
+                    className={`timelineActiveScheduleRun align-${range.align}${range.clippedStart ? " is-clipped-start" : ""}${range.clippedEnd ? " is-clipped-end" : ""}`}
+                    style={{
+                      left: `${range.leftPercent}%`,
+                      top: index * activeScheduleRowHeight,
+                      width: `${range.widthPercent}%`
+                    }}
+                    aria-label={range.accessibleLabel}
+                    title={`${range.statusLabel} · running for ${range.durationLabel}`}
+                    onClick={() => activateMarker(range.marker)}
+                  >
+                    <span className="timelineActiveScheduleLine" aria-hidden="true" />
+                    <span className="timelineActiveScheduleStart" aria-hidden="true" />
+                    <span className="timelineActiveScheduleEnd" aria-hidden="true" />
+                    <span className="timelineActiveScheduleLabel" aria-hidden="true">
+                      <strong>{range.marker.schedule?.scheduleName}</strong>
+                      <small>{range.statusLabel} · {range.durationLabel}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             {!visibleEventCount && !loading && (
               <span className="serverTimelineEventRailEmpty">No server events, automation runs, or planned schedules here</span>
             )}

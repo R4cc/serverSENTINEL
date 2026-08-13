@@ -29,7 +29,7 @@ const server: ManagedServer = {
   updatedAt: "2026-01-01T00:00:00.000Z"
 };
 
-function renderForm(disabled = false, disabledReason = "") {
+function renderForm(disabled = false, disabledReason = "", saving = false) {
   return renderToStaticMarkup(
     <ServerEditForm
       server={server}
@@ -37,6 +37,7 @@ function renderForm(disabled = false, disabledReason = "") {
       onSubmit={vi.fn()}
       disabled={disabled}
       disabledReason={disabledReason}
+      saving={saving}
       exportPanel={<ExportServerPanel server={server} onExport={vi.fn()} />}
       dangerZone={<section data-testid="danger-zone">Danger zone</section>}
     />
@@ -44,11 +45,11 @@ function renderForm(disabled = false, disabledReason = "") {
 }
 
 describe("ServerEditForm", () => {
-  it("renders a toolbar and distinct configuration cards with one advanced disclosure", () => {
+  it("renders distinct configuration cards with one advanced disclosure and no idle actions", () => {
     const html = renderForm();
 
     expect(html.match(/propertiesSettingsSurface/g)).toHaveLength(1);
-    expect(html).toContain("propertiesToolbar");
+    expect(html).not.toContain("propertiesToolbar");
     expect(html).toContain("propertiesSectionGeneral");
     expect(html).toContain("propertiesSectionResources");
     expect(html).toContain("propertiesSectionNetwork");
@@ -77,8 +78,9 @@ describe("ServerEditForm", () => {
       expect(html).toContain(`name="${name}"`);
     }
 
-    expect(html).toContain("Discard changes");
-    expect(html).toContain("Save changes");
+    expect(html).not.toContain("propertiesSaveDock");
+    expect(html).not.toContain("Discard");
+    expect(html).not.toContain("Save changes");
     expect(html).toContain("Start when node starts");
     expect(html).toMatch(/name="startOnNodeStart"[^>]*checked=""/);
     expect(html).toContain('data-testid="danger-zone"');
@@ -123,8 +125,7 @@ describe("ServerEditForm", () => {
     expect(html).toMatch(/class="[^"]*propertiesLockBanner[^"]*"/);
     expect(html).toContain(reason);
     expect(html).toMatch(/<fieldset disabled=""/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Discard changes<\/button>/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Save changes<\/button>/);
+    expect(html).not.toContain("propertiesSaveDock");
     expect(html).toContain("-XX:+UseG1GC");
     expect(html).toContain("Additional port bindings");
     expect(html).not.toMatch(/<details[^>]*disabled/);
@@ -161,6 +162,17 @@ describe("ExportServerPanel", () => {
     createdAt: "2026-01-02T00:00:00.000Z",
     canCancel: true,
     ...overrides
+  });
+
+  it("moves saving feedback into the animated save button without a warning banner", () => {
+    const html = renderForm(true, "Server settings are saving.", true);
+
+    expect(html).not.toContain("propertiesLockBanner");
+    expect(html).not.toContain("Server settings are saving.");
+    expect(html).toContain("propertiesSaveDock");
+    expect(html).toContain("Saving changes");
+    expect(html).toContain("uiSpinner");
+    expect(html).toContain('aria-busy="true"');
   });
 
   it("renders the empty, succeeded, and cancelled states", () => {

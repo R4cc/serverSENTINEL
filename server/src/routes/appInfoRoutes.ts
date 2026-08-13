@@ -56,7 +56,7 @@ app.get("/api/app", async (request) => {
   const dockerSocketMounted = await dockerReachable();
   const totalMemory = await detectedTotalMemory();
   return {
-    servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes))),
+    servers: await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes, servers))),
     nodes: await publicNodes(nodes, totalMemory),
     appVersion,
     buildId: appBuildId,
@@ -75,7 +75,7 @@ app.get("/api/context", async (request) => {
   await requireRequestPermission(request, "servers.view");
   const servers = await listManagedServers();
   const nodes = await readNodes();
-  const publicServers = await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes)));
+  const publicServers = await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes, servers)));
   const publicNodeList = await publicNodes(nodes);
   return {
     nodes: publicNodeList.map((node) => ({
