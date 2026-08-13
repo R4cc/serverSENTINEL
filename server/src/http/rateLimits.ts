@@ -4,5 +4,7 @@ export const nodeJoinRateLimit = { config: { rateLimit: { max: 30, timeWindow: "
 export const provisionRateLimit = { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } };
 export const runtimeActionRateLimit = { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } };
 export const destructiveRateLimit = { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } };
+/** Chunked imports may need many small requests when a reverse proxy enforces a low body limit. */
+export const importChunkRateLimit = { config: { rateLimit: { max: 3_000, timeWindow: "1 minute" } } };
 export const modChangeRateLimit = { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } };
 export const commandRateLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };

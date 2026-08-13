@@ -32,15 +32,18 @@ describe("abandoned import sweep", () => {
     const root = await importsRoot();
     const stale = join(root, "imports", "import-00000000-0000-4000-8000-000000000001.zip");
     const fresh = join(root, "imports", "import-00000000-0000-4000-8000-000000000002.zip");
+    const interrupted = join(root, "imports", "import-00000000-0000-4000-8000-000000000003.upload");
     await writeFile(stale, "stale", "utf8");
     await writeFile(fresh, "fresh", "utf8");
+    await writeFile(interrupted, "partial", "utf8");
     const old = new Date(Date.now() - 48 * 60 * 60 * 1000);
     await utimes(stale, old, old);
+    await utimes(interrupted, old, old);
 
     const sweep = await loadSweeper(root);
     const result = await sweep();
 
-    expect(result.removed).toBe(1);
+    expect(result.removed).toBe(2);
     expect(await readdir(join(root, "imports"))).toEqual(["import-00000000-0000-4000-8000-000000000002.zip"]);
   });
 

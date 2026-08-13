@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -14,6 +14,19 @@ function sessionCookieFrom(response: { headers: Record<string, unknown> }) {
   const header = response.headers["set-cookie"];
   const value = Array.isArray(header) ? header[0] : header;
   return typeof value === "string" ? value.split(";", 1)[0] : undefined;
+}
+
+function multipartChunk(offset: number, content: Buffer) {
+  const boundary = `serversentinel-test-${offset}`;
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    payload: Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="offset"\r\n\r\n${offset}\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="export.zip"\r\nContent-Type: application/zip\r\n\r\n`),
+      content,
+      Buffer.from(`\r\n--${boundary}--\r\n`)
+    ])
+  };
 }
 
 afterEach(async () => {
@@ -54,6 +67,73 @@ describe("Fastify application factory", () => {
     expect(app.server.listening).toBe(false);
     const rebuiltApp = await buildApp();
     await rebuiltApp.close();
+  });
+
+  it("assembles an import archive from bounded multipart chunks", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-chunked-import-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18092",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+
+    try {
+      const login = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(login.statusCode, login.body).toBe(200);
+      const cookie = sessionCookieFrom(login);
+      const expected = Buffer.from("chunk-one-chunk-two");
+
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/imports/uploads",
+        headers: { ...csrf, cookie },
+        payload: { size: expected.length }
+      });
+      expect(created.statusCode, created.body).toBe(201);
+      expect(created.json().chunkSize).toBe(16 * 1024 * 1024);
+      const importId = created.json().importId as string;
+
+      let offset = 0;
+      for (const content of [Buffer.from("chunk-one-"), Buffer.from("chunk-two")]) {
+        const chunk = multipartChunk(offset, content);
+        const uploaded = await app.inject({
+          method: "POST",
+          url: `/api/imports/${importId}/chunks`,
+          headers: { ...csrf, cookie, "content-type": chunk.contentType },
+          payload: chunk.payload
+        });
+        offset += content.length;
+        expect(uploaded.statusCode, uploaded.body).toBe(200);
+        expect(uploaded.json().received).toBe(offset);
+      }
+
+      const completed = await app.inject({
+        method: "POST",
+        url: `/api/imports/${importId}/complete`,
+        headers: { ...csrf, cookie },
+        payload: { size: expected.length }
+      });
+      expect(completed.statusCode, completed.body).toBe(200);
+      expect(await readFile(join(dataDir, "imports", `import-${importId}.zip`))).toEqual(expected);
+    } finally {
+      await app.close();
+    }
   });
 
   it("serves an export artifact to a browser download, which cannot set a request header", async () => {

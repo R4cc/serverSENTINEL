@@ -37,6 +37,12 @@ type ImportOperationResult = {
 };
 
 const pollIntervalMs = 1000;
+const minimumImportUploadChunkBytes = 256 * 1024;
+
+export function smallerImportUploadChunk(currentBytes: number) {
+  if (currentBytes <= minimumImportUploadChunkBytes) return undefined;
+  return Math.max(minimumImportUploadChunkBytes, Math.floor(currentBytes / 2));
+}
 
 export function exportStatePollInterval(state: ServerExportState) {
   return state.latest?.status === "queued" || state.latest?.status === "running" ? pollIntervalMs : 5_000;
@@ -304,19 +310,55 @@ export function useExportWorkspace(
     setImportBusy(true);
     setImportError("");
     setImportValidation(null);
+    setImportProgress(0);
     setImportTask("Uploading archive");
+    let pendingImportId = "";
+    let uploadComplete = false;
     try {
-      const body = new FormData();
-      body.append("file", file);
-      const uploaded = await api<{ importId: string }>("/api/imports/upload", { method: "POST", body });
-      setImportId(uploaded.importId);
+      const upload = await api<{ importId: string; chunkSize: number }>("/api/imports/uploads", {
+        method: "POST",
+        body: JSON.stringify({ size: file.size })
+      });
+      pendingImportId = upload.importId;
+      setImportId(upload.importId);
+      let chunkSize = upload.chunkSize;
+      let offset = 0;
+      while (offset < file.size) {
+        const end = Math.min(offset + chunkSize, file.size);
+        const body = new FormData();
+        // Multipart fields must precede the file because the server consumes the request as a stream.
+        body.append("offset", String(offset));
+        body.append("file", file.slice(offset, end), file.name);
+        try {
+          await api<{ received: number }>(`/api/imports/${upload.importId}/chunks`, { method: "POST", body });
+          offset = end;
+          const progress = Math.round((offset / file.size) * 100);
+          setImportProgress(progress);
+          setImportTask(`Uploading archive · ${progress}%`);
+        } catch (error) {
+          const smallerChunk = error instanceof ApiError && error.status === 413
+            ? smallerImportUploadChunk(chunkSize)
+            : undefined;
+          if (!smallerChunk) throw error;
+          chunkSize = smallerChunk;
+        }
+      }
+      await api(`/api/imports/${upload.importId}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ size: file.size })
+      });
+      uploadComplete = true;
       setImportTask("Validating archive");
       const validation = await api<ImportValidationResult>("/api/imports/validate", {
         method: "POST",
-        body: JSON.stringify({ importId: uploaded.importId, targetNodeId })
+        body: JSON.stringify({ importId: upload.importId, targetNodeId })
       });
       setImportValidation(validation);
     } catch (error) {
+      if (pendingImportId && !uploadComplete) {
+        void api(`/api/imports/${pendingImportId}`, { method: "DELETE" }).catch(() => undefined);
+        setImportId("");
+      }
       setImportError(error instanceof ApiError ? error.message : errorMessage(error, "The archive could not be read."));
     } finally {
       setImportBusy(false);

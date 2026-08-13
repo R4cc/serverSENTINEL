@@ -1,13 +1,14 @@
 import type { FastifyInstance } from "fastify";
+import type { MultipartFile } from "@fastify/multipart";
 
 import { createWriteStream } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, rename, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { EXPORT_CATEGORY_DESCRIPTORS } from "@serversentinel/contracts";
 import { config } from "../config.js";
-import { destructiveRateLimit } from "../http/rateLimits.js";
+import { destructiveRateLimit, importChunkRateLimit } from "../http/rateLimits.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
 import {
   estimateExport,
@@ -28,9 +29,16 @@ import { services } from "../appServices.js";
 import { isFullAccessUser } from "../permissions.js";
 import { getServer } from "../servers/store.js";
 
+const importUploadChunkMaxBytes = 16 * 1024 * 1024;
+const activeImportUploads = new Set<string>();
+
 /** Uploaded archives live here until an import operation consumes them. */
 function importStagingPath(importId: string) {
   return join(config.importsDir, `import-${importId}.zip`);
+}
+
+function importPendingPath(importId: string) {
+  return join(config.importsDir, `import-${importId}.upload`);
 }
 
 function validateImportId(value: unknown) {
@@ -57,6 +65,33 @@ async function resolveUploadedArchive(importId: string) {
     throw new Error("Uploaded archive is no longer available. Upload it again.");
   }
   return path;
+}
+
+async function resolvePendingUpload(importId: string) {
+  const path = resolve(importPendingPath(importId));
+  if (!isInsideServersDirectory(config.importsDir, path)) {
+    throw new Error("Pending import upload is not available");
+  }
+  try {
+    await stat(path);
+  } catch {
+    throw new Error("Pending import upload is no longer available. Start the upload again.");
+  }
+  return path;
+}
+
+function multipartField(part: MultipartFile, name: string) {
+  const raw = part.fields[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value && value.type === "field" && typeof value.value === "string" ? value.value : undefined;
+}
+
+function positiveUploadSize(value: unknown) {
+  const size = typeof value === "number" ? value : Number.NaN;
+  if (!Number.isSafeInteger(size) || size < 1 || size > config.importMaxExpandedBytes) {
+    throw new Error(`Export archive size must be between 1 byte and ${Math.floor(config.importMaxExpandedBytes / 1024 / 1024 / 1024)} GiB`);
+  }
+  return size;
 }
 
 export function registerImportExportRoutes(app: FastifyInstance) {
@@ -164,6 +199,80 @@ app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download
  * makes the artifact far too large to resend for validation and again for apply, and far too large
  * to carry as base64 in a JSON body the way schema 3 did.
  */
+app.post<{ Body: { size?: unknown } }>("/api/imports/uploads", destructiveRateLimit, async (request, reply) => {
+  await requireRequestPermission(request, "servers.create");
+  positiveUploadSize(request.body?.size);
+  const importId = randomUUID();
+  await mkdir(config.importsDir, { recursive: true, mode: 0o700 });
+  await writeFile(importPendingPath(importId), Buffer.alloc(0), { flag: "wx", mode: 0o600 });
+  return reply.code(201).send({ importId, chunkSize: importUploadChunkMaxBytes });
+});
+
+app.post<{ Params: { importId: string } }>("/api/imports/:importId/chunks", importChunkRateLimit, async (request) => {
+  await requireRequestPermission(request, "servers.create");
+  const importId = validateImportId(request.params.importId);
+  if (activeImportUploads.has(importId)) {
+    throw new Error("Another chunk is already being saved for this import");
+  }
+  activeImportUploads.add(importId);
+  let path: string | undefined;
+  let startingSize: number | undefined;
+  try {
+    path = await resolvePendingUpload(importId);
+    const part = await request.file({ limits: { fileSize: importUploadChunkMaxBytes, files: 1 } });
+    if (!part) throw new Error("An export archive chunk is required");
+    const offset = Number(multipartField(part, "offset"));
+    const current = await stat(path);
+    startingSize = current.size;
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset !== startingSize) {
+      part.file.destroy();
+      throw new Error(`Import upload offset ${offset} does not match the saved size ${startingSize}`);
+    }
+    if (startingSize >= config.importMaxExpandedBytes) {
+      part.file.destroy();
+      throw new Error("Export archive has reached the configured import limit");
+    }
+    await pipeline(part.file, createWriteStream(path, { flags: "a", mode: 0o600 }));
+    const written = await stat(path);
+    if (part.file.truncated || written.size > config.importMaxExpandedBytes) {
+      await truncate(path, startingSize);
+      throw new Error(`Export archive chunk exceeds the ${Math.floor(importUploadChunkMaxBytes / 1024 / 1024)} MiB chunk limit`);
+    }
+    if (written.size === startingSize) {
+      throw new Error("Export archive chunk is empty");
+    }
+    return { received: written.size };
+  } catch (error) {
+    if (path && startingSize !== undefined) await truncate(path, startingSize).catch(() => undefined);
+    throw error;
+  } finally {
+    activeImportUploads.delete(importId);
+  }
+});
+
+app.post<{ Body: { size?: unknown }; Params: { importId: string } }>("/api/imports/:importId/complete", destructiveRateLimit, async (request) => {
+  await requireRequestPermission(request, "servers.create");
+  const importId = validateImportId(request.params.importId);
+  if (activeImportUploads.has(importId)) {
+    throw new Error("The final import chunk is still being saved");
+  }
+  activeImportUploads.add(importId);
+  try {
+    const path = await resolvePendingUpload(importId);
+    const expectedSize = positiveUploadSize(request.body?.size);
+    const written = await stat(path);
+    if (written.size !== expectedSize) {
+      throw new Error(`Import upload is incomplete: received ${written.size} of ${expectedSize} bytes`);
+    }
+    await rename(path, importStagingPath(importId));
+    return { importId, size: written.size };
+  } finally {
+    activeImportUploads.delete(importId);
+  }
+});
+
+// Kept for older browser builds. Current clients use bounded chunks so reverse proxies never need
+// to accept a multi-gigabyte request body in one HTTP request.
 app.post("/api/imports/upload", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.create");
   const part = await request.file({ limits: { fileSize: config.importMaxExpandedBytes, files: 1 } });
@@ -203,8 +312,14 @@ app.post<{ Body: { importId?: unknown; targetNodeId?: unknown } }>("/api/imports
 
 app.delete<{ Params: { importId: string } }>("/api/imports/:importId", async (request) => {
   await requireRequestPermission(request, "servers.create");
-  const archivePath = await resolveUploadedArchive(validateImportId(request.params.importId));
-  await rm(archivePath, { force: true });
+  const importId = validateImportId(request.params.importId);
+  if (activeImportUploads.has(importId)) {
+    throw new Error("Import upload is still being saved");
+  }
+  await Promise.all([
+    rm(importStagingPath(importId), { force: true }),
+    rm(importPendingPath(importId), { force: true })
+  ]);
   return { ok: true };
 });
 
