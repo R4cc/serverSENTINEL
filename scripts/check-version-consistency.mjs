@@ -5,6 +5,10 @@ const readText = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 
 const version = readJson("package.json").version;
 
 const failures = [];
+const calendarVersionPattern = /^\d{2}\.(?:[1-9]|1[0-2])\.[1-9]\d*$/;
+if (!calendarVersionPattern.test(version)) {
+  failures.push(`package.json version ${version} does not use YY.M.N calendar versioning`);
+}
 for (const manifest of ["server/package.json", "shared/package.json", "web/package.json"]) {
   const actual = readJson(manifest).version;
   if (actual !== version) failures.push(`${manifest} is ${actual}; expected ${version}`);

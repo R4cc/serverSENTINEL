@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.8.1 - 2026-08-13
+
+- Adopted calendar versions in the `YY.M.N` format, starting at `26.8.1`, with the release number incrementing within each month and resetting when the year or month changes.
+
 ## 1.15.0 - 2026-08-13
 
 - Added live duration bars for active schedule runs to the Overview event timeline, including runs that began before the visible window, with direct navigation to the running execution.
