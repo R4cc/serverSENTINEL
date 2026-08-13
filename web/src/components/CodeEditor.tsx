@@ -1,17 +1,10 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
-import { javascript } from "@codemirror/lang-javascript";
-import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { yaml } from "@codemirror/lang-yaml";
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
 import { type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { search } from "@codemirror/search";
 import { tags } from "@lezer/highlight";
-import { properties } from "@codemirror/legacy-modes/mode/properties";
-import { shell } from "@codemirror/legacy-modes/mode/shell";
-import { toml } from "@codemirror/legacy-modes/mode/toml";
 
 type CodeEditorProps = {
   selectedPath: string;
@@ -150,9 +143,34 @@ const serverSentinelEditorTheme = EditorView.theme({
   }
 });
 
-const propertiesLanguage = StreamLanguage.define(properties);
-const shellLanguage = StreamLanguage.define(shell);
-const tomlLanguage = StreamLanguage.define(toml);
+/**
+ * Grammars are the bulk of the editor bundle, and one file needs exactly one of them. Loading them
+ * on demand keeps the JavaScript and Markdown parsers — by far the largest — out of the download
+ * for the `.properties`, `.yml`, and `.json` files this panel actually opens most of the time.
+ * The editor mounts immediately with plain text and gains highlighting when the grammar lands.
+ */
+const languageLoaders: Record<Exclude<EditorLanguageKind, "plain">, () => Promise<Extension>> = {
+  json: () => import("@codemirror/lang-json").then((module) => module.json()),
+  yaml: () => import("@codemirror/lang-yaml").then((module) => module.yaml()),
+  javascript: () => import("@codemirror/lang-javascript").then((module) => module.javascript({ typescript: true, jsx: true })),
+  markdown: () => import("@codemirror/lang-markdown").then((module) => module.markdown()),
+  toml: () => import("@codemirror/legacy-modes/mode/toml").then((module) => StreamLanguage.define(module.toml)),
+  properties: () => import("@codemirror/legacy-modes/mode/properties").then((module) => StreamLanguage.define(module.properties)),
+  shell: () => import("@codemirror/legacy-modes/mode/shell").then((module) => StreamLanguage.define(module.shell))
+};
+
+const loadedLanguages = new Map<EditorLanguageKind, Extension>();
+
+/** Resolves synchronously once a grammar has been loaded, so reopening a file never flashes plain text. */
+export function loadEditorLanguage(kind: EditorLanguageKind) {
+  if (kind === "plain") return undefined;
+  const cached = loadedLanguages.get(kind);
+  if (cached) return cached;
+  return languageLoaders[kind]().then((extension) => {
+    loadedLanguages.set(kind, extension);
+    return extension;
+  });
+}
 
 function fileParts(path: string) {
   const fileName = path.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
@@ -179,25 +197,34 @@ export function editorLanguageKind(path: string): EditorLanguageKind {
   return "plain";
 }
 
-function editorLanguage(path: string): Extension {
-  switch (editorLanguageKind(path)) {
-    case "json":
-      return json();
-    case "yaml":
-      return yaml();
-    case "javascript":
-      return javascript({ typescript: true, jsx: true });
-    case "markdown":
-      return markdown();
-    case "toml":
-      return tomlLanguage;
-    case "properties":
-      return propertiesLanguage;
-    case "shell":
-      return shellLanguage;
-    case "plain":
-      return [];
-  }
+/**
+ * Holds the grammar for `path`, resolving to the cached one on the first render when it is already
+ * in memory. A grammar that arrives after the file has changed again is discarded rather than
+ * applied to the wrong document.
+ */
+function useEditorLanguage(path: string): Extension {
+  const kind = editorLanguageKind(path);
+  const [language, setLanguage] = useState<Extension>(() => {
+    const immediate = loadEditorLanguage(kind);
+    return immediate instanceof Promise || !immediate ? [] : immediate;
+  });
+
+  useEffect(() => {
+    const pending = loadEditorLanguage(kind);
+    if (!(pending instanceof Promise)) {
+      setLanguage(pending ?? []);
+      return;
+    }
+    let current = true;
+    void pending.then((extension) => {
+      if (current) setLanguage(extension);
+    });
+    return () => {
+      current = false;
+    };
+  }, [kind]);
+
+  return language;
 }
 
 export default function CodeEditor({
@@ -220,10 +247,12 @@ export default function CodeEditor({
     onChangeRef.current(nextValue);
   }, []);
 
+  const language = useEditorLanguage(selectedPath);
+
   const extensions = useMemo<Extension[]>(
     () => [
       syntaxHighlighting(serverSentinelHighlightStyle, { fallback: true }),
-      editorLanguage(selectedPath),
+      language,
       editorSearchExtension,
       keymap.of([
         {
@@ -236,7 +265,7 @@ export default function CodeEditor({
         }
       ])
     ],
-    [selectedPath]
+    [language]
   );
 
   return (

@@ -7,6 +7,7 @@
 - Kept console logs at a stable size by settling the accelerated renderer before revealing output.
 - Spread cached player-head refreshes across a rolling daily schedule while keeping visible-player requests responsive.
 - Removed the obsolete export-retention setting now that successful export archives remain until replaced.
+- Reduced repeat downloads and panel CPU use with stable vendor chunks, font preloads, and precompressed web assets.
 
 ## 26.8.5 - 2026-08-13
 
