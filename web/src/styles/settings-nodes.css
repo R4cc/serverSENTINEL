@@ -1986,7 +1986,7 @@
   display: grid;
   align-content: start;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) 14px;
+  padding: var(--space-4);
 }
 
 .eventsPanel .uiPanelHeader {

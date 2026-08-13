@@ -813,7 +813,7 @@ button:disabled,
   gap: 10px;
   align-items: center;
   justify-content: stretch;
-  padding: 10px 11px;
+  padding: 10px var(--space-3);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 20%, transparent);
   border-radius: var(--radius-sm);

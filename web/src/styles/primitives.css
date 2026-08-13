@@ -931,6 +931,8 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .modalFooter .uiButton,
 .userModalFooter .uiButton {
   min-height: var(--control-height-compact);
+  padding-inline: var(--space-3);
+  font-size: var(--type-meta-size);
   white-space: nowrap;
 }
 
