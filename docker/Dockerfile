@@ -1,17 +1,17 @@
-ARG SS_VERSION=26.8.11
+# syntax=docker/dockerfile:1
+
+ARG SS_VERSION=26.8.12
 FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
 
 FROM dependency-base AS production-dependencies
 
 COPY package*.json ./
 COPY shared/package.json shared/package.json
 COPY server/package.json server/package.json
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev --workspace server; else npm install --omit=dev --workspace server; fi \
+RUN --mount=type=cache,id=serversentinel-npm,target=/root/.npm \
+  npm ci --omit=dev --workspace server \
   && test -f node_modules/better-sqlite3/prebuilds/linux-x64.node \
   && find node_modules/better-sqlite3/prebuilds -type f ! -name linux-x64.node -delete \
   && rm -rf node_modules/better-sqlite3/build \
@@ -28,7 +28,7 @@ COPY package*.json ./
 COPY shared/package.json shared/package.json
 COPY server/package.json server/package.json
 COPY web/package.json web/package.json
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN --mount=type=cache,id=serversentinel-npm,target=/root/.npm npm ci
 
 COPY shared shared
 COPY server server

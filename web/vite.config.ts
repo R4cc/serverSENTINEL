@@ -1,4 +1,4 @@
-import { constants, brotliCompress, gzip } from "node:zlib";
+import { constants, brotliCompress } from "node:zlib";
 import { promisify } from "node:util";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -9,7 +9,6 @@ const backendTarget = process.env.VITE_SERVERSENTINEL_API_TARGET ?? "http://loca
 const backendWsTarget = backendTarget.replace(/^http/, "ws");
 
 const compressBrotli = promisify(brotliCompress);
-const compressGzip = promisify(gzip);
 
 /**
  * Bundled dependencies that never change when the application does. Splitting each one out of the
@@ -76,10 +75,11 @@ function chunkName(moduleIds: readonly string[]) {
 }
 
 /**
- * Precompresses the emitted assets so the panel serves a stored `.br`/`.gz` body instead of
+ * Precompresses the emitted assets so modern browsers receive a stored `.br` body instead of
  * encoding one per request. Build-time Brotli runs at maximum quality, which the request path
- * cannot afford, so the transfer is smaller *and* costs the host no CPU. `@fastify/static`
- * picks the sibling file up through `preCompressed`.
+ * cannot afford, so the transfer is smaller *and* costs the host no CPU. Gzip-only clients fall
+ * back to the plain asset and the server's response compressor instead of adding a second copy of
+ * every compressed asset to the container image.
  *
  * Only text-shaped assets are worth it. Fonts and images are already compressed, and a second
  * pass over them adds files that are never smaller than the original.
@@ -100,24 +100,18 @@ function precompressAssets(): Plugin {
           // Below roughly a packet the stored copy saves nothing over encoding on the fly.
           if (body.byteLength < 1024) return 0;
           const target = resolve(outputDirectory, fileName);
-          const [brotli, gzipped] = await Promise.all([
-            compressBrotli(body, {
-              params: {
-                [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
-                [constants.BROTLI_PARAM_SIZE_HINT]: body.byteLength
-              }
-            }),
-            compressGzip(body, { level: 9 })
-          ]);
-          await Promise.all([
-            writeFile(`${target}.br`, brotli),
-            writeFile(`${target}.gz`, gzipped)
-          ]);
+          const brotli = await compressBrotli(body, {
+            params: {
+              [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
+              [constants.BROTLI_PARAM_SIZE_HINT]: body.byteLength
+            }
+          });
+          await writeFile(`${target}.br`, brotli);
           return 1;
         })
       );
       const count = written.reduce((total, value) => total + value, 0);
-      this.info(`precompressed ${count} assets as .br and .gz`);
+      this.info(`precompressed ${count} assets as .br`);
     }
   };
 }

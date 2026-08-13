@@ -10,7 +10,7 @@ export const immutableAssetCacheControl = "public, max-age=31536000, immutable";
 export const publicAssetCacheControl = "public, max-age=3600, must-revalidate";
 
 /**
- * A precompressed hit is served from the sibling `.br`/`.gz` file, so the path this sees carries the
+ * A precompressed hit is served from a sibling `.br` file, so the path this sees carries the
  * encoding suffix. The policy belongs to the resource, not to the encoding it arrived in.
  */
 function withoutEncodingSuffix(path: string) {
@@ -33,10 +33,9 @@ export async function registerStaticFrontend(app: FastifyInstance) {
     prefix: "/",
     wildcard: false,
     cacheControl: false,
-    // The build writes a maximum-quality `.br` and `.gz` beside every text asset. Serving those
-    // sends a smaller body than the request-time encoder can produce and spends no CPU doing it;
-    // `@fastify/compress` leaves a reply alone once `Content-Encoding` is set. A build without the
-    // siblings, or a client that asked for neither encoding, falls back to the plain file.
+    // The build writes a maximum-quality `.br` beside every text asset. Serving it sends a smaller
+    // body than the request-time encoder can produce and spends no CPU doing it. Gzip-only clients
+    // fall back to the plain file, which `@fastify/compress` encodes on demand.
     preCompressed: true,
     setHeaders(reply, path) {
       // HTML must revalidate and must not be transformed by Cloudflare, which also

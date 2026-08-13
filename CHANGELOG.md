@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 26.8.12 - 2026-08-13
+
+- Reduced container storage by retaining maximum-quality Brotli assets while compressing the uncommon gzip fallback on demand.
+- Shortened container builds and reduced intermediate cache size by using the packaged SQLite binary without a compiler toolchain and caching npm downloads across dependency installs.
+
 ## 26.8.11 - 2026-08-13
 
 - Reduced the container image and runtime attack surface with a shell-free Distroless Node image, guarded by final-image SQLite, timezone, fetch, and CA certificate checks.
