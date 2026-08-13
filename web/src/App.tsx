@@ -9,7 +9,7 @@ import { trimFormValue } from "./utils/validation";
 import { authValidationErrors, type AuthField } from "./utils/authValidation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
-import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
+import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldLoadPlayerSnapshots, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
@@ -790,7 +790,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (activePage !== "nodes" && activePage !== "overview") return;
+    if (!shouldLoadPlayerSnapshots(activePage)) return;
     if (demoMode) {
       setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(demoRunning));
       return;

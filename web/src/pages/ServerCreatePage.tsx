@@ -376,13 +376,11 @@ export function ManagedServerForm({
           <>
             <div className="modInstallStepIntro">
               <h3>Placement & Identity</h3>
-              <p>Choose where to host your server and give it a name.</p>
             </div>
 
             <div className="createWizardFields">
               <div className="createWizardField">
                 <label htmlFor="create-node-select">Node</label>
-                <span id="create-node-hint" className="fieldHint">Select the node where this server will be created.</span>
                 <div className="nodeSelectRow">
                   <select
                     id="create-node-select"
@@ -392,7 +390,7 @@ export function ManagedServerForm({
                     disabled={provisioning || nodes.length === 0}
                     required
                     aria-invalid={placementBlocked}
-                    aria-describedby={`create-node-hint${placementBlocked ? " create-node-error" : ""}`}
+                    aria-describedby={placementBlocked ? "create-node-error" : undefined}
                   >
                     <option value="">{nodes.length === 0 ? "No nodes available" : "Choose a node"}</option>
                     {nodes.map((node) => {
@@ -425,7 +423,6 @@ export function ManagedServerForm({
 
               <div className="createWizardField">
                 <label htmlFor="create-display-name">Display name</label>
-                <span id="create-display-name-hint" className="fieldHint">This is how your server will be displayed in the panel.</span>
                 <input
                   id="create-display-name"
                   name="displayName"
@@ -435,7 +432,7 @@ export function ManagedServerForm({
                   required
                   maxLength={80}
                   aria-invalid={Boolean(displayNameError)}
-                  aria-describedby={`create-display-name-hint${displayNameError ? " create-display-name-error" : ""}`}
+                  aria-describedby={displayNameError ? "create-display-name-error" : undefined}
                 />
                 {displayNameError && <span id="create-display-name-error" className="fieldError">{displayNameError}</span>}
               </div>
@@ -646,13 +643,11 @@ export function RuntimeWizardStep({
     <>
       <div className="modInstallStepIntro">
         <h3>Runtime</h3>
-        <p>Select the Minecraft version and server runtime you want to run.</p>
       </div>
 
       <div className="createWizardFields runtimeWizardFields">
         <div className="createWizardField">
           <label htmlFor="create-minecraft-version">Minecraft version</label>
-          <span className="fieldHint">Choose the Minecraft version for your server.</span>
           <select
             id="create-minecraft-version"
             name="minecraftVersion"
@@ -683,7 +678,6 @@ export function RuntimeWizardStep({
         <section className="runtimeLoaderSection" aria-labelledby="runtime-loader-title">
           <div>
             <strong id="runtime-loader-title">Server runtime</strong>
-            <span className="fieldHint">Availability is controlled by each runtime provider.</span>
           </div>
           {serverRuntimeTypes.map((candidateType) => {
             const candidate = serverRuntimeDefinitions[candidateType];
@@ -726,7 +720,6 @@ export function RuntimeWizardStep({
 
         <div className="createWizardField">
           <label htmlFor="create-runtime-version">{runtimeDefinition.versionLabel}</label>
-          <span className="fieldHint">Choose the {runtimeDefinition.displayName} version compatible with the selected Minecraft version.</span>
           <select
             id="create-runtime-version"
             name="runtimeVersion"
@@ -918,14 +911,12 @@ function ResourcesNetworkWizardStep({
     <>
       <div className="modInstallStepIntro">
         <h3>Resources & Network</h3>
-        <p>Configure the resources your server will use and how it can be accessed.</p>
       </div>
 
       <div className="createWizardFields resourcesWizardFields">
         <section className="resourceStepSection" aria-labelledby="create-memory-title">
           <div className="resourceSectionIntro">
             <h4 id="create-memory-title">Memory</h4>
-            <p>Configure the memory allocation for your server.</p>
           </div>
           <div className="memoryRangeLayout">
             <MemoryRangeControl
@@ -965,7 +956,6 @@ function ResourcesNetworkWizardStep({
         <section className="resourceStepSection networkPortsSection" aria-labelledby="create-network-title">
           <div className="resourceSectionIntro">
             <h4 id="create-network-title">Network ports</h4>
-            <p>Configure the primary ports used by your server.</p>
           </div>
           <div className="networkPortGrid">
             <ProtocolInput
@@ -1322,7 +1312,6 @@ function ReviewCreateWizardStep({
     <>
       <div className="modInstallStepIntro">
         <h3>Review & Create</h3>
-        <p>Review your server configuration before creating it.</p>
       </div>
 
       <div className="createWizardFields reviewWizardFields">
@@ -1426,10 +1415,10 @@ function ReviewNodeIcon() {
 }
 
 const createWizardSteps = [
-  { title: "Placement & Identity", subtitle: "Where and what" },
-  { title: "Runtime", subtitle: "What to run" },
-  { title: "Resources & Network", subtitle: "How it runs" },
-  { title: "Review & Create", subtitle: "Confirm and create" }
+  { title: "Placement & Identity" },
+  { title: "Runtime" },
+  { title: "Resources & Network" },
+  { title: "Review & Create" }
 ];
 
 export function CreateServerStepper({ activeStep }: { activeStep: number }) {
@@ -1444,7 +1433,6 @@ export function CreateServerStepper({ activeStep }: { activeStep: number }) {
             <span>{completed ? <AppIcon name="check" /> : stepNumber}</span>
             <div>
               <strong>{step.title}</strong>
-              <small>{step.subtitle}</small>
               <span className="srOnly">{active ? "Current step" : completed ? "Completed" : "Not started"}</span>
             </div>
             {index < createWizardSteps.length - 1 && <i aria-hidden="true" />}

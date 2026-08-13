@@ -17,11 +17,11 @@
   position: sticky;
   top: var(--space-4);
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   border: 1px solid var(--glass-edge);
   border-radius: calc(var(--radius-md) + 2px);
   background: var(--glass-tint);
-  padding: 7px;
+  padding: var(--space-2);
   box-shadow: var(--glass-shadow-panel);
   -webkit-backdrop-filter: var(--glass-filter-panel);
   backdrop-filter: var(--glass-filter-panel);
@@ -38,7 +38,7 @@
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
-  padding: 9px 10px;
+  padding: var(--space-2) var(--space-3);
   text-align: left;
   box-shadow: none;
   transform: none;
@@ -91,7 +91,7 @@
 .settingsHubCategories button > span:last-child {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: var(--space-1);
 }
 
 .settingsHubCategories strong {
@@ -126,7 +126,7 @@
 }
 
 .settingsHubSectionHeader {
-  min-height: 94px;
+  min-height: 78px;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
@@ -152,13 +152,6 @@
   color: var(--text);
   font-size: var(--type-section-title-size);
   line-height: 1.2;
-}
-
-.settingsHubSectionHeader p {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  line-height: 1.4;
 }
 
 .settingsHubSectionActions,
@@ -683,7 +676,7 @@
   }
 
   .settingsHubSectionHeader {
-    min-height: 82px;
+    min-height: 70px;
     grid-template-columns: 40px minmax(0, 1fr);
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);

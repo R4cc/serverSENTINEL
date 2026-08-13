@@ -661,12 +661,6 @@
   line-height: 1.2;
 }
 
-.createWizardStep small {
-  color: inherit;
-  font-size: 12px;
-  font-weight: var(--weight-strong);
-}
-
 .createWizardStep i {
   border-top: var(--border-subtle) solid var(--border-muted);
 }
@@ -1992,7 +1986,7 @@
   display: grid;
   align-content: start;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) 14px;
+  padding: var(--space-4);
 }
 
 .eventsPanel .uiPanelHeader {

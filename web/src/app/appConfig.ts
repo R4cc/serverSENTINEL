@@ -1,6 +1,6 @@
 import type { ActivePage, AppState, PlaceholderNode } from "../types";
 
-export const appVersion = "26.8.7";
+export const appVersion = "26.8.8";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 export const demoLocalStorageKey = "serversentinel-demo-mode";
@@ -46,6 +46,9 @@ export const emptyPanelContextNode: PlaceholderNode = {
 
 export function isServerWorkspacePage(page: ActivePage) {
   return serverWorkspacePages.includes(page);
+}
+export function shouldLoadPlayerSnapshots(page: ActivePage) {
+  return page === "nodes" || isServerWorkspacePage(page);
 }
 export function shouldShowApplicationLoadingSkeleton(page: ActivePage) {
   return page !== "settings";

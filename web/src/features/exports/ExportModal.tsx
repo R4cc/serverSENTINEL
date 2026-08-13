@@ -70,8 +70,7 @@ export function ExportModal({
 
       <div className="modalBody exportModalBody">
         <p id={descriptionId} className="uiFormFieldDescription">
-          Choose what to include from this server. The download is a single ZIP archive you can import
-          back into this panel or another one.
+          The ZIP archive can be imported back into this panel or another one.
         </p>
 
         {running && (

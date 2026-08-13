@@ -132,7 +132,6 @@ function CategoryHeader({ category, actions }: { category: SettingsCategory; act
       <span className="settingsHubSectionIcon"><SettingsGlyph name={category} /></span>
       <div>
         <h3>{details.label}</h3>
-        <p>{details.description}</p>
       </div>
       {actions && <div className="settingsHubSectionActions">{actions}</div>}
     </header>
@@ -181,7 +180,7 @@ export function SettingsPage(props: SettingsPageProps) {
       <>
         <CategoryHeader category="appearance" actions={<StatusBadge tone="neutral">This browser</StatusBadge>} />
         <div className="settingsHubRows">
-          <PreferenceRow title="Theme" description="Choose a panel palette. This preference stays in this browser.">
+          <PreferenceRow title="Theme" description="Saved in this browser.">
             <select aria-label="Theme" value={props.themePreference} onChange={(event) => props.onThemeChange(event.target.value as ThemePreference)}>
               {themeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
