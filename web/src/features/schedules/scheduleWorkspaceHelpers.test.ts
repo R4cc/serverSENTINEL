@@ -3,6 +3,7 @@ import type { ScheduleStep, ScheduledExecution } from "../../types";
 import {
   createDemoSchedule,
   scheduleDisabledReason,
+  scheduleRestartsServer,
   scheduleUpdateLabel,
   scheduleValidationMessage,
   type SchedulePatch
@@ -46,6 +47,11 @@ describe("schedule workspace helpers", () => {
     expect(scheduleUpdateLabel({ enabled: true })).toBe("Schedule enabled");
     expect(scheduleUpdateLabel({ enabled: false })).toBe("Schedule disabled");
     expect(scheduleUpdateLabel({ enabled: true, name: "Nightly" } as Partial<ScheduledExecution>)).toBe("Schedule updated");
+  });
+
+  it("detects the restart step that makes an on-demand run disruptive", () => {
+    expect(scheduleRestartsServer({ steps: [commandStep] })).toBe(false);
+    expect(scheduleRestartsServer({ steps: [commandStep, { type: "action", procedure: "restart", delaySeconds: 60 }] })).toBe(true);
   });
 
   it("prioritizes the existing schedule lock reasons", () => {

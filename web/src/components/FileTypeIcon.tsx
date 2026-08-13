@@ -20,6 +20,7 @@ import {
   GripHorizontal,
   Hourglass,
   House,
+  Minus,
   MoreHorizontal,
   MoreVertical,
   Network,
@@ -56,7 +57,7 @@ export function SidebarIcon({ name }: { name: SidebarIconName }) {
   return <Icon className="sideIcon" aria-hidden="true" />;
 }
 
-type AppIconName = "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" | "moreHorizontal" | "moreVertical";
+type AppIconName = "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "minus" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" | "moreHorizontal" | "moreVertical";
 
 const appIcons: Record<AppIconName, LucideIcon> = {
   chevronLeft: ChevronLeft,
@@ -65,6 +66,7 @@ const appIcons: Record<AppIconName, LucideIcon> = {
   chevronDown: ChevronDown,
   plus: Plus,
   x: X,
+  minus: Minus,
   fileUp: FileUp,
   arrowUp: ArrowUp,
   home: House,

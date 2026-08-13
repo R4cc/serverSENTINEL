@@ -164,7 +164,7 @@ export function SchedulePage({
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
   const activeRunCount = runItems.filter((run) => run.kind === "active").length;
-  const recentRunsKey = runItems.map((run) => `${run.kind}:${run.id}:${run.kind === "active" ? run.waitingUntil ?? run.message ?? "" : run.ranAt}`).join("|");
+  const recentRunsKey = scheduleRunFeedKey(runItems);
   const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
     {
       id: "name",
@@ -204,9 +204,12 @@ export function SchedulePage({
   });
   const scheduleRows = scheduleTable.getRowModel().rows;
 
+  // Keyed on the run contents alone. The page refetches app state every 15 seconds, so depending on
+  // the `schedules` array identity scrolled the feed back to the top on every poll, whether or not
+  // a run had changed, and pulled whatever the reader was looking at out from under them.
   useEffect(() => {
     runsFeedRef.current?.scrollTo({ top: 0 });
-  }, [schedules, recentRunsKey]);
+  }, [recentRunsKey]);
 
   useEffect(() => {
     if (selectedRun && !runItems.some((run) => run.kind === "completed" && run.id === selectedRun.id)) {
@@ -498,12 +501,12 @@ export function SchedulePage({
                             {relativeTimestamps ? lastRunRelativeTime(schedule.lastRunAt, relativeNow) : formatScheduleTime(schedule.lastRunAt, formatDate)}
                           </time>
                           <span
-                            className={`scheduleStatusIcon ${statusTone(schedule.lastStatus) === "success" ? "success" : "failed"}`}
+                            className={`scheduleStatusIcon ${statusTone(schedule.lastStatus)}`}
                             role="img"
                             aria-label={statusLabel(schedule.lastStatus)}
                             title={statusLabel(schedule.lastStatus)}
                           >
-                            <AppIcon name={statusTone(schedule.lastStatus) === "success" ? "check" : "x"} />
+                            <AppIcon name={statusIcon(schedule.lastStatus)} />
                           </span>
                         </div>
                       ) : (
@@ -549,14 +552,14 @@ export function SchedulePage({
                         disabled={disabled}
                         items={[
                           {
-                            id: "test-now",
-                            label: "Test now",
+                            id: "run-now",
+                            label: "Run now",
                             icon: <AppIcon name="refresh" />,
                             onSelect: () => { void onRunNow(schedule); },
                             disabled: disabled || scheduleIsActive,
                             title: scheduleIsActive
                               ? "This schedule already has an active run. Cancel it or wait for it to finish."
-                              : disabled ? disabledReason || "Schedule testing is unavailable right now." : `Test ${schedule.name} now`
+                              : disabled ? disabledReason || "Schedule runs are unavailable right now." : `Run ${schedule.name} now`
                           },
                           {
                             id: "edit",
@@ -952,7 +955,7 @@ function scheduleRuns(schedules: ScheduledExecution[]) {
     .slice(0, 8);
 }
 
-function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelItem[] {
+export function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelItem[] {
   const active = schedules.flatMap((schedule) => schedule.activeRuns ?? [])
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     .map((run) => ({ ...run, kind: "active" as const, sortAt: run.startedAt }));
@@ -961,6 +964,17 @@ function scheduleRunItems(schedules: ScheduledExecution[]): ScheduledRunPanelIte
     .filter((run) => !activeIds.has(run.id))
     .map((run) => ({ ...run, kind: "completed" as const, sortAt: run.ranAt }));
   return [...active, ...completed.slice(0, Math.max(8 - active.length, 0))];
+}
+
+/**
+ * Identifies the runs feed by its contents rather than by the array holding them. The page refetches
+ * app state on a timer and gets a fresh `schedules` array every time, so anything keyed on identity
+ * fires on every poll; this key only changes when a run is added, removed, or advances.
+ */
+export function scheduleRunFeedKey(runItems: ScheduledRunPanelItem[]) {
+  return runItems
+    .map((run) => `${run.kind}:${run.id}:${run.kind === "active" ? run.waitingUntil ?? run.message ?? "" : run.ranAt}`)
+    .join("|");
 }
 
 export function resolveScheduleNavigationTarget(schedules: ScheduledExecution[], target: ScheduleNavigationTarget) {
@@ -991,17 +1005,13 @@ export function scheduleDescription(schedule: ScheduledExecution) {
   return playerPolicy || "Console command automation";
 }
 
+/**
+ * The row and the editor have to read the same expression the same way. A private summariser here
+ * drifted from the editor's describer and printed raw cron fields back at the user, so the table
+ * now shares the describer and only supplies the wording for an expression it cannot parse.
+ */
 function cronSummary(cron: string) {
-  const [minute, hour, day, month, weekday] = cron.trim().split(/\s+/);
-  if (minute?.startsWith("*/") && hour === "*" && day === "*" && month === "*" && weekday === "*") return `Every ${minute.slice(2)} minutes`;
-  if (minute === "0" && hour?.startsWith("*/") && day === "*" && month === "*" && weekday === "*") return `Every ${hour.slice(2)} hours`;
-  if (day === "*" && month === "*" && weekday === "*") return `Daily at ${padTime(hour)}:${padTime(minute)}`;
-  if (day === "*" && month === "*" && weekday !== "*") return `Weekly on ${weekday} at ${padTime(hour)}:${padTime(minute)}`;
-  return "Custom schedule";
-}
-
-function padTime(value?: string) {
-  return /^\d+$/.test(value ?? "") ? String(value).padStart(2, "0") : value ?? "*";
+  return describeCronExpression(cron) ?? "Invalid cron expression";
 }
 
 function statusLabel(status?: string) {
@@ -1012,6 +1022,18 @@ function statusLabel(status?: string) {
   if (normalized === "cancelled") return "Cancelled";
   if (normalized === "running") return "In progress";
   return "Not run";
+}
+
+/**
+ * Skipping is the expected outcome of two of the three player policies, so a skipped run must not
+ * borrow the failure mark. Cancelled keeps the cross because the run really was stopped, and the
+ * tone class separates it from a failure.
+ */
+function statusIcon(status?: string): "check" | "x" | "minus" {
+  const tone = statusTone(status);
+  if (tone === "success") return "check";
+  if (tone === "failed" || tone === "cancelled") return "x";
+  return "minus";
 }
 
 function statusTone(status?: string) {

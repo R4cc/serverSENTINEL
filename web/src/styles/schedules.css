@@ -238,6 +238,15 @@
   color: var(--sentinel-danger);
 }
 
+.scheduleStatusIcon.skipped,
+.scheduleStatusIcon.cancelled {
+  color: var(--sentinel-warning);
+}
+
+.scheduleStatusIcon.unknown {
+  color: var(--text-muted);
+}
+
 .scheduleEnabledCell,
 .scheduleRowActions {
   justify-self: center;

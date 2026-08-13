@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.12.1 - 2026-08-13
+
+- Fixed skipped and cancelled schedule runs being marked as failures in the Last run column, so a run that correctly skipped no longer looks like one that broke.
+- Fixed the Schedules table describing cron expressions differently from the schedule editor, which printed raw cron fields such as "Weekly on 1-5" back at you.
+- Fixed the Scheduled Runs feed scrolling itself back to the top every time the page refreshed its data.
+- Renamed the schedule "Test now" action to "Run now" and added a confirmation for schedules that restart the server, because running one on demand performs every step for real.
+
 ## 1.12.0 - 2026-08-13
 
 - Added page-visit notifications for available node updates, with one combined fleet alert, a three-day browser mute, and persistent per-node notification controls.

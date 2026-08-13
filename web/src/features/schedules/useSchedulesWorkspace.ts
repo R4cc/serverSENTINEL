@@ -8,6 +8,7 @@ import { clientId } from "../../utils/files";
 import {
   createDemoSchedule,
   scheduleDisabledReason,
+  scheduleRestartsServer,
   scheduleUpdateLabel,
   scheduleValidationMessage,
   type SchedulePatch
@@ -185,6 +186,16 @@ export function useSchedulesWorkspace({
       setNotice(message);
       notify("info", message);
       return false;
+    }
+    if (scheduleRestartsServer(schedule)) {
+      const confirmed = await requestConfirmation({
+        title: `Run ${schedule.name} now?`,
+        description: "Run every step of this schedule immediately, ahead of its next scheduled time.",
+        warning: "This schedule restarts the Minecraft server, disconnecting anyone online.",
+        confirmLabel: "Run schedule",
+        variant: "critical"
+      });
+      if (!confirmed) return false;
     }
     setBusy(true);
     if (activeServerIsDemo) {

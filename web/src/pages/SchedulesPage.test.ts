@@ -11,7 +11,9 @@ import {
   ScheduleRunDetailsDialog,
   resolveScheduleNavigationTarget,
   reorderScheduleSteps,
-  scheduleDescription
+  scheduleDescription,
+  scheduleRunFeedKey,
+  scheduleRunItems
 } from "./SchedulesPage";
 
 function schedule(steps: ScheduledExecution["steps"]): ScheduledExecution {
@@ -176,6 +178,46 @@ describe("schedule workspace rendering", () => {
     expect(html).not.toContain("Active runs");
     expect(html).toContain("No schedules added");
     expect(html).toContain("No runs yet");
+  });
+
+  // Skipping is the expected outcome of two of the three player policies, so the last-run mark has
+  // to separate it from a failure. It shipped once as the same red cross a thrown run gets.
+  it("gives a skipped last run its own mark instead of the failure one", () => {
+    const lastRun = { lastRunAt: "2026-07-14T04:00:00.000Z" };
+    const skipped = renderSchedulePage([{ ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), ...lastRun, lastStatus: "skipped" }]);
+    const failed = renderSchedulePage([{ ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), ...lastRun, lastStatus: "failed" }]);
+
+    expect(skipped).toContain('class="scheduleStatusIcon skipped"');
+    expect(skipped).toContain('aria-label="Skipped"');
+    expect(skipped).not.toContain("scheduleStatusIcon failed");
+    expect(failed).toContain('class="scheduleStatusIcon failed"');
+    expect(failed).toContain('aria-label="Failed"');
+  });
+
+  // The feed resets its scroll position when this key changes, and the page is handed a brand new
+  // schedules array every time it polls. Keying on anything the poll rebuilds pulled the run the
+  // reader was looking at out from under them every 15 seconds.
+  it("identifies the runs feed by its contents, not by the array holding them", () => {
+    const run = { id: "run-1", scheduleId: "schedule-1", scheduleName: "Nightly maintenance", status: "success", ranAt: "2026-07-14T04:00:00.000Z" };
+    const polled = () => [{ ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), recentRuns: [{ ...run }] }];
+
+    const first = polled();
+    const second = polled();
+    expect(second).not.toBe(first);
+    expect(scheduleRunFeedKey(scheduleRunItems(second))).toBe(scheduleRunFeedKey(scheduleRunItems(first)));
+
+    const advanced = polled();
+    advanced[0].recentRuns = [{ ...run, id: "run-2", ranAt: "2026-07-15T04:00:00.000Z" }];
+    expect(scheduleRunFeedKey(scheduleRunItems(advanced))).not.toBe(scheduleRunFeedKey(scheduleRunItems(first)));
+  });
+
+  it("describes the cron column with the same describer the editor uses", () => {
+    const weekdays = { ...schedule([{ type: "command", command: "save-all", delaySeconds: 0 }]), cron: "0 4 * * 1-5" };
+
+    const html = renderSchedulePage([weekdays]);
+
+    expect(html).toContain("Every weekday at 04:00");
+    expect(html).not.toContain("Weekly on 1-5");
   });
 });
 
