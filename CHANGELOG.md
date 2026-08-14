@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 26.8.16 - 2026-08-14
+
+- Fixed renaming a server that runs on a node, or changing any of its settings, failing with "server.createdAt must be a non-empty string". The panel now keeps its own record of the server when a node answers an update, instead of expecting the node to return bookkeeping it was never sent.
+
+## 26.8.15 - 2026-08-14
+
+- The panel now explains that a node too old to update itself needs its container recreated, instead of offering a `docker pull` command that reads like the whole fix while leaving the old agent running.
+
 ## 26.8.14 - 2026-08-14
 
 - Minecraft containers now get 60 seconds to save and shut down when something outside serverSENTINEL stops them, such as a Docker daemon restart during a package upgrade, instead of being killed after Docker's 10 second default. The window is configurable with `SERVERSENTINEL_MINECRAFT_STOP_TIMEOUT_SECONDS`.

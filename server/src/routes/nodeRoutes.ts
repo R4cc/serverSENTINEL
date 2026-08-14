@@ -151,9 +151,10 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
     return {
       ok: false,
       mode: "manual",
-      message: `Node agent ${node.agentVersion} cannot update itself to ${appVersion}: it would build its replacement container with the entrypoint of its own image, which the current image no longer has. Pull the image on the node host and recreate the node container once with the same options; it rejoins with its existing identity, and later updates work from the panel again.`,
-      image,
-      command: `docker pull ${image}`
+      // Deliberately no copyable command: the only correct one repeats this host's own volumes and
+      // environment, and a plain `docker pull` reads like the whole fix while changing nothing.
+      message: `Node agent ${node.agentVersion} cannot update itself to ${appVersion}: it builds its replacement container from the image it is running, whose entrypoint the current image no longer has. Pulling ${image} is not enough on its own — the running container keeps the old agent until it is replaced. Recreate the node container once on its host with the same volumes and environment (\`docker compose pull && docker compose up -d\`, or \`docker rm -f\` followed by the command under Install instructions). It rejoins with the identity in its data volume, and panel updates work again from then on.`,
+      image
     };
   }
   if (node.status !== "online") {
