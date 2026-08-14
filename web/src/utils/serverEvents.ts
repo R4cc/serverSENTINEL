@@ -1,5 +1,5 @@
 export const playerReconnectWindowMs = 30_000;
-export const repeatedEventWindowMs = 10 * 60 * 1_000;
+const repeatedEventWindowMs = 10 * 60 * 1_000;
 
 export function groupNearbyRepeatedEvents<T extends { signature: string }>(
   events: T[],

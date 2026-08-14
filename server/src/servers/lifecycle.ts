@@ -38,7 +38,7 @@ export function runtimeResultRunning(value: unknown) {
   return result.running === true || result.docker?.running === true;
 }
 
-export function runtimeStatusRunning(value: unknown): boolean | undefined {
+function runtimeStatusRunning(value: unknown): boolean | undefined {
   if (!value || typeof value !== "object") return undefined;
   const status = value as { running?: unknown; docker?: { available?: unknown; running?: unknown; state?: unknown; message?: unknown } };
   if (status.running === true || status.docker?.running === true) return true;
@@ -59,7 +59,7 @@ export function setRuntimeLifecycle(server: ManagedServer, patch: Partial<Pick<M
   services.serversRepository.setRuntimeLifecycle(server.id, server);
 }
 
-export async function withLifecycleLock<T>(server: ManagedServer, operation: () => Promise<T>) {
+async function withLifecycleLock<T>(server: ManagedServer, operation: () => Promise<T>) {
   return services.exportCoordinator.withMutation(server.id, async () => {
     if (activeLifecycleActions.has(server.id)) throw new Error("Another lifecycle action is already running for this server");
     activeLifecycleActions.add(server.id);
@@ -71,7 +71,7 @@ export async function withLifecycleLock<T>(server: ManagedServer, operation: () 
   });
 }
 
-export async function waitForRuntimeState(server: ManagedServer, running: boolean, timeoutMs: number) {
+async function waitForRuntimeState(server: ManagedServer, running: boolean, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
     const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
@@ -81,7 +81,7 @@ export async function waitForRuntimeState(server: ManagedServer, running: boolea
   return false;
 }
 
-export function requireResolvedServerPorts(server: ManagedServer) {
+function requireResolvedServerPorts(server: ManagedServer) {
   if (!server.portConflictUnresolved) return;
   const issues = unresolvedServerPortIssues(server, services.serversRepository.list());
   if (issues.length === 0) {

@@ -8,7 +8,7 @@ import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer } from "../types.js";
 
-export const defaultLevelName = "world";
+const defaultLevelName = "world";
 
 /**
  * A path that is simply absent is not an export failure -- a server that never had a `config/` or
@@ -73,8 +73,8 @@ export function worldDirectories(levelName: string | undefined) {
  */
 const neverExported = new Set(["backups", "cache", "libraries", "versions"]);
 
-export const exportMaxEntries = config.fileDownloadMaxEntries;
-export const exportMaxDepth = 64;
+const exportMaxEntries = config.fileDownloadMaxEntries;
+const exportMaxDepth = 64;
 
 export function categoryTargets(server: ManagedServer, category: ExportCategory, levelName?: string): CategoryTargets {
   if (category === "panelSettings") return { files: [], directories: [] };
@@ -85,7 +85,7 @@ export function categoryTargets(server: ManagedServer, category: ExportCategory,
   return staticCategoryTargets[category];
 }
 
-export function isExportCategory(value: unknown): value is ExportCategory {
+function isExportCategory(value: unknown): value is ExportCategory {
   return typeof value === "string" && (EXPORT_CATEGORIES as readonly string[]).includes(value);
 }
 
@@ -111,7 +111,7 @@ export function normalizeExportSelection(value: unknown): ExportSelection {
   };
 }
 
-export type CollectedFile = {
+type CollectedFile = {
   /** Path relative to the server root, always forward-slashed. */
   relativePath: string;
   /** Node-resolved absolute path, opened lazily when the archive streams. */

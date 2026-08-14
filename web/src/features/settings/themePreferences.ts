@@ -1,6 +1,6 @@
 import type { ThemePreference } from "../../types";
 
-export type ThemeOption = {
+type ThemeOption = {
   value: ThemePreference;
   label: string;
   mode: "light" | "dark" | "system";

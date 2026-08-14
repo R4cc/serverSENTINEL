@@ -53,7 +53,7 @@ export function compatibilityFromSelectedVersion(input: {
   };
 }
 
-export type InstallCandidate = {
+type InstallCandidate = {
   file: ModrinthJarFile;
   hasCompatibleLoader: boolean;
   matchesMinecraft: boolean;

@@ -70,7 +70,7 @@ export function recallNextCommand(history: string[], state: TerminalHistoryState
   };
 }
 
-export type ConsoleCopyKeystroke = {
+type ConsoleCopyKeystroke = {
   key: string;
   ctrlKey: boolean;
   metaKey: boolean;

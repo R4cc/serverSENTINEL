@@ -1,7 +1,7 @@
 import type { ModrinthProject } from "../types.js";
 import { modrinthFetch } from "./modrinthClient.js";
 
-export type ModrinthSearchBody = { hits?: ModrinthProject[]; total_hits?: number; offset?: number; limit?: number };
+type ModrinthSearchBody = { hits?: ModrinthProject[]; total_hits?: number; offset?: number; limit?: number };
 
 const cacheTtlMs = 30_000;
 const staleTtlMs = 5 * 60_000;

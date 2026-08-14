@@ -3,7 +3,7 @@ import type { ExportSelection } from "@serversentinel/contracts";
 import type { CollectedCategory } from "./servers/exportSelection.js";
 
 export const exportInventoryTtlMs = 5 * 60 * 1000;
-export const exportInventoryMaxEntries = 4;
+const exportInventoryMaxEntries = 4;
 
 type CachedExportInventory = {
   createdBy: string;

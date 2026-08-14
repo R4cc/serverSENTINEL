@@ -122,7 +122,7 @@ function upstreamDetails(response: Awaited<ReturnType<typeof fetch>>, attempt: n
   };
 }
 
-export type ModrinthFetchOptions = {
+type ModrinthFetchOptions = {
   timeoutMs?: number;
   deadlineMs?: number;
   method?: "GET" | "POST";

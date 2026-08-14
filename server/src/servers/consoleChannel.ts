@@ -15,8 +15,8 @@ import { randomUUID } from "node:crypto";
 import type { ConsoleBacklog, ConsoleEpoch, ConsoleLine } from "@serversentinel/contracts";
 
 /** Held per server, so this bounds panel memory across every console anyone has opened. */
-export const consoleChannelMaxLines = 25_000;
-export const consoleChannelMaxBytes = 8 * 1024 * 1024;
+const consoleChannelMaxLines = 25_000;
+const consoleChannelMaxBytes = 8 * 1024 * 1024;
 /**
  * How long a channel outlives its last viewer. Browsing away from the console and back is the
  * common case, and keeping the upstream attached over that gap is what makes the return free

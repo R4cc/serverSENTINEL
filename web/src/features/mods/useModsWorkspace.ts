@@ -62,7 +62,7 @@ function mergeStableModMetadata(previous: InstalledMod[], incoming: InstalledMod
   });
 }
 
-export type ModsWorkspaceInputs = {
+type ModsWorkspaceInputs = {
   activeServer?: ManagedServer;
   activePage: ActivePage;
   activeServerIsDemo: boolean;

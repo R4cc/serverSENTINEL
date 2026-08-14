@@ -120,7 +120,7 @@ export type PlayerHeadsState = {
   cacheBytes: number;
 };
 
-export type OnboardingState = {
+type OnboardingState = {
   currentVersion: number;
   completedVersion: number;
 };
@@ -152,7 +152,7 @@ export type AuthSession = {
   user: PublicUser | null;
 };
 
-export type DockerStatus = {
+type DockerStatus = {
   configured: boolean;
   available: boolean;
   controllable: boolean;
@@ -172,7 +172,7 @@ export type ServerStatus = {
   lifecycle: RuntimeLifecycleStatus;
 };
 
-export type ResourceStats = {
+type ResourceStats = {
   available: boolean;
   running: boolean;
   cpuPercent: number;

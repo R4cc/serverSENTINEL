@@ -91,7 +91,7 @@ export async function downloadServerJar(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), runtimeType: profile.runtimeType, filename, size: downloaded.size, durationMs: durationSince(startedAt) }, `${runtime.displayName} server runtime downloaded`);
 }
 
-export async function createServerFiles(
+async function createServerFiles(
   server: ManagedServer,
   acceptEula: boolean,
   serverPort: string,

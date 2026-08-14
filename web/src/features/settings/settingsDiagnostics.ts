@@ -16,7 +16,7 @@ export type SettingsSystemInfo = {
   modrinthConfigured: boolean;
 };
 
-export type SettingsSystemSummary = {
+type SettingsSystemSummary = {
   nodeCount: number;
   onlineNodeCount: number;
   agentVersions: string;

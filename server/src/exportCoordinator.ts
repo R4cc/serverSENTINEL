@@ -1,7 +1,7 @@
 import { operationInProgress } from "./http/errors.js";
 import type { OperationsRepository } from "./storage/operationsRepository.js";
 
-export const exportInProgressMessage = "An export is in progress for this server. Abort it or wait for it to finish before making changes.";
+const exportInProgressMessage = "An export is in progress for this server. Abort it or wait for it to finish before making changes.";
 
 export class ExportCancelledError extends Error {
   constructor() {

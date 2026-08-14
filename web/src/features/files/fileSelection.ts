@@ -4,7 +4,7 @@ export type FileSelectionModifiers = {
   additive?: boolean;
 };
 
-export type FileSelectionResult = {
+type FileSelectionResult = {
   selectedPaths: string[];
   anchorPath: string;
 };

@@ -17,7 +17,7 @@ import { runtimeForServer } from "../appServices.js";
 import { logInfo } from "../logging.js";
 import { completeOnboarding, onboardingCurrentVersion, publicOnboardingState } from "../onboarding.js";
 
-export function publicPlayerHeadsState(demoMode = false) {
+function publicPlayerHeadsState(demoMode = false) {
   if (demoMode) {
     return { enabled: false, onboardingRequired: false, provider: playerHeadProvider, cacheEntries: 0, cacheBytes: 0 };
   }

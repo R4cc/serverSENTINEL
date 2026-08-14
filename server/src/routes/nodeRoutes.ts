@@ -8,7 +8,7 @@ import { destructiveRateLimit, nodeJoinRateLimit } from "../http/rateLimits.js";
 import { optionalNodeDataMount, optionalNodePanelUrl, requireStrictBoolean, validateDockerImageName, validateNodeName } from "../http/validation.js";
 import { apiErrorResponse, operationInProgress } from "../http/errors.js";
 import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
-import { compareVersionStrings } from "../servers/versions.js";
+import { compareVersionStrings } from "@serversentinel/contracts";
 import { requireRequestPermission } from "../auth/sessionService.js";
 
 import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateImageForBuild, nodeUpdateNeedsManualRecreate, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";

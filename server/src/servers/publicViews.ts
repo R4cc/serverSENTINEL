@@ -38,7 +38,7 @@ export async function publicServer(server: ManagedServer, nodes?: ManagedNode[],
   };
 }
 
-export function publicDockerStatus(value: unknown) {
+function publicDockerStatus(value: unknown) {
   const docker = value && typeof value === "object" ? value as Record<string, unknown> : {};
   return {
     configured: docker.configured === true,
@@ -89,7 +89,7 @@ export function publicServerStatus(status: unknown, server: Pick<ManagedServer, 
   };
 }
 
-export function publicModCompatibility(value: unknown) {
+function publicModCompatibility(value: unknown) {
   if (!value || typeof value !== "object") return value;
   const compatibility = value as Record<string, unknown>;
   const file = compatibility.file && typeof compatibility.file === "object" ? compatibility.file as Record<string, unknown> : undefined;
@@ -102,7 +102,7 @@ export function publicModCompatibility(value: unknown) {
   };
 }
 
-export function publicInstalledModMetadata(value: unknown) {
+function publicInstalledModMetadata(value: unknown) {
   if (!value || typeof value !== "object") return value;
   const metadata = value as Record<string, unknown>;
   const { hashes: _hashes, ...publicMetadata } = metadata;

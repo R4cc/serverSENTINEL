@@ -5,7 +5,7 @@ import { normalizeReleaseChannel, versionChannel } from "../modrinth/compatibili
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import type { ManagedServer, ModPreference, ModrinthVersion } from "../types.js";
 
-export type ContentPlan = {
+type ContentPlan = {
   /** Restorable from Modrinth on import; the jar bytes stay out of the archive. */
   lockfile: ExportLockfileEntry[];
   /** Filenames Modrinth could not identify, which must travel as real files. */

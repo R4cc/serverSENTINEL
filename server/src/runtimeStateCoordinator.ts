@@ -21,7 +21,7 @@ type RuntimeObservation = {
   inFlight: boolean;
 };
 
-export type RuntimeStateCoordinatorOptions = {
+type RuntimeStateCoordinatorOptions = {
   pollMs?: number;
   exitConfirmationMs?: number;
   readServers: () => Promise<ManagedServer[]>;
@@ -37,8 +37,8 @@ export type RuntimeStateCoordinatorOptions = {
 };
 
 const stoppedStates = new Set(["created", "dead", "exited"]);
-export const crashRetryDelaysMs = [5_000, 15_000, 30_000] as const;
-export const crashRetryWindowMs = 10 * 60_000;
+const crashRetryDelaysMs = [5_000, 15_000, 30_000] as const;
+const crashRetryWindowMs = 10 * 60_000;
 
 function runningFromStatus(value: unknown) {
   if (!value || typeof value !== "object") return false;

@@ -16,9 +16,9 @@ import type { ZipExtractionPlan } from "../../zipArchive.js";
 export const editorFileSizeLimit = 2 * 1024 * 1024;
 export const fileUploadSizeLimit = 256 * 1024 * 1024;
 
-export type FileEntryStatus = "ok" | "too_large" | "binary" | "unknown";
+type FileEntryStatus = "ok" | "too_large" | "binary" | "unknown";
 
-export type UploadSource = {
+type UploadSource = {
   stream: NodeJS.ReadableStream;
   size?: number;
 };
@@ -43,11 +43,11 @@ export function safeFileManagerName(name?: string) {
   return filename;
 }
 
-export function isTextLikeServerFile(name: string) {
+function isTextLikeServerFile(name: string) {
   return /\.(txt|json5?|properties|toml|ya?ml|cfg|conf|log|md|csv|env)$/i.test(name) || !name.includes(".");
 }
 
-export function fileManagerStatus(entryStat: Awaited<ReturnType<typeof lstat>>, name: string): FileEntryStatus {
+function fileManagerStatus(entryStat: Awaited<ReturnType<typeof lstat>>, name: string): FileEntryStatus {
   if (entryStat.isDirectory()) return "ok";
   if (!entryStat.isFile()) return "unknown";
   if (entryStat.size > editorFileSizeLimit) return "too_large";

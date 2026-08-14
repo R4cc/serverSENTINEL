@@ -14,7 +14,7 @@ import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
  * server and so reserves ports globally, while a node agent only knows about its own.
  */
 
-export type ServerUpdateInput = {
+type ServerUpdateInput = {
   displayName?: string;
   runtime?: unknown;
   dockerContainer?: string;

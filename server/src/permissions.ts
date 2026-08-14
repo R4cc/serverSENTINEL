@@ -2,7 +2,7 @@ import { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS } from "@servers
 import { throwHttp } from "./http/errors.js";
 import type { Permission, RolePreset, StoredUser } from "./types.js";
 
-export { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS };
+export { ALL_PERMISSIONS, ROLE_PRESETS };
 
 const allPermissionSet = new Set<string>(ALL_PERMISSIONS);
 const permissionOrder = new Map<Permission, number>(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
@@ -43,11 +43,11 @@ const normalizedRolePresets: Record<Exclude<RolePreset, "custom">, Permission[]>
   admin: normalizePermissions(ROLE_PRESETS.admin)
 };
 
-export function isPermission(value: unknown): value is Permission {
+function isPermission(value: unknown): value is Permission {
   return typeof value === "string" && allPermissionSet.has(value);
 }
 
-export function assertPermission(value: unknown): Permission {
+function assertPermission(value: unknown): Permission {
   if (isPermission(value)) return value;
   throwPermissionError(`Unknown permission: ${String(value)}`, 400);
 }

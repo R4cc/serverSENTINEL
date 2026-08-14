@@ -8,9 +8,9 @@ import { parseServerProperties } from "../runtime/serverProperties.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { managedContentNaming } from "../modrinth/installPolicy.js";
 import type { ManagedServer, ResolvedServerVersions, ServerRuntimeType } from "../types.js";
-export const versionMetadataFilename = ".serversentinel-version.json";
+const versionMetadataFilename = ".serversentinel-version.json";
 
-export type VersionMetadata = {
+type VersionMetadata = {
   minecraftVersion?: string;
   runtimeType?: ServerRuntimeType;
   runtimeVersion?: string;
@@ -20,22 +20,6 @@ export type VersionMetadata = {
 
 export function versionResolution(version: string | undefined, source: ResolvedServerVersions["minecraftVersion"]["source"], lastCheckedAt: string) {
   return { version: version || undefined, source: version ? source : "unknown", lastCheckedAt };
-}
-
-export function compareVersionStrings(left?: string, right?: string) {
-  if (!left || !right) return null;
-  const parse = (value: string) => {
-    const match = value.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
-    return match ? [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)] : null;
-  };
-  const leftParts = parse(left);
-  const rightParts = parse(right);
-  if (!leftParts || !rightParts) return left === right ? 0 : null;
-  for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] > rightParts[index]) return 1;
-    if (leftParts[index] < rightParts[index]) return -1;
-  }
-  return 0;
 }
 
 export async function writeVersionMetadataFile(server: ManagedServer) {
@@ -87,7 +71,7 @@ export function readZipEntry(buffer: Buffer, entryName: string) {
   return undefined;
 }
 
-export async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<VersionMetadata> {
+async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<VersionMetadata> {
   const targetRuntime = runtimeTarget(server);
   if (targetRuntime.runtimeType !== "fabric") return {};
   try {
@@ -122,7 +106,7 @@ export function detectVersionsFromLogText(logText: string, runtimeType: ServerRu
   };
 }
 
-export function detectedPaperBuild(logText: string) {
+function detectedPaperBuild(logText: string) {
   const token = [...logText.matchAll(/(?:This server is running|Starting) Paper version\s+([^\s]+)/gi)].at(-1)?.[1];
   if (!token) return undefined;
   if (/^\d+$/.test(token)) return token;
@@ -152,7 +136,7 @@ export function managedContentRuntime(server: Pick<ManagedServer, "runtimeProfil
   };
 }
 
-export async function detectVersionsFromLogs(server: ManagedServer) {
+async function detectVersionsFromLogs(server: ManagedServer) {
   const logs = await Promise.allSettled([
     readLatestServerLog(server),
     dockerControlConfigured(server) ? dockerRecentLogs(server) : Promise.resolve("")

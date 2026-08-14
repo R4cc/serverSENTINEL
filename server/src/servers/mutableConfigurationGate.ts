@@ -9,7 +9,7 @@ import type { OperationType } from "../types.js";
 
 export const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
 export const blockingRuntimeOperationTypes = new Set<OperationType>(["server.start", "server.stop", "server.restart"]);
-export const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
+const stoppedLikeDockerStates = new Set(["created", "dead", "exited"]);
 
 type DockerStatusShape = {
   configured?: unknown;

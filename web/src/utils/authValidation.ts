@@ -2,7 +2,7 @@ import { validatePassword, validateUsername } from "./validation";
 
 export type AuthField = "setupToken" | "username" | "password" | "confirmPassword";
 
-export type AuthValidationError = {
+type AuthValidationError = {
   field: AuthField;
   message: string;
 };

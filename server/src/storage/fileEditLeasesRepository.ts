@@ -39,7 +39,7 @@ function leaseFromRow(row: LeaseRow): FileEditLease {
   };
 }
 
-export class FileLeaseError extends Error {
+class FileLeaseError extends Error {
   statusCode = 409;
   details?: { lease: Omit<FileEditLease, "sessionId"> };
 

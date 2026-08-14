@@ -14,7 +14,7 @@ import { validateExistingInsideServer } from "../core.js";
 import { type BackpressuredClient } from "./consoleBackpressure.js";
 import type { ConsoleUpstream } from "./consoleChannel.js";
 import type { ManagedServer, ServerActivity, ServerEvent } from "../types.js";
-export const consoleHeartbeatIntervalMs = 5_000;
+const consoleHeartbeatIntervalMs = 5_000;
 
 export type Client = BackpressuredClient;
 
@@ -23,7 +23,7 @@ export type Client = BackpressuredClient;
  * turn one `readFileRange` into an arbitrarily large allocation. Skipping ahead loses the middle of a
  * burst, which the viewer is told about, rather than allocating all of it.
  */
-export const consoleLogPollMaxBytes = 1024 * 1024;
+const consoleLogPollMaxBytes = 1024 * 1024;
 
 /** History requested when first following a container. Later attachments ask for none of it. */
 export const dockerFollowInitialTail = 200;

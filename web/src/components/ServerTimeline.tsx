@@ -21,10 +21,8 @@ import {
   playerTimelineLaneWindowSize,
   preservePlayerTimelineLanePosition,
   resolvePlayerTimelineLaneWindow,
-  timelineSessionGeometry,
   type PlayerTimelineLanePosition,
-  type PlayerTimelineRow,
-  type TimelineSessionGeometry
+  type PlayerTimelineRow
 } from "./playerTimelineChart";
 import { RuntimeControlIcon } from "./RuntimeControls";
 import {
@@ -89,11 +87,9 @@ type MetricBand = {
   prominent: boolean;
 };
 
-export type TimelinePlayerRow = PlayerTimelineRow;
-export type { TimelineSessionGeometry };
-export { formatTimelineDuration, timelineSessionGeometry };
+type TimelinePlayerRow = PlayerTimelineRow;
 
-export type TimelineMarker = {
+type TimelineMarker = {
   id: string;
   occurredAt: number;
   label: string;
@@ -107,7 +103,7 @@ export type TimelineMarker = {
   schedule?: ServerTimelineScheduleMarker;
 };
 
-export type TimelineActiveScheduleRange = {
+type TimelineActiveScheduleRange = {
   marker: TimelineMarker;
   leftPercent: number;
   widthPercent: number;
@@ -439,7 +435,7 @@ export function clusterTimelineMarkers(markers: TimelineMarker[], from: number, 
   });
 }
 
-export type PositionedMarkerCluster = MarkerCluster & {
+type PositionedMarkerCluster = MarkerCluster & {
   leftPercent: number;
   lane: number;
   alignEnd: boolean;
@@ -473,7 +469,7 @@ export function timelineMarkerDisplayLabel(marker: TimelineMarker): TimelineMark
   return { primary: marker.label };
 }
 
-export const maxTimelineClusterIcons = 3;
+const maxTimelineClusterIcons = 3;
 
 export function timelineClusterIconMarkers(cluster: MarkerCluster) {
   const icons: TimelineMarker[] = [];

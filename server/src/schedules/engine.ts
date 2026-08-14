@@ -120,7 +120,7 @@ export function scheduleFromBody(body: {
   };
 }
 
-export async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution, active: ActiveScheduleExecution) {
+async function runScheduledExecution(server: ManagedServer, schedule: ScheduledExecution, active: ActiveScheduleExecution) {
   const startedAt = Date.now();
   let completedStepCount = 0;
   let terminalStepIndex: number | undefined;
@@ -252,7 +252,7 @@ export async function runScheduledExecution(server: ManagedServer, schedule: Sch
   }
 }
 
-export const scheduleProcedureLabel: Record<ScheduleProcedure, string> = {
+const scheduleProcedureLabel: Record<ScheduleProcedure, string> = {
   restart: "Restart",
   stop: "Stop",
   start: "Start"
@@ -285,7 +285,7 @@ export function scheduleRequiresRunningServer(schedule: Pick<ScheduledExecution,
   return schedule.steps.some((step) => step.type === "command" || step.procedure !== "start");
 }
 
-export const schedulePlayerWaitPollSeconds = 30;
+const schedulePlayerWaitPollSeconds = 30;
 
 export async function waitUntilServerIsEmpty(
   server: ManagedServer,
@@ -354,7 +354,7 @@ async function withScheduleMutation<T>(
   return services.exportCoordinator.withMutation(serverId, action);
 }
 
-export function scheduledRunLogSnapshot(runtime: NodeRuntime, server: ManagedServer) {
+function scheduledRunLogSnapshot(runtime: NodeRuntime, server: ManagedServer) {
   return new Promise<string | undefined>((resolveSnapshot) => {
     const timer = setTimeout(() => resolveSnapshot(undefined), 1_500);
     void runtime.serverLogs(server).then((result) => {
@@ -368,7 +368,7 @@ export function scheduledRunLogSnapshot(runtime: NodeRuntime, server: ManagedSer
   });
 }
 
-export async function scheduledRunCommandLogCapture(runtime: NodeRuntime, server: ManagedServer, before: string | undefined) {
+async function scheduledRunCommandLogCapture(runtime: NodeRuntime, server: ManagedServer, before: string | undefined) {
   let after = await scheduledRunLogSnapshot(runtime, server);
   for (let attempt = 0; attempt < 3 && before !== undefined && after === before; attempt += 1) {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));

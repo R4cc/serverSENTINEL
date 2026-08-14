@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 
-export type GlassVariant = "chrome" | "floating" | "modal";
+type GlassVariant = "chrome" | "floating" | "modal";
 
 const LiquidGlass = lazy(() => import("liquid-glass-react"));
 const fixedMousePosition = { x: 1, y: 1 };

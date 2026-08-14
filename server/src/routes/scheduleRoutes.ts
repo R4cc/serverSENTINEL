@@ -4,7 +4,7 @@ import { apiErrorResponse } from "../http/errors.js";
 import { validateOperationId, validateScheduleId } from "../http/validation.js";
 import type { ManagedServer, Permission, ScheduledActiveRun, ScheduledExecution, ScheduledRun } from "../types.js";
 
-export type ScheduleBody = {
+type ScheduleBody = {
   name?: string;
   cron?: string;
   steps?: unknown;
@@ -13,7 +13,7 @@ export type ScheduleBody = {
   enabled?: boolean;
 };
 
-export type ScheduleRoutesContext = {
+type ScheduleRoutesContext = {
   destructiveRateLimit: RouteShorthandOptions;
   requireRequestPermission(request: AuthenticatedRequest, permission: Permission): Promise<unknown>;
   getServer(serverId: string): Promise<ManagedServer>;

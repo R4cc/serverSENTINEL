@@ -1,6 +1,6 @@
 import type { ScheduleStep } from "../../types";
 
-export type ScheduleTemplate = {
+type ScheduleTemplate = {
   id: string;
   name: string;
   summary: string;

@@ -1,7 +1,7 @@
 import type { FileEntry } from "../../types";
 import { fileDisplayType } from "../../utils/files";
 
-export type FileSortColumn = "name" | "modifiedAt" | "type" | "size";
+type FileSortColumn = "name" | "modifiedAt" | "type" | "size";
 export type FileSort = { id: FileSortColumn; desc: boolean };
 
 export const defaultFileSort: FileSort = { id: "name", desc: false };

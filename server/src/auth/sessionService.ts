@@ -103,7 +103,7 @@ export async function currentUserFromCookie(cookieHeader?: string) {
   return services.usersRepository.findById(session.userId) ?? null;
 }
 
-export async function requireAuthenticated(request: AuthenticatedRequest) {
+async function requireAuthenticated(request: AuthenticatedRequest) {
   const user = await currentUserForRequest(request, currentUserFromCookie);
   if (!user) {
     unauthorized("Authentication required");

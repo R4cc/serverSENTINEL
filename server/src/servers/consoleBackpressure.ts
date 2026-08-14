@@ -12,9 +12,9 @@ export type BackpressuredClient = {
   bufferedAmount?: number;
 };
 
-export const consoleClientMaxQueuedBytes = 8 * 1024 * 1024;
+const consoleClientMaxQueuedBytes = 8 * 1024 * 1024;
 
-export type ConsoleSender = {
+type ConsoleSender = {
   /** Sends the event unless the client is too far behind. Returns false when the frame was dropped. */
   send: (event: unknown) => boolean;
   /** Frames dropped so far, for logging when the stream closes. */

@@ -5,7 +5,7 @@ import { pipeline } from "node:stream/promises";
 import yauzl, { type Entry, type ZipFile } from "yauzl";
 import { httpError } from "./http/errors.js";
 
-export type ZipArchiveLimits = {
+type ZipArchiveLimits = {
   maxEntries: number;
   maxExpandedBytes: number;
 };
@@ -21,7 +21,7 @@ type ZipArchiveEntry = {
   unsupported?: boolean;
 };
 
-export type ZipExtractionConflict = {
+type ZipExtractionConflict = {
   path: string;
   kind: "file" | "type" | "symlink";
 };

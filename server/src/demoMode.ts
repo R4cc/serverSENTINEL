@@ -1,9 +1,9 @@
 import { ROLE_PRESETS, normalizePermissions } from "./permissions.js";
 import type { StoredUser } from "./types.js";
 
-export const DEMO_USERNAME = "demo";
-export const DEMO_PASSWORD = "demo";
-export const DEMO_USER_ID = "serversentinel-demo-user";
+const DEMO_USERNAME = "demo";
+const DEMO_PASSWORD = "demo";
+const DEMO_USER_ID = "serversentinel-demo-user";
 
 type DemoUsersRepository = {
   repairSystemUser(user: StoredUser): StoredUser;

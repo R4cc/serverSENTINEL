@@ -31,7 +31,7 @@ export type DockerContainerInspect = {
   NetworkSettings?: { Networks?: Record<string, DockerNetworkAttachment> };
 };
 
-export type DockerNetworkAttachment = {
+type DockerNetworkAttachment = {
   IPAMConfig?: unknown;
   Aliases?: string[];
   DriverOpts?: Record<string, string>;
@@ -46,11 +46,11 @@ export type DockerNetworkAttachment = {
   MacAddress?: string;
 };
 
-export type DockerNetworkingConfig = {
+type DockerNetworkingConfig = {
   EndpointsConfig: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; DriverOpts?: Record<string, string> }>;
 };
 
-export type DockerStats = {
+type DockerStats = {
   read?: string;
   memory_stats?: { usage?: number; limit?: number; stats?: { cache?: number; inactive_file?: number } };
   cpu_stats?: {
@@ -88,14 +88,14 @@ export function dockerControlConfigured(server: ManagedServer) {
   return Boolean(server.dockerContainer || (server.dockerMountSource && runtimeTarget(server).serverJar));
 }
 
-export function serverDockerMountSource(server: ManagedServer) {
+function serverDockerMountSource(server: ManagedServer) {
   if (server.dockerMountSource && server.dockerMountSource !== server.serverDir) {
     return server.dockerMountSource;
   }
   return config.serversDockerVolume || server.dockerMountSource || server.serverDir;
 }
 
-export function serverDockerWorkingDir(server: ManagedServer) {
+function serverDockerWorkingDir(server: ManagedServer) {
   if (server.dockerWorkingDir) {
     return server.dockerWorkingDir;
   }
@@ -105,11 +105,11 @@ export function serverDockerWorkingDir(server: ManagedServer) {
   return "/data/server";
 }
 
-export function serverDockerBindTarget(server: ManagedServer) {
+function serverDockerBindTarget(server: ManagedServer) {
   return serverDockerWorkingDir(server).startsWith("/data/servers/") ? "/data/servers" : "/data/server";
 }
 
-export function dockerContainerMountValid(server: ManagedServer, details: DockerContainerInspect) {
+function dockerContainerMountValid(server: ManagedServer, details: DockerContainerInspect) {
   const expectedDestination = serverDockerBindTarget(server);
   const expectedSource = serverDockerMountSource(server);
   return Boolean(details.Mounts?.some((mount) => {
@@ -135,7 +135,7 @@ function containerOwnershipRefusal(server: ManagedServer, labels: ContainerLabel
   return `Container ${dockerContainerName(server)} ${cause}; refusing to ${verb} it`;
 }
 
-export async function removeDockerContainer(server: ManagedServer) {
+async function removeDockerContainer(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), action: "remove_container" }, "Removing Minecraft runtime container");
   await dockerRequest("DELETE", `/containers/${encodeURIComponent(dockerContainerName(server))}?force=1`, 204);
 }
@@ -153,7 +153,7 @@ export async function removeManagedDockerContainer(server: ManagedServer) {
   return true;
 }
 
-export function splitImage(image: string) {
+function splitImage(image: string) {
   const slashIndex = image.lastIndexOf("/");
   const colonIndex = image.lastIndexOf(":");
   if (colonIndex > slashIndex) {
@@ -162,7 +162,7 @@ export function splitImage(image: string) {
   return { fromImage: image, tag: "latest" };
 }
 
-export async function ensureDockerImage(image: string) {
+async function ensureDockerImage(image: string) {
   try {
     await dockerRequest("GET", `/images/${encodeURIComponent(image)}/json`, 200);
     return;
@@ -193,7 +193,7 @@ export async function inspectDockerContainer(server: ManagedServer) {
   }
 }
 
-export function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; restartPolicy: "no" | "unless-stopped" }) {
+function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; restartPolicy: "no" | "unless-stopped" }) {
   const targetRuntime = runtimeTarget(server);
   return {
     image: server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion),
@@ -242,7 +242,7 @@ export async function detectedTotalMemory() {
   return totalmem();
 }
 
-export function currentContainerId() {
+function currentContainerId() {
   return process.env.HOSTNAME || "";
 }
 
@@ -268,7 +268,7 @@ export function minecraftContainerNetworkingConfig(existing?: Pick<DockerContain
   return dockerNetworkingConfigFromInspect(existing) ?? dockerNetworkingConfigFromInspect(fallback);
 }
 
-export async function currentContainerNetworkingConfig() {
+async function currentContainerNetworkingConfig() {
   return dockerNetworkingConfigFromInspect(await currentContainerInspect().catch(() => null));
 }
 

@@ -140,7 +140,7 @@ export function hasPermission(user: PublicUser | null | undefined, permission: P
   return derivedPermissions(user).lookup.has(permission);
 }
 
-export type FileManagerPermission = "view" | "download" | "edit" | "rename" | "upload" | "duplicate" | "delete";
+type FileManagerPermission = "view" | "download" | "edit" | "rename" | "upload" | "duplicate" | "delete";
 
 export function isModsPublicPath(path: string) {
   const normalized = normalizePublicPath(path);

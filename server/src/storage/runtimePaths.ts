@@ -13,7 +13,7 @@ export type RuntimeDataPaths = {
   nodeUpdatesDir: string;
 };
 
-export function resolveRuntimeDataDir(value?: string) {
+function resolveRuntimeDataDir(value?: string) {
   const trimmed = value?.trim();
   return resolve(trimmed || defaultRuntimeDataDir);
 }

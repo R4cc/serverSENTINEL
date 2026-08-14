@@ -1,6 +1,6 @@
 import type { ManagedServer } from "./types.js";
 
-export type QueryNetworkInspect = {
+type QueryNetworkInspect = {
   Id?: string;
   Name?: string;
   NetworkSettings?: {

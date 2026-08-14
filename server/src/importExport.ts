@@ -35,18 +35,18 @@ import type { BinaryDownloadResult } from "./nodes/panelConnections.js";
 const maxManifestBytes = 64 * 1024 * 1024;
 const contentFileSuffixes = [".jar", ".jar.disabled"];
 
-export const importZipLimits = {
+const importZipLimits = {
   maxEntries: config.importMaxFiles,
   maxExpandedBytes: config.importMaxExpandedBytes
 };
 
-export type ExportManifestFile = {
+type ExportManifestFile = {
   /** Relative to the server's archive folder; the bytes live at `servers/<key>/<path>`. */
   path: string;
   size: number;
 };
 
-export type ExportManifestServer = {
+type ExportManifestServer = {
   key: string;
   server: ManagedServer;
   modPreferences: Record<string, ModPreference>;

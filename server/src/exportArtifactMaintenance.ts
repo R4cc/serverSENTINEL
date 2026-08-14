@@ -20,7 +20,7 @@ export type ExportOperationResult = {
   [key: string]: unknown;
 };
 
-export type ExportMaintenanceReport = {
+type ExportMaintenanceReport = {
   abandonedArtifacts: number;
   orphanedArtifacts: number;
   prunedOperations: number;

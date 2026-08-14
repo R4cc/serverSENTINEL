@@ -4,7 +4,7 @@ export const appVersion = "26.8.16";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
 const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
 export const demoLocalStorageKey = "serversentinel-demo-mode";
-export const signedInLocalStorageKey = "serversentinel-signed-in";
+const signedInLocalStorageKey = "serversentinel-signed-in";
 
 export const emptyApp: AppState = {
   servers: [],

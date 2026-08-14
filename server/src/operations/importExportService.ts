@@ -42,7 +42,7 @@ export function targetNodeIdFromBody(value: unknown) {
   return targetNodeId;
 }
 
-export async function resolveExportServers(serverIds: string[] | undefined) {
+async function resolveExportServers(serverIds: string[] | undefined) {
   const all = await listManagedServers();
   if (serverIds === undefined) return all;
   const selected = new Set(serverIds);
@@ -67,7 +67,7 @@ async function serverIsRunning(server: ManagedServer) {
  * place while chunks are saved, so the archive can contain half-written chunks that roll back or
  * corrupt on restore. Rather than warn, exports require every selected server to be stopped.
  */
-export async function assertServersStopped(servers: ManagedServer[]) {
+async function assertServersStopped(servers: ManagedServer[]) {
   const running: string[] = [];
   for (const server of servers) {
     if (await serverIsRunning(server)) running.push(server.displayName);
@@ -147,7 +147,7 @@ export async function estimateExport(serverIds: string[] | undefined, selection:
  * pessimistic: it refuses only when even an uncompressed copy plus the configured headroom would not
  * fit. A false pass still fails cleanly on ENOSPC while writing.
  */
-export async function assertExportDiskSpace(estimatedBytes: number) {
+async function assertExportDiskSpace(estimatedBytes: number) {
   const free = await availableBytes(config.exportsDir);
   if (free === undefined) return;
   if (free < estimatedBytes + config.exportMinFreeBytes) {

@@ -9,7 +9,7 @@ import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { nodeBuildUpdateAvailable as hasNodeBuildUpdate, nodeUpdateAvailable as hasNodeUpdate, nodeVersionState as getNodeVersionState } from "../utils/nodeUpdates";
 import { NodeDetailsDrawer } from "./NodeDetailsDrawer";
 
-export type AddNodeInput = {
+type AddNodeInput = {
   name: string;
   panelUrl: string;
   dataMount: string;

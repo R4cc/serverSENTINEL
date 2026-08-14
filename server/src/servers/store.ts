@@ -11,7 +11,7 @@ import { localNodeId } from "../nodes/nodeService.js";
 import { normalizeManagedPorts } from "./ports.js";
 import { normalizeRuntimeProfile } from "../runtime/profile.js";
 import type { ManagedServer, ManagedServerPort, RestartRequiredChange, RestartRequiredModSnapshot, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails } from "../types.js";
-export function normalizeSchedule(value: unknown): ScheduledExecution {
+function normalizeSchedule(value: unknown): ScheduledExecution {
   const schedule = asObject(value, "schedule");
   const steps = sanitizeScheduleSteps(schedule.steps);
   const waitForPlayersToLeave = optionalStrictBoolean(schedule.waitForPlayersToLeave, "schedule.waitForPlayersToLeave", false);
@@ -33,7 +33,7 @@ export function normalizeSchedule(value: unknown): ScheduledExecution {
   };
 }
 
-export function normalizeScheduledRun(value: unknown): ScheduledRun {
+function normalizeScheduledRun(value: unknown): ScheduledRun {
   const run = asObject(value, "scheduled run");
   const details = run.details === undefined ? undefined : asObject(run.details, "run.details");
   return {
@@ -55,7 +55,7 @@ export function normalizeScheduledRun(value: unknown): ScheduledRun {
   };
 }
 
-export function normalizeScheduledRunStep(value: unknown, fallbackIndex: number): ScheduledRunStepDetails {
+function normalizeScheduledRunStep(value: unknown, fallbackIndex: number): ScheduledRunStepDetails {
   const step = asObject(value, `run.details.steps[${fallbackIndex}]`);
   const type = requiredString(step.type, `run.details.steps[${fallbackIndex}].type`);
   if (type !== "command" && type !== "action") badRequest("Scheduled run step type must be command or action");
@@ -85,7 +85,7 @@ export function normalizeScheduledRunStep(value: unknown, fallbackIndex: number)
   };
 }
 
-export function normalizeScheduledActiveRun(value: unknown): ScheduledActiveRun {
+function normalizeScheduledActiveRun(value: unknown): ScheduledActiveRun {
   const run = asObject(value, "active scheduled run");
   return {
     id: validateOperationId(run.id),
@@ -139,7 +139,7 @@ export function findScheduledRun(server: ManagedServer, scheduleId: string, runI
   return schedule?.recentRuns?.find((run) => run.id === runId);
 }
 
-export function safeNextCronRun(cron: string) {
+function safeNextCronRun(cron: string) {
   try {
     return nextCronRun(cron);
   } catch {

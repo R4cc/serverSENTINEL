@@ -12,7 +12,7 @@ import {
   type TimelinePalette
 } from "./serverTimelineChart";
 
-export type PlayerTimelineWindow = { from: number; to: number };
+type PlayerTimelineWindow = { from: number; to: number };
 
 export type PlayerTimelineRow = {
   player: string;
@@ -20,7 +20,7 @@ export type PlayerTimelineRow = {
   sessions: ServerTimelinePlayerSession[];
 };
 
-export type PlayerTimelineGroupLane = {
+type PlayerTimelineGroupLane = {
   key: "group:online" | "group:offline";
   kind: "group";
   online: boolean;
@@ -28,7 +28,7 @@ export type PlayerTimelineGroupLane = {
   count: number;
 };
 
-export type PlayerTimelinePlayerLane = {
+type PlayerTimelinePlayerLane = {
   key: string;
   kind: "player";
   online: boolean;
@@ -36,7 +36,7 @@ export type PlayerTimelinePlayerLane = {
   row: PlayerTimelineRow;
 };
 
-export type PlayerTimelineLane = PlayerTimelineGroupLane | PlayerTimelinePlayerLane;
+type PlayerTimelineLane = PlayerTimelineGroupLane | PlayerTimelinePlayerLane;
 
 export type PlayerTimelineLanePosition = {
   startKey?: string;
@@ -52,7 +52,7 @@ export type TimelineSessionGeometry = {
   durationMs: number;
 };
 
-export type PlayerTimelineChartItem = {
+type PlayerTimelineChartItem = {
   id: string;
   player: string;
   online: boolean;
@@ -100,10 +100,10 @@ export type PlayerTimelineLabelLayout = {
   showEnd: boolean;
 };
 
-export const playerTimelineRowHeight = 40;
-export const playerTimelineAxisHeight = 30;
-export const playerTimelineCollapsedLaneCount = 6;
-export const playerTimelineExpandedLaneCount = 16;
+const playerTimelineRowHeight = 40;
+const playerTimelineAxisHeight = 30;
+const playerTimelineCollapsedLaneCount = 6;
+const playerTimelineExpandedLaneCount = 16;
 export const playerTimelineReconnectWindowMs = 15 * 60_000;
 export const playerTimelineTimeDataZoomId = "player-timeline-time";
 export const playerTimelineRowsDataZoomId = "player-timeline-rows";

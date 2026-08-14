@@ -28,7 +28,7 @@ export function safeArchivePath(path: string) {
   return segments.join("/");
 }
 
-export type ZipArchiveStreamOptions = {
+type ZipArchiveStreamOptions = {
   /**
    * File downloads stay stored so the archive size is predictable enough to announce up front. An
    * export is spooled to disk and measured afterwards, so it can afford to deflate -- which matters

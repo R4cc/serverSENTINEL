@@ -15,7 +15,7 @@ export type DockerStatsSample = {
   networks?: Record<string, { rx_bytes?: number; tx_bytes?: number }>;
 };
 
-export type ContainerResourceSample = {
+type ContainerResourceSample = {
   cpuPercent: number;
   cpuCapacityCores: number;
   memoryUsageBytes: number;

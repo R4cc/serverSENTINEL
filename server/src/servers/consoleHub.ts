@@ -16,7 +16,7 @@ import {
   type ConsoleUpstream
 } from "./consoleChannel.js";
 
-export type ConsoleUpstreamStarter = (
+type ConsoleUpstreamStarter = (
   server: ManagedServer,
   upstream: ConsoleUpstream
 ) => Promise<() => void>;

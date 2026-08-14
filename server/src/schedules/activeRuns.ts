@@ -14,7 +14,7 @@ export function scheduleExecutionKey(serverId: string, scheduleId: string) {
   return `${serverId}:${scheduleId}`;
 }
 
-export function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveRun {
+function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveRun {
   return {
     id: run.id,
     scheduleId: run.scheduleId,
