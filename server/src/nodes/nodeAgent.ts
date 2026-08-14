@@ -2,14 +2,14 @@ import { existsSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { totalmem } from "node:os";
 import { Readable } from "node:stream";
 import http from "node:http";
 import WebSocket from "ws";
-import { EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
+import { defaultDockerImageForMinecraftVersion, EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
+import { isValidServerPort, queryPortEntry } from "../servers/ports.js";
 import { planServerUpdate } from "../servers/serverUpdatePlan.js";
 import { storageSpaceForPath } from "../servers/storageSpace.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
@@ -50,11 +50,13 @@ import {
   toPublicServerPath,
   writeServerTextFile
 } from "../runtime/local/fileService.js";
-import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { detectedTotalMemory, minecraftContainerNetworkingConfig } from "../runtime/local/dockerContainers.js";
+import { detailedError, detailedErrorMessage } from "../logging.js";
+import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { runtimeSelection } from "../runtime/selection.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
-import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
+import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizeNodeUpdateFailure, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
@@ -114,9 +116,6 @@ type DockerContainerListItem = {
   State?: string;
   Status?: string;
 };
-type DockerInfo = {
-  MemTotal?: number;
-};
 type CreateInput = {
   nodeId?: string;
   displayName?: string;
@@ -153,19 +152,6 @@ export function nodeReconnectDelayMs(attempt: number, random = Math.random) {
   return Math.round(reconnectBaseDelayMs + (ceiling - reconnectBaseDelayMs) * Math.min(1, Math.max(0, random())));
 }
 const removablePreviousNodeStates = new Set(["created", "dead", "exited", "removing"]);
-
-function detailedError(error: Error, details: string) {
-  (error as Error & { details?: string }).details = details;
-  return error;
-}
-
-function detailedErrorMessage(error: unknown) {
-  if (error instanceof Error && "details" in error && typeof error.details === "string" && error.details.trim()) {
-    return error.details.trim();
-  }
-  if (error instanceof Error) return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
-  return String(error);
-}
 
 let nodeStorageDatabase: StorageDatabase | undefined;
 let nodeUpdateInProgress = false;
@@ -331,26 +317,6 @@ async function dockerServerRoot(server: ManagedServer) {
   return join(config.nodeDockerDataDir, rel);
 }
 
-function isValidServerPort(port: string) {
-  if (!/^\d+$/.test(port)) return false;
-  const value = Number(port);
-  return value >= minServerPort && value <= maxServerPort;
-}
-
-function queryPortEntry(port: number, internalPort = port): ManagedServerPort {
-  return {
-    id: "minecraft-query",
-    name: "Minecraft Query",
-    type: "query",
-    protocol: "udp",
-    internalPort,
-    externalPort: port,
-    required: true,
-    removable: false,
-    advanced: true
-  };
-}
-
 function queryPortFromInput(input: { queryPort?: string; dockerPorts?: string }) {
   if (input.queryPort?.trim() && isValidServerPort(input.queryPort.trim())) return Number(input.queryPort.trim());
   const udpBinding = (input.dockerPorts || "").split(",").map((part) => part.trim()).find((part) => part.endsWith("/udp"));
@@ -417,7 +383,7 @@ async function createContainer(server: ManagedServer, networkingConfig?: NodeNet
     Env: minecraftContainerEnvironment(),
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "no" } },
-    NetworkingConfig: networkingConfig ?? createNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
+    NetworkingConfig: networkingConfig ?? minecraftContainerNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
     Labels: managedContainerLabels(server.id, runtimeConfigHash(server))
   }, [201, 409]);
 }
@@ -757,20 +723,6 @@ function sendStreamEnd(socket: WebSocket, id: string, error?: NodeStreamEndMessa
   }
 }
 
-async function detectedTotalMemory() {
-  if (dockerAvailable()) {
-    try {
-      const info = await dockerRequest<DockerInfo>("GET", "/info");
-      if (typeof info.MemTotal === "number" && info.MemTotal > 0) {
-        return info.MemTotal;
-      }
-    } catch {
-      // Fall through to Node's view when Docker host info cannot be read.
-    }
-  }
-  return totalmem();
-}
-
 function startConsoleStream(server: ManagedServer, streamId: string, socket: WebSocket, onDone: () => void) {
   let closed = false;
   const finish = () => {
@@ -852,34 +804,10 @@ function cleanContainerName(name?: string) {
   return (name || "").replace(/^\/+/, "");
 }
 
-function validateNodeDockerImageName(image: string) {
-  const value = image.trim();
-  if (!value || value.length > 255 || /\s/.test(value) || !/^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(value)) {
-    throw new Error("Docker image name contains invalid characters");
-  }
-  return value;
-}
-
-function createNetworkingConfig(inspect?: Pick<NodeContainerInspect, "NetworkSettings"> | null): NodeNetworkingConfig | undefined {
-  const networks = inspect?.NetworkSettings?.Networks;
-  if (!networks || Object.keys(networks).length === 0) return undefined;
-  return {
-    EndpointsConfig: Object.fromEntries(Object.entries(networks).map(([name, network]) => [name, {
-      IPAMConfig: network.IPAMConfig,
-      Aliases: network.Aliases,
-      DriverOpts: network.DriverOpts
-    }]))
-  };
-}
-
-function minecraftContainerNetworkingConfig(existing?: Pick<NodeContainerInspect, "NetworkSettings"> | null, fallback?: Pick<NodeContainerInspect, "NetworkSettings"> | null) {
-  return createNetworkingConfig(existing) ?? createNetworkingConfig(fallback);
-}
-
 async function prepareNodeUpdate(payload: unknown) {
   if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
   const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
-  const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${appVersion}`);
+  const image = validateDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${appVersion}`);
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Mount the Docker socket before updating the node from the panel.");
   }
@@ -1031,7 +959,7 @@ export function nodeReplacementContainerConfig(
     MacAddress: undefined,
     NetworkDisabled: undefined,
     HostConfig: inspect.HostConfig,
-    NetworkingConfig: createNetworkingConfig(inspect)
+    NetworkingConfig: minecraftContainerNetworkingConfig(inspect)
   };
 }
 
@@ -1493,15 +1421,14 @@ async function modsList(server: ManagedServer) {
 }
 
 async function writeManagedContentBuffer(server: ManagedServer, filename: unknown, content: Buffer) {
-  const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
-  const singular = runtime.contentKind === "plugins" ? "Plugin" : "Mod";
+  const { directory, singular, Singular } = managedContentNaming(runtimeTarget(server).runtimeType);
   const name = safeModFilename(safeInstalledModFilename(filename as string | undefined));
-  if (!name.endsWith(".jar")) throw new Error(`${singular} uploads must be .jar files`);
-  if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular.toLowerCase()} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
-  assertJarBuffer(content, singular.toLowerCase());
-  await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
-  await inside(server, runtime.contentDirectory);
-  return writeRelativeFile(server, posix.join(runtime.contentDirectory, name), content);
+  if (!name.endsWith(".jar")) throw new Error(`${Singular} uploads must be .jar files`);
+  if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
+  assertJarBuffer(content, singular);
+  await mkdir(await inside(server, directory, false), { recursive: true });
+  await inside(server, directory);
+  return writeRelativeFile(server, posix.join(directory, name), content);
 }
 
 type PreparedBinaryUpload = {
@@ -1530,14 +1457,15 @@ async function prepareBinaryUpload(message: NodeTransferStartMessage): Promise<P
     targetPath = await writableResolvedInside(server, join(parent, safeName(payload.filename)));
   } else {
     maximumBytes = uploadLimit;
-    const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
+    const runtimeType = runtimeTarget(server).runtimeType;
+    const runtime = serverRuntimeDefinition(runtimeType);
     const expectedPrefix = runtime.contentKind === "mods" ? "mods" : "content";
     if (!runtime.managedContent || !message.command.startsWith(`${expectedPrefix}.`)) throw new Error(`${runtime.displayName} does not support this managed-content upload`);
-    const singular = runtime.contentKind === "plugins" ? "plugin" : "mod";
+    const { directory, singular, Singular } = managedContentNaming(runtimeType);
     const name = safeModFilename(safeInstalledModFilename(payload.filename as string | undefined));
-    if (!name.endsWith(".jar")) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} uploads must be .jar files`);
-    await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
-    targetPath = await writableInside(server, posix.join(runtime.contentDirectory, name));
+    if (!name.endsWith(".jar")) throw new Error(`${Singular} uploads must be .jar files`);
+    await mkdir(await inside(server, directory, false), { recursive: true });
+    targetPath = await writableInside(server, posix.join(directory, name));
     managedContentName = singular;
   }
   if (message.size < (managedContentName ? 1 : 0) || message.size > maximumBytes) {
@@ -1621,7 +1549,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const channel: ReleaseChannel = payload.channel === "alpha" || payload.channel === "beta" ? payload.channel : "release";
   const targetRuntime = runtimeTarget(server);
   const naming = managedContentNaming(targetRuntime.runtimeType);
-  const singular = naming.singular;
+  const { singular, Singular } = naming;
   if (!targetRuntime.minecraftVersion) throw new Error(`A resolved ${naming.displayName} runtime profile is required before installing compatible ${naming.plural}`);
 
   if (!versionId) {
@@ -1631,7 +1559,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     if (!file?.url || !file.filename) throw new Error("No installable .jar file was found for that version");
     assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
     const response = await modrinthFetch(file.url, { signal });
-    if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
+    if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
     assertModrinthJarHashes(content, file);
     const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
@@ -1665,7 +1593,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
   assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
   const response = await modrinthFetch(file.url, { signal });
-  if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
+  if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
   assertModrinthJarHashes(content, file);
   const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
@@ -1822,7 +1750,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
 
 export const __nodeAgentTestHooks = {
   cleanupPreviousNodeContainers,
-  createNetworkingConfig,
   createdServerRecord,
   handleCommand,
   minecraftContainerNetworkingConfig,

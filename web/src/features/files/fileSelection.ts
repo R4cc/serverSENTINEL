@@ -9,7 +9,7 @@ type FileSelectionResult = {
   anchorPath: string;
 };
 
-export type FileContextSelectionIntent = "preserve" | "replace" | "clear";
+type FileContextSelectionIntent = "preserve" | "replace" | "clear";
 
 export function fileContextSelectionIntent(currentPaths: string[], targetPath?: string): FileContextSelectionIntent {
   if (!targetPath) return "clear";

@@ -1,10 +1,9 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { serverRuntimeDefinition } from "@serversentinel/contracts";
+import { defaultDockerImageForMinecraftVersion, serverRuntimeDefinition } from "@serversentinel/contracts";
 import { api } from "../api";
 import { dockerContainerNameInputPattern, runtimeJarFilenameInputPattern } from "../utils/inputPatterns";
 import type { ManagedServer, RuntimeVersion } from "../types";
 import {
-  defaultDockerImageForMinecraftVersion,
   formatAdaptiveBytes,
   isValidServerPort,
   maxServerPort,

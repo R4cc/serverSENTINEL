@@ -12,7 +12,7 @@ type ExportArtifactMetadata = {
   downloadUrl?: string;
 };
 
-export type ExportOperationResult = {
+type ExportOperationResult = {
   artifact?: ExportArtifactMetadata;
   artifactPath?: string;
   serverIds?: string[];

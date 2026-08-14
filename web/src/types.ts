@@ -336,6 +336,11 @@ export type InstalledMod = {
   } | null;
 };
 
+export type NotificationTone = "success" | "error" | "info" | "warning";
+
+/** Raises a toast. Every workspace hook takes this from App rather than reaching for the toaster. */
+export type Notify = (type: NotificationTone, text: string) => void;
+
 export type GeneralJob = {
   id: string;
   type: "provision" | "mod-install" | "mod-upload" | "file-extract";
@@ -347,7 +352,7 @@ export type GeneralJob = {
   error?: string;
   errorDetails?: string;
   finalNotification?: {
-    type: "success" | "error" | "info" | "warning";
+    type: NotificationTone;
     text: string;
   };
   dismissible: boolean;

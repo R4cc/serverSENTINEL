@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
 import { api, ApiError } from "../../api";
 import { demoFixtures, demoServerId } from "../../demoRuntime";
-import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ModUpdatePlan, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
+import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModrinthHit, ModrinthInstallVersion, ModrinthInstallVersionsResponse, ModUpdatePlan, Notify, ReleaseChannel, SafeBatchUpdateResult } from "../../types";
 import type { ModInstallModalState } from "../../app/uiState";
 import { errorMessage } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
@@ -12,8 +12,6 @@ import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { managedContentTerminology } from "./contentTerminology";
 
 const modSearchDebounceMs = 650;
-
-type Notify = (type: "success" | "error" | "info" | "warning", text: string) => void;
 
 function modrinthSearchErrorMessage(error: unknown) {
   if (error instanceof ApiError && error.status === 424 && /^Request failed with 424$/i.test(error.message)) {

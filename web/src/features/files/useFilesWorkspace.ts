@@ -1,7 +1,7 @@
 import { type ChangeEvent, type Dispatch, type MutableRefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { api, apiErrorFromResponse } from "../../api";
 import { demoFixtures, demoServerId } from "../../demoRuntime";
-import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, OperationRecord, PublicUser } from "../../types";
+import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, Notify, OperationRecord, PublicUser } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
 import { isEditableFile, isPreviewableFile, joinPublicPath, parentPath } from "../../utils/files";
 import { hasFileManagerPermission, isServerPropertiesPath } from "../../utils/permissions";
@@ -29,8 +29,6 @@ type DownloadIntent =
       expiresAt: string;
     };
 
-type NotifyFn = (type: "success" | "error" | "info" | "warning", text: string) => void;
-
 type UseFilesWorkspaceOptions = {
   activeServer: ManagedServer | null | undefined;
   activeServerIsDemo: boolean;
@@ -49,7 +47,7 @@ type UseFilesWorkspaceOptions = {
   stoppedServerMutationMessage: string;
   permissionUser: PublicUser | null;
   formatDisplayDate: (value: string | number | Date) => string;
-  notify: NotifyFn;
+  notify: Notify;
   setNotice: (message: string) => void;
   handleStaleSession: (error: unknown) => boolean;
   refreshModsAfterFilesChange: () => Promise<unknown> | unknown;

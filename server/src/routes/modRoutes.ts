@@ -68,14 +68,14 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
   const user = await requireRequestPermission(request, "mods.enableDisable");
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
+  const { singular: contentName, Singular } = managedContentRuntime(server);
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.toggle",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Updating ${contentName} state`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} state updated`
+    successTask: `${Singular} state updated`
   }, () => runtimeForServer(server).toggleMod(server, request.body.filename, request.body.enabled)));
 });
 
@@ -83,14 +83,14 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
   const user = await requireRequestPermission(request, "mods.remove");
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
+  const { singular: contentName, Singular } = managedContentRuntime(server);
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.remove",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Removing ${contentName}`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} removed`
+    successTask: `${Singular} removed`
   }, () => runtimeForServer(server).removeMod(server, request.query.filename)));
 });
 
@@ -98,7 +98,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/mods/upload", modChangeRa
   const user = await requireRequestPermission(request, "mods.upload");
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
+  const { singular: contentName, Singular } = managedContentRuntime(server);
   if (!request.isMultipart()) throw new Error("Mod and plugin uploads require multipart form data");
   const uploadRequest = await multipartUpload(request, modFileSizeLimit);
   return withTrackedModMutation(server, () => recordOperation({
@@ -107,7 +107,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/mods/upload", modChangeRa
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Uploading ${contentName}`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} uploaded`
+    successTask: `${Singular} uploaded`
   }, () => runtimeForServer(server).uploadMod(server, uploadRequest.filename, uploadRequest.content)));
 });
 
@@ -115,14 +115,14 @@ app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; ch
   const user = await requireRequestPermission(request, "mods.install");
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
+  const { singular: contentName, Singular } = managedContentRuntime(server);
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.install",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Installing ${contentName}`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} installed`
+    successTask: `${Singular} installed`
   }, () => installModWithRemoteVersionFallback(server, request.body)));
 });
 
@@ -371,14 +371,14 @@ app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChanne
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
+  const { singular: contentName, Singular } = managedContentRuntime(server);
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Updating ${contentName}`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} updated`
+    successTask: `${Singular} updated`
   }, () => updateModrinthMod(server, request.body)));
 });
 
@@ -386,14 +386,14 @@ app.post<{ Body: { serverId?: string; filename?: string; versionId?: string; cha
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
+  const { singular: contentName, Singular } = managedContentRuntime(server);
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Switching ${contentName} version`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} version switched`
+    successTask: `${Singular} version switched`
   }, () => switchModrinthModVersion(server, request.body)));
 });
 
@@ -401,14 +401,14 @@ app.post<{ Body: { serverId?: string; filename?: string } }>("/api/modrinth/ackn
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
+  const { singular: contentName, Singular } = managedContentRuntime(server);
   return withModMutationLock(server.id, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Acknowledging ${contentName} review`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} review acknowledged`
+    successTask: `${Singular} review acknowledged`
   }, () => acknowledgeInstalledModReview(server, request.body)));
 });
 
@@ -416,15 +416,14 @@ app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseCha
   const user = await requireRequestPermission(request, "mods.update");
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
-  const contentName = managedContentRuntime(server).singular;
-  const contentPlural = managedContentRuntime(server).plural;
+  const { Singular, plural: contentPlural } = managedContentRuntime(server);
   return withTrackedModMutation(server, () => recordOperation({
     type: "mod.batchUpdate",
     serverId: server.id,
     nodeId: server.nodeId,
     createdBy: user.id,
     task: `Updating ${contentPlural}`,
-    successTask: `${contentName === "plugin" ? "Plugin" : "Mod"} update batch complete`
+    successTask: `${Singular} update batch complete`
   }, async () => {
     const channel = optionalReleaseChannel(request.body.channel);
     const filenames = request.body.filenames === undefined

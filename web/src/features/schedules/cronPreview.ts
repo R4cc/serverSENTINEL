@@ -1,6 +1,6 @@
 import { nextCronRunsInTimeZone } from "@serversentinel/contracts";
 
-export type CronPreview = {
+type CronPreview = {
   /** Formatted in the timezone the expression is written in, which is the panel's. */
   occurrences: string[];
   /** Present only when the reader's clock disagrees with the panel's, which is the confusing case. */

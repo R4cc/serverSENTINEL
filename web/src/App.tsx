@@ -2,7 +2,7 @@ import { FormEvent, Fragment, Suspense, useCallback, useEffect, useRef, useState
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, NotificationTone, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue } from "./utils/validation";
@@ -1258,7 +1258,7 @@ export default function App() {
     });
   }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError]);
 
-  function notify(type: "success" | "error" | "info" | "warning", text: string) {
+  function notify(type: NotificationTone, text: string) {
     const options = { duration: type === "error" ? 7000 : 5000, closeButton: true, dismissible: true };
     if (type === "success") {
       toast.success(text, options);

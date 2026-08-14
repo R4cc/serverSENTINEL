@@ -3,7 +3,7 @@ export const minecraftTerminalProfile = {
   env: ["TERM=xterm-256color", "COLORTERM=truecolor"]
 } as const;
 
-export type MinecraftTerminalProfile = {
+type MinecraftTerminalProfile = {
   tty: boolean;
   env: readonly string[];
 };

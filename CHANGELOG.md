@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.8.17 - 2026-08-14
+
+- Fixed servers on a pre-release Minecraft version, such as `1.21-pre1`, defaulting to the Java 17 container image instead of the Java 21 one the version needs. The panel, the node agent, and the create-server preview now all read the same rule.
+
 ## 26.8.16 - 2026-08-14
 
 - Fixed renaming a server that runs on a node, or changing any of its settings, failing with "server.createdAt must be a non-empty string". The panel now keeps its own record of the server when a node answers an update, instead of expecting the node to return bookkeeping it was never sent.

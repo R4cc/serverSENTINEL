@@ -1,6 +1,6 @@
 import type { ScheduledExecution, ScheduledRun } from "../../types";
 
-export type ScheduleHealth = {
+type ScheduleHealth = {
   tone: "failed" | "skipped";
   /** Short enough to sit in a table row. */
   label: string;

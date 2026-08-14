@@ -1,6 +1,7 @@
+import { defaultDockerImageForMinecraftVersion } from "@serversentinel/contracts";
 import { maxServerPort, minServerPort } from "../config.js";
 import { optionalStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../http/validation.js";
-import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer } from "../runtime/profile.js";
+import { runtimeProfileForServer } from "../runtime/profile.js";
 import { runtimeSelection, runtimeUpdatePlan } from "../runtime/selection.js";
 import { defaultServerContainerName } from "../storage/serverIdentity.js";
 import { isValidServerPort } from "./ports.js";
@@ -26,7 +27,7 @@ type ServerUpdateInput = {
   startOnNodeStart?: boolean;
 };
 
-export type ServerUpdatePlan = {
+type ServerUpdatePlan = {
   runtimeProfile: ServerRuntimeProfile;
   displayName: string;
   dockerContainer: string;

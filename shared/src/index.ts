@@ -152,6 +152,43 @@ export const PERMISSION_DEPENDENCIES: Readonly<Record<Permission, readonly Permi
   "users.manage": ["users.view"]
 };
 
+const permissionOrder = new Map<Permission, number>(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
+
+export function isPermission(value: unknown): value is Permission {
+  return typeof value === "string" && permissionOrder.has(value as Permission);
+}
+
+/**
+ * The dependency closure of a grant, in `ALL_PERMISSIONS` order. Panel and browser both compare
+ * normalized lists element by element, so the ordering is part of the contract, not a nicety.
+ */
+export function expandPermissions(permissions: readonly Permission[]): Permission[] {
+  const expanded = new Set<Permission>();
+  const visit = (permission: Permission) => {
+    if (expanded.has(permission)) return;
+    expanded.add(permission);
+    for (const dependency of PERMISSION_DEPENDENCIES[permission]) visit(dependency);
+  };
+  for (const permission of permissions) visit(permission);
+  return [...expanded].sort((left, right) => permissionOrder.get(left)! - permissionOrder.get(right)!);
+}
+
+/** `ROLE_PRESETS` is constant, so expand each preset once instead of on every comparison. */
+const expandedRolePresets = (["admin", "manager", "maintainer", "operator", "viewer"] as const)
+  .map((preset) => [preset, expandPermissions(ROLE_PRESETS[preset])] as const);
+
+/** The preset a grant is exactly equivalent to, or "custom" when it matches none of them. */
+export function inferRolePreset(permissions: readonly Permission[]): RolePreset {
+  const expanded = expandPermissions(permissions);
+  for (const [preset, presetPermissions] of expandedRolePresets) {
+    if (expanded.length === presetPermissions.length
+      && expanded.every((permission, index) => permission === presetPermissions[index])) {
+      return preset;
+    }
+  }
+  return "custom";
+}
+
 export type OperationStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export type OperationType =
@@ -372,6 +409,30 @@ export function serverRuntimeDefinition(type: ServerRuntimeType): ServerRuntimeD
 export type ServerJarProviderId = "mcjars" | "papermc";
 export type JavaMajorVersion = 17 | 21 | 25;
 export type RuntimeCompatibilityStatus = "compatible" | "unsupported" | "unknown";
+
+/**
+ * The Java runtime a Minecraft release needs, or null when the string is not a release this panel
+ * manages — unparsable, or older than 1.18. Both sides read this: the panel to resolve and reject
+ * versions, the browser to preview the image a new server will get. Two copies used to disagree on
+ * pre-release identifiers such as `1.21-pre1`.
+ */
+export function javaMajorVersionForMinecraft(minecraftVersion: string): JavaMajorVersion | null {
+  const trimmed = minecraftVersion.trim();
+  const modern = trimmed.match(/^(\d+)\.(\d+)(?:\.(\d+))?(?:[-\w.]*)?$/);
+  if (modern && Number(modern[1]) >= 26) return 25;
+  const match = trimmed.match(/^1\.(\d+)(?:\.(\d+))?(?:[-\w.]*)?$/);
+  if (!match) return null;
+  const minor = Number(match[1]);
+  const patch = Number(match[2] ?? "0");
+  if (!Number.isInteger(minor) || !Number.isInteger(patch)) return null;
+  if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
+  return minor >= 18 ? 17 : null;
+}
+
+/** The image a server runs on when nobody has pinned one. */
+export function defaultDockerImageForMinecraftVersion(minecraftVersion?: string) {
+  return `eclipse-temurin:${javaMajorVersionForMinecraft(minecraftVersion ?? "") ?? 21}-jre`;
+}
 
 export type ServerRuntimeProfile = {
   minecraftVersion: string;

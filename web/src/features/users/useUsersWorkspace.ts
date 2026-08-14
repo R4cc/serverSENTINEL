@@ -1,11 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../api";
-import type { ActivePage, AuthSession, PublicUser } from "../../types";
+import type { ActivePage, AuthSession, Notify, PublicUser } from "../../types";
 import { errorMessage, setValidationNotice } from "../../utils/appHelpers";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { createUserFormValues, resetPasswordFormValues, updateUserFormValues } from "./userForm";
-
-type Notify = (type: "success" | "error" | "info" | "warning", text: string) => void;
 
 type UsersWorkspaceInputs = {
   activePage: ActivePage;

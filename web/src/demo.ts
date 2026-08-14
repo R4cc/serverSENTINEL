@@ -44,7 +44,7 @@ type DemoTimelineScenarioPlayers = {
   blink: string;
 };
 
-export type DemoSession = {
+type DemoSession = {
   startedAt: number;
   playerCount: number;
   maxPlayers: number;

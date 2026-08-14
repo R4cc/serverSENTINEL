@@ -25,7 +25,7 @@ export type DownloadSelection = DownloadIntentEntry & {
   target: string;
 };
 
-export type PreparedDownload = {
+type PreparedDownload = {
   entries: FileArchiveEntry[];
   totalSize: number;
   archiveFilename: string;

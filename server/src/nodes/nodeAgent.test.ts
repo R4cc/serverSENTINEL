@@ -214,7 +214,7 @@ describe("remote node create and Docker command safety", () => {
       }
     };
 
-    expect(hooks.createNetworkingConfig(inspect)).toEqual({
+    expect(hooks.minecraftContainerNetworkingConfig(inspect)).toEqual({
       EndpointsConfig: {
         minecraft: {
           IPAMConfig: { IPv4Address: "172.30.0.8" },
@@ -229,8 +229,8 @@ describe("remote node create and Docker command safety", () => {
     const minecraftInspect = { NetworkSettings: { Networks: { minecraft: { Aliases: ["survival"] } } } };
     const nodeInspect = { NetworkSettings: { Networks: { panel: { Aliases: ["node"] } } } };
 
-    expect(hooks.minecraftContainerNetworkingConfig(minecraftInspect, nodeInspect)).toEqual(hooks.createNetworkingConfig(minecraftInspect));
-    expect(hooks.minecraftContainerNetworkingConfig({ NetworkSettings: { Networks: {} } }, nodeInspect)).toEqual(hooks.createNetworkingConfig(nodeInspect));
+    expect(hooks.minecraftContainerNetworkingConfig(minecraftInspect, nodeInspect)).toEqual(hooks.minecraftContainerNetworkingConfig(minecraftInspect));
+    expect(hooks.minecraftContainerNetworkingConfig({ NetworkSettings: { Networks: {} } }, nodeInspect)).toEqual(hooks.minecraftContainerNetworkingConfig(nodeInspect));
   });
 });
 

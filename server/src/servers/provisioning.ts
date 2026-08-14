@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
-import { serverRuntimeDefinition } from "@serversentinel/contracts";
+import { defaultDockerImageForMinecraftVersion, serverRuntimeDefinition } from "@serversentinel/contracts";
 import { config } from "../config.js";
 import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js";
 import { appUserAgentFor } from "../buildInfo.js";
@@ -11,7 +11,7 @@ import { defaultServerJarProvider } from "../runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "../runtime/artifact.js";
 import { runtimeProfileForServer, type ServerJarProvider } from "../runtime/profile.js";
 import { runtimeSelection } from "../runtime/selection.js";
-import { defaultDockerImageForMinecraftVersion, ensureDockerContainer, removeManagedDockerContainer, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
+import { ensureDockerContainer, removeManagedDockerContainer, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
 
 import { ensureInsideServer } from "../core.js";
 import { newServerId, serverDirectory, serverStorageName, defaultServerContainerName } from "../storage/serverIdentity.js";

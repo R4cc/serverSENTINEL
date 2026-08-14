@@ -630,7 +630,7 @@ export async function localModIcon(server: ManagedServer, filenameInput: unknown
 }
 
 export async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
-  const { directory, singular } = managedContentRuntime(server);
+  const { directory, Singular } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const enabled = requireStrictBoolean(enabledInput, "enabled");
   const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join(directory, filename)))
@@ -656,12 +656,12 @@ export async function localToggleMod(server: ManagedServer, filenameInput: unkno
     delete prefs[sourceName];
     await writeModPreferences(server, prefs);
   }
-  logInfo({ ...serverLogFields(server), filename: basename(target), enabled, action: "toggle_mod" }, `${singular === "plugin" ? "Plugin" : "Mod"} state changed`);
+  logInfo({ ...serverLogFields(server), filename: basename(target), enabled, action: "toggle_mod" }, `${Singular} state changed`);
   return { ok: true, filename: basename(target), enabled };
 }
 
 export async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
-  const { directory, singular } = managedContentRuntime(server);
+  const { directory, Singular } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const target = await validateExistingInsideServer(server, join(directory, filename));
   await rm(target, { force: true });
@@ -671,7 +671,7 @@ export async function localRemoveMod(server: ManagedServer, filenameInput: unkno
     delete prefs[filename];
     await writeModPreferences(server, prefs);
   }
-  logInfo({ ...serverLogFields(server), filename, action: "remove_mod" }, `${singular === "plugin" ? "Plugin" : "Mod"} removed`);
+  logInfo({ ...serverLogFields(server), filename, action: "remove_mod" }, `${Singular} removed`);
   return { ok: true, filename };
 }
 
@@ -882,7 +882,7 @@ export async function updateModrinthMod(server: ManagedServer, input: unknown) {
     };
     await writeModPreferences(server, prefs);
 
-    logInfo({ ...serverLogFields(server), filename, targetFilename: finalFilename, versionId: latest.id, action: "update_mod", status: "succeeded", durationMs: durationSince(startedAt) }, `${contentDefinition.singular === "plugin" ? "Plugin" : "Mod"} update succeeded`);
+    logInfo({ ...serverLogFields(server), filename, targetFilename: finalFilename, versionId: latest.id, action: "update_mod", status: "succeeded", durationMs: durationSince(startedAt) }, `${contentDefinition.Singular} update succeeded`);
     return { ok: true, filename: finalFilename, version: latest.version_number, channel: versionChannel(latest.version_type), replaced: filename };
   } catch (error) {
     logOperationFailure({ ...serverLogFields(server), filename, action: "update_mod", status: "failed", durationMs: durationSince(startedAt) }, "Mod update failed", error);

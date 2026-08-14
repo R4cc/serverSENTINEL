@@ -43,7 +43,7 @@ export type PlayerTimelineLanePosition = {
   startIndex: number;
 };
 
-export type TimelineSessionGeometry = {
+type TimelineSessionGeometry = {
   leftPercent: number;
   widthPercent: number;
   startClipped: boolean;
@@ -90,7 +90,7 @@ type CartesianRect = {
 
 type TextAlignment = "left" | "center" | "right";
 
-export type PlayerTimelineLabelLayout = {
+type PlayerTimelineLabelLayout = {
   durationX: number;
   startX: number;
   startAlign: TextAlignment;

@@ -1,7 +1,7 @@
-import { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS } from "@serversentinel/contracts";
+import { ALL_PERMISSIONS, expandPermissions, inferRolePreset, isPermission, PERMISSION_DEPENDENCIES, ROLE_PRESETS } from "@serversentinel/contracts";
 import type { PermissionKey, PublicUser, RolePreset } from "../types";
 
-export { PERMISSION_DEPENDENCIES };
+export { expandPermissions, inferRolePreset, PERMISSION_DEPENDENCIES };
 
 export const PERMISSION_GROUPS: Array<{ title: string; permissions: Array<{ key: PermissionKey; label: string }> }> = [
   {
@@ -60,49 +60,15 @@ export const PERMISSION_GROUPS: Array<{ title: string; permissions: Array<{ key:
   }
 ];
 
-const knownPermissions = new Set<string>(ALL_PERMISSIONS);
-const permissionOrder = new Map(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
+export { isPermission as isPermissionKey };
 
-export function isPermissionKey(value: unknown): value is PermissionKey {
-  return typeof value === "string" && knownPermissions.has(value);
-}
-
-export function expandPermissions(permissions: readonly PermissionKey[]) {
-  const expanded = new Set<PermissionKey>();
-  const visit = (permission: PermissionKey) => {
-    if (expanded.has(permission)) return;
-    expanded.add(permission);
-    for (const dependency of PERMISSION_DEPENDENCIES[permission]) visit(dependency);
-  };
-  permissions.forEach(visit);
-  return sortPermissions([...expanded]);
-}
-
+/** The browser drops anything it does not recognize; the API is what refuses an unknown key. */
 export function normalizePermissions(permissions: readonly string[]) {
-  return expandPermissions(permissions.filter(isPermissionKey));
-}
-
-const ROLE_PRESET_ORDER = ["admin", "manager", "maintainer", "operator", "viewer"] as const;
-
-/** `ROLE_PRESETS` is constant, so normalize each preset once instead of on every comparison. */
-const normalizedRolePresets = new Map<RolePreset, PermissionKey[]>(
-  ROLE_PRESET_ORDER.map((preset) => [preset, normalizePermissions(ROLE_PRESETS[preset])])
-);
-
-export function inferRolePreset(permissions: readonly PermissionKey[]): RolePreset {
-  const normalized = normalizePermissions(permissions);
-  for (const preset of ROLE_PRESET_ORDER) {
-    const presetPermissions = normalizedRolePresets.get(preset)!;
-    if (
-      normalized.length === presetPermissions.length
-      && normalized.every((permission, index) => permission === presetPermissions[index])
-    ) return preset;
-  }
-  return "custom";
+  return expandPermissions(permissions.filter(isPermission));
 }
 
 export function permissionsForPreset(preset: RolePreset) {
-  return preset === "custom" ? [] : [...normalizedRolePresets.get(preset)!];
+  return preset === "custom" ? [] : expandPermissions(ROLE_PRESETS[preset]);
 }
 
 /**
@@ -196,10 +162,6 @@ export function displayedRolePreset(user: PublicUser) {
 
 export function dependentPermissions(basePermission: PermissionKey) {
   return ALL_PERMISSIONS.filter((permission) => PERMISSION_DEPENDENCIES[permission].includes(basePermission));
-}
-
-function sortPermissions(permissions: PermissionKey[]) {
-  return permissions.sort((a, b) => permissionOrder.get(a)! - permissionOrder.get(b)!);
 }
 
 function normalizePublicPath(path: string) {

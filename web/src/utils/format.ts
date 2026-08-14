@@ -90,20 +90,6 @@ export function memoryArgs(memoryGb: number) {
   return `-Xms${memory}G -Xmx${memory}G`;
 }
 
-export function javaMajorVersionForMinecraft(version: string): 17 | 21 | 25 {
-  const modernMajor = version.trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
-  if (modernMajor && Number(modernMajor[1]) >= 26) return 25;
-  const match = version.trim().match(/^1\.(\d+)(?:\.(\d+))?/);
-  const minor = Number(match?.[1] ?? "21");
-  const patch = Number(match?.[2] ?? "0");
-  if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
-  return 17;
-}
-
-export function defaultDockerImageForMinecraftVersion(version?: string) {
-  return `eclipse-temurin:${javaMajorVersionForMinecraft(version ?? "")}-jre`;
-}
-
 export function isValidServerPort(port: string) {
   if (!/^\d+$/.test(port)) return false;
   const value = Number(port);

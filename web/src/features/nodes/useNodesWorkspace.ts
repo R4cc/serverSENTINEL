@@ -10,15 +10,14 @@ import type {
   NodeManualRecovery,
   NodeOperation,
   NodeUpdateResponse,
-  NodeView
+  NodeView,
+  Notify
 } from "../../types";
 import { errorMessage } from "../../utils/appHelpers";
 import { advanceNodeOperation, isNodeRuntimeUsable, nodeRestartImpactMessage } from "../../utils/nodes";
 
 /** How long a node may stay disconnected after an update before it is treated as failed. */
 export const nodeUpdateGraceMs = 5 * 60 * 1000;
-
-type Notify = (type: "success" | "error" | "info" | "warning", text: string) => void;
 
 type NodesWorkspaceInputs = {
   contextNodes: ContextNode[];

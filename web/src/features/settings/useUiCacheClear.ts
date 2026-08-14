@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
+import type { Notify } from "../../types";
 
 type ServerCacheStatus = "checking" | "ready" | "blocked" | "unavailable";
 
@@ -75,7 +76,7 @@ export function useUiCacheClear(inputs: {
   enabled: boolean;
   localBlockedReason: string;
   requestConfirmation: RequestConfirmation;
-  notify: (type: "success" | "error" | "info" | "warning", text: string) => void;
+  notify: Notify;
 }) {
   const { enabled, localBlockedReason, requestConfirmation, notify } = inputs;
   const [serverStatus, setServerStatus] = useState<ServerCacheStatus>("checking");

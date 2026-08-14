@@ -1,6 +1,6 @@
 import type { FastifyReply } from "fastify";
 
-export type PublicApiError = {
+type PublicApiError = {
   error: {
     code: string;
     message: string;
@@ -8,7 +8,7 @@ export type PublicApiError = {
   };
 };
 
-export type HttpError = Error & {
+type HttpError = Error & {
   statusCode?: number;
   code?: string;
   details?: unknown;

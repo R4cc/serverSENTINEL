@@ -444,7 +444,7 @@ type PositionedMarkerCluster = MarkerCluster & {
   labelHeight: number;
 };
 
-export type TimelineMarkerDisplayLabel = {
+type TimelineMarkerDisplayLabel = {
   primary: string;
   secondary?: string;
 };
