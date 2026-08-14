@@ -7,6 +7,7 @@ import {
   type ImportValidationResult
 } from "@serversentinel/contracts";
 import { api, ApiError, exportConflictEvent } from "../../api";
+import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { errorMessage } from "../../utils/appHelpers";
 import type { OperationRecord } from "../../types";
 
@@ -85,7 +86,8 @@ async function pollOperation(operationId: string, onProgress: (operation: Operat
 export function useExportWorkspace(
   notify: (tone: "success" | "error" | "info", text: string) => void,
   activeServerId = "",
-  enabled = true
+  enabled = true,
+  requestConfirmation?: RequestConfirmation
 ) {
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -101,6 +103,7 @@ export function useExportWorkspace(
   const [serverExportState, setServerExportState] = useState<ServerExportState>({ latest: null, artifact: null });
   const [serverExportStateLoading, setServerExportStateLoading] = useState(false);
   const [serverExportStateError, setServerExportStateError] = useState("");
+  const [deletingExportId, setDeletingExportId] = useState("");
 
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importId, setImportId] = useState("");
@@ -287,6 +290,28 @@ export function useExportWorkspace(
     }
   }, [notify, refreshServerExportState]);
 
+  const deleteExport = useCallback(async (artifact: ServerExportArtifact) => {
+    if (!requestConfirmation) return;
+    const confirmed = await requestConfirmation({
+      title: "Delete export?",
+      description: `Permanently delete ${artifact.filename}.`,
+      warning: "The ZIP archive will be removed from panel storage and cannot be downloaded again.",
+      confirmLabel: "Delete export",
+      variant: "critical"
+    });
+    if (!confirmed) return;
+    setDeletingExportId(artifact.operationId);
+    try {
+      await api<{ ok: boolean }>(`/api/exports/${encodeURIComponent(artifact.operationId)}`, { method: "DELETE" });
+      notify("success", "Export deleted");
+    } catch (error) {
+      notify("error", errorMessage(error, "The export could not be deleted."));
+    } finally {
+      setDeletingExportId("");
+      await refreshServerExportState();
+    }
+  }, [notify, refreshServerExportState, requestConfirmation]);
+
   const openImport = useCallback((defaultNodeId: string) => {
     setImportFile(null);
     setImportId("");
@@ -421,6 +446,7 @@ export function useExportWorkspace(
     serverExportState,
     serverExportStateLoading,
     serverExportStateError,
+    deletingExportId,
     exportMutationLocked: serverExportState.latest?.status === "queued" || serverExportState.latest?.status === "running",
     exportMutationBlockedReason: "An export is in progress. Abort it or wait for it to finish before changing this server.",
     importFile,
@@ -435,6 +461,7 @@ export function useExportWorkspace(
     closeExport,
     runExport,
     cancelExport,
+    deleteExport,
     refreshServerExportState,
     openImport,
     closeImport,

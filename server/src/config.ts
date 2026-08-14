@@ -70,6 +70,14 @@ function parseCountLimitEnv(name: string, defaultValue: number) {
   return value;
 }
 
+function parseSecondsRangeEnv(name: string, defaultValue: number, minimum: number, maximum: number) {
+  const value = parseCountLimitEnv(name, defaultValue);
+  if (value < minimum || value > maximum) {
+    throw new Error(`${name} must be between ${minimum} and ${maximum} seconds`);
+  }
+  return value;
+}
+
 function parseHourDurationEnv(name: string, defaultValue: number) {
   const hours = parseCountLimitEnv(name, defaultValue);
   if (hours > 24 * 365) {
@@ -128,6 +136,16 @@ export const config = {
   tmpDir: paths.tmpDir,
   serversDockerVolume: defaultServersDockerVolume(paths.dataDir),
   dockerSocket: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock",
+  /**
+   * Seconds Docker waits after SIGTERM before killing a Minecraft container. Docker's ten second
+   * default is shorter than a world save, so any stop serverSENTINEL did not drive through the
+   * Minecraft `stop` command - including the one the daemon issues to every container when the
+   * Docker package is upgraded - killed the JVM before it finished shutting down. The daemon also
+   * stretches its own shutdown grace period to the longest container stop timeout plus five seconds,
+   * so this value is what buys the save time during a daemon restart. Keep it under the service
+   * manager's stop timeout for Docker, which is 90 seconds under the packaged systemd unit.
+   */
+  minecraftStopTimeoutSeconds: parseSecondsRangeEnv("SERVERSENTINEL_MINECRAFT_STOP_TIMEOUT_SECONDS", 60, 10, 3600),
   logLevel: process.env.LOG_LEVEL?.trim() || "info",
   port: parseHttpPort(process.env.PORT),
   panelUrl,

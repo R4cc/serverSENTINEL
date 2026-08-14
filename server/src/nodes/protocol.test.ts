@@ -57,6 +57,23 @@ describe("node protocol v3.1", () => {
     });
   });
 
+  it("carries a reported update failure and drops an unusable one without losing the session", () => {
+    const failure = {
+      at: "2026-08-14T10:00:00.000Z",
+      stage: "start",
+      message: "The replacement container could not start",
+      image: "nl2109/serversentinel:26.8.13",
+      recovered: true,
+      containerName: "serversentinel-node"
+    };
+
+    expect(normalizeNodeHello(hello({ updateFailure: failure })).updateFailure).toEqual(failure);
+    expect(normalizeNodeHello(hello({ updateFailure: { ...failure, stage: "invented" } })).updateFailure).toBeUndefined();
+    expect(normalizeNodeHello(hello({ updateFailure: { stage: "start" } })).updateFailure).toBeUndefined();
+    expect(normalizeNodeHello(hello({ updateFailure: "broken" })).updateFailure).toBeUndefined();
+    expect(normalizeNodeHello(hello()).updateFailure).toBeUndefined();
+  });
+
   it("rejects non-current protocols, incomplete hellos, capabilities, and features", () => {
     expect(() => normalizeNodeHello(hello({ protocolVersion: "3.0" }))).toThrow("protocol 3.1 is required");
     expect(() => normalizeNodeHello(hello({ protocolVersion: "2.0" }))).toThrow("protocol 3.1 is required");

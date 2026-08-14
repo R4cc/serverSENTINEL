@@ -165,6 +165,13 @@ export class ExportArtifactMaintenance {
     return (await this.removeOperationFiles(operation)).success;
   }
 
+  async deleteSuccessfulExport(operation: OperationRecord) {
+    if (operation.type !== "export.run" || operation.status !== "succeeded") return false;
+    const cleanup = await this.removeOperationFiles(operation);
+    if (!cleanup.success) return false;
+    return this.operations.deleteFinished([operation.id]) === 1;
+  }
+
   async prepareNewExport(serverIds: readonly string[]) {
     const scope = new Set(serverIds);
     const obsolete = this.operations.listExportOperations().filter((operation) => (

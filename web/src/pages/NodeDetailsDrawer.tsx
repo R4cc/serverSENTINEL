@@ -2,6 +2,7 @@ import { ActionMenu, type ActionMenuItem } from "../components/ActionMenu";
 import { DialogSurface } from "../components/DialogSurface";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Button, Spinner, StatusBadge } from "../components/UiPrimitives";
+import type { NodeUpdateFailureStage } from "@serversentinel/contracts";
 import type { ContextNode, NodeView, NodeManualRecovery, NodeOperation } from "../types";
 import { formatBytes } from "../utils/format";
 import { nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
@@ -47,6 +48,20 @@ export function nodeDetailsActionIds({
     if (contextNode.servers.length > 0) ids.push("force-remove");
   }
   return ids;
+}
+
+const nodeUpdateFailureTitles: Record<NodeUpdateFailureStage, string> = {
+  pull: "Update failed while downloading the image",
+  create: "Update failed while creating the container",
+  start: "Updated container could not start",
+  verify: "Updated container did not become healthy",
+  session: "Updated container did not reconnect",
+  cleanup: "Update finished with a leftover container",
+  reconnect: "Node did not come back from the update"
+};
+
+function nodeUpdateFailureTitle(stage: NodeUpdateFailureStage) {
+  return nodeUpdateFailureTitles[stage] ?? "Update failed";
 }
 
 function formatNodeDate(value: string | undefined, formatter: (value: string | number | Date) => string) {
@@ -108,6 +123,7 @@ export type NodeDetailsDrawerProps = {
   onShowInstall: (node: NodeView) => void;
   onRotateToken: (node: NodeView) => void;
   onUpdateNode: (node: NodeView) => void;
+  onDismissUpdateFailure: (node: NodeView) => void;
   onUpdateNotifications: (node: NodeView, enabled: boolean) => void;
   onRefresh: () => void;
   onRestartNode: (node: NodeView) => void;
@@ -137,6 +153,7 @@ export function NodeDetailsDrawer({
   onShowInstall,
   onRotateToken,
   onUpdateNode,
+  onDismissUpdateFailure,
   onUpdateNotifications,
   onRefresh,
   onRestartNode,
@@ -265,6 +282,27 @@ export function NodeDetailsDrawer({
             {node.status !== "unknown" && (operation || manualRecovery) && <small>Last reported status: {node.status}</small>}
           </div>
         </section>
+
+        {node.lastUpdateFailure && (
+          <section className="nodeDrawerNotice failure" aria-label="Node update failure">
+            <strong>{nodeUpdateFailureTitle(node.lastUpdateFailure.stage)}</strong>
+            <p>{node.lastUpdateFailure.message}</p>
+            <small>
+              {formatDate(node.lastUpdateFailure.at)}
+              {node.lastUpdateFailure.image ? ` · ${node.lastUpdateFailure.image}` : ""}
+              {node.lastUpdateFailure.recovered === false ? " · Needs recovery on the node host" : ""}
+            </small>
+            <div className="nodeDrawerNoticeActions">
+              {canManageNodes && <Button variant="secondary" compact onClick={() => onDismissUpdateFailure(node)} disabled={nodeBusy}>Dismiss</Button>}
+              {canManageNodes && node.status === "online" && !node.isInternal && (
+                <Button compact onClick={() => onUpdateNode(node)} disabled={nodeBusy || operation?.phase === "waiting"}><AppIcon name="arrowUp" />Retry update</Button>
+              )}
+              {node.lastUpdateFailure.recovered === false && !node.isInternal && (
+                <Button variant="secondary" compact onClick={() => onShowInstall(node)} disabled={nodeBusy}><AppIcon name="download" />Install instructions</Button>
+              )}
+            </div>
+          </section>
+        )}
 
         {manualRecovery?.command && (
           <section className="nodeManualCommand" aria-label="Manual update command">

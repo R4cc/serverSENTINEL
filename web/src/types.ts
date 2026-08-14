@@ -87,7 +87,8 @@ export type NodeInstallResponse = {
 
 export type NodeUpdateResponse = {
   ok: boolean;
-  mode: "self" | "offline" | "current";
+  /** `manual` means the node is too old to replace its own container and must be recreated on its host. */
+  mode: "self" | "offline" | "current" | "manual";
   message: string;
   image?: string;
   command?: string;

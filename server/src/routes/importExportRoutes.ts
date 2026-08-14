@@ -194,6 +194,18 @@ app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download
   return reply.send(exportDownloadStream(artifactPath));
 });
 
+app.delete<{ Params: { operationId: string } }>("/api/exports/:operationId", destructiveRateLimit, async (request, reply) => {
+  const user = await requireRequestPermission(request, "servers.export");
+  const operation = services.operationsRepository.find(validateOperationId(request.params.operationId));
+  if (!operation || operation.type !== "export.run" || operation.status !== "succeeded" || operation.createdBy !== user.id) {
+    return reply.code(404).send(apiErrorResponse("EXPORT_NOT_FOUND", "Export operation not found"));
+  }
+  if (!await services.exportArtifactMaintenance.deleteSuccessfulExport(operation)) {
+    throw new Error("Export artifact could not be deleted");
+  }
+  return { ok: true };
+});
+
 /**
  * Import is a two-step: the archive is uploaded once and validated and applied by reference. A world
  * makes the artifact far too large to resend for validation and again for apply, and far too large

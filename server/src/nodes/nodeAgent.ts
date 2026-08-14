@@ -6,7 +6,7 @@ import { totalmem } from "node:os";
 import { Readable } from "node:stream";
 import http from "node:http";
 import WebSocket from "ws";
-import { EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition } from "@serversentinel/contracts";
+import { EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
@@ -17,6 +17,7 @@ import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, openContainedReadStream, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerReachable, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
+import { dockerLiveRestoreEnabled, dockerLiveRestoreGuidance, dockerStopQuery, dockerStopRequestTimeoutMs } from "../docker/dockerDaemon.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
@@ -56,7 +57,7 @@ import { parseServerProperties, serializeServerProperties } from "../runtime/ser
 import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
-import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
+import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizeNodeUpdateFailure, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
 import type { NodeCancelMessage, NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, NodeTransferCancelMessage, NodeTransferFinishMessage, NodeTransferResultMessage, NodeTransferStartMessage, PanelWelcome, ServerLogCursor, ServerObservationItem, ServerObservationResponse, ServerObservationResultItem, ServerObservationSection } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
@@ -73,6 +74,8 @@ type NodeUpdateRequest = {
 type NodeContainerInspect = {
   Id: string;
   Name?: string;
+  /** The image id the container was created from, which is what its inherited config came from. */
+  Image?: string;
   State?: { Status?: string; Running?: boolean; ExitCode?: number; OOMKilled?: boolean; StartedAt?: string; FinishedAt?: string; Health?: { Status?: string } };
   Config?: Record<string, unknown> & {
     Image?: string;
@@ -135,6 +138,7 @@ type CreateInput = {
 type UpdateInput = Omit<CreateInput, "nodeId" | "acceptEula">;
 
 const nodeIdentityMetadataKey = "node.identity";
+const nodeUpdateFailureMetadataKey = "node.update.failure";
 const nodeUpdateDir = config.paths.nodeUpdatesDir;
 const serversRoot = resolve(config.nodeDataDir, "servers");
 const uploadLimit = managedContentFileSizeLimit;
@@ -165,6 +169,12 @@ function detailedErrorMessage(error: unknown) {
 
 let nodeStorageDatabase: StorageDatabase | undefined;
 let nodeUpdateInProgress = false;
+/**
+ * Set by the running agent so a failed self-update can hand its report to the panel immediately.
+ * The panel marks a node offline the moment an update starts and then waits for it to come back, so
+ * a node that stays on its original session after a failure would sit there looking offline.
+ */
+let reconnectToPanel: ((reason: string) => void) | undefined;
 
 function nodeStorage() {
   nodeStorageDatabase ??= openStorageDatabase();
@@ -177,6 +187,34 @@ function parseNodeIdentity(value: string): NodeIdentity {
     throw new Error("Stored node identity is invalid");
   }
   return { nodeId: parsed.nodeId, nodeSecret: parsed.nodeSecret };
+}
+
+/**
+ * The node's own record of an update that did not finish. It is persisted because the report has to
+ * survive the agent restart that recovery can involve, and it is cleared as soon as the panel has
+ * accepted a session carrying it.
+ */
+function readStoredNodeUpdateFailure(): NodeUpdateFailure | undefined {
+  const value = nodeStorage().metadata(nodeUpdateFailureMetadataKey);
+  return value === undefined ? undefined : normalizeNodeUpdateFailure(safeJsonParse(value));
+}
+
+function safeJsonParse(value: string) {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function recordNodeUpdateFailure(failure: NodeUpdateFailure) {
+  nodeStorage().setMetadata(nodeUpdateFailureMetadataKey, JSON.stringify(failure));
+}
+
+function clearStoredNodeUpdateFailure(reportedAt?: string) {
+  const stored = readStoredNodeUpdateFailure();
+  if (!stored || (reportedAt && stored.at !== reportedAt)) return;
+  nodeStorage().setMetadata(nodeUpdateFailureMetadataKey, "");
 }
 
 async function readNodeIdentity() {
@@ -256,7 +294,10 @@ function runtimeConfigHashInput(server: ManagedServer, options: { includeTermina
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
     timeZone: config.timeZone,
     ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {}),
-    ...(options.includeRestartPolicy ? { restartPolicy: "no" } : {})
+    ...(options.includeRestartPolicy ? { restartPolicy: "no" } : {}),
+    // Docker only accepts a stop timeout at create time, so it belongs in the hash: a container
+    // built with the old grace period has to be replaced before the new one takes effect.
+    stopTimeoutSeconds: config.minecraftStopTimeoutSeconds
   };
 }
 
@@ -369,6 +410,9 @@ async function createContainer(server: ManagedServer, networkingConfig?: NodeNet
     Cmd: command,
     OpenStdin: true,
     AttachStdin: true,
+    // Applies to every stop this container ever receives, including the one the daemon issues to
+    // all containers when Docker itself is restarted or upgraded, which the node agent never sees.
+    StopTimeout: config.minecraftStopTimeoutSeconds,
     ...terminalConfig,
     Env: minecraftContainerEnvironment(),
     ExposedPorts: exposedPorts,
@@ -438,9 +482,10 @@ async function recreateContainerAfterMissingNetwork(server: ManagedServer) {
 
 async function requestContainerLifecycleAction(server: ManagedServer, action: "start" | "restart", signal?: AbortSignal) {
   const name = encodeURIComponent(containerName(server));
-  const path = action === "start" ? `/containers/${name}/start` : `/containers/${name}/restart?t=10`;
+  const path = action === "start" ? `/containers/${name}/start` : `/containers/${name}/restart${dockerStopQuery()}`;
   const expectedStatus = action === "start" ? [204, 304] : 204;
-  const request = () => signal ? dockerRequest("POST", path, expectedStatus, signal) : dockerRequest("POST", path, expectedStatus);
+  const timeoutMs = action === "start" ? undefined : dockerStopRequestTimeoutMs();
+  const request = () => dockerRequest("POST", path, expectedStatus, signal, timeoutMs);
   signal?.throwIfAborted();
   try {
     await request();
@@ -860,24 +905,37 @@ async function prepareNodeUpdate(payload: unknown) {
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
   nodeUpdateInProgress = true;
 
+  await clearStoredNodeUpdateFailure();
   setTimeout(() => {
     void selfUpdateContainer(inspect, image, currentName, planPath).catch((error) => {
       nodeUpdateInProgress = false;
-      void writeFile(join(nodeUpdateDir, `node-update-error-${Date.now()}.json`), `${JSON.stringify({
+      const failure = (error as Error & { updateFailure?: NodeUpdateFailure }).updateFailure ?? {
         at: new Date().toISOString(),
+        stage: "start" as const,
+        message: (error as Error).message,
         image,
-        containerName: currentName,
-        planPath,
-        error: (error as Error).message
-      }, null, 2)}\n`, "utf8").catch(() => null);
-      console.error(`Node self-update failed: ${(error as Error).message}`);
+        recovered: false,
+        containerName: currentName
+      };
+      void writeFile(join(nodeUpdateDir, `node-update-error-${Date.now()}.json`), `${JSON.stringify({ ...failure, planPath }, null, 2)}\n`, "utf8").catch(() => null);
+      console.error(`Node self-update failed: ${failure.message}`);
+      try {
+        recordNodeUpdateFailure(failure);
+      } catch (storageError) {
+        console.error(`Could not persist the node update failure: ${(storageError as Error).message}`);
+      }
+      // The panel is waiting for this node to come back from the update. Handing it a fresh session
+      // is what turns a silent stall into a reported failure on the Nodes page. The cleanup stage is
+      // the exception: the replacement already owns the session there, and this container is going
+      // away, so the report rides along on the replacement's next handshake instead.
+      if (failure.stage !== "cleanup") reconnectToPanel?.("node update failed");
     });
   }, 500);
 
   return {
     ok: true,
     mode: "self",
-    message: "Node update started. The node will reconnect shortly. After the replacement is running and healthy, the previous node container will be removed; if startup fails, it will be retained for recovery.",
+    message: "Node update started. The node will reconnect shortly. If the replacement does not start and reconnect, the previous node container is restored and the failure is reported back to the panel.",
     image,
     planPath
   };
@@ -929,16 +987,45 @@ async function prepareNodeRemoval() {
   };
 }
 
-async function selfUpdateContainer(inspect: NodeContainerInspect, image: string, currentName: string, planPath: string) {
-  await mkdir(nodeUpdateDir, { recursive: true });
-  await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(image)}`, [200, 201, 204], 10 * 60 * 1000);
-  const oldName = `${currentName}-previous-${Date.now()}`;
-  await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(oldName)}`, 204);
+/**
+ * Container config keys Docker fills in from the image when the operator did not set them. Copying
+ * the running container's resolved config into the replacement pins them to the *old* image, so a
+ * release that changes any of them cannot be self-updated into: the entrypoint of the Debian-based
+ * image (`docker-entrypoint.sh`) does not exist in the Distroless one, and a container created with
+ * it fails to start with "executable file not found in $PATH".
+ */
+const imageDerivedContainerConfigFields = ["Entrypoint", "Cmd", "WorkingDir", "User", "Healthcheck", "Volumes", "ExposedPorts", "StopSignal", "Shell", "ArgsEscaped", "OnBuild"] as const;
 
-  const configBody = {
-    ...inspect.Config,
+function sameConfigValue(left: unknown, right: unknown) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+/**
+ * Builds the create body for the replacement container: everything the operator configured, minus
+ * the values that only came from the outgoing image. A field is treated as operator-set when it
+ * differs from that image's own config, so an explicit `--entrypoint` or command still survives.
+ * When the outgoing image can no longer be inspected the inherited values are dropped anyway —
+ * letting the new image supply its defaults recovers, while carrying stale ones cannot.
+ */
+export function nodeReplacementContainerConfig(
+  inspect: NodeContainerInspect,
+  image: string,
+  previousImageConfig?: Record<string, unknown>
+): Record<string, unknown> {
+  const config: Record<string, unknown> = { ...inspect.Config };
+  for (const field of imageDerivedContainerConfigFields) {
+    if (!(field in config)) continue;
+    if (previousImageConfig && !sameConfigValue(config[field], previousImageConfig[field])) continue;
+    delete config[field];
+  }
+  const imageLabels = (previousImageConfig?.Labels ?? {}) as Record<string, string>;
+  const labels = Object.fromEntries(Object.entries((config.Labels ?? {}) as Record<string, string>)
+    .filter(([name, value]) => imageLabels[name] !== value));
+  return {
+    ...config,
+    Labels: labels,
     Image: image,
-    Env: withoutBuildMetadataEnvironment(inspect.Config?.Env),
+    Env: withoutInheritedEnvironment(withoutBuildMetadataEnvironment(inspect.Config?.Env), previousImageConfig?.Env as string[] | undefined),
     Hostname: undefined,
     Domainname: undefined,
     MacAddress: undefined,
@@ -946,14 +1033,138 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
     HostConfig: inspect.HostConfig,
     NetworkingConfig: createNetworkingConfig(inspect)
   };
-  await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(currentName)}`, configBody, 201);
-  await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "created" }, null, 2)}\n`, "utf8");
-  await dockerRequest("POST", `/containers/${encodeURIComponent(currentName)}/start`, 204);
-  await verifyUpdatedNodeContainer(currentName);
-  await verifyUpdatedNodeSession(currentName);
-  await cleanupPreviousNodeContainers(currentName, oldName);
-  await writeFile(join(nodeUpdateDir, `node-update-status-${Date.now()}.json`), `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, oldName, planPath, status: "healthy", cleanup: "previous-container-removed" }, null, 2)}\n`, "utf8");
 }
+
+async function inspectImageConfig(imageReference?: string) {
+  if (!imageReference) return undefined;
+  try {
+    const image = await dockerRequest<{ Config?: Record<string, unknown> }>("GET", `/images/${encodeURIComponent(imageReference)}/json`, 200);
+    return image.Config;
+  } catch (error) {
+    console.warn(`Could not inspect the current node image ${imageReference}: ${(error as Error).message}. Image defaults will be taken from the new image.`);
+    return undefined;
+  }
+}
+
+async function selfUpdateContainer(inspect: NodeContainerInspect, image: string, currentName: string, planPath: string) {
+  await mkdir(nodeUpdateDir, { recursive: true });
+  const writeStatus = (status: string, extra: Record<string, unknown> = {}) => writeFile(
+    join(nodeUpdateDir, `node-update-status-${Date.now()}.json`),
+    `${JSON.stringify({ updatedAt: new Date().toISOString(), image, currentName, planPath, status, ...extra }, null, 2)}\n`,
+    "utf8"
+  );
+
+  let stage: NodeUpdateFailureStage = "pull";
+  let oldName: string | undefined;
+  let replacementId: string | undefined;
+  try {
+    await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(image)}`, [200, 201, 204], 10 * 60 * 1000);
+    const previousImageConfig = await inspectImageConfig(inspect.Image || inspect.Config?.Image);
+
+    stage = "create";
+    oldName = `${currentName}-previous-${Date.now()}`;
+    await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(oldName)}`, 204);
+    const created = await dockerJsonRequest<{ Id?: string }>("POST", `/containers/create?name=${encodeURIComponent(currentName)}`, nodeReplacementContainerConfig(inspect, image, previousImageConfig), 201);
+    replacementId = created?.Id || currentName;
+    await writeStatus("created", { oldName });
+
+    stage = "start";
+    await dockerRequest("POST", `/containers/${encodeURIComponent(currentName)}/start`, 204);
+
+    stage = "verify";
+    await verifyUpdatedNodeContainer(currentName);
+
+    stage = "session";
+    await verifyUpdatedNodeSession(currentName);
+
+    stage = "cleanup";
+    await cleanupPreviousNodeContainers(currentName, oldName);
+    await writeStatus("healthy", { oldName, cleanup: "previous-container-removed" });
+  } catch (error) {
+    // A cleanup failure means the replacement is already healthy and owns the panel session, so the
+    // update itself succeeded: rolling it back here would trade a working node for a stale one. This
+    // container steps aside instead and leaves the leftover for the next update's cleanup sweep.
+    const recovery = stage === "cleanup"
+      ? await standDownAfterCleanupFailure(inspect.Id, oldName ?? currentName)
+      : await restorePreviousNodeContainer({ previousId: inspect.Id, oldName, currentName, replacementId });
+    await writeStatus("failed", { oldName, stage, error: (error as Error).message, recovery }).catch(() => null);
+    throw nodeUpdateFailure(error as Error, stage, recovery, image, currentName);
+  }
+}
+
+type NodeUpdateRecovery = { recovered: boolean; notes: string[] };
+
+/**
+ * Undoes a failed update so the host is left exactly as it was: the half-built replacement is
+ * removed and the container this agent is running in gets its own name back. Without this the node
+ * keeps serving under a `-previous-<timestamp>` name and every later update stacks another one.
+ */
+async function restorePreviousNodeContainer(input: { previousId: string; oldName?: string; currentName: string; replacementId?: string }): Promise<NodeUpdateRecovery> {
+  const notes: string[] = [];
+  if (input.replacementId) {
+    try {
+      await dockerRequest("DELETE", `/containers/${encodeURIComponent(input.replacementId)}?force=1`, [204, 404]);
+      notes.push("Removed the replacement container.");
+    } catch (error) {
+      notes.push(`Could not remove the replacement container: ${(error as Error).message}`);
+      return { recovered: false, notes };
+    }
+  }
+  if (!input.oldName) return { recovered: true, notes };
+  try {
+    await dockerRequest("POST", `/containers/${encodeURIComponent(input.previousId)}/rename?name=${encodeURIComponent(input.currentName)}`, 204);
+    notes.push(`Restored the previous container name ${input.currentName}.`);
+  } catch (error) {
+    notes.push(`Could not rename ${input.oldName} back to ${input.currentName}: ${(error as Error).message}`);
+    return { recovered: false, notes };
+  }
+  try {
+    const restored = await inspectNodeContainer(input.currentName);
+    if (!restored.State?.Running) {
+      await dockerRequest("POST", `/containers/${encodeURIComponent(input.currentName)}/start`, [204, 304]);
+      notes.push("Restarted the previous container.");
+    }
+  } catch (error) {
+    notes.push(`Could not confirm the previous container is running: ${(error as Error).message}`);
+    return { recovered: false, notes };
+  }
+  return { recovered: true, notes };
+}
+
+async function standDownAfterCleanupFailure(previousId: string, previousName: string): Promise<NodeUpdateRecovery> {
+  try {
+    await selfStopContainer(previousId, previousName);
+    return { recovered: false, notes: [`The updated node is running. The previous container ${previousName} could not be removed and was stopped instead; remove it on the node host.`] };
+  } catch (error) {
+    return { recovered: false, notes: [`The updated node is running, but the previous container ${previousName} is still running and could not be stopped: ${(error as Error).message}. Remove it on the node host.`] };
+  }
+}
+
+function nodeUpdateFailure(error: Error, stage: NodeUpdateFailureStage, recovery: NodeUpdateRecovery, image: string, currentName: string) {
+  const summary = recovery.recovered
+    ? `The node kept running on its previous image and container ${currentName}.`
+    : recovery.notes.join(" ") || "The previous container could not be restored; recover the node on its host.";
+  const failure = new Error(`${nodeUpdateStageSummary[stage]}: ${error.message} ${summary}`) as Error & { updateFailure?: NodeUpdateFailure };
+  failure.updateFailure = {
+    at: new Date().toISOString(),
+    stage,
+    message: failure.message,
+    image,
+    recovered: recovery.recovered,
+    containerName: currentName
+  };
+  return failure;
+}
+
+const nodeUpdateStageSummary: Record<NodeUpdateFailureStage, string> = {
+  pull: "The node could not pull the new image",
+  create: "The node could not create the replacement container",
+  start: "The replacement container could not start",
+  verify: "The replacement container did not become healthy",
+  session: "The replacement container did not reconnect to the panel",
+  cleanup: "The replacement container started but the previous container could not be removed",
+  reconnect: "The node did not reconnect with the updated agent"
+};
 
 const buildMetadataEnvironmentNames = new Set([
   "SERVERSENTINEL_BUILD_ID",
@@ -972,6 +1183,17 @@ function withoutBuildMetadataEnvironment(environment?: string[]) {
   });
 }
 
+/**
+ * Drops environment entries the outgoing image baked in, so the new image's own defaults apply.
+ * `SERVERSENTINEL_NODE_IMAGE` is the reason this matters: carrying it forward pins a node to the
+ * image tag of the release it was first created from.
+ */
+function withoutInheritedEnvironment(environment?: string[], imageEnvironment?: string[]) {
+  if (!environment || !imageEnvironment?.length) return environment;
+  const inherited = new Set(imageEnvironment);
+  return environment.filter((entry) => !inherited.has(entry));
+}
+
 async function verifyUpdatedNodeContainer(currentName: string) {
   let lastInspect: NodeContainerInspect | undefined;
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -980,13 +1202,13 @@ async function verifyUpdatedNodeContainer(currentName: string) {
     const health = state?.Health?.Status;
     if (state?.Running && (!health || health === "healthy")) return lastInspect;
     if (health === "unhealthy") {
-      throw new Error(`Updated node container ${currentName} reported unhealthy. Previous container was retained for recovery.`);
+      throw new Error(`Updated node container ${currentName} reported unhealthy${await updatedNodeContainerLogTail(currentName)}`);
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000));
   }
   const status = lastInspect?.State?.Status || "unknown";
   const health = lastInspect?.State?.Health?.Status;
-  throw new Error(`Updated node container ${currentName} did not become healthy enough to remove the previous container. Current status: ${status}${health ? `, health: ${health}` : ""}. Previous container was retained for recovery.`);
+  throw new Error(`Updated node container ${currentName} did not become healthy. Current status: ${status}${health ? `, health: ${health}` : ""}${await updatedNodeContainerLogTail(currentName)}`);
 }
 
 async function verifyUpdatedNodeSession(currentName: string) {
@@ -995,10 +1217,25 @@ async function verifyUpdatedNodeSession(currentName: string) {
     const text = logs.toString("utf8");
     if (/Node (?:session|registration) accepted/i.test(text)) return;
     const inspect = await inspectNodeContainer(currentName);
-    if (!inspect.State?.Running) throw new Error(`Updated node container ${currentName} stopped before reconnecting to the panel. Previous container was retained for recovery.`);
+    if (!inspect.State?.Running) throw new Error(`Updated node container ${currentName} stopped before reconnecting to the panel${await updatedNodeContainerLogTail(currentName)}`);
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000));
   }
-  throw new Error(`Updated node container ${currentName} did not reconnect to the panel. Previous container was retained for recovery.`);
+  throw new Error(`Updated node container ${currentName} did not reconnect to the panel${await updatedNodeContainerLogTail(currentName)}`);
+}
+
+/**
+ * The last log line of the failed replacement, quoted into the failure the panel shows. Docker
+ * reports the actual cause there (a missing entrypoint, a bad mount, a port clash) and it is the
+ * one thing an operator cannot read for themselves once the container has been removed.
+ */
+async function updatedNodeContainerLogTail(currentName: string) {
+  try {
+    const logs = await dockerBufferRequest("GET", `/containers/${encodeURIComponent(currentName)}/logs?stdout=1&stderr=1&tail=20`, 200, 10_000, undefined, dockerLogTailMaxBytes);
+    const lastLine = stripDockerLogHeaders(logs).toString("utf8").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).pop();
+    return lastLine ? `. Last container log: ${lastLine.slice(0, 400)}` : ".";
+  } catch {
+    return ".";
+  }
 }
 
 async function inspectNodeContainer(nameOrId: string) {
@@ -1478,7 +1715,7 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     await requestContainerLifecycleAction(server, "start", signal);
     return runtimeStatus(server);
   }
-  if (command === "server.stop") { signal?.throwIfAborted(); await (signal ? dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304], signal) : dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304])); return runtimeStatus(server); }
+  if (command === "server.stop") { signal?.throwIfAborted(); await dockerRequest("POST", `/containers/${name}/stop${dockerStopQuery()}`, [204, 304], signal, dockerStopRequestTimeoutMs()); return runtimeStatus(server); }
   if (command === "server.restart") {
     await ensureContainer(server);
     await requestContainerLifecycleAction(server, "restart", signal);
@@ -1595,6 +1832,7 @@ export const __nodeAgentTestHooks = {
   nodeReconnectDelayMs,
   prepareBinaryUpload,
   prepareBinaryDownload,
+  nodeReplacementContainerConfig,
   selfUpdateContainer
 };
 
@@ -1608,6 +1846,7 @@ export async function startNodeAgent() {
   let stopping = false;
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
   console.info(`serverSENTINEL node agent ${appVersion}${appBuildId ? ` build ${appBuildId}` : ""} starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
+  if (await dockerLiveRestoreEnabled() === false) console.warn(dockerLiveRestoreGuidance);
 
   registerShutdownHandlers(async () => {
     stopping = true;
@@ -1623,6 +1862,8 @@ export async function startNodeAgent() {
       error: (fields, message) => console.error(`${message} (${JSON.stringify(fields)})`)
     }
   });
+
+  let reportedUpdateFailure: NodeUpdateFailure | undefined;
 
   const connect = async () => {
     if (stopping) return;
@@ -1671,9 +1912,16 @@ export async function startNodeAgent() {
       const timer = setTimeout(() => void connect(), reconnectDelayMs);
       timer.unref?.();
     };
+    // Closing the session is what makes the panel take a fresh handshake, which is how a stored
+    // update failure reaches it. Terminating rather than closing keeps the panel from waiting.
+    reconnectToPanel = (reason: string) => {
+      if (socket.readyState === WebSocket.OPEN) socket.close(4001, "Node update failed");
+      reconnect(reason);
+    };
     socket.on("open", async () => {
       const dockerStatus = await dockerReachable() ? "available" : "unavailable";
       const dataPathStatus = existsSync(config.nodeDataDir) ? "ready" : "missing";
+      reportedUpdateFailure = readStoredNodeUpdateFailure();
       const hello: NodeHello = {
         type: "hello",
         nodeId: persisted?.nodeId ?? null,
@@ -1688,7 +1936,8 @@ export async function startNodeAgent() {
         features: [...nodeFeatures],
         dockerStatus,
         dataPathStatus,
-        totalMemory: await detectedTotalMemory()
+        totalMemory: await detectedTotalMemory(),
+        updateFailure: reportedUpdateFailure
       };
       if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(hello));
@@ -1742,6 +1991,11 @@ export async function startNodeAgent() {
         accepted = true;
         stableSessionTimer = setTimeout(() => { reconnectAttempt = 0; }, 15_000);
         stableSessionTimer.unref?.();
+        if (reportedUpdateFailure) {
+          clearStoredNodeUpdateFailure(reportedUpdateFailure.at);
+          console.warn(`Reported the failed node update to the panel: ${reportedUpdateFailure.message}`);
+          reportedUpdateFailure = undefined;
+        }
         if (message.timeZone) {
           try {
             new Intl.DateTimeFormat("en-US", { timeZone: message.timeZone }).format(new Date());

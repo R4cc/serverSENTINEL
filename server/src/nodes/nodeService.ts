@@ -4,14 +4,16 @@ import { appBuildId, appVersion } from "../buildInfo.js";
 import { panelNodeConnections, services } from "../appServices.js";
 import { detectedTotalMemory } from "../runtime/local/dockerContainers.js";
 import { buildNodeInstallInstructions } from "./installInstructions.js";
-import type { NodeInstallInstructions } from "@serversentinel/contracts";
+import type { NodeInstallInstructions, NodeUpdateFailure } from "@serversentinel/contracts";
 import { totalmem } from "node:os";
 import { badRequest } from "../http/validation.js";
+import { compareVersionStrings } from "../servers/versions.js";
 import { throwHttp } from "../http/errors.js";
 import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
 import { normalizeNode } from "../storage/nodesRepository.js";
 import type { ManagedNode, ManagedServer, PublicNode } from "../types.js";
 import { nodeUpdateNotificationsEnabled } from "./nodeUpdateNotifications.js";
+import { readNodeUpdateFailure } from "./nodeUpdateStatus.js";
 
 export const localNodeId = "local";
 export const nodeImageRepository = "nl2109/serversentinel";
@@ -27,6 +29,22 @@ export function nodeUpdateImageForBuild(configuredImage?: string, buildId?: stri
 
 export function nodeUpdateAlreadyCurrent(node: Pick<ManagedNode, "agentVersion" | "buildId">, requestedImage?: string, version = appVersion, buildId = appBuildId) {
   return !requestedImage?.trim() && node.agentVersion === version && (buildId ? node.buildId === buildId : true);
+}
+
+/** The release where the node image moved to Distroless and its entrypoint changed. */
+export const nodeEntrypointChangeVersion = "26.8.11";
+
+/**
+ * Whether a node has to be recreated by hand instead of updating itself. Agents older than the
+ * Distroless switch build their replacement container from the config they are running with, which
+ * pins the old image's entrypoint; the replacement then cannot start at all. The fix ships in the
+ * new agent, so it cannot help the very update that installs it — one manual recreate per node is
+ * the only way across, and saying so beats an attempt that always fails.
+ */
+export function nodeUpdateNeedsManualRecreate(agentVersion?: string, requestedImage?: string, targetVersion = appVersion) {
+  if (requestedImage?.trim()) return false;
+  return compareVersionStrings(agentVersion, nodeEntrypointChangeVersion) === -1
+    && (compareVersionStrings(targetVersion, nodeEntrypointChangeVersion) ?? -1) >= 0;
 }
 
 export const minNodeJoinTokenTtlMinutes = 5;
@@ -107,18 +125,23 @@ function persistedNodeSnapshot(node: ManagedNode) {
   return JSON.stringify(normalizeNode(node));
 }
 
-export function publicNode(node: ManagedNode, updateNotificationsEnabled = true): PublicNode {
+export function publicNode(node: ManagedNode, updateNotificationsEnabled = true, lastUpdateFailure?: NodeUpdateFailure): PublicNode {
   const normalized = normalizeNode(node);
   const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
   return {
     ...publicFields,
     hasPendingJoinToken: Boolean(normalized.joinTokenHash && normalized.joinTokenExpiresAt && new Date(normalized.joinTokenExpiresAt).getTime() > Date.now()),
-    updateNotificationsEnabled
+    updateNotificationsEnabled,
+    lastUpdateFailure
   };
 }
 
 export function publicNodeWithSettings(node: ManagedNode) {
-  return publicNode(node, nodeUpdateNotificationsEnabled(services.storageDatabase, node.id));
+  return publicNode(
+    node,
+    nodeUpdateNotificationsEnabled(services.storageDatabase, node.id),
+    readNodeUpdateFailure(services.storageDatabase, node.id)
+  );
 }
 
 export function nodeWithLiveConnectionStatus(node: ManagedNode, connected: boolean): ManagedNode {

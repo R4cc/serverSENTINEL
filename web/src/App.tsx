@@ -367,7 +367,7 @@ export default function App() {
     serverCount: effectiveAppState.servers.length,
     serverRunning: onboardingServerRunning
   });
-  const exportWorkspace = useExportWorkspace(notify, activeServer?.id ?? "", canExportServers && Boolean(authSession?.authenticated));
+  const exportWorkspace = useExportWorkspace(notify, activeServer?.id ?? "", canExportServers && Boolean(authSession?.authenticated), requestConfirmation);
   const exportMutationLocked = exportWorkspace.exportMutationLocked;
   const exportMutationBlockedReason = exportWorkspace.exportMutationBlockedReason;
 
@@ -2463,11 +2463,13 @@ export default function App() {
                         server={activeServer}
                         onExport={() => exportWorkspace.openExport(activeServer.id)}
                         onCancel={(operationId) => void exportWorkspace.cancelExport(operationId)}
+                        onDelete={(artifact) => void exportWorkspace.deleteExport(artifact)}
                         state={exportWorkspace.serverExportState}
                         loading={exportWorkspace.serverExportStateLoading}
                         error={exportWorkspace.serverExportStateError}
                         formatDate={formatDisplayDate}
                         disabled={serverSettingsSaving}
+                        deletingExportId={exportWorkspace.deletingExportId}
                       />
                     ) : undefined}
                     dangerZone={

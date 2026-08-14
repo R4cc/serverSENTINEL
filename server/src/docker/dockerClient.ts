@@ -115,13 +115,19 @@ async function dockerSocketRequest(
   });
 }
 
+/**
+ * `timeoutMs` bounds the socket read, not the Docker operation. Endpoints that hold the response
+ * open until the container settles - `/stop` and `/restart` wait out the container's stop timeout -
+ * need it raised past the default, or the request fails while the operation is still succeeding.
+ */
 export async function dockerRequest<T>(
   method: "GET" | "POST" | "DELETE",
   path: string,
   expectedStatus: number | number[] = [200, 204, 304],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs?: number
 ): Promise<T> {
-  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { signal })).toString("utf8"));
+  return dockerJsonBody<T>((await dockerSocketRequest(method, path, expectedStatus, { signal, timeoutMs })).toString("utf8"));
 }
 
 export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000, signal?: AbortSignal, maxBytes?: number) {
