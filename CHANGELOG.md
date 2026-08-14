@@ -8,6 +8,8 @@
 - A node update that cannot finish now restores the previous node container under its own name instead of leaving it renamed, and the node reports the reason back to the panel.
 - The Nodes page now shows why the last update failed, with the stage it stopped at, whether the node recovered, and actions to retry, dismiss, or open the install instructions.
 - Nodes running an agent from before the Distroless image change are now told to recreate their container once on the node host, instead of starting a panel update that cannot succeed.
+- A finished server export can now be deleted from the server properties page, which removes its archive from panel storage.
+- The export and danger zone cards on the server properties page now share a row instead of stacking.
 
 ## 26.8.12 - 2026-08-13
 

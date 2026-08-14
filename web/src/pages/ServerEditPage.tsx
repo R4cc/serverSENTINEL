@@ -19,7 +19,7 @@ import {
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Banner, Button, FormField, PanelHeader, Spinner, StatusBadge } from "../components/UiPrimitives";
-import type { ServerExportState } from "../features/exports/useExportWorkspace";
+import type { ServerExportArtifact, ServerExportState } from "../features/exports/useExportWorkspace";
 import {
   clampNumber,
   fallbackFabricRuntimeVersions,
@@ -554,8 +554,12 @@ export function ServerEditForm({
       </form>
 
       {/* Both live outside the settings form so their own buttons cannot submit it. */}
-      {exportPanel && <div className="propertiesExportZone">{exportPanel}</div>}
-      {dangerZone && <div className="propertiesDangerZone">{dangerZone}</div>}
+      {(exportPanel || dangerZone) && (
+        <div className={`propertiesSideCards${exportPanel && dangerZone ? " propertiesSideCards--paired" : ""}`}>
+          {exportPanel && <div className="propertiesExportZone">{exportPanel}</div>}
+          {dangerZone && <div className="propertiesDangerZone">{dangerZone}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -564,20 +568,24 @@ export function ExportServerPanel({
   server,
   onExport,
   onCancel,
+  onDelete,
   state,
   loading = false,
   error = "",
   formatDate = (value) => new Date(value).toLocaleString(),
-  disabled = false
+  disabled = false,
+  deletingExportId = ""
 }: {
   server: ManagedServer;
   onExport: () => void;
   onCancel?: (operationId: string) => void;
+  onDelete?: (artifact: ServerExportArtifact) => void;
   state?: ServerExportState;
   loading?: boolean;
   error?: string;
   formatDate?: (value: string | number | Date) => string;
   disabled?: boolean;
+  deletingExportId?: string;
 }) {
   const latest = state?.latest ?? null;
   const artifact = state?.artifact ?? null;
@@ -631,7 +639,7 @@ export function ExportServerPanel({
 
       {artifact && (
         <div className="exportArtifactRow">
-          <div>
+          <div className="exportArtifactCopy">
             <strong>{retainedIsPrevious ? "Last successful export" : artifact.filename}</strong>
             <small>
               {retainedIsPrevious ? `${artifact.filename} · ` : ""}
@@ -644,9 +652,23 @@ export function ExportServerPanel({
             </small>
           </div>
           {artifact.downloadUrl ? (
-            <a className="uiButton uiButton--secondary uiButton--compact" href={artifact.downloadUrl} download>
-              <AppIcon name="download" /> Download
-            </a>
+            <div className="exportArtifactActions">
+              <a className="uiButton uiButton--secondary uiButton--compact" href={artifact.downloadUrl} download>
+                <AppIcon name="download" /> Download
+              </a>
+              {onDelete && (
+                <Button
+                  variant="critical"
+                  compact
+                  onClick={() => onDelete(artifact)}
+                  disabled={disabled || deletingExportId === artifact.operationId}
+                  aria-busy={deletingExportId === artifact.operationId}
+                  reserveLabel="Deleting…"
+                >
+                  <AppIcon name="trash" /> {deletingExportId === artifact.operationId ? "Deleting…" : "Delete"}
+                </Button>
+              )}
+            </div>
           ) : <small>Download available to the user who created it.</small>}
         </div>
       )}

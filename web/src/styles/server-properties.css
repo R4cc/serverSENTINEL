@@ -417,8 +417,26 @@
   background: var(--surface-inset);
 }
 
+.exportArtifactActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.exportArtifactActions .uiButton--critical {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-muted));
+  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface));
+  color: var(--sentinel-danger);
+}
+
+.exportArtifactActions .uiButton--critical:hover:not(:disabled) {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--swiss-white);
+}
+
 .exportTaskCopy,
-.exportArtifactRow > div {
+.exportArtifactCopy {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -475,9 +493,37 @@
   justify-self: start;
 }
 
+.propertiesSideCards {
+  display: grid;
+  grid-template-columns: minmax(0, 720px);
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
 .propertiesExportZone,
 .propertiesDangerZone {
+  display: flex;
   max-width: 720px;
+}
+
+.propertiesExportZone > .propertiesSideCard,
+.propertiesDangerZone > .propertiesSideCard {
+  width: 100%;
+}
+
+@media (min-width: 1500px) {
+  .propertiesSideCards--paired {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .propertiesSideCards--paired > .propertiesExportZone,
+  .propertiesSideCards--paired > .propertiesDangerZone {
+    max-width: none;
+  }
+
+  .propertiesSideCards--paired .propertiesSideCard {
+    height: 100%;
+  }
 }
 
 /* Single column; the `1 / -1` spans above already collapse to it. */
@@ -515,10 +561,19 @@
 
   /* Stacked side cards read as one column, so their single action fills the
      card the way the danger panel's already does. */
-  .exportPanelActions .uiButton,
-  .exportArtifactRow .uiButton {
+  .exportPanelActions .uiButton {
     width: 100%;
     justify-self: stretch;
+  }
+
+  .exportArtifactActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .exportArtifactActions .uiButton {
+    width: 100%;
   }
 
   .exportArtifactRow {

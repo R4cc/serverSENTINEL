@@ -251,6 +251,24 @@ describe("Fastify application factory", () => {
       expect(download.headers["content-type"]).toBe("application/zip");
       expect(download.headers["content-disposition"]).toContain("attachment");
 
+      const artifactPath = join(dataDir, "exports", `serversentinel-export-${operationId}.zip`);
+      expect(existsSync(artifactPath)).toBe(true);
+      const deleted = await app.inject({
+        method: "DELETE",
+        url: `/api/exports/${operationId}`,
+        headers: { cookie, "x-requested-with": "XMLHttpRequest" }
+      });
+      expect(deleted.statusCode, deleted.body).toBe(200);
+      expect(deleted.json()).toEqual({ ok: true });
+      expect(existsSync(artifactPath)).toBe(false);
+
+      const deletedDownload = await app.inject({
+        method: "GET",
+        url: `/api/exports/${operationId}/download`,
+        headers: { cookie }
+      });
+      expect(deletedDownload.statusCode).toBe(404);
+
       // The exemption is for this artifact alone; the rest of the API still requires the header.
       const operations = await app.inject({ method: "GET", url: "/api/operations", headers: { cookie } });
       expect(operations.statusCode).toBe(400);
@@ -688,6 +706,20 @@ describe("Fastify application factory", () => {
         headers: { ...csrf, cookie: managerCookie }
       });
       expect(crossUserDownload.statusCode).toBe(404);
+
+      const crossUserDelete = await app.inject({
+        method: "DELETE",
+        url: `/api/exports/${adminOperationId}`,
+        headers: { ...csrf, cookie: managerCookie }
+      });
+      expect(crossUserDelete.statusCode).toBe(404);
+
+      const retainedAdminDownload = await app.inject({
+        method: "GET",
+        url: `/api/exports/${adminOperationId}/download`,
+        headers: { ...csrf, cookie: adminCookie }
+      });
+      expect(retainedAdminDownload.statusCode).toBe(200);
     } finally {
       await app.close();
     }

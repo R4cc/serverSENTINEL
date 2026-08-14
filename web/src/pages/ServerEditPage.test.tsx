@@ -91,6 +91,7 @@ describe("ServerEditForm", () => {
     const formEnd = html.indexOf("</form>");
 
     expect(html).toContain("propertiesExportZone");
+    expect(html).toContain("propertiesSideCards--paired");
     expect(html).toContain("Export server");
     expect(html).toContain(`Download ${server.displayName} as a ZIP archive`);
     expect(formEnd).toBeGreaterThan(-1);
@@ -240,6 +241,7 @@ describe("ExportServerPanel", () => {
       <ExportServerPanel
         server={server}
         onExport={vi.fn()}
+        onDelete={vi.fn()}
         state={{
           latest: task({ status: "failed", progress: 88, task: "Export failed", errorMessage: "A very long remote stream error", finishedAt: "2026-01-03T00:00:00.000Z" }),
           artifact: {
@@ -260,6 +262,32 @@ describe("ExportServerPanel", () => {
     expect(html).toContain("7.48 GiB");
     expect(html).toContain(`title="${artifactBytes.toLocaleString()} bytes"`);
     expect(html).toContain('href="/api/exports/export-1/download"');
+    expect(html).toContain("exportArtifactCopy");
+    expect(html).toContain("exportArtifactActions");
+    expect(html).toContain(" Delete</span>");
+  });
+
+  it("keeps the delete action stable while the archive is being removed", () => {
+    const html = renderToStaticMarkup(
+      <ExportServerPanel
+        server={server}
+        onExport={vi.fn()}
+        onDelete={vi.fn()}
+        deletingExportId="export-1"
+        state={{
+          latest: task({ id: "export-1", status: "succeeded", progress: 100, task: "Export ready" }),
+          artifact: {
+            operationId: "export-1",
+            filename: "survival.zip",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            downloadUrl: "/api/exports/export-1/download"
+          }
+        }}
+      />
+    );
+
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Deleting…/s);
   });
 
   it("shares another user's progress but keeps its controls and download private", () => {
