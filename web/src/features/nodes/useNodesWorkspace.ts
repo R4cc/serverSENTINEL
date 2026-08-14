@@ -255,8 +255,13 @@ export function useNodesWorkspace({
           ...current,
           [node.id]: { message: result.message, command: result.command, image: result.image }
         }));
+        // Opening the details drawer is what carries the explanation: it is too long for a toast,
+        // and the manual recreate it describes is not something to skim past.
         setNodeDetails((current) => current?.id === node.id ? current : node);
-        notify(result.mode === "manual" ? "warning" : "info", result.message);
+        notify(
+          result.mode === "manual" ? "warning" : "info",
+          result.mode === "manual" ? `${node.name} cannot update itself. Node details explain the one-time container recreate it needs.` : result.message
+        );
         return;
       }
       if (result.mode === "current") {
