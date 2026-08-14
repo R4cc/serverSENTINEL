@@ -35,11 +35,30 @@ function testRuntimeProfile(): ServerRuntimeProfile {
 
 describe("node reconnect backoff", () => {
   it("stays within one and thirty seconds while growing exponentially", () => {
-    expect(hooks.nodeReconnectDelayMs(0, () => 0)).toBe(1_000);
+    expect(hooks.nodeReconnectDelayMs(0, () => 0)).toBe(500);
+    expect(hooks.nodeReconnectDelayMs(0, () => 1)).toBe(1_000);
     expect(hooks.nodeReconnectDelayMs(1, () => 1)).toBe(2_000);
     expect(hooks.nodeReconnectDelayMs(4, () => 1)).toBe(16_000);
     expect(hooks.nodeReconnectDelayMs(20, () => 1)).toBe(30_000);
-    expect(hooks.nodeReconnectDelayMs(20, () => 0)).toBe(1_000);
+    expect(hooks.nodeReconnectDelayMs(20, () => 0)).toBe(15_000);
+  });
+});
+
+describe("node lifecycle action exclusion", () => {
+  it("reserves the update slot before asynchronous preparation and releases it on failure", async () => {
+    mockDockerAvailable = true;
+    process.env.HOSTNAME = "node-container-id";
+    const failure = new Error("Docker inspect timed out");
+    let rejectInspect: (error: Error) => void = () => {};
+    mockDockerRequest.mockImplementation(() => new Promise((_resolve, reject) => { rejectInspect = reject; }));
+
+    const first = hooks.handleCommand("node.update", { image: "serversentinel:test" });
+    await expect(hooks.handleCommand("node.update", { image: "serversentinel:test" })).rejects.toThrow("already in progress");
+    rejectInspect(failure);
+    await expect(first).rejects.toThrow("Docker inspect timed out");
+
+    mockDockerRequest.mockRejectedValue(failure);
+    await expect(hooks.handleCommand("node.update", { image: "serversentinel:test" })).rejects.toThrow("Docker inspect timed out");
   });
 });
 
@@ -151,6 +170,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.SERVERSENTINEL_DATA_DIR;
+  delete process.env.HOSTNAME;
   vi.resetModules();
   await rm(tempRoot, { recursive: true, force: true });
 });
@@ -388,7 +408,7 @@ describe("remote node Docker container recreation", () => {
       expect.objectContaining({
         HostConfig: expect.objectContaining({ Binds: [`${join(tempRoot, "servers", server.storageName!)}:/data`] })
       }),
-      [201, 409]
+      201
     );
     // A start carries no abort signal here and no stop grace period, so both trailing arguments of
     // the Docker request are absent.
@@ -405,7 +425,11 @@ describe("remote node Docker container recreation", () => {
     const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
     mockDockerRequest.mockImplementation(async (method: string, path: string) => {
       if (method === "GET" && path === "/containers/serversentinel-survival/json") {
-        return { Id: "container-id", State: { Running: false, Status: "exited" }, Config: { Labels: {} } };
+        return {
+          Id: "container-id",
+          State: { Running: false, Status: "exited" },
+          Config: { Labels: { "serversentinel.managed": "true", "serversentinel.server-id": server.id } }
+        };
       }
       return {};
     });
@@ -415,6 +439,27 @@ describe("remote node Docker container recreation", () => {
     const stop = mockDockerRequest.mock.calls.find(([method, path]) => method === "POST" && String(path).includes("/stop"));
     expect(stop?.[1]).toBe(`/containers/serversentinel-survival/stop?t=${config.minecraftStopTimeoutSeconds}`);
     expect(stop?.[4]).toBeGreaterThan(config.minecraftStopTimeoutSeconds * 1_000);
+  });
+
+  it("refuses to stop a same-named container owned by another server", async () => {
+    mockDockerAvailable = true;
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    mockDockerRequest.mockResolvedValue({
+      Id: "sibling-container-id",
+      State: { Running: true, Status: "running" },
+      Config: { Labels: { "serversentinel.managed": "true", "serversentinel.server-id": "another-server" } }
+    });
+
+    await expect(hooks.handleCommand("server.stop", { server })).rejects.toThrow("not managed by this server");
+    expect(mockDockerRequest.mock.calls.some(([method]) => method === "POST")).toBe(false);
+  });
+
+  it("does not convert a transient Docker inspect failure into a missing container", async () => {
+    mockDockerAvailable = true;
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    mockDockerRequest.mockRejectedValue(new Error("Docker request timed out"));
+
+    await expect(hooks.handleCommand("server.inspect", { server })).rejects.toThrow("Docker request timed out");
   });
 
   it("recreates and retries a managed container whose Docker network ID became stale", async () => {
@@ -485,7 +530,7 @@ describe("remote node Docker container recreation", () => {
           }
         }
       }),
-      [201, 409]
+      201
     );
   });
 
@@ -542,7 +587,7 @@ describe("remote node Docker container recreation", () => {
           }
         }
       }),
-      [201, 409]
+      201
     );
     const createBody = mockDockerJsonRequest.mock.calls.find((call) => call[1] === "/containers/create?name=serversentinel-survival")?.[2] as { NetworkingConfig?: unknown; HostConfig?: { RestartPolicy?: { Name?: string } } };
     expect(JSON.stringify(createBody.NetworkingConfig)).not.toContain("EndpointID");

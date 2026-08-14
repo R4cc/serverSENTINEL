@@ -66,7 +66,7 @@ describe("RemoteObservationCoordinator", () => {
           observedAt: new Date().toISOString(),
           items: payload.items.map(({ server: observed, sections }) => ({
             serverId: observed.id,
-            status: { docker: { running: true } },
+            ...(sections.includes("status") ? { status: { docker: { running: true } } } : {}),
             ...(sections.includes("overviewFiles") ? { overviewFiles: { properties: "level-name=world", eula: "eula=true" } } : {})
           }))
         };
@@ -132,7 +132,7 @@ describe("RemoteObservationCoordinator", () => {
     coordinator.stop();
   });
 
-  it("keeps the later-issued observation when an earlier request answers last", async () => {
+  it("coalesces overlapping refreshes for the same node", async () => {
     const servers = [server(0)];
     const delays = [40, 0];
     const counters = [100, 500];
@@ -156,8 +156,46 @@ describe("RemoteObservationCoordinator", () => {
     await coordinator.refreshNode("node-1");
     await slow;
 
-    expect(issued).toBe(2);
-    expect(await coordinator.read(servers[0], "stats", 60_000)).toEqual({ networkRxBytes: 500 });
+    expect(issued).toBe(1);
+    expect(await coordinator.read(servers[0], "stats", 60_000)).toEqual({ networkRxBytes: 100 });
+    coordinator.stop();
+  });
+
+  it("rejects a failed section instead of returning an old confirmed value", async () => {
+    const observedServer = server(0);
+    let requestCount = 0;
+    const connections = {
+      isConnected: () => true,
+      request: async () => {
+        requestCount += 1;
+        return requestCount === 1
+          ? { observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, status: { docker: { running: true } } }] }
+          : { observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, errors: { status: { code: "docker_unavailable", message: "Docker did not respond", retryable: true } } }] };
+      }
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => [observedServer], lookupNode: async () => node(), connections });
+
+    await expect(coordinator.read(observedServer, "status", 60_000)).resolves.toEqual({ docker: { running: true } });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await expect(coordinator.read(observedServer, "status", 1)).rejects.toMatchObject({
+      code: "docker_unavailable",
+      retryable: true
+    });
+    coordinator.stop();
+  });
+
+  it("rejects an observation batch that names an unrequested server", async () => {
+    const observedServer = server(0);
+    const connections = {
+      isConnected: () => true,
+      request: async () => ({
+        observedAt: new Date().toISOString(),
+        items: [{ serverId: "server-sibling", status: { docker: { running: true } } }]
+      })
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => [observedServer], lookupNode: async () => node(), connections });
+
+    await expect(coordinator.read(observedServer, "status", 0)).rejects.toMatchObject({ code: "invalid_observation_response" });
     coordinator.stop();
   });
 });

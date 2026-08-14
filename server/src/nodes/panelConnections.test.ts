@@ -51,9 +51,22 @@ describe("PanelNodeConnections", () => {
 
     connections.connect(connected, socket as unknown as WebSocket);
     expect(connections.connectedNode(connected.id)).toBe(connected);
+    expect(connections.isConnected("missing-node")).toBe(false);
 
     socket.close();
     expect(connections.connectedNode(connected.id)).toBeUndefined();
+    connections.close();
+  });
+
+  it("does not report a socket outside OPEN as connected before its close event arrives", () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    connections.connect(node(), socket as unknown as WebSocket);
+
+    socket.readyState = 2;
+
+    expect(connections.isConnected(node().id)).toBe(false);
+    expect(connections.connectedNode(node().id)).toBeUndefined();
     connections.close();
   });
 
@@ -99,6 +112,40 @@ describe("PanelNodeConnections", () => {
     connections.close();
   });
 
+  it("reports a disconnect as the stream failure instead of a successful end", async () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    connections.connect(node(), socket as unknown as WebSocket);
+    let closedWith: Error | undefined;
+    await connections.stream(node(), "files.archive.extract", {}, () => {}, (error) => { closedWith = error; });
+
+    socket.close();
+
+    expect(closedWith).toMatchObject({ code: "node_offline" });
+    connections.close();
+  });
+
+  it("times out a finite stream, stops it remotely, and ignores a late end", async () => {
+    vi.useFakeTimers();
+    try {
+      const connections = new PanelNodeConnections();
+      const socket = new FakeSocket();
+      connections.connect(node(), socket as unknown as WebSocket);
+      let closedWith: Error | undefined;
+      await connections.stream(node(), "files.archive.extract", {}, () => {}, (error) => { closedWith = error; }, 5_000);
+      const start = socket.sent.map(String).map((value) => JSON.parse(value)).find((value) => value.type === "streamStart");
+
+      vi.advanceTimersByTime(5_000);
+
+      expect(closedWith).toMatchObject({ code: "stream_timeout" });
+      expect(socket.sent.map(String).map((value) => JSON.parse(value))).toContainEqual({ type: "streamStop", id: start.id });
+      expect(() => emitJson(socket, { type: "streamEnd", id: start.id })).not.toThrow();
+      connections.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("pings every 15 seconds and terminates a connection without pong by 35 seconds", () => {
     vi.useFakeTimers();
     try {
@@ -132,6 +179,31 @@ describe("PanelNodeConnections", () => {
     expect(binary).toHaveLength(1);
     expect(binary[0][0]).toBe(0x01);
     connections.close();
+  });
+
+  it("destroys a stalled upload source when the transfer deadline expires", async () => {
+    vi.useFakeTimers();
+    try {
+      const connections = new PanelNodeConnections();
+      const socket = new FakeSocket();
+      socket.onSend = (value) => {
+        if (typeof value !== "string") return;
+        const message = JSON.parse(value);
+        if (message.type === "transferStart") queueMicrotask(() => emitJson(socket, { type: "transferReady", id: message.id }));
+      };
+      connections.connect(node(), socket as unknown as WebSocket);
+      const source = new Readable({ read() {} });
+      const upload = connections.upload(node(), "files.upload", {}, source, 1, 5_000);
+      const rejected = expect(upload).rejects.toMatchObject({ code: "transfer_timeout" });
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await rejected;
+      expect(source.destroyed).toBe(true);
+      expect(socket.sent.map(String).map((value) => JSON.parse(value)).some((value) => value.type === "transferCancel")).toBe(true);
+      connections.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("verifies streamed downloads before ending the consumer stream", async () => {
@@ -274,6 +346,26 @@ describe("PanelNodeConnections", () => {
     const drain = async () => { for await (const _chunk of download.stream) { /* drain */ } };
     await expect(drain()).rejects.toMatchObject({ code: "transfer_integrity_failed" });
     expect(socket.sent.map(String).map((value) => JSON.parse(value)).some((value) => value.type === "transferResult" && value.ok === false)).toBe(true);
+    connections.close();
+  });
+
+  it("fails a download that reports success before integrity finalization", async () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    socket.onSend = (value) => {
+      if (typeof value !== "string") return;
+      const message = JSON.parse(value);
+      if (message.type !== "transferStart") return;
+      queueMicrotask(() => {
+        emitJson(socket, { type: "transferReady", id: message.id, filename: "unfinished.txt", size: 4 });
+        emitJson(socket, { type: "transferResult", id: message.id, ok: true, result: {} });
+      });
+    };
+    connections.connect(node(), socket as unknown as WebSocket);
+    const download = await connections.download(node(), "files.download", {}, 1024);
+
+    const drain = async () => { for await (const _chunk of download.stream) { /* drain */ } };
+    await expect(drain()).rejects.toMatchObject({ code: "unexpected_transfer_result" });
     connections.close();
   });
 });

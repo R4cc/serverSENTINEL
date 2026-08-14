@@ -309,9 +309,9 @@ export function normalizeNodeHello(value: unknown): NodeHello {
   const protocolVersion = requiredString(hello.protocolVersion, "protocolVersion");
   if (protocolVersion !== nodeProtocolVersion) throw new Error(`Unsupported node protocol ${protocolVersion}; protocol ${nodeProtocolVersion} is required`);
   const nodeId = hello.nodeId === null ? null : optionalString(hello.nodeId, "nodeId") ?? null;
-  const capabilities = requiredStringArray(hello.capabilities, "capabilities");
-  const unsupportedCapabilities = capabilities.filter((capability) => !nodeCapabilitySet.has(capability));
-  if (unsupportedCapabilities.length) throw new Error(`Node advertised unsupported capabilities: ${unsupportedCapabilities.join(", ")}`);
+  // Capabilities are additive command names. A newer node can safely advertise commands this panel
+  // never sends, so intersect them instead of turning an otherwise compatible 3.1 session offline.
+  const capabilities = requiredStringArray(hello.capabilities, "capabilities").filter(isNodeCapability);
   const rawFeatures = requiredStringArray(hello.features, "features");
   const unsupportedFeatures = rawFeatures.filter((feature) => !nodeFeatureSet.has(feature));
   if (unsupportedFeatures.length) throw new Error(`Node advertised unsupported features: ${unsupportedFeatures.join(", ")}`);
@@ -433,8 +433,10 @@ export function normalizeNodeToPanelMessage(value: unknown): NodeToPanelMessage 
   throw new Error(`Unsupported node message type ${String(message.type)}`);
 }
 
-export function structuredNodeProtocolError(code: string, message: string, details?: string) {
-  return httpError(400, message, { code, details: details || undefined }) as Error & { code?: string; statusCode?: number; details?: string };
+export function structuredNodeProtocolError(code: string, message: string, details?: string, retryable?: boolean) {
+  const error = httpError(400, message, { code, details: details || undefined }) as Error & { code?: string; statusCode?: number; details?: string; retryable?: boolean };
+  if (retryable !== undefined) error.retryable = retryable;
+  return error;
 }
 
 function optionalWireError(value: unknown): NodeWireError | undefined {

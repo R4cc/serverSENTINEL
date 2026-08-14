@@ -149,7 +149,8 @@ const panelHeartbeatTimeoutMs = 45_000;
 
 export function nodeReconnectDelayMs(attempt: number, random = Math.random) {
   const ceiling = Math.min(reconnectMaxDelayMs, reconnectBaseDelayMs * (2 ** Math.min(Math.max(0, attempt), 5)));
-  return Math.round(reconnectBaseDelayMs + (ceiling - reconnectBaseDelayMs) * Math.min(1, Math.max(0, random())));
+  const floor = Math.max(500, ceiling / 2);
+  return Math.round(floor + (ceiling - floor) * Math.min(1, Math.max(0, random())));
 }
 const removablePreviousNodeStates = new Set(["created", "dead", "exited", "removing"]);
 
@@ -385,7 +386,7 @@ async function createContainer(server: ManagedServer, networkingConfig?: NodeNet
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "no" } },
     NetworkingConfig: networkingConfig ?? minecraftContainerNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
     Labels: managedContainerLabels(server.id, runtimeConfigHash(server))
-  }, [201, 409]);
+  }, 201);
 }
 
 function minecraftContainerCommand(server: ManagedServer) {
@@ -419,7 +420,7 @@ async function removeManagedContainer(server: ManagedServer) {
 }
 
 async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?: NodeNetworkingConfig) {
-  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  const details = await inspectOrMissing(server);
   if (!details) {
     await createContainer(server, preferredNetworkingConfig);
     return;
@@ -440,7 +441,7 @@ async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?
 }
 
 async function recreateContainerAfterMissingNetwork(server: ManagedServer) {
-  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  const details = await inspectOrMissing(server);
   const networkingConfig = minecraftContainerNetworkingConfig(details, await inspectCurrentContainer().catch(() => null));
   await removeManagedContainer(server);
   await createContainer(server, networkingConfig);
@@ -615,7 +616,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
     }), "utf8");
   }
   if (containerConfigChanged && dockerAvailable() && !running) {
-    const networkingConfig = minecraftContainerNetworkingConfig(await inspect(server).catch(() => null) as NodeContainerInspect | null);
+    const networkingConfig = minecraftContainerNetworkingConfig(await inspectOrMissing(server));
     await removeManagedContainer(server);
     await ensureContainer(updated, networkingConfig);
   }
@@ -626,8 +627,29 @@ async function inspect(server: ManagedServer) {
   return dockerRequest("GET", `/containers/${encodeURIComponent(containerName(server))}/json`);
 }
 
+function isMissingContainerError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /No such container|Docker API (?:request )?(?:returned|failed with) 404|status(?:Code)? 404/i.test(message);
+}
+
+async function inspectOrMissing(server: ManagedServer) {
+  try {
+    return await inspect(server) as NodeContainerInspect;
+  } catch (error) {
+    if (isMissingContainerError(error)) return null;
+    throw error;
+  }
+}
+
+function assertContainerOwnership(server: ManagedServer, details: NodeContainerInspect | null) {
+  if (details && !isManagedContainerFor(details.Config?.Labels, server.id)) {
+    throw new Error(`Container ${containerName(server)} exists but is not managed by this server; refusing to access it`);
+  }
+  return details;
+}
+
 async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeContainerInspect | null) {
-  const details = prefetchedDetails === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : prefetchedDetails;
+  const details = prefetchedDetails === undefined ? await inspectOrMissing(server) : prefetchedDetails;
   const running = Boolean(details?.State?.Running);
   const managed = isManagedContainerFor(details?.Config?.Labels, server.id);
   if (details && managed) await reconcileRestartPolicy(server, details);
@@ -675,7 +697,7 @@ async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeCont
 }
 
 async function resourceStats(server: ManagedServer, details?: NodeContainerInspect | null) {
-  const inspected = details === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : details;
+  const inspected = assertContainerOwnership(server, details === undefined ? await inspectOrMissing(server) : details);
   const running = inspected?.State?.Running === true;
   if (!running) return { available: true, running: false, cpuPercent: 0, memoryUsageBytes: 0, memoryLimitBytes: 0, networkRxBytes: 0, networkTxBytes: 0, sampledAt: new Date().toISOString() };
   const name = encodeURIComponent(containerName(server));
@@ -693,7 +715,7 @@ async function resourceStats(server: ManagedServer, details?: NodeContainerInspe
 async function playerObservation(server: ManagedServer, details?: NodeContainerInspect | null) {
   const propsPath = await inside(server, "server.properties", false);
   const props = parseServerProperties(await readFile(propsPath, "utf8").catch(() => ""));
-  const minecraftInspect = details === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : details;
+  const minecraftInspect = assertContainerOwnership(server, details === undefined ? await inspectOrMissing(server) : details);
   const running = minecraftInspect?.State?.Running === true;
   const callerInspect = running ? await inspectCurrentContainer().catch(() => null) : null;
   const [endpoint = null, ...fallbackEndpoints] = running ? resolveMinecraftQueryEndpoints(server, props, minecraftInspect, callerInspect) : [];
@@ -806,6 +828,16 @@ function cleanContainerName(name?: string) {
 
 async function prepareNodeUpdate(payload: unknown) {
   if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
+  nodeUpdateInProgress = true;
+  try {
+    return await prepareNodeUpdateUnlocked(payload);
+  } catch (error) {
+    nodeUpdateInProgress = false;
+    throw error;
+  }
+}
+
+async function prepareNodeUpdateUnlocked(payload: unknown) {
   const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
   const image = validateDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${appVersion}`);
   if (!dockerAvailable()) {
@@ -831,8 +863,6 @@ async function prepareNodeUpdate(payload: unknown) {
   await mkdir(nodeUpdateDir, { recursive: true });
   const planPath = join(nodeUpdateDir, `node-update-${Date.now()}.json`);
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
-  nodeUpdateInProgress = true;
-
   await clearStoredNodeUpdateFailure();
   setTimeout(() => {
     void selfUpdateContainer(inspect, image, currentName, planPath).catch((error) => {
@@ -870,6 +900,7 @@ async function prepareNodeUpdate(payload: unknown) {
 }
 
 async function prepareNodeRestart() {
+  if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Mount the Docker socket before restarting the node from the panel.");
   }
@@ -891,6 +922,7 @@ async function prepareNodeRestart() {
 }
 
 async function prepareNodeRemoval() {
+  if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Stop the node container manually after removing it from the panel.");
   }
@@ -1292,7 +1324,7 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   const result: ServerObservationResultItem = { serverId: server.id };
   const errors: ServerObservationResultItem["errors"] = {};
   const needsInspect = sections.has("status") || sections.has("stats") || sections.has("players");
-  const details = needsInspect ? await inspect(server).catch(() => null) as NodeContainerInspect | null : undefined;
+  const details = needsInspect ? await inspectOrMissing(server) : undefined;
   const tasks: Promise<void>[] = [];
   const run = (section: ServerObservationSection, operation: () => Promise<unknown>, assign: (value: any) => void) => {
     tasks.push(operation().then(assign).catch((error) => { errors[section] = observationError(error); }));
@@ -1630,7 +1662,7 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     return updateServer(server, payload?.input as UpdateInput, signal);
   }
   if (command === "server.delete") {
-    const status = await inspect(server).catch(() => null) as any;
+    const status = await inspectOrMissing(server);
     if (status?.State?.Running) throw new Error("Stop the server before deleting it");
     const deletedContainer = await removeManagedContainer(server);
     if (payload?.input?.deleteFiles) await rm(await serverRoot(server), { recursive: true, force: true });
@@ -1643,7 +1675,13 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     await requestContainerLifecycleAction(server, "start", signal);
     return runtimeStatus(server);
   }
-  if (command === "server.stop") { signal?.throwIfAborted(); await dockerRequest("POST", `/containers/${name}/stop${dockerStopQuery()}`, [204, 304], signal, dockerStopRequestTimeoutMs()); return runtimeStatus(server); }
+  if (command === "server.stop") {
+    signal?.throwIfAborted();
+    const details = assertContainerOwnership(server, await inspectOrMissing(server));
+    if (!details) return runtimeStatus(server, null);
+    await dockerRequest("POST", `/containers/${name}/stop${dockerStopQuery()}`, [204, 304], signal, dockerStopRequestTimeoutMs());
+    return runtimeStatus(server);
+  }
   if (command === "server.restart") {
     await ensureContainer(server);
     await requestContainerLifecycleAction(server, "restart", signal);
@@ -1802,7 +1840,7 @@ export async function startNodeAgent() {
     const activeStreams = new Map<string, () => void>();
     const activeRequests = new Map<string, AbortController>();
     type ActiveTransfer =
-      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void> }
+      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void>; cancelled: boolean; writeError?: Error }
       | { direction: "download"; stream?: NodeJS.ReadableStream; cancelled: boolean };
     const activeTransfers = new Map<string, ActiveTransfer>();
     let accepted = false;
@@ -1816,8 +1854,10 @@ export async function startNodeAgent() {
       activeRequests.clear();
       for (const transfer of activeTransfers.values()) {
         if (transfer.direction === "upload") {
-          void transfer.file.close().catch(() => undefined);
-          void rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
+          transfer.cancelled = true;
+          void transfer.writes.catch(() => undefined)
+            .then(() => transfer.file.close().catch(() => undefined))
+            .then(() => rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined));
         } else {
           transfer.cancelled = true;
           if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();
@@ -1881,10 +1921,22 @@ export async function startNodeAgent() {
           const { id, payload } = decodeTransferChunk(rawBuffer);
           const transfer = activeTransfers.get(id);
           if (!transfer || transfer.direction !== "upload") return;
+          if (transfer.cancelled || transfer.writeError) return;
           transfer.received += payload.byteLength;
           if (transfer.received > transfer.expectedSize || transfer.received > transfer.prepared.maximumBytes) throw new Error("Upload exceeded its declared limit");
           transfer.hash.update(payload);
+          // Pause the shared socket until this chunk reaches disk. Without this backpressure a slow
+          // volume retained every upload chunk in a promise chain (up to the full transfer limit),
+          // and an early ENOSPC rejection could go unobserved until transferFinish.
+          socket.pause();
           transfer.writes = transfer.writes.then(async () => { await transfer.file.write(payload); });
+          void transfer.writes.then(
+            () => { if (socket.readyState === WebSocket.OPEN) socket.resume(); },
+            (error) => {
+              transfer.writeError = error as Error;
+              if (socket.readyState === WebSocket.OPEN) socket.resume();
+            }
+          );
         } catch {
           socket.close(1002, "Invalid binary transfer frame");
         }
@@ -1946,10 +1998,13 @@ export async function startNodeAgent() {
       }
       if (message.type === "cancel") {
         activeRequests.get(message.id)?.abort();
-        activeRequests.delete(message.id);
         return;
       }
       if (message.type === "transferStart") {
+        if (activeTransfers.has(message.id)) {
+          socket.close(1002, "Duplicate transfer id");
+          return;
+        }
         if (activeTransfers.size >= nodeProtocolMaxActiveTransfers) {
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "node_overloaded", message: "Node transfer limit reached", retryable: true } } satisfies NodeTransferResultMessage));
           return;
@@ -1958,7 +2013,7 @@ export async function startNodeAgent() {
           try {
             const prepared = await prepareBinaryUpload(message);
             const file = await open(prepared.temporaryPath, "wx");
-            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve() });
+            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve(), cancelled: false });
             socket.send(JSON.stringify({ type: "transferReady", id: message.id }));
           } catch (error) {
             socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_rejected", message: (error as Error).message } } satisfies NodeTransferResultMessage));
@@ -2001,6 +2056,7 @@ export async function startNodeAgent() {
         if (!transfer || transfer.direction !== "upload") return;
         try {
           await transfer.writes;
+          if (transfer.writeError) throw transfer.writeError;
           if (transfer.received !== transfer.expectedSize || transfer.received !== message.size || transfer.hash.digest("hex") !== message.sha256) {
             throw new Error("Transfer size or SHA-256 did not match");
           }
@@ -2038,6 +2094,8 @@ export async function startNodeAgent() {
         const transfer = activeTransfers.get(message.id);
         activeTransfers.delete(message.id);
         if (transfer?.direction === "upload") {
+          transfer.cancelled = true;
+          await transfer.writes.catch(() => undefined);
           await transfer.file.close().catch(() => undefined);
           await rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
         } else if (transfer) {
@@ -2087,6 +2145,10 @@ export async function startNodeAgent() {
         return;
       }
       if (message.type !== "request") return;
+      if (activeRequests.has(message.id)) {
+        socket.close(1002, "Duplicate request id");
+        return;
+      }
       if (activeRequests.size >= nodeProtocolMaxActiveRequests) {
         socket.send(JSON.stringify({ type: "response", id: message.id, ok: false, error: { code: "node_overloaded", message: "Node command limit reached", retryable: true } } satisfies NodeResponseMessage));
         return;

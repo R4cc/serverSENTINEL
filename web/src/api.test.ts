@@ -76,6 +76,17 @@ describe("api error contract", () => {
     }
   });
 
+  it("fails a half-open request with a stable timeout code", async () => {
+    globalThis.fetch = vi.fn((_path: string | URL | Request, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    })) as unknown as typeof fetch;
+
+    await expect(api("/api/stalled", { timeoutMs: 10 })).rejects.toMatchObject({
+      name: "ApiError",
+      code: "REQUEST_TIMEOUT",
+      status: 0
+    });
+  });
 });
 
 describe("runtime-controlled demo mode", () => {

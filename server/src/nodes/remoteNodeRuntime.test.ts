@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Readable } from "node:stream";
 import type { ManagedNode, ManagedServer, ServerRuntimeProfile } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
@@ -244,6 +244,36 @@ describe("RemoteNodeRuntime payload projection", () => {
 });
 
 describe("RemoteNodeRuntime command timeouts", () => {
+  it("keeps a confirmed start successful when only its delayed verification loses the node", async () => {
+    vi.useFakeTimers();
+    try {
+      const node = testNode();
+      const server = testServer();
+      const connections = {
+        request: async (_node: ManagedNode, command: string) => {
+          if (command === "server.start") return { docker: { running: true } };
+          throw Object.assign(new Error("Node disconnected"), { code: "node_offline" });
+        }
+      } as unknown as PanelNodeConnections;
+      const runtime = new RemoteNodeRuntime(
+        node.id,
+        async () => node,
+        connections,
+        async (value) => value as never,
+        async () => undefined,
+        async () => undefined,
+        async () => undefined
+      );
+
+      const started = runtime.lifecycle(server, "start");
+      const result = expect(started).resolves.toEqual({ docker: { running: true } });
+      await vi.advanceTimersByTimeAsync(1_500);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("uses the live node's negotiated features for 17 MiB streamed mod uploads", async () => {
     const storedNode = testNode();
     const liveNode = { ...storedNode, features: [...nodeFeatures] };

@@ -231,7 +231,7 @@ export async function reconcileDockerRestartPolicy(server: ManagedServer, detail
 export async function detectedTotalMemory() {
   if (dockerAvailable()) {
     try {
-      const info = await dockerRequest<DockerInfo>("GET", "/info", 200);
+      const info = await dockerRequest<DockerInfo>("GET", "/info", 200, undefined, 5_000);
       if (typeof info.MemTotal === "number" && info.MemTotal > 0) {
         return info.MemTotal;
       }

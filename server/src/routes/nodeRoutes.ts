@@ -6,7 +6,7 @@ import { config } from "../config.js";
 import { appBuildId, appVersion } from "../buildInfo.js";
 import { destructiveRateLimit, nodeJoinRateLimit } from "../http/rateLimits.js";
 import { optionalNodeDataMount, optionalNodePanelUrl, requireStrictBoolean, validateDockerImageName, validateNodeName } from "../http/validation.js";
-import { apiErrorResponse, operationInProgress } from "../http/errors.js";
+import { apiErrorResponse, operationInProgress, throwHttp } from "../http/errors.js";
 import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
 import { compareVersionStrings } from "@serversentinel/contracts";
 import { requireRequestPermission } from "../auth/sessionService.js";
@@ -239,18 +239,16 @@ app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructi
   }
 
   if (node.status !== "online") {
-    throw new Error("Node is offline.");
+    throwHttp(409, "Node is offline.", { code: "NODE_OFFLINE" });
   }
   if (!panelNodeConnections.isConnected(node.id)) {
-    throw new Error("Node is not connected to the panel right now.");
+    throwHttp(409, "Node is not connected to the panel right now.", { code: "NODE_OFFLINE" });
   }
 
-  const result = await panelNodeConnections.request(node, "node.restart", {}, 30_000);
-  const restartResult = result as { ok?: boolean };
-  if (restartResult.ok) {
-    await markNodeOfflineIfConnectionUnchanged(node);
-  }
-  return result;
+  // The node schedules the container restart after responding. The socket close is the authoritative
+  // offline transition; predicting it here leaves a live node stuck offline if Docker rejects the
+  // delayed restart.
+  return panelNodeConnections.request(node, "node.restart", {}, 30_000);
 });
 
 app.delete<{ Params: { nodeId: string }; Querystring: { force?: string } }>("/api/nodes/:nodeId", destructiveRateLimit, async (request) => {
@@ -307,6 +305,7 @@ app.get<{ Params: { nodeId: string } }>("/api/nodes/:nodeId", async (request, re
 app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (socket) => {
   const ws = socket as any;
   let helloTimer: NodeJS.Timeout | undefined;
+  let socketClosed = false;
   const reject = (message: string) => {
     if (helloTimer) clearTimeout(helloTimer);
     const response: PanelWelcome = { type: "welcome", nodeId: "", accepted: false, error: message };
@@ -317,6 +316,7 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
   helloTimer = setTimeout(() => reject("Node hello timed out"), 10_000);
   helloTimer.unref();
   ws.once("close", () => {
+    socketClosed = true;
     if (helloTimer) clearTimeout(helloTimer);
   });
 
@@ -403,6 +403,22 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
       return;
     }
 
+    const markAcceptedNodeOffline = async () => {
+      if (panelNodeConnections.isConnected(acceptedNode!.id)) return;
+      await updateNodes((nodes) => {
+        const node = nodes.find((candidate) => candidate.id === acceptedNode!.id);
+        if (node && node.connectedAt === acceptedNode!.connectedAt) {
+          node.status = "offline";
+          node.updatedAt = new Date().toISOString();
+        }
+      }).catch(() => undefined);
+    };
+    ws.on("close", () => { void markAcceptedNodeOffline(); });
+    if (socketClosed || ws.readyState !== ws.OPEN) {
+      await markAcceptedNodeOffline();
+      return;
+    }
+
     logInfo({
       nodeId: acceptedNode.id,
       nodeName: acceptedNode.name,
@@ -459,16 +475,6 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
         status: "failed"
       }, hello.updateFailure.message);
     }
-    ws.on("close", () => {
-      if (panelNodeConnections.isConnected(acceptedNode!.id)) return;
-      void updateNodes((nodes) => {
-        const node = nodes.find((candidate) => candidate.id === acceptedNode!.id);
-        if (node && node.connectedAt === acceptedNode!.connectedAt) {
-          node.status = "offline";
-          node.updatedAt = new Date().toISOString();
-        }
-      }).catch(() => {});
-    });
   });
 });
 
