@@ -449,6 +449,7 @@ export function NodesPage({
   onShowInstall,
   onRotateToken,
   onUpdateNode,
+  onDismissUpdateFailure,
   onUpdateNotifications,
   onRestartNode,
   onRemoveNode,
@@ -489,6 +490,7 @@ export function NodesPage({
   onShowInstall: (node: NodeView) => void;
   onRotateToken: (node: NodeView) => void;
   onUpdateNode: (node: NodeView) => void;
+  onDismissUpdateFailure: (node: NodeView) => void;
   onUpdateNotifications: (node: NodeView, enabled: boolean) => void;
   onRestartNode: (node: NodeView) => void;
   onRemoveNode: (node: ContextNode, force?: boolean) => void;
@@ -675,6 +677,9 @@ export function NodesPage({
                     {nodeVersionMismatch(node) && (
                       <StatusBadge tone="warning" className="nodeListStatus warning" title={`Node agent ${node.agentVersion} does not match panel ${panelVersion}. Update both to matching release versions.`}>Version mismatch</StatusBadge>
                     )}
+                    {node.lastUpdateFailure && !operation && (
+                      <StatusBadge tone="danger" className="nodeListStatus danger" title={node.lastUpdateFailure.message}>Update failed</StatusBadge>
+                    )}
                   </div>
                   <div className="nodeListActions">
                     {nodeUpdateAvailable(node) && (
@@ -776,6 +781,7 @@ export function NodesPage({
             onShowInstall={onShowInstall}
             onRotateToken={onRotateToken}
             onUpdateNode={onUpdateNode}
+            onDismissUpdateFailure={onDismissUpdateFailure}
             onUpdateNotifications={onUpdateNotifications}
             onRefresh={onRefresh}
             onRestartNode={onRestartNode}

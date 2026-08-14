@@ -856,23 +856,82 @@ describe("node self-update container cleanup", () => {
     expect(mockDockerRequest).not.toHaveBeenCalledWith("POST", expect.stringContaining("/stop?t=10"), expect.anything());
   });
 
-  it("preserves the previous container when the replacement fails health verification", async () => {
+  it("restores the previous container when the replacement fails health verification", async () => {
     mockDockerAvailable = true;
     mockDockerBufferRequest.mockResolvedValue(Buffer.alloc(0));
-    mockDockerJsonRequest.mockResolvedValue({});
+    mockDockerJsonRequest.mockResolvedValue({ Id: "new-node-id" });
+    const renames: string[] = [];
     mockDockerRequest.mockImplementation(async (method: string, path: string) => {
-      if (method === "POST" && path.includes("/rename?")) return {};
+      if (method === "POST" && path.includes("/rename?")) {
+        renames.push(path);
+        return {};
+      }
       if (method === "POST" && path === "/containers/serversentinel-node/start") return {};
+      if (method === "DELETE" && path === "/containers/new-node-id?force=1") return {};
       if (method === "GET" && path === "/containers/serversentinel-node/json") {
-        return { Id: "new-node-id", Name: "/serversentinel-node", State: { Running: true, Status: "running", Health: { Status: "unhealthy" } } };
+        return renames.length > 1
+          ? { Id: "old-node-id", Name: "/serversentinel-node", State: { Running: true, Status: "running" } }
+          : { Id: "new-node-id", Name: "/serversentinel-node", State: { Running: true, Status: "running", Health: { Status: "unhealthy" } } };
       }
       throw new Error(`Unexpected Docker request ${method} ${path}`);
     });
 
-    await expect(hooks.selfUpdateContainer(nodeInspect(), "nl2109/serversentinel:new", "serversentinel-node", join(tempRoot, "plan.json")))
-      .rejects.toThrow("Previous container was retained");
+    let failure: (Error & { updateFailure?: Record<string, unknown> }) | undefined;
+    try {
+      await hooks.selfUpdateContainer(nodeInspect(), "nl2109/serversentinel:new", "serversentinel-node", join(tempRoot, "plan.json"));
+    } catch (thrown) {
+      failure = thrown as Error & { updateFailure?: Record<string, unknown> };
+    }
 
-    expect(mockDockerRequest).not.toHaveBeenCalledWith("DELETE", expect.any(String), expect.anything());
+    expect(failure?.message).toContain("did not become healthy");
+    expect(failure?.updateFailure).toMatchObject({ stage: "verify", recovered: true, containerName: "serversentinel-node" });
+    expect(mockDockerRequest).toHaveBeenCalledWith("DELETE", "/containers/new-node-id?force=1", [204, 404]);
+    expect(renames[1]).toBe("/containers/old-node-id/rename?name=serversentinel-node");
+  });
+
+  it("does not carry image defaults of the outgoing image into the replacement", async () => {
+    const inspect = nodeInspect({
+      Image: "sha256:old-image-id",
+      Config: {
+        Image: "nl2109/serversentinel:old",
+        Entrypoint: ["docker-entrypoint.sh"],
+        Cmd: ["node", "server/dist/index.js"],
+        WorkingDir: "/app",
+        Env: ["SS_MODE=node", "SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:old", "TZ=Europe/Vienna"],
+        Labels: { "org.opencontainers.image.version": "26.8.8", "com.docker.compose.project": "serversentinel" }
+      }
+    });
+
+    const body = hooks.nodeReplacementContainerConfig(inspect, "nl2109/serversentinel:new", {
+      Entrypoint: ["docker-entrypoint.sh"],
+      Cmd: ["node", "server/dist/index.js"],
+      WorkingDir: "/app",
+      Env: ["SERVERSENTINEL_NODE_IMAGE=nl2109/serversentinel:old"],
+      Labels: { "org.opencontainers.image.version": "26.8.8" }
+    });
+
+    expect(body).not.toHaveProperty("Entrypoint");
+    expect(body).not.toHaveProperty("Cmd");
+    expect(body).not.toHaveProperty("WorkingDir");
+    expect(body.Env).toEqual(["SS_MODE=node", "TZ=Europe/Vienna"]);
+    expect(body.Labels).toEqual({ "com.docker.compose.project": "serversentinel" });
+    expect(body.Image).toBe("nl2109/serversentinel:new");
+  });
+
+  it("keeps an entrypoint the operator set instead of the image", async () => {
+    const inspect = nodeInspect({ Config: { Image: "nl2109/serversentinel:old", Entrypoint: ["/custom-entrypoint.sh"], Env: [] } });
+
+    const body = hooks.nodeReplacementContainerConfig(inspect, "nl2109/serversentinel:new", { Entrypoint: ["docker-entrypoint.sh"] });
+
+    expect(body.Entrypoint).toEqual(["/custom-entrypoint.sh"]);
+  });
+
+  it("drops inherited image defaults when the outgoing image can no longer be inspected", async () => {
+    const inspect = nodeInspect({ Config: { Image: "nl2109/serversentinel:old", Entrypoint: ["docker-entrypoint.sh"], Env: [] } });
+
+    const body = hooks.nodeReplacementContainerConfig(inspect, "nl2109/serversentinel:new");
+
+    expect(body).not.toHaveProperty("Entrypoint");
   });
 
   it("cleanup does not delete the active node container", async () => {

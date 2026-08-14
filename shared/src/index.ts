@@ -522,11 +522,30 @@ export type ManagedNodeCore = {
   joinTokenExpiresAt?: string;
 };
 
+/** Where a node self-update stopped. `reconnect` is recorded by the panel, the rest by the node. */
+export type NodeUpdateFailureStage = "pull" | "create" | "start" | "verify" | "session" | "cleanup" | "reconnect";
+
+/**
+ * The outcome of the last node update that did not finish. The node reports its own failures on the
+ * next handshake; the panel records one itself when a node never reconnects with the updated agent.
+ */
+export type NodeUpdateFailure = {
+  at: string;
+  stage: NodeUpdateFailureStage;
+  message: string;
+  image?: string;
+  /** Whether the node container that was running before the attempt is running again under its own name. */
+  recovered?: boolean;
+  containerName?: string;
+};
+
 /** A managed node exactly as the panel API serializes it. */
 export type PublicNode = ManagedNodeCore & {
   hasPendingJoinToken?: boolean;
   /** Whether page-visit notifications should include available updates for this node. */
   updateNotificationsEnabled?: boolean;
+  /** Set while the last update attempt is unresolved; cleared on a successful update or by dismissal. */
+  lastUpdateFailure?: NodeUpdateFailure;
 };
 
 /**

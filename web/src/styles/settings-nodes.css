@@ -2277,6 +2277,38 @@
   line-height: 1.4;
 }
 
+.nodeDrawerNotice.failure {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 35%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface-raised));
+}
+
+.nodeDrawerNotice.failure > strong {
+  color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--text));
+}
+
+.nodeDrawerNotice.failure p {
+  margin: var(--space-2) 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.45;
+}
+
+.nodeDrawerNotice.failure small {
+  display: block;
+  margin-top: var(--space-2);
+  overflow-wrap: anywhere;
+  color: var(--text-soft);
+  font-size: var(--type-meta-size);
+}
+
+.nodeDrawerNoticeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 .nodeManualCommand {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

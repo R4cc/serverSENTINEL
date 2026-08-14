@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { defaultNodeDataPath } from "../../app/appConfig";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
@@ -52,6 +52,12 @@ export function useNodesWorkspace({
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeResult, setAddNodeResult] = useState<CreateNodeResponse | null>(null);
   const [installMethod, setInstallMethod] = useState<"compose" | "run">("run");
+  /**
+   * The failure timestamp already announced per node. Nodes are seeded on first sight so a failure
+   * that was already on the record does not re-announce itself on every page load; only one that
+   * arrives while this page is open is worth a notification.
+   */
+  const announcedUpdateFailures = useRef<Record<string, string>>({});
 
   const hasWaitingNodeOperation = Object.values(nodeOperations).some((operation) => operation.phase === "waiting");
 
@@ -108,6 +114,25 @@ export function useNodesWorkspace({
       notify("warning", `${node.name} reconnected without the expected update.`);
     }
   }, [contextNodes, nodeOperationNow, nodeOperations]);
+
+  // A node that reports why its update failed ends the wait immediately: the panel already knows the
+  // outcome, so counting down to a timeout that says nothing would only delay the real reason.
+  useEffect(() => {
+    for (const node of contextNodes) {
+      const reportedAt = node.lastUpdateFailure?.at ?? "";
+      const announced = announcedUpdateFailures.current[node.id];
+      announcedUpdateFailures.current[node.id] = reportedAt;
+      if (announced === undefined || announced === reportedAt || !node.lastUpdateFailure) continue;
+      setNodeOperations((current) => {
+        if (!current[node.id]) return current;
+        const next = { ...current };
+        delete next[node.id];
+        return next;
+      });
+      forgetManualRecovery(node.id);
+      notify("error", `${node.name}: ${node.lastUpdateFailure.message}`);
+    }
+  }, [contextNodes]);
 
   useEffect(() => {
     if (!hasWaitingNodeOperation || demoMode) return;
@@ -225,13 +250,13 @@ export function useNodesWorkspace({
         method: "POST",
         body: JSON.stringify({})
       });
-      if (result.mode === "offline") {
+      if (result.mode === "offline" || result.mode === "manual") {
         setNodeManualRecoveryById((current) => ({
           ...current,
           [node.id]: { message: result.message, command: result.command, image: result.image }
         }));
         setNodeDetails((current) => current?.id === node.id ? current : node);
-        notify("info", result.message);
+        notify(result.mode === "manual" ? "warning" : "info", result.message);
         return;
       }
       if (result.mode === "current") {
@@ -259,6 +284,21 @@ export function useNodesWorkspace({
       window.setTimeout(() => void refreshApp(), 5000);
     } catch (error) {
       notify("error", errorMessage(error, "Could not start the node update."));
+    } finally {
+      setBusyNodeId("");
+    }
+  }
+
+  async function dismissNodeUpdateFailure(node: NodeView) {
+    if (!canManageNodes) return;
+    setBusyNodeId(node.id);
+    try {
+      const result = await api<{ ok: boolean; node: ManagedNode }>(`/api/nodes/${node.id}/update-failure`, { method: "DELETE" });
+      announcedUpdateFailures.current[node.id] = "";
+      setNodeDetails((current) => current?.id === node.id ? result.node : current);
+      await refreshApp({ silent: true });
+    } catch (error) {
+      notify("error", errorMessage(error, "Could not dismiss the update failure."));
     } finally {
       setBusyNodeId("");
     }
@@ -443,6 +483,7 @@ export function useNodesWorkspace({
     onShowInstall: showNodeInstall,
     onRotateToken: rotateNodeToken,
     onUpdateNode: updateNodeImage,
+    onDismissUpdateFailure: dismissNodeUpdateFailure,
     onUpdateNotifications: updateNodeNotifications,
     onRestartNode: restartNode,
     onRemoveNode: removeNode,

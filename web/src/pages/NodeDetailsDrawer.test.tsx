@@ -58,6 +58,7 @@ function props(overrides: Partial<NodeDetailsDrawerProps> = {}): NodeDetailsDraw
     onShowInstall: vi.fn(),
     onRotateToken: vi.fn(),
     onUpdateNode: vi.fn(),
+    onDismissUpdateFailure: vi.fn(),
     onUpdateNotifications: vi.fn(),
     onRefresh: vi.fn(),
     onRestartNode: vi.fn(),
@@ -129,6 +130,45 @@ describe("NodeDetailsDrawer", () => {
     expect(html).toContain('class="uiSpinner uiSpinner--xs"');
     expect(html).toContain('class="uiSpinner uiSpinner--md"');
     expect(html).not.toContain("<li>Node is offline.</li>");
+  });
+
+  it("names why the last update failed and offers a way forward", () => {
+    const html = renderToStaticMarkup(<NodeDetailsDrawer {...props({
+      node: node({
+        lastUpdateFailure: {
+          at: "2026-08-14T10:00:00.000Z",
+          stage: "start",
+          message: "The replacement container could not start: executable file not found in $PATH. The node kept running on its previous image.",
+          image: "nl2109/serversentinel:26.8.13",
+          recovered: true,
+          containerName: "serversentinel-node"
+        }
+      })
+    })} />);
+
+    expect(html).toContain("Updated container could not start");
+    expect(html).toContain("executable file not found in $PATH");
+    expect(html).toContain("nl2109/serversentinel:26.8.13");
+    expect(html).toContain("Dismiss");
+    expect(html).toContain("Retry update");
+    expect(html).not.toContain("Needs recovery on the node host");
+  });
+
+  it("points an unrecovered node at its install instructions", () => {
+    const html = renderToStaticMarkup(<NodeDetailsDrawer {...props({
+      node: node({
+        lastUpdateFailure: {
+          at: "2026-08-14T10:00:00.000Z",
+          stage: "reconnect",
+          message: "mc-node-01 did not reconnect with the updated agent within 5 minutes.",
+          recovered: false
+        }
+      })
+    })} />);
+
+    expect(html).toContain("Node did not come back from the update");
+    expect(html).toContain("Needs recovery on the node host");
+    expect(html).toContain("Install instructions");
   });
 
   it("renders manual recovery details with a copyable command", () => {

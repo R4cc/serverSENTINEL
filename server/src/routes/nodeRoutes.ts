@@ -11,8 +11,9 @@ import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
 import { compareVersionStrings } from "../servers/versions.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
 
-import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateImageForBuild, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
+import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateImageForBuild, nodeUpdateNeedsManualRecreate, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
 import { setNodeUpdateNotificationsEnabled } from "../nodes/nodeUpdateNotifications.js";
+import { clearNodeUpdateFailure, setNodeUpdateFailure } from "../nodes/nodeUpdateStatus.js";
 
 import { listManagedServers } from "../servers/store.js";
 import { logDebug, logInfo, logWarn, errorLogFields } from "../logging.js";
@@ -22,6 +23,9 @@ import { nodeAdvertisesCapability, nodeFeatures, nodeProtocolVersion, normalizeN
 import type { NodeHello, PanelWelcome } from "../nodes/protocol.js";
 import { newNodeSecret } from "../nodes/nodeAgent.js";
 import type { ManagedNode } from "../types.js";
+
+/** How long a node may stay away after an update before the panel calls the attempt failed. Matches the Nodes page grace. */
+const nodeUpdateReconnectGraceMs = 5 * 60 * 1000;
 
 type CreateNodeRoute = {
   Body: { name?: string; tokenTtlMinutes?: number; dataMount?: string; panelUrl?: string };
@@ -143,6 +147,15 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
   }
   if (activeNodeUpdates.has(node.id)) operationInProgress(`An update is already running for node ${node.name}`, "NODE_UPDATE_IN_PROGRESS");
   const image = validateDockerImageName(body.image?.trim() || nodeUpdateImageForBuild(config.nodeImage, appBuildId));
+  if (nodeUpdateNeedsManualRecreate(node.agentVersion, body.image)) {
+    return {
+      ok: false,
+      mode: "manual",
+      message: `Node agent ${node.agentVersion} cannot update itself to ${appVersion}: it would build its replacement container with the entrypoint of its own image, which the current image no longer has. Pull the image on the node host and recreate the node container once with the same options; it rejoins with its existing identity, and later updates work from the panel again.`,
+      image,
+      command: `docker pull ${image}`
+    };
+  }
   if (node.status !== "online") {
     return {
       ok: false,
@@ -162,6 +175,7 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
     };
   }
   activeNodeUpdates.set(node.id, body.image?.trim() ? {} : { version: appVersion, buildId: appBuildId });
+  clearNodeUpdateFailure(services.storageDatabase, node.id);
   let result: unknown;
   try {
     result = await panelNodeConnections.request(node, "node.update", { image }, 30_000);
@@ -172,11 +186,32 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
   const updateResult = result as { ok?: boolean; mode?: string };
   if (updateResult.ok && updateResult.mode === "self") {
     await markNodeOfflineIfConnectionUnchanged(node);
-    setTimeout(() => activeNodeUpdates.delete(node.id), 5 * 60 * 1000).unref();
+    // A node that reports its own failure clears this entry on its next handshake. One that never
+    // comes back cannot report anything, so the panel records the outcome itself rather than
+    // leaving the Nodes page showing an update that is still "in progress" hours later.
+    setTimeout(() => {
+      if (!activeNodeUpdates.delete(node.id)) return;
+      setNodeUpdateFailure(services.storageDatabase, node.id, {
+        at: new Date().toISOString(),
+        stage: "reconnect",
+        image,
+        recovered: false,
+        message: `${node.name} did not reconnect with the updated agent within ${Math.round(nodeUpdateReconnectGraceMs / 60_000)} minutes. Check the node host, then retry the update or recreate the node container manually.`
+      });
+      logWarn({ nodeId: node.id, nodeName: node.name, image, action: "node_update", status: "failed" }, "Node did not reconnect after an update");
+    }, nodeUpdateReconnectGraceMs).unref();
   } else {
     activeNodeUpdates.delete(node.id);
   }
   return result;
+});
+
+app.delete<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/update-failure", async (request) => {
+  await requireRequestPermission(request, "users.manage");
+  const node = (await readNodes()).find((candidate) => candidate.id === request.params.nodeId);
+  if (!node) nodeNotFound(request.params.nodeId);
+  clearNodeUpdateFailure(services.storageDatabase, node.id);
+  return { ok: true, node: publicNodeWithSettings(node) };
 });
 
 app.post<{ Params: { nodeId: string } }>("/api/nodes/:nodeId/restart", destructiveRateLimit, async (request) => {
@@ -406,6 +441,22 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
       && (!expectedUpdate.version || acceptedNode.agentVersion === expectedUpdate.version)
       && (!expectedUpdate.buildId || acceptedNode.buildId === expectedUpdate.buildId)) {
       activeNodeUpdates.delete(acceptedNode.id);
+      clearNodeUpdateFailure(services.storageDatabase, acceptedNode.id);
+    }
+    if (hello.updateFailure) {
+      // The node came back on its old release to tell the panel why the update did not take. Recording
+      // it here is what lets the Nodes page name the cause instead of reporting a silent timeout.
+      activeNodeUpdates.delete(acceptedNode.id);
+      setNodeUpdateFailure(services.storageDatabase, acceptedNode.id, hello.updateFailure);
+      logWarn({
+        nodeId: acceptedNode.id,
+        nodeName: acceptedNode.name,
+        image: hello.updateFailure.image,
+        stage: hello.updateFailure.stage,
+        recovered: hello.updateFailure.recovered,
+        action: "node_update",
+        status: "failed"
+      }, hello.updateFailure.message);
     }
     ws.on("close", () => {
       if (panelNodeConnections.isConnected(acceptedNode!.id)) return;

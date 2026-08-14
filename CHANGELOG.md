@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 26.8.13 - 2026-08-14
+
+- Fixed node self-updates failing to start after the switch to the Distroless image, by letting the replacement container take its entrypoint, command, and other defaults from the new image instead of the outgoing one.
+- A node update that cannot finish now restores the previous node container under its own name instead of leaving it renamed, and the node reports the reason back to the panel.
+- The Nodes page now shows why the last update failed, with the stage it stopped at, whether the node recovered, and actions to retry, dismiss, or open the install instructions.
+- Nodes running an agent from before the Distroless image change are now told to recreate their container once on the node host, instead of starting a panel update that cannot succeed.
+
 ## 26.8.12 - 2026-08-13
 
 - Reduced container storage by retaining maximum-quality Brotli assets while compressing the uncommon gzip fallback on demand.

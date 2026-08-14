@@ -128,6 +128,7 @@ function renderDenseNodesPage(nodes: ContextNode[], overrides: Partial<Component
     onShowInstall: vi.fn(),
     onRotateToken: vi.fn(),
     onUpdateNode: vi.fn(),
+    onDismissUpdateFailure: vi.fn(),
     onUpdateNotifications: vi.fn(),
     onRestartNode: vi.fn(),
     onRemoveNode: vi.fn(),

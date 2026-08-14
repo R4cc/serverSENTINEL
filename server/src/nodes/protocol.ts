@@ -1,4 +1,4 @@
-import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
+import { NODE_PROTOCOL_VERSION, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
 import { httpError } from "../http/errors.js";
 import { asObject as objectValue } from "../storage/valueValidation.js";
 import type { ManagedNode, ManagedServer } from "../types.js";
@@ -76,7 +76,15 @@ export type NodeHello = {
   dockerStatus: string;
   dataPathStatus: string;
   totalMemory: number;
+  /**
+   * Reported once, on the first handshake after a self-update that did not finish. The field is
+   * optional in both directions on purpose: a panel that predates it ignores the extra key, and a
+   * node that predates it simply never sends one.
+   */
+  updateFailure?: NodeUpdateFailure;
 };
+
+export const nodeUpdateFailureStages = ["pull", "create", "start", "verify", "session", "cleanup", "reconnect"] as const;
 
 export type PanelWelcome = {
   type: "welcome";
@@ -323,11 +331,35 @@ export function normalizeNodeHello(value: unknown): NodeHello {
     features: rawFeatures as NodeFeature[],
     dockerStatus: requiredString(hello.dockerStatus, "dockerStatus"),
     dataPathStatus: requiredString(hello.dataPathStatus, "dataPathStatus"),
-    totalMemory: positiveNumber(hello.totalMemory, "totalMemory")
+    totalMemory: positiveNumber(hello.totalMemory, "totalMemory"),
+    updateFailure: normalizeNodeUpdateFailure(hello.updateFailure)
   };
   if (!nodeId && !normalized.joinToken) throw new Error("Node hello requires nodeId or joinToken");
   if (nodeId && !normalized.nodeSecret) throw new Error("Node hello requires nodeSecret when nodeId is present");
   return normalized;
+}
+
+/**
+ * A malformed report must never cost the node its session: the handshake it rides on is how the
+ * node comes back after a failed update, so an unparseable field is dropped rather than thrown.
+ */
+export function normalizeNodeUpdateFailure(value: unknown): NodeUpdateFailure | undefined {
+  if (value === undefined || value === null) return undefined;
+  try {
+    const failure = objectValue(value, "updateFailure");
+    const stage = requiredString(failure.stage, "updateFailure.stage");
+    if (!nodeUpdateFailureStages.includes(stage as NodeUpdateFailureStage)) return undefined;
+    return {
+      at: requiredString(failure.at, "updateFailure.at"),
+      stage: stage as NodeUpdateFailureStage,
+      message: requiredString(failure.message, "updateFailure.message"),
+      image: optionalString(failure.image, "updateFailure.image"),
+      recovered: failure.recovered === undefined ? undefined : requiredBoolean(failure.recovered, "updateFailure.recovered"),
+      containerName: optionalString(failure.containerName, "updateFailure.containerName")
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export function normalizePanelWelcome(value: unknown): PanelWelcome {
