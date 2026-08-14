@@ -30,6 +30,13 @@ const modsListCommandTimeoutMs = 30_000;
 const modrinthCommandTimeoutMs = 5 * 60 * 1000;
 const archiveCommandTimeoutMs = 30 * 60 * 1000;
 const exportTransferTimeoutMs = 6 * 60 * 60 * 1000;
+/**
+ * A node does not answer `server.stop` or `server.restart` until Docker has taken the container
+ * down, and Docker waits out the Minecraft stop timeout before it kills the JVM. The panel has to
+ * outlast that whole window plus the node's own round trip, or it reports a timeout for a stop that
+ * is still saving the world.
+ */
+const lifecycleCommandTimeoutMs = Math.max(defaultRemoteCommandTimeoutMs, (config.minecraftStopTimeoutSeconds + 30) * 1_000);
 
 function normalizeRemotePath(path: string) {
   const value = path || ".";
@@ -162,7 +169,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   async lifecycle(server: ManagedServer, action: RuntimeAction) {
     const command = action === "start" ? "server.start" : action === "stop" ? "server.stop" : "server.restart";
     this.invalidateObservations(server, ["status", "stats", "players", "logs"]);
-    const result = await this.command(server, command);
+    const result = await this.command(server, command, undefined, action === "start" ? defaultRemoteCommandTimeoutMs : lifecycleCommandTimeoutMs);
     this.invalidateObservations(server, ["status", "stats", "players", "logs"]);
     if (action !== "start" && action !== "restart") return result;
 

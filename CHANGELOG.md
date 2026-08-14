@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 26.8.14 - 2026-08-14
+
+- Minecraft containers now get 60 seconds to save and shut down when something outside serverSENTINEL stops them, such as a Docker daemon restart during a package upgrade, instead of being killed after Docker's 10 second default. The window is configurable with `SERVERSENTINEL_MINECRAFT_STOP_TIMEOUT_SECONDS`.
+- Stopping or restarting a server from the panel now waits out that full window rather than reporting a timeout while the world is still saving.
+- The panel and node agents now warn at startup when Docker's `live-restore` is disabled, which is the host setting that keeps Minecraft containers running through a Docker daemon restart or upgrade.
+
 ## 26.8.13 - 2026-08-14
 
 - Fixed node self-updates failing to start after the switch to the Distroless image, by letting the replacement container take its entrypoint, command, and other defaults from the new image instead of the outgoing one.

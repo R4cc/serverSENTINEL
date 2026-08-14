@@ -13,6 +13,7 @@ import { computeContainerResourceSample } from "../containerStats.js";
 import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../profile.js";
 export { defaultDockerImageForMinecraftVersion } from "../profile.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerLogTailMaxBytes, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
+import { dockerStopQuery, dockerStopRequestTimeoutMs } from "../../docker/dockerDaemon.js";
 import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
 import { shellQuote } from "../../docker/shell.js";
 import { durationSince, errorLogFields, logError, logInfo, logWarn, type LogFields } from "../../logging.js";
@@ -202,7 +203,10 @@ export function dockerRuntimeConfigHashInput(server: ManagedServer, options: { i
     serverJar: targetRuntime.serverJar,
     javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
     ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {}),
-    restartPolicy: options.restartPolicy
+    restartPolicy: options.restartPolicy,
+    // Docker only accepts a stop timeout at create time, so it belongs in the hash: a container
+    // built with the old grace period has to be replaced before the new one takes effect.
+    stopTimeoutSeconds: config.minecraftStopTimeoutSeconds
   };
 }
 
@@ -321,6 +325,9 @@ export async function ensureDockerContainer(server: ManagedServer, preferredNetw
         AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
+        // Applies to every stop this container ever receives, including the one the daemon issues to
+        // all containers when Docker itself is restarted or upgraded, which serverSENTINEL never sees.
+        StopTimeout: config.minecraftStopTimeoutSeconds,
         ...minecraftTerminalContainerConfig(),
         ExposedPorts: exposedPorts,
         HostConfig: {
@@ -425,7 +432,12 @@ export async function dockerAction(server: ManagedServer, action: "start" | "sto
         throw new Error(refusal);
       }
     }
-    const requestAction = () => dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}`, [200, 204, 304]);
+    // `t` is sent explicitly so a container created before the stop timeout became part of the
+    // runtime configuration still gets the full grace period, and the socket read is widened to
+    // match because Docker holds the response until the container is actually down.
+    const query = action === "start" ? "" : dockerStopQuery();
+    const timeoutMs = action === "start" ? undefined : dockerStopRequestTimeoutMs();
+    const requestAction = () => dockerRequest("POST", `/containers/${encodeURIComponent(dockerContainerName(server))}/${action}${query}`, [200, 204, 304], undefined, timeoutMs);
     try {
       await requestAction();
     } catch (error) {

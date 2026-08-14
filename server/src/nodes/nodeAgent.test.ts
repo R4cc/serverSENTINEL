@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
+import { config } from "../config.js";
 import { readZipEntryBuffer } from "../zipArchive.js";
 
 type NodeAgentTestHooks = typeof import("./nodeAgent.js").__nodeAgentTestHooks;
@@ -389,7 +390,31 @@ describe("remote node Docker container recreation", () => {
       }),
       [201, 409]
     );
-    expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-survival/start", [204, 304]);
+    // A start carries no abort signal here and no stop grace period, so both trailing arguments of
+    // the Docker request are absent.
+    expect(mockDockerRequest).toHaveBeenCalledWith("POST", "/containers/serversentinel-survival/start", [204, 304], undefined, undefined);
+    expect(mockDockerJsonRequest.mock.calls[0][2]).toMatchObject({ StopTimeout: config.minecraftStopTimeoutSeconds });
+  });
+
+  /**
+   * Node-managed containers face the same daemon restart as panel-local ones, so the stop grace
+   * period has to reach them too rather than staying at Docker's ten second default.
+   */
+  it("stops a node-managed container with the configured Minecraft grace period", async () => {
+    mockDockerAvailable = true;
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path === "/containers/serversentinel-survival/json") {
+        return { Id: "container-id", State: { Running: false, Status: "exited" }, Config: { Labels: {} } };
+      }
+      return {};
+    });
+
+    await hooks.handleCommand("server.stop", { server });
+
+    const stop = mockDockerRequest.mock.calls.find(([method, path]) => method === "POST" && String(path).includes("/stop"));
+    expect(stop?.[1]).toBe(`/containers/serversentinel-survival/stop?t=${config.minecraftStopTimeoutSeconds}`);
+    expect(stop?.[4]).toBeGreaterThan(config.minecraftStopTimeoutSeconds * 1_000);
   });
 
   it("recreates and retries a managed container whose Docker network ID became stale", async () => {

@@ -35,6 +35,14 @@ Minecraft version detection remains common. Runtime version detection is selecte
 
 Artifact download, content-directory creation, metadata writing, Docker/container configuration, start, stop, restart, recovery, console, files, schedules, and query handling consume the canonical profile. Both the panel-local and remote-node paths use the same runtime-neutral terminology and capability checks.
 
+#### Shutdown
+
+A serverSENTINEL restart sends the Minecraft `stop` command and only falls back to `docker stop` if the console route fails, so the world is saved by Minecraft itself. Every other way a container can be stopped bypasses that: a plain stop from the panel, a `docker stop` from the shell, and the stop the daemon issues to all of its containers when Docker is restarted or upgraded. Those deliver SIGTERM to the JVM, whose shutdown hook saves and closes the world, and Docker kills it if it has not exited within the container's stop timeout.
+
+Docker's default of ten seconds is shorter than a world save, so managed containers are created with `StopTimeout` set from `SERVERSENTINEL_MINECRAFT_STOP_TIMEOUT_SECONDS` (60 seconds by default). The value is part of the runtime configuration hash, so a container built with an older timeout is replaced on the next start rather than kept with a stale grace period. Stop and restart requests also send `t` explicitly, which covers containers created before the timeout became part of that configuration, and the Docker socket read and the panel's remote-node command timeout are both widened past it because neither endpoint answers until the container is down.
+
+The daemon derives its own shutdown grace period from the longest container stop timeout plus five seconds, so this setting is what buys the save time during a daemon restart — bounded in turn by the service manager's stop timeout for Docker. Keeping containers running through a daemon restart entirely is a host decision serverSENTINEL cannot make for the operator: it requires `"live-restore": true` in `/etc/docker/daemon.json`. The panel and the node agent read the flag from Docker's `/info` at startup and warn when it is off.
+
 ### Managed content
 
 The shared managed-content service owns the safe reusable workflow: JAR inspection, hashes, Modrinth metadata, cached update plans, dependency planning, enable/disable renames, removal, manual upload, restart tracking, and the existing permission keys. Runtime definitions supply the visible terminology, content directory, Modrinth project type, and compatible loader set.

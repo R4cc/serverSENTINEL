@@ -17,6 +17,7 @@ import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
 import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, openContainedReadStream, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerReachable, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
+import { dockerLiveRestoreEnabled, dockerLiveRestoreGuidance, dockerStopQuery, dockerStopRequestTimeoutMs } from "../docker/dockerDaemon.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
@@ -293,7 +294,10 @@ function runtimeConfigHashInput(server: ManagedServer, options: { includeTermina
     javaArgs: validateJavaArgs(server.javaArgs || "-Xms2G -Xmx4G"),
     timeZone: config.timeZone,
     ...(options.includeTerminal ? { terminal: minecraftTerminalConfigFingerprint() } : {}),
-    ...(options.includeRestartPolicy ? { restartPolicy: "no" } : {})
+    ...(options.includeRestartPolicy ? { restartPolicy: "no" } : {}),
+    // Docker only accepts a stop timeout at create time, so it belongs in the hash: a container
+    // built with the old grace period has to be replaced before the new one takes effect.
+    stopTimeoutSeconds: config.minecraftStopTimeoutSeconds
   };
 }
 
@@ -406,6 +410,9 @@ async function createContainer(server: ManagedServer, networkingConfig?: NodeNet
     Cmd: command,
     OpenStdin: true,
     AttachStdin: true,
+    // Applies to every stop this container ever receives, including the one the daemon issues to
+    // all containers when Docker itself is restarted or upgraded, which the node agent never sees.
+    StopTimeout: config.minecraftStopTimeoutSeconds,
     ...terminalConfig,
     Env: minecraftContainerEnvironment(),
     ExposedPorts: exposedPorts,
@@ -475,9 +482,10 @@ async function recreateContainerAfterMissingNetwork(server: ManagedServer) {
 
 async function requestContainerLifecycleAction(server: ManagedServer, action: "start" | "restart", signal?: AbortSignal) {
   const name = encodeURIComponent(containerName(server));
-  const path = action === "start" ? `/containers/${name}/start` : `/containers/${name}/restart?t=10`;
+  const path = action === "start" ? `/containers/${name}/start` : `/containers/${name}/restart${dockerStopQuery()}`;
   const expectedStatus = action === "start" ? [204, 304] : 204;
-  const request = () => signal ? dockerRequest("POST", path, expectedStatus, signal) : dockerRequest("POST", path, expectedStatus);
+  const timeoutMs = action === "start" ? undefined : dockerStopRequestTimeoutMs();
+  const request = () => dockerRequest("POST", path, expectedStatus, signal, timeoutMs);
   signal?.throwIfAborted();
   try {
     await request();
@@ -1707,7 +1715,7 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     await requestContainerLifecycleAction(server, "start", signal);
     return runtimeStatus(server);
   }
-  if (command === "server.stop") { signal?.throwIfAborted(); await (signal ? dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304], signal) : dockerRequest("POST", `/containers/${name}/stop?t=10`, [204, 304])); return runtimeStatus(server); }
+  if (command === "server.stop") { signal?.throwIfAborted(); await dockerRequest("POST", `/containers/${name}/stop${dockerStopQuery()}`, [204, 304], signal, dockerStopRequestTimeoutMs()); return runtimeStatus(server); }
   if (command === "server.restart") {
     await ensureContainer(server);
     await requestContainerLifecycleAction(server, "restart", signal);
@@ -1838,6 +1846,7 @@ export async function startNodeAgent() {
   let stopping = false;
   if (!persisted && !config.joinToken) throw new Error("SS_JOIN_TOKEN is required for first node registration");
   console.info(`serverSENTINEL node agent ${appVersion}${appBuildId ? ` build ${appBuildId}` : ""} starting. Panel: ${config.panelUrl}. Data: ${config.nodeDataDir}.`);
+  if (await dockerLiveRestoreEnabled() === false) console.warn(dockerLiveRestoreGuidance);
 
   registerShutdownHandlers(async () => {
     stopping = true;

@@ -22,6 +22,7 @@ import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
 import { initializeOnboarding } from "./onboarding.js";
 import { dockerReachable } from "./docker/dockerClient.js";
+import { dockerLiveRestoreEnabled, dockerLiveRestoreGuidance } from "./docker/dockerDaemon.js";
 import { configureModrinthApiKeyProvider } from "./modrinth/modrinthClient.js";
 import { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
 import { registerShutdownHandlers } from "./shutdown.js";
@@ -601,6 +602,7 @@ const startupNodes = await readNodes().catch(() => []);
 const modrinthConfigured = Boolean(await modrinthApiKey().catch(() => ""));
 const playerHeadsEnabled = services.settingsRepository.get().playerHeadsEnabled;
 const dockerSocketMounted = config.runtimeMode === "panel" ? false : await dockerReachable();
+const dockerLiveRestore = dockerSocketMounted ? await dockerLiveRestoreEnabled() : undefined;
 app.log.info({
   appVersion,
   appBuildId,
@@ -612,6 +614,8 @@ app.log.info({
   tmpDir: config.tmpDir,
   nodeCount: startupNodes.length,
   dockerSocketMounted,
+  dockerLiveRestore,
+  minecraftStopTimeoutSeconds: config.minecraftStopTimeoutSeconds,
   modrinthApiConfigured: modrinthConfigured,
   playerHeadsEnabled,
   authEnabled: startupUsers.length > 0,
@@ -620,6 +624,9 @@ app.log.info({
 }, "serverSENTINEL startup configuration");
 if (config.runtimeMode !== "panel" && !dockerSocketMounted) {
   app.log.warn({ dockerSocket: config.dockerSocket }, "Docker endpoint is unavailable; runtime management is unavailable");
+}
+if (dockerLiveRestore === false) {
+  app.log.warn({ minecraftStopTimeoutSeconds: config.minecraftStopTimeoutSeconds }, dockerLiveRestoreGuidance);
 }
 
 return app;

@@ -172,6 +172,20 @@ volumes:
 
 All-in-one mode requires access to the Docker socket so serverSENTINEL can create, start, and stop Minecraft containers. Only mount the socket in a trusted environment.
 
+### Surviving a Docker restart
+
+Restarting or upgrading the Docker daemon — `apt upgrade` of the Docker packages, most often — stops every container on the host, and serverSENTINEL never sees the request, so it cannot send Minecraft the `stop` command first. Two host settings decide what happens to a running world:
+
+```json
+{
+  "live-restore": true
+}
+```
+
+Put that in `/etc/docker/daemon.json` and run `systemctl reload docker`. Running containers then stay up while the daemon restarts, so a Docker upgrade does not interrupt Minecraft at all. serverSENTINEL logs a warning at startup when live-restore is off.
+
+Without live-restore, the daemon stops each container and waits out that container's stop timeout before killing it. serverSENTINEL sets a 60 second timeout on every Minecraft container it creates, which is also long enough for the JVM to run its shutdown hook and save the world; Docker's own default of 10 seconds is not. Raise it with `SERVERSENTINEL_MINECRAFT_STOP_TIMEOUT_SECONDS` for a very large world, and raise `TimeoutStopSec` for `docker.service` alongside it — systemd's 90 second default caps how long the daemon is allowed to take.
+
 ## First Run
 
 1. Create the initial administrator with the setup token from `docker compose logs serversentinel`.
