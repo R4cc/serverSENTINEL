@@ -141,10 +141,33 @@ export class RemoteNodeRuntime implements NodeRuntime {
     return server;
   }
 
+  /**
+   * A node answers `server.update` by spreading the compact spec it was sent, so its reply can only
+   * describe the fields in that projection. Everything the panel keeps to itself -- when the server
+   * was created, its schedules, crash history, restart-required tracking, the unresolved port
+   * conflict flag -- never reached the node and cannot come back. Persisting the reply as the whole
+   * record dropped all of it, and since `createdAt` is required the store rejected the write outright:
+   * renaming a server on a node failed with "server.createdAt must be a non-empty string".
+   *
+   * So the stored record is the base and only what a node owns is taken from its reply. Running the
+   * reply back through `compactNodeServerSpec` ties that set to the same projection the request was
+   * built from, so a field added to one side cannot be forgotten on the other. `startOnNodeStart` is
+   * outside the projection but is resolved from the update input, so the node's answer stands.
+   */
+  private applyNodeServerUpdate(stored: ManagedServer, result: ManagedServer): ManagedServer {
+    const bound = this.bindServerIdentity(result, stored.id);
+    return {
+      ...stored,
+      ...compactNodeServerSpec(bound),
+      startOnNodeStart: bound.startOnNodeStart ?? stored.startOnNodeStart,
+      updatedAt: bound.updatedAt || new Date().toISOString()
+    };
+  }
+
   async updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer> {
     const result = await this.command(server, "server.update", { input }, provisioningCommandTimeoutMs) as ManagedServer;
     this.invalidateObservations(server);
-    const updated = this.bindServerIdentity(result, server.id);
+    const updated = this.applyNodeServerUpdate(server, result);
     await this.updateServerRecord(updated);
     return updated;
   }
