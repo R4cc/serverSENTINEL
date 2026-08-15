@@ -386,6 +386,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   fileRenamePermission(server: ManagedServer, source: string, target: string): Permission {
+    // Must stay in step with the local implementation in files/fileService.ts. Without the settings
+    // branch, renaming server.properties aside and moving an uploaded file into its place edits the
+    // server's settings with only files.edit.
+    if (this.isServerSettingsFile(server, source) || this.isServerSettingsFile(server, target)) return "servers.editSettings";
     if (this.isModsPath(server, source) || this.isModsPath(server, target)) return "mods.enableDisable";
     return "files.edit";
   }

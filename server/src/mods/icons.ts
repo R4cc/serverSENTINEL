@@ -265,6 +265,15 @@ export async function fetchModrinthIcon(iconUrl: unknown) {
  * list needs the value anyway, so the result is returned rather than looked up a second time by the
  * caller. That halves the per-mod filesystem work in the common case where the icon is already cached.
  */
+/**
+ * Jars that Modrinth does not recognize, keyed by content hash. Without this the lookup below —
+ * a full file read, a fresh sha1, and an API call — repeated on every mod-list load for every
+ * manually uploaded jar, concurrently, because a miss caches nothing and there is no icon to find
+ * on the next pass either.
+ */
+const unknownModrinthJarHashes = new Set<string>();
+const unknownModrinthJarHashLimit = 2_000;
+
 export async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string, metadata?: InstalledModMetadata) {
   const cached = await modIconUrl(server, filename);
   if (cached) return cached;
@@ -275,11 +284,16 @@ export async function ensureModrinthIconForFile(server: ManagedServer, filename:
     } else {
       const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
       const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
+      if (unknownModrinthJarHashes.has(hash)) return undefined;
       const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
       const version = await versionResponse.json() as { project_id?: string };
       if (version.project_id) {
         const project = await fetchProject(version.project_id);
         await saveModIcon(server, filename, project.icon_url);
+      } else {
+        if (unknownModrinthJarHashes.size >= unknownModrinthJarHashLimit) unknownModrinthJarHashes.clear();
+        unknownModrinthJarHashes.add(hash);
+        return undefined;
       }
     }
   } catch {

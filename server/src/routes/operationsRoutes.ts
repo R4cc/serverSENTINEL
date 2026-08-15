@@ -23,6 +23,24 @@ export type OperationsRoutesContext = {
   cancelOperation?: (operation: OperationRecord, message: string) => OperationRecord | undefined | Promise<OperationRecord | undefined>;
 };
 
+/**
+ * An export operation's result carries the artifact's absolute path on the panel host and a
+ * download URL. `/api/servers/:id/exports` already blanks the URL for anyone who did not create the
+ * export; these endpoints returned the raw record to every `servers.view` holder, so the two
+ * disagreed on the boundary. The download route enforces ownership either way — this stops the
+ * listing from handing out the location.
+ */
+function withoutForeignArtifactLocation(operation: OperationRecord, user: StoredUser): OperationRecord {
+  const result = operation.result;
+  if (operation.type !== "export.run" || !result || typeof result !== "object") return operation;
+  if (operation.createdBy && operation.createdBy === user.id) return operation;
+  const { artifactPath: _artifactPath, artifact, ...rest } = result as Record<string, unknown>;
+  const redactedArtifact = artifact && typeof artifact === "object"
+    ? (({ downloadUrl: _downloadUrl, ...artifactRest }) => artifactRest)(artifact as Record<string, unknown>)
+    : artifact;
+  return { ...operation, result: { ...rest, ...(artifact === undefined ? {} : { artifact: redactedArtifact }) } };
+}
+
 function optionalOperationStatus(value: unknown): OperationStatus | undefined {
   if (value === undefined) return undefined;
   if (value === "queued" || value === "running" || value === "succeeded" || value === "failed" || value === "cancelled") {
@@ -33,7 +51,7 @@ function optionalOperationStatus(value: unknown): OperationStatus | undefined {
 
 export function registerOperationsRoutes(app: FastifyInstance, context: OperationsRoutesContext) {
   app.get<{ Querystring: { serverId?: string; status?: string; limit?: string } }>("/api/operations", async (request) => {
-    await context.requireRequestPermission(request, "servers.view");
+    const user = await context.requireRequestPermission(request, "servers.view");
     const status = optionalOperationStatus(request.query.status);
     const parsedLimit = request.query.limit ? Number.parseInt(request.query.limit, 10) : undefined;
     const serverId = request.query.serverId ? validateServerId(request.query.serverId) : undefined;
@@ -43,18 +61,18 @@ export function registerOperationsRoutes(app: FastifyInstance, context: Operatio
         serverId,
         status,
         limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined
-      })
+      }).map((operation) => withoutForeignArtifactLocation(operation, user))
     };
   });
 
   app.get<{ Params: { id: string } }>("/api/operations/:id", async (request, reply) => {
-    await context.requireRequestPermission(request, "servers.view");
+    const user = await context.requireRequestPermission(request, "servers.view");
     const operation = context.operations.find(validateOperationId(request.params.id));
     if (!operation) {
       return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
     }
     if (operation.serverId) await context.assertServerExists(operation.serverId);
-    return operation;
+    return withoutForeignArtifactLocation(operation, user);
   });
 
   /**

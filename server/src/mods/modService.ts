@@ -629,6 +629,31 @@ export async function localModIcon(server: ManagedServer, filenameInput: unknown
   return { contentType: iconContentType(icon.filename), stream };
 }
 
+/**
+ * Install staging writes `<name>.serversentinel-<uuid>.tmp` next to its destination. Every in-process
+ * failure path removes it, but a crash or a SIGKILL mid-download cannot — and nothing else sweeps,
+ * while the `.jar` filter on the mod list hides the leftovers from whoever is paying for the disk.
+ */
+const abandonedInstallTemporaryMaxAgeMs = 60 * 60 * 1000;
+
+async function sweepAbandonedInstallTemporaries(server: ManagedServer, directory: string) {
+  try {
+    const root = await validateExistingInsideServer(server, directory);
+    const cutoff = Date.now() - abandonedInstallTemporaryMaxAgeMs;
+    const entries = await readdir(root);
+    await Promise.all(entries
+      .filter((entry) => /\.serversentinel-[0-9a-f-]{36}\.tmp$/i.test(entry))
+      .map(async (entry) => {
+        const target = join(root, entry);
+        const info = await stat(target).catch(() => null);
+        if (!info?.isFile() || info.mtimeMs > cutoff) return;
+        await rm(target, { force: true }).catch(() => undefined);
+      }));
+  } catch {
+    // A directory that cannot be read is not a reason to refuse the install that follows.
+  }
+}
+
 export async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
   const { directory, Singular } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
@@ -849,7 +874,12 @@ export async function updateModrinthMod(server: ManagedServer, input: unknown) {
     const targetFilename = safeModFilename(safeInstalledModFilename(file.filename));
     const currentEnabled = !filename.endsWith(".disabled");
     const existingTarget = mods.find((mod) => mod.filename === targetFilename || mod.filename === `${targetFilename}.disabled`);
-    if (existingTarget && existingTarget.filename !== filename) {
+    // Dropping the file being updated is only safe when what survives is in the same enabled state.
+    // A disabled copy of the target used to satisfy this, so updating an enabled mod deleted it and
+    // left only the disabled one — reported, including in batch updates, as a successful update.
+    const existingTargetFilename = typeof existingTarget?.filename === "string" ? existingTarget.filename : "";
+    const existingTargetEnabled = Boolean(existingTargetFilename) && !existingTargetFilename.endsWith(".disabled");
+    if (existingTarget && existingTargetFilename !== filename && existingTargetEnabled === currentEnabled) {
       await runtime.removeMod(server, filename);
       logInfo({ ...serverLogFields(server), filename, targetFilename, versionId: latest.id, action: "update_mod", status: "deduplicated", durationMs: durationSince(startedAt) }, "Mod update removed older duplicate");
       return { ok: true, filename: existingTarget.filename, version: latest.version_number, channel: versionChannel(latest.version_type), replaced: filename };
@@ -1305,6 +1335,7 @@ export async function localInstallMod(server: ManagedServer, input: unknown) {
     const prefs = { ...previousPrefs };
     const installedProjectIds = new Set(Object.values(previousPrefs).map((pref) => pref.modrinth?.projectId).filter(Boolean));
     const staged: Array<{ planned: PlannedModInstall; destination: string; temporaryDestination: string }> = [];
+    await sweepAbandonedInstallTemporaries(server, contentDefinition.directory);
 
     try {
       for (const planned of installPlan.installs) {

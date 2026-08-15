@@ -11,7 +11,7 @@ import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
 import { compareVersionStrings } from "@serversentinel/contracts";
 import { requireRequestPermission } from "../auth/sessionService.js";
 
-import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateImageForBuild, nodeUpdateNeedsManualRecreate, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
+import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateHasLanded, nodeUpdateImageForBuild, nodeUpdateNeedsManualRecreate, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
 import { setNodeUpdateNotificationsEnabled } from "../nodes/nodeUpdateNotifications.js";
 import { clearNodeUpdateFailure, setNodeUpdateFailure } from "../nodes/nodeUpdateStatus.js";
 
@@ -143,6 +143,10 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
   }
   const alreadyCurrent = nodeUpdateAlreadyCurrent(node, body.image);
   if (alreadyCurrent) {
+    // The node is demonstrably on the target build, so any recorded failure is resolved — including
+    // one the operator fixed by recreating the container on the node host, which never reaches the
+    // reconnect path below because no update was in flight.
+    clearNodeUpdateFailure(services.storageDatabase, node.id);
     return { ok: true, mode: "current", message: `Node ${node.name} is already running the current panel build.` };
   }
   if (activeNodeUpdates.has(node.id)) operationInProgress(`An update is already running for node ${node.name}`, "NODE_UPDATE_IN_PROGRESS");
@@ -175,7 +179,9 @@ app.post<{ Params: { nodeId: string }; Body: { image?: string } }>("/api/nodes/:
       command: `docker pull ${image}`
     };
   }
-  activeNodeUpdates.set(node.id, body.image?.trim() ? {} : { version: appVersion, buildId: appBuildId });
+  activeNodeUpdates.set(node.id, body.image?.trim()
+    ? { fromVersion: node.agentVersion, fromBuildId: node.buildId }
+    : { version: appVersion, buildId: appBuildId });
   clearNodeUpdateFailure(services.storageDatabase, node.id);
   let result: unknown;
   try {
@@ -454,9 +460,7 @@ app.get("/api/nodes/connect", { websocket: true, ...nodeJoinRateLimit }, async (
       }
     }
     const expectedUpdate = activeNodeUpdates.get(acceptedNode.id);
-    if (expectedUpdate
-      && (!expectedUpdate.version || acceptedNode.agentVersion === expectedUpdate.version)
-      && (!expectedUpdate.buildId || acceptedNode.buildId === expectedUpdate.buildId)) {
+    if (expectedUpdate && nodeUpdateHasLanded(expectedUpdate, acceptedNode)) {
       activeNodeUpdates.delete(acceptedNode.id);
       clearNodeUpdateFailure(services.storageDatabase, acceptedNode.id);
     }

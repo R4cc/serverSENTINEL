@@ -189,7 +189,12 @@ async function receiveChallenge(socket: dgram.Socket, sessionId: Buffer, deadlin
     if (packet.length < 5 || packet[0] !== 9 || !packet.subarray(1, 5).equals(sessionId)) return undefined;
     return parseMinecraftQueryChallenge(packet, sessionId);
   });
-  await sendPacket(socket, handshake);
+  // `response` already holds a live rejection timer. Letting a send failure throw past it would
+  // leave that timer to reject into nobody, which Node reports as an unhandled rejection.
+  await sendPacket(socket, handshake).catch((error: unknown) => {
+    response.catch(() => undefined);
+    throw error;
+  });
   return response;
 }
 
@@ -229,7 +234,11 @@ async function receiveFullStat(socket: dgram.Socket, sessionId: Buffer, deadline
     }
     return Buffer.concat(ordered);
   });
-  await sendPacket(socket, request);
+  // Same ordering hazard as receiveChallenge: the receive timer is already armed.
+  await sendPacket(socket, request).catch((error: unknown) => {
+    response.catch(() => undefined);
+    throw error;
+  });
   try {
     return await response;
   } catch (error) {

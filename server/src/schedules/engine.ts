@@ -408,6 +408,15 @@ export async function executeMatchedSchedule(
     progress: 10,
     task: resumed ? `Resuming schedule ${schedule.name}` : `Running schedule ${schedule.name}`
   });
+  // Claim the occurrence now rather than at completion, so the duplicate guard in tickSchedules
+  // holds even if this run dies partway or the panel restarts inside the matched minute.
+  if (!resumed) {
+    try {
+      services.serversRepository.markScheduledRunStarted(server.id, schedule.id, startedAt);
+    } catch (error) {
+      logError({ ...serverLogFields(server), scheduleId: schedule.id, runId, ...errorLogFields(error) }, "Schedule run start could not be recorded");
+    }
+  }
   const active: ActiveScheduleExecution = {
     id: runId,
     serverId: server.id,

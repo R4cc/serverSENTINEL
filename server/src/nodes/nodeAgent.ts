@@ -153,6 +153,9 @@ export function nodeReconnectDelayMs(attempt: number, random = Math.random) {
   return Math.round(floor + (ceiling - floor) * Math.min(1, Math.max(0, random())));
 }
 const removablePreviousNodeStates = new Set(["created", "dead", "exited", "removing"]);
+/** Queued console bytes on the panel socket past which the node stops reading container logs. */
+const consoleStreamHighWaterMark = 4 * 1024 * 1024;
+const consoleStreamDrainPollMs = 50;
 
 let nodeStorageDatabase: StorageDatabase | undefined;
 let nodeUpdateInProgress = false;
@@ -783,11 +786,37 @@ function startConsoleStream(server: ManagedServer, streamId: string, socket: Web
       }
 
       const decoder = new DockerLogDecoder();
+      let drainTimer: NodeJS.Timeout | undefined;
+      // A container can write faster than the panel's socket drains — a crash loop, a mod logging
+      // per tick. Every other high-volume path here awaits its send; this one cannot, so it pauses
+      // the docker response instead. Without it the frames queue in the agent's heap without limit
+      // and take the whole node down, not just the console.
+      const applyBackpressure = () => {
+        if (closed || drainTimer || socket.bufferedAmount <= consoleStreamHighWaterMark) return;
+        response.pause();
+        drainTimer = setInterval(() => {
+          if (closed || socket.readyState !== WebSocket.OPEN) {
+            clearInterval(drainTimer);
+            drainTimer = undefined;
+            return;
+          }
+          if (socket.bufferedAmount > consoleStreamHighWaterMark) return;
+          clearInterval(drainTimer);
+          drainTimer = undefined;
+          response.resume();
+        }, consoleStreamDrainPollMs);
+        drainTimer.unref?.();
+      };
       response.on("data", (chunk: Buffer) => {
         const text = decoder.write(chunk).toString("utf8");
         if (text) {
           sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
+          applyBackpressure();
         }
+      });
+      response.on("close", () => {
+        if (drainTimer) clearInterval(drainTimer);
+        drainTimer = undefined;
       });
       response.on("end", () => finish());
       response.on("error", (error) => {
@@ -1022,8 +1051,12 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
     const previousImageConfig = await inspectImageConfig(inspect.Image || inspect.Config?.Image);
 
     stage = "create";
-    oldName = `${currentName}-previous-${Date.now()}`;
-    await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(oldName)}`, 204);
+    const previousName = `${currentName}-previous-${Date.now()}`;
+    await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(previousName)}`, 204);
+    // Only now does the old container answer to that name. Recording it before the rename made a
+    // failed rename look like one that had happened, so recovery tried to rename the container to
+    // the name it still held and reported an unrecovered failure for an untouched node.
+    oldName = previousName;
     const created = await dockerJsonRequest<{ Id?: string }>("POST", `/containers/create?name=${encodeURIComponent(currentName)}`, nodeReplacementContainerConfig(inspect, image, previousImageConfig), 201);
     replacementId = created?.Id || currentName;
     await writeStatus("created", { oldName });
@@ -1873,6 +1906,14 @@ export async function startNodeAgent() {
       if (heartbeatWatchdog) clearInterval(heartbeatWatchdog);
       if (stableSessionTimer) clearTimeout(stableSessionTimer);
       if (stopping) return;
+      // During a self-update the replacement container handshakes with this node's identity, so the
+      // panel closes this session on purpose. Reconnecting here would evict the replacement, which
+      // reconnects and evicts this one, flapping the node until the outgoing container is removed.
+      // A failed update clears the flag before calling reconnectToPanel, so the report still lands.
+      if (nodeUpdateInProgress) {
+        console.warn(`Node agent disconnected during a self-update: ${reason}. The replacement container owns the session.`);
+        return;
+      }
       const reconnectDelayMs = nodeReconnectDelayMs(reconnectAttempt);
       reconnectAttempt += 1;
       console.warn(`Node agent disconnected: ${reason}. Reconnecting in ${Math.max(1, Math.round(reconnectDelayMs / 1000))}s.`);

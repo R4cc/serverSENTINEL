@@ -1,4 +1,5 @@
 import { modrinthFetch } from "./modrinthClient.js";
+import { errorLogFields, logWarn } from "../logging.js";
 import type { ModCompatibility, ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
 
 const channelRank: Record<ReleaseChannel, number> = { release: 0, beta: 1, alpha: 2 };
@@ -424,8 +425,17 @@ export async function resolveModrinthProjectCompatibility(options: Compatibility
     }
 
     return resolveCompatibilityFromVersions(await fetchProjectVersions(options.projectId), options, projectSides);
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    // The caller only ever sees "compatibility could not be verified", so the reason — a rejected
+    // API key, a rate limit, a request deadline — has to reach the operator through the structured
+    // log rather than a bare console.error nothing else in this tree writes to.
+    logWarn({
+      projectId: options.projectId,
+      minecraftVersion: options.minecraftVersion,
+      action: "modrinth_compatibility",
+      status: "unknown",
+      ...errorLogFields(error)
+    }, "Modrinth compatibility could not be resolved");
     return unknownCompatibility();
   }
 }

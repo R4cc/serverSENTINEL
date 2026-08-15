@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Fixed changing a server's Minecraft version leaving it on the old Java runtime image, so an upgrade across the 1.20.5 boundary downloaded a jar the container could not load and reported it only as a runtime exit. An image chosen by hand is still left alone.
+- Fixed a stray promise rejection anywhere in the panel or a node agent terminating the process, which for the panel took down the control plane for every managed server.
+- Fixed `server.properties` being renameable, and therefore replaceable, with only file-edit permission on servers hosted by a remote node.
+- Fixed a console viewer that disconnected while its stream was still attaching leaking its subscription and holding the container log follow open for the life of the process. Deleting a server now also releases its console buffer.
+- Fixed a schedule running twice for one cron occurrence when the panel restarted inside the matched minute, or when recording the previous run failed.
+- Fixed a node agent flapping between its outgoing and replacement container during a self-update, and fixed an update started with a custom image being closed out by any reconnect at all.
+- Fixed a failed Docker image pull being reported as success and resurfacing later as "No such image", and gave a first pull room to finish instead of timing out after 15 seconds.
+- Fixed a node agent buffering console output without limit when a server outran the panel connection, which could exhaust the node's memory.
+- Fixed updating a mod deleting the running copy when a disabled copy of the target version was also present, and reporting it as a successful update.
+- Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
+- Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
+
 ## 26.8.17 - 2026-08-14
 
 - Fixed servers on a pre-release Minecraft version, such as `1.21-pre1`, defaulting to the Java 17 container image instead of the Java 21 one the version needs. The panel, the node agent, and the create-server preview now all read the same rule.

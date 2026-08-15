@@ -62,13 +62,22 @@ async function acquireRequestSlot() {
     activeRequests += 1;
     return;
   }
+  // The slot is handed over by releaseRequestSlot, which leaves the count alone, so waking here
+  // must not increment again.
   await new Promise<void>((resolve) => requestWaiters.push(resolve));
-  activeRequests += 1;
 }
 
 function releaseRequestSlot() {
+  const waiter = requestWaiters.shift();
+  if (waiter) {
+    // Pass the slot straight to the next waiter. Decrementing first opened a window in which a
+    // fresh caller took the same slot before the woken waiter resumed, so the ceiling was exceeded
+    // by however many waiters were awake but not yet running — worst exactly while Modrinth is
+    // already rate limiting.
+    waiter();
+    return;
+  }
   activeRequests = Math.max(0, activeRequests - 1);
-  requestWaiters.shift()?.();
 }
 
 function retryDelayMs(response: Awaited<ReturnType<typeof fetch>>, attempt: number) {

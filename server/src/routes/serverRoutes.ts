@@ -174,7 +174,11 @@ app.delete<{
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.delete");
   const server = await getServer(request.params.id);
-  return services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
+  const deleted = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
+  // The buffer and its upstream follow outlive the container otherwise: `dispose` is only reached
+  // by the idle timer, which never runs while a viewer is still attached.
+  consoleHub.dispose(server.id);
+  return deleted;
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
@@ -245,6 +249,12 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
     const server = await getServer(serverId);
     stopHeartbeat = startConsoleHeartbeat(client);
     socket.on("close", stopHeartbeat);
+    // `attach` below subscribes synchronously and then awaits its upstream, which for a remote node
+    // is a round trip. A viewer that gives up inside that window would otherwise register its close
+    // handler on an already-closed socket, stranding the subscriber and holding the upstream follow
+    // open for the life of the process.
+    let closedDuringAttach = false;
+    socket.on("close", () => { closedDuringAttach = true; });
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
 
     // Per viewer, not per buffer: a viewer that cannot keep up drops its own frames and resumes
@@ -256,6 +266,10 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
       empty: (message) => { sender.send({ type: "empty", message }); }
     }, consoleCursor(url.searchParams));
     socket.on("close", session.detach);
+    if (closedDuringAttach) {
+      session.detach();
+      return;
+    }
 
     sender.send({ type: "backlog", ...session.backlog });
     session.start();

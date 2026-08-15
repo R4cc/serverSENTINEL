@@ -21,6 +21,9 @@ import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } 
 import { parseServerProperties, serializeServerProperties } from "./../serverProperties.js";
 import type { DockerState, ManagedServer } from "../../types.js";
 
+/** A cold pull of a Minecraft runtime image routinely takes minutes on a slow registry link. */
+const imagePullTimeoutMs = 10 * 60 * 1000;
+
 export type DockerContainerInspect = {
   Id?: string;
   State?: { Status?: DockerState; Running?: boolean; ExitCode?: number; OOMKilled?: boolean; StartedAt?: string; FinishedAt?: string };
@@ -154,6 +157,12 @@ export async function removeManagedDockerContainer(server: ManagedServer) {
 }
 
 function splitImage(image: string) {
+  // A digest-pinned reference keeps its whole digest as the tag. Splitting on the last colon would
+  // cut `sha256` off the hash and produce a reference the registry cannot resolve.
+  const digestIndex = image.lastIndexOf("@");
+  if (digestIndex > 0) {
+    return { fromImage: image.slice(0, digestIndex), tag: image.slice(digestIndex + 1) };
+  }
   const slashIndex = image.lastIndexOf("/");
   const colonIndex = image.lastIndexOf(":");
   if (colonIndex > slashIndex) {
@@ -162,19 +171,44 @@ function splitImage(image: string) {
   return { fromImage: image, tag: "latest" };
 }
 
+/**
+ * `POST /images/create` answers 200 and then streams progress, so a pull that fails on
+ * authentication, a rate limit, or an unknown tag reports its reason inside a successful response.
+ * Left unread, provisioning continued and failed later with "No such image", naming the wrong cause.
+ */
+function assertDockerPullSucceeded(image: string, body: Buffer) {
+  for (const line of body.toString("utf8").split("\n")) {
+    if (!line.trim()) continue;
+    let parsed: { error?: string; errorDetail?: { message?: string } };
+    try {
+      parsed = JSON.parse(line) as typeof parsed;
+    } catch {
+      continue;
+    }
+    const message = parsed.errorDetail?.message ?? parsed.error;
+    if (message) throw new Error(`Could not pull Docker image ${image}: ${message}`);
+  }
+}
+
 async function ensureDockerImage(image: string) {
   try {
     await dockerRequest("GET", `/images/${encodeURIComponent(image)}/json`, 200);
     return;
-  } catch {
-    logInfo({ image }, "Pulling Minecraft runtime image");
-    const { fromImage, tag } = splitImage(image);
-    await dockerBufferRequest(
-      "POST",
-      `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
-      200
-    );
+  } catch (error) {
+    // Only a genuinely absent image is worth a pull. A daemon that is unreachable or unconfigured
+    // must surface that, not be retried as if the image were merely missing.
+    if (!dockerAvailable()) throw error;
   }
+  logInfo({ image }, "Pulling Minecraft runtime image");
+  const { fromImage, tag } = splitImage(image);
+  const body = await dockerBufferRequest(
+    "POST",
+    `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
+    200,
+    // A first pull of a Minecraft runtime image routinely outruns the default socket idle timeout.
+    imagePullTimeoutMs
+  );
+  assertDockerPullSucceeded(image, body);
 }
 
 export async function inspectDockerContainer(server: ManagedServer) {
@@ -273,8 +307,13 @@ async function currentContainerNetworkingConfig() {
 }
 
 export async function ensureDockerContainer(server: ManagedServer, preferredNetworkingConfig?: DockerNetworkingConfig) {
-  const expectedConfigHash = dockerRuntimeConfigHash(server);
+  // The terminal settings are applied at create time, so they belong in the fingerprint: without
+  // them a change to the terminal profile could never invalidate an existing container, which is
+  // the one input this hash exists to notice. Every hash a running container may already carry is
+  // accepted below, so adding it does not recreate anything that is currently live.
+  const expectedConfigHash = dockerRuntimeConfigHash(server, { includeTerminal: true, restartPolicy: "no" });
   const legacyConfigHashes = new Set([
+    dockerRuntimeConfigHash(server, { includeTerminal: false, restartPolicy: "no" }),
     dockerRuntimeConfigHash(server, { includeTerminal: false, restartPolicy: "unless-stopped" }),
     dockerRuntimeConfigHash(server, { includeTerminal: true, restartPolicy: "unless-stopped" })
   ]);

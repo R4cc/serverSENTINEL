@@ -258,4 +258,21 @@ export function nodeServerCleanupError(summary: NodeServerCleanupSummary) {
   return `Could not clean up ${summary.failed.length} managed server container${summary.failed.length === 1 ? "" : "s"} before deleting the node: ${names}.`;
 }
 
-export const activeNodeUpdates = new Map<string, { version?: string; buildId?: string }>();
+/**
+ * Updates the panel is waiting to see land. A panel-built image has a predictable target, so the
+ * reconnect must report exactly that version and build. A custom image does not, so the target is
+ * recorded as the identity the node had *before* the update and completion means it changed —
+ * without that, an empty expectation matched any reconnect at all, including the outgoing agent's.
+ */
+export type ActiveNodeUpdate =
+  | { version: string; buildId?: string }
+  | { fromVersion?: string; fromBuildId?: string };
+
+export const activeNodeUpdates = new Map<string, ActiveNodeUpdate>();
+
+export function nodeUpdateHasLanded(expected: ActiveNodeUpdate, node: Pick<ManagedNode, "agentVersion" | "buildId">) {
+  if ("version" in expected) {
+    return node.agentVersion === expected.version && (!expected.buildId || node.buildId === expected.buildId);
+  }
+  return node.agentVersion !== expected.fromVersion || node.buildId !== expected.fromBuildId;
+}

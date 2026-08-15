@@ -93,9 +93,14 @@ export async function planServerUpdate(
   const dockerContainer = validateDockerContainerName(
     input.dockerContainer?.trim() || current.dockerContainer || defaultServerContainerName(current.id)
   );
-  const dockerImage = validateDockerImageName(
-    input.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion)
-  );
+  // A stored image is normally kept, but a Minecraft upgrade can cross a Java boundary (1.20.5
+  // moves from 17 to 21), and the stored image then cannot load the jar this same update downloads.
+  // Only an image serverSENTINEL picked itself is re-derived; one the owner chose is left alone.
+  const previousDefaultImage = defaultDockerImageForMinecraftVersion(currentRuntime.minecraftVersion);
+  const keptDockerImage = current.dockerImage && current.dockerImage !== previousDefaultImage
+    ? current.dockerImage
+    : defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion);
+  const dockerImage = validateDockerImageName(input.dockerImage?.trim() || keptDockerImage);
   const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
   const startOnNodeStart = optionalStrictBoolean(input.startOnNodeStart, "startOnNodeStart", current.startOnNodeStart ?? false);

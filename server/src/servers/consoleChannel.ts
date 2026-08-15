@@ -18,6 +18,12 @@ import type { ConsoleBacklog, ConsoleEpoch, ConsoleLine } from "@serversentinel/
 const consoleChannelMaxLines = 25_000;
 const consoleChannelMaxBytes = 8 * 1024 * 1024;
 /**
+ * A partial line is held until it completes, so a producer that never emits a newline — binary
+ * output, one enormous payload — would grow that buffer past every limit above it. Past this it is
+ * framed as a line of its own so `trim` can account for it.
+ */
+const consoleChannelMaxPendingBytes = 256 * 1024;
+/**
  * How long a channel outlives its last viewer. Browsing away from the console and back is the
  * common case, and keeping the upstream attached over that gap is what makes the return free
  * rather than a rebuild the viewer sees as a full redraw.
@@ -94,6 +100,11 @@ export class ConsoleChannel {
     const text = this.pending + chunk;
     const lastLineFeed = text.lastIndexOf("\n");
     if (lastLineFeed === -1) {
+      if (text.length >= consoleChannelMaxPendingBytes) {
+        this.pending = "";
+        this.append([`${text}\n`]);
+        return;
+      }
       this.pending = text;
       return;
     }

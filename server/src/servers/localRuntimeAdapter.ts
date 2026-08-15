@@ -96,6 +96,11 @@ export async function localUpdateServer(serverId: string, input: unknown) {
     if (jarChanged) {
       await downloadServerJar(updated);
     }
+    // Persisted before the container work, because the jar on disk is already the new one. Leaving
+    // this to the end meant a failure below (an image that will not pull, a bound host port) kept
+    // the panel describing the old runtime, and the next start rebuilt a container for that old
+    // profile around the new jar.
+    services.serversRepository.replaceMetadata(updated);
     if (containerConfigChanged && dockerAvailable() && !status.running) {
       const networkingConfig = minecraftContainerNetworkingConfig(await inspectDockerContainer(current).catch(() => null));
       await removeManagedDockerContainer(current);
@@ -110,7 +115,6 @@ export async function localUpdateServer(serverId: string, input: unknown) {
       });
     }
 
-    services.serversRepository.replaceMetadata(updated);
     updatedServer = updated;
   });
   return updatedServer!;

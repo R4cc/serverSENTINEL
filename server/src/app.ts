@@ -92,7 +92,11 @@ let activeAppReservation: symbol | undefined;
 async function buildAppInstance(reservation: symbol) {
 initializeRuntimeDataRoot(config.paths);
 const app = Fastify({
-  trustProxy: config.trustProxy,
+  // One hop, not `true`. Trusting the whole X-Forwarded-For chain lets any client choose its own
+  // `request.ip`, and that is what the rate limiter keys on — so login throttling could be defeated
+  // by rotating the header. A single hop matches the documented reverse-proxy deployment and makes
+  // `request.ip` the address the proxy itself observed, which the client cannot forge.
+  trustProxy: config.trustProxy ? 1 : false,
   logger: {
     level: config.logLevel,
     redact: [
@@ -337,20 +341,32 @@ registerAuthRoutes(app, {
 });
 
 app.addHook("preHandler", async (request) => {
-  if (!request.raw.url?.startsWith("/api/") || request.raw.url.startsWith("/api/auth/")) {
+  const url = request.raw.url ?? "";
+  const path = url.split("?", 1)[0];
+  // Websocket routes are gated too. Scoping this to `/api/` left `/ws/console` outside it, and the
+  // demo account holds every permission, so demo mode streamed a real server's live console while
+  // `/api/app` was busy hiding that the server existed at all.
+  const isApiRequest = url.startsWith("/api/");
+  const isWebsocketRequest = url.startsWith("/ws/");
+  if (!isApiRequest && !isWebsocketRequest) {
     return;
   }
-  if (request.raw.url.split("?", 1)[0] === "/api/nodes/connect") {
+  if (isApiRequest && url.startsWith("/api/auth/")) {
+    return;
+  }
+  if (path === "/api/nodes/connect") {
     return;
   }
   const demoMode = await isDemoModeRequest(request);
   if (demoMode) {
-    if (request.method === "GET" && (request.raw.url === "/api/app" || request.raw.url.startsWith("/api/runtime/"))) {
+    if (request.method === "GET" && (url === "/api/app" || url.startsWith("/api/runtime/"))) {
       return;
     }
     throwHttp(403, "Demo mode is active. Disable demo mode before managing real servers.", { code: "DEMO_MODE_ACTIVE" });
   }
-  await requireRequestPermission(request);
+  if (isApiRequest) {
+    await requireRequestPermission(request);
+  }
 });
 
 registerAppInfoRoutes(app);
