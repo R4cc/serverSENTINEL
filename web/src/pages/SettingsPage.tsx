@@ -1,6 +1,7 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import { Copy, Palette, PlugZap, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
-import type { DisplayTimeZonePreference, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
+import { Blocks, Copy, Palette, PlugZap, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
+import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";
+import type { DisplayTimeZonePreference, ModuleAccessState, ModuleId, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
@@ -11,7 +12,7 @@ import { InlineState } from "../components/InlineState";
 import { Button, StatusBadge } from "../components/UiPrimitives";
 import { resolveRegionalFormatLocale } from "../utils/format";
 
-type SettingsCategory = "appearance" | "console" | "integrations" | "users" | "system";
+type SettingsCategory = "appearance" | "console" | "integrations" | "modules" | "users" | "system";
 
 type SettingsUserState = {
   users: PublicUser[];
@@ -60,6 +61,10 @@ export type SettingsPageProps = {
   playerHeadsBusy: boolean;
   onPlayerHeadsEnabledChange(value: boolean): void;
   onClearPlayerHeadCache(): void;
+  modules: ModuleAccessState[] | undefined;
+  modulesBusy: boolean;
+  canManageModules: boolean;
+  onModuleEnabledChange(id: ModuleId, enabled: boolean): void;
   canViewUsers: boolean;
   userState: SettingsUserState;
   systemInfo: SettingsSystemInfo;
@@ -77,6 +82,7 @@ const categoryDetails: Record<SettingsCategory, { label: string; description: st
   appearance: { label: "Appearance", description: "Theme, timestamps, and regional formats" },
   console: { label: "Console", description: "History, text size, and retained output" },
   integrations: { label: "Integrations", description: "External services and credentials" },
+  modules: { label: "Modules", description: "Optional features this installation runs" },
   users: { label: "Users", description: "Accounts, roles, and permissions" },
   system: { label: "System", description: "Panel health, runtime, and diagnostics" }
 };
@@ -94,6 +100,7 @@ function SettingsGlyph({ name }: { name: SettingsCategory | "refresh" | "copy" }
     appearance: Palette,
     console: SquareTerminal,
     integrations: PlugZap,
+    modules: Blocks,
     users: Users,
     system: SettingsIcon,
     refresh: RefreshCw,
@@ -139,7 +146,7 @@ function CategoryHeader({ category, actions }: { category: SettingsCategory; act
 }
 
 export function SettingsPage(props: SettingsPageProps) {
-  const categories = useMemo<SettingsCategory[]>(() => ["appearance", "console", "integrations", ...(props.canViewUsers ? ["users" as const] : []), "system"], [props.canViewUsers]);
+  const categories = useMemo<SettingsCategory[]>(() => ["appearance", "console", "integrations", "modules", ...(props.canViewUsers ? ["users" as const] : []), "system"], [props.canViewUsers]);
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(props.initialCategory ?? "appearance");
   const selectedCategory = categories.includes(activeCategory) ? activeCategory : "appearance";
   const systemSummary = summarizeSettingsSystemInfo(props.systemInfo);
@@ -264,6 +271,40 @@ export function SettingsPage(props: SettingsPageProps) {
               </Button>
             </div>
           </PreferenceRow>
+        </div>
+      </>
+    ),
+    modules: (
+      <>
+        <CategoryHeader category="modules" actions={<StatusBadge tone="neutral">Whole installation</StatusBadge>} />
+        <div className="settingsHubRows">
+          {MODULE_DESCRIPTORS.map((descriptor) => {
+            const enabled = isModuleEnabled(props.modules, descriptor.id);
+            return (
+              <PreferenceRow
+                key={descriptor.id}
+                title={descriptor.label}
+                description={(
+                  <>
+                    {descriptor.summary}
+                    <br />
+                    {enabled
+                      ? <>Visible to accounts with the <strong>{descriptor.accessPermission}</strong> permission.</>
+                      : descriptor.disabledEffect}
+                  </>
+                )}
+              >
+                <Toggle
+                  checked={enabled}
+                  onChange={(value) => props.onModuleEnabledChange(descriptor.id, value)}
+                  label={`Enable the ${descriptor.label} module`}
+                  stateLabel={enabled ? "Enabled" : "Disabled"}
+                  disabled={!props.canManageModules || props.modulesBusy || props.loading}
+                  title={!props.canManageModules ? "Manage integrations permission is required" : undefined}
+                />
+              </PreferenceRow>
+            );
+          })}
         </div>
       </>
     ),

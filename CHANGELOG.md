@@ -24,6 +24,11 @@
 - Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
 - Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
 
+## 26.8.18 - 2026-08-15
+
+- Optional features can now be switched off for an installation. Settings gains a Modules category; Schedules is the first module, and turning it off stops scheduled runs, closes the schedule API, and hides the workspace while keeping every existing schedule and its history intact.
+- A module is only visible to accounts that hold its permission — `schedules.view` for Schedules — so it can be enabled for the installation and still limited to the operators who should use it. The browser no longer downloads a module's code for anyone who cannot reach it.
+
 ## 26.8.17 - 2026-08-14
 
 - Fixed servers on a pre-release Minecraft version, such as `1.21-pre1`, defaulting to the Java 17 container image instead of the Java 21 one the version needs. The panel, the node agent, and the create-server preview now all read the same rule.

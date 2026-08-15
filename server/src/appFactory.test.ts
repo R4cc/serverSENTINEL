@@ -1035,6 +1035,105 @@ describe("Fastify application factory", () => {
     }
   });
 
+  it("switches an optional module off for the whole installation and keeps it off across restarts", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-modules-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18095",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    let app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const scheduleUrl = "/api/servers/11111111-1111-4111-8111-111111111111/schedules";
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const adminCookie = sessionCookieFrom(registered);
+
+      const initial = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: adminCookie } });
+      expect(initial.statusCode, initial.body).toBe(200);
+      expect(initial.json().modules).toEqual([{ id: "schedules", enabled: true, accessible: true }]);
+
+      // An account without schedules.view sees the module as present but out of reach, which is
+      // what keeps the browser from fetching its code for them.
+      const viewerCreated = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { username: "console-only", password: "password123", permissions: ["servers.view", "settings.view"] }
+      });
+      expect(viewerCreated.statusCode, viewerCreated.body).toBe(200);
+      const viewerLogin = await app.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        headers: csrf,
+        payload: { username: "console-only", password: "password123" }
+      });
+      const viewerCookie = sessionCookieFrom(viewerLogin);
+      const viewerApp = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: viewerCookie } });
+      expect(viewerApp.json().modules).toEqual([{ id: "schedules", enabled: true, accessible: false }]);
+
+      // Reading the catalog is a settings-level right; changing it is not.
+      expect((await app.inject({ method: "GET", url: "/api/modules", headers: { ...csrf, cookie: viewerCookie } })).statusCode).toBe(200);
+      const refusedToggle = await app.inject({
+        method: "PUT",
+        url: "/api/modules/schedules",
+        headers: { ...csrf, cookie: viewerCookie },
+        payload: { enabled: false }
+      });
+      expect(refusedToggle.statusCode, refusedToggle.body).toBe(403);
+
+      const disabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/schedules",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect(disabled.json().modules).toEqual([{ id: "schedules", enabled: false, accessible: false }]);
+
+      const refused = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(refused.statusCode, refused.body).toBe(403);
+      expect(refused.json().error.code).toBe("MODULE_DISABLED");
+
+      const afterDisable = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: adminCookie } });
+      expect(afterDisable.json().modules).toEqual([{ id: "schedules", enabled: false, accessible: false }]);
+      await app.close();
+
+      app = await buildApp();
+      const restarted = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(restarted.statusCode, restarted.body).toBe(403);
+      expect(restarted.json().error.code).toBe("MODULE_DISABLED");
+
+      const reEnabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/schedules",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { enabled: true }
+      });
+      expect(reEnabled.statusCode, reEnabled.body).toBe(200);
+      const reachable = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(reachable.json().error?.code).not.toBe("MODULE_DISABLED");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("compresses JSON replies but leaves the export artifact download intact", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-compression-"));
     temporaryDirectories.push(dataDir);

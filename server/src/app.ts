@@ -44,6 +44,9 @@ import { registerFileRoutes } from "./routes/fileRoutes.js";
 import { buildModUpdatePlan, localInstallMod, localListMods, localModIcon, localRemoveMod, localToggleMod, localUploadMod, modrinthApiKey } from "./mods/modService.js";
 import { registerOperationsRoutes } from "./routes/operationsRoutes.js";
 import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
+import { registerModuleRoutes } from "./routes/moduleRoutes.js";
+import { ModuleRegistry } from "./modules/moduleRegistry.js";
+import { createScheduleModuleRuntime } from "./modules/scheduleModule.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
@@ -173,6 +176,11 @@ if (initialSetupToken) {
   app.log.warn({ setupToken: initialSetupToken }, "Initial admin registration requires this one-time setup token");
 }
 services.nodesRepository = new NodesRepository(services.storageDatabase);
+services.moduleRegistry = new ModuleRegistry(services.storageDatabase, {
+  onRuntimeError: (error, moduleId, phase) => {
+    logWarn({ ...errorLogFields(error), moduleId, phase, category: "modules" }, "Optional module runtime could not be reconfigured");
+  }
+});
 services.settingsRepository = new SettingsRepository(services.storageDatabase);
 services.playerHeadCacheRepository = new PlayerHeadCacheRepository(services.storageDatabase);
 instancePlayerHeadService = new PlayerHeadService({
@@ -198,9 +206,11 @@ services.exportArtifactMaintenance = new ExportArtifactMaintenance(
   operationRetentionMs,
   operationRetentionMaxRows
 );
-const resumableScheduleWaits = resumableScheduleWaitOperations(
-  services.operationsRepository.listActiveByType("schedule.run")
-);
+// With the schedules module switched off nothing will resume these, so they are left out of the
+// resumable set and failed with the rest of the incomplete work rather than staying "running".
+const resumableScheduleWaits = services.moduleRegistry.isEnabled("schedules")
+  ? resumableScheduleWaitOperations(services.operationsRepository.listActiveByType("schedule.run"))
+  : [];
 const recoveredOperations = services.operationsRepository.failIncompleteOnStartup(
   undefined,
   undefined,
@@ -406,7 +416,15 @@ registerOperationsRoutes(app, {
   operations: services.operationsRepository
 });
 
-registerScheduleRoutes(app, {
+registerModuleRoutes(app, {
+  destructiveRateLimit,
+  requireRequestPermission,
+  states: (user) => services.moduleRegistry.states(user),
+  setEnabled: (id, enabled) => services.moduleRegistry.setEnabled(id, enabled),
+  logInfo
+});
+
+await services.moduleRegistry.registerRoutes(app, "schedules", (scope) => registerScheduleRoutes(scope, {
   destructiveRateLimit,
   requireRequestPermission,
   getServer,
@@ -422,7 +440,7 @@ registerScheduleRoutes(app, {
   serverLogFields,
   logInfo,
   withServerMutation: (serverId, action) => services.exportCoordinator.withMutation(serverId, action)
-});
+}));
 
 registerModRoutes(app);
 
@@ -606,26 +624,15 @@ if (resumedScheduleWaits > 0) {
 
 await registerStaticFrontend(app);
 
-let scheduleTimer: NodeJS.Timeout | undefined;
-let schedulerClosed = false;
-function scheduleNextTick() {
-  scheduleTimer = setTimeout(async () => {
-    scheduleTimer = undefined;
-    try {
-      await tickSchedules();
-    } catch (error: unknown) {
-      app.log.error({ ...errorLogFields(error), category: "scheduler" }, "Schedule polling failed");
-    } finally {
-      if (!schedulerClosed) scheduleNextTick();
-    }
-  }, 30_000);
-  scheduleTimer.unref();
-}
-scheduleNextTick();
+services.moduleRegistry.registerRuntime("schedules", createScheduleModuleRuntime({
+  tick: tickSchedules,
+  onError: (error) => {
+    app.log.error({ ...errorLogFields(error), category: "scheduler" }, "Schedule polling failed");
+  }
+}));
+await services.moduleRegistry.startEnabled();
 app.addHook("onClose", async () => {
-  schedulerClosed = true;
-  if (scheduleTimer) clearTimeout(scheduleTimer);
-  scheduleTimer = undefined;
+  await services.moduleRegistry.stopAll();
 });
 
 const startupUsers = await readUsers().catch(() => []);
@@ -649,6 +656,7 @@ app.log.info({
   dockerLiveRestore,
   minecraftStopTimeoutSeconds: config.minecraftStopTimeoutSeconds,
   modrinthApiConfigured: modrinthConfigured,
+  disabledModules: services.moduleRegistry.states().filter((module) => !module.enabled).map((module) => module.id),
   playerHeadsEnabled,
   authEnabled: startupUsers.length > 0,
   logLevel: config.logLevel,

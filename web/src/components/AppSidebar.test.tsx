@@ -3,9 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { demoServer } from "../demo";
 import { fabricContentTerminology } from "../features/mods/contentTerminology";
+import type { ActivePage } from "../types";
 import { AppSidebar } from "./AppSidebar";
 
-function renderSidebar(activePage: "nodes" | "overview", withServer = true) {
+function renderSidebar(activePage: "nodes" | "overview", withServer = true, availablePages?: (page: ActivePage) => boolean) {
   const activeServer = withServer ? demoServer() : undefined;
   return renderToStaticMarkup(
     <AppSidebar
@@ -15,6 +16,7 @@ function renderSidebar(activePage: "nodes" | "overview", withServer = true) {
       activePage={activePage}
       onNavigate={vi.fn()}
       onPrefetch={vi.fn()}
+      isPageAvailable={availablePages ?? (() => true)}
       servers={activeServer ? [activeServer] : []}
       activeServer={activeServer}
       onSelectServer={vi.fn()}
@@ -45,5 +47,10 @@ describe("AppSidebar navigation semantics", () => {
 
     expect(html).toMatch(/disabled=""[^>]*title="Select a managed server first"[^>]*>.*Overview/s);
     expect(html).toContain('title="Open nodes"');
+  });
+
+  it("leaves out a destination whose optional module this visitor cannot reach", () => {
+    expect(renderSidebar("overview")).toContain("Schedules");
+    expect(renderSidebar("overview", true, (page) => page !== "schedule")).not.toContain("Schedules");
   });
 });

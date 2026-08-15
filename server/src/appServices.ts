@@ -5,6 +5,7 @@ import type { NodeRuntime } from "./nodes/types.js";
 import type { ManagedServer } from "./types.js";
 import type { RemoteObservationCoordinator } from "./nodes/observationCoordinator.js";
 import type { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
+import type { ModuleRegistry } from "./modules/moduleRegistry.js";
 import type { OperationService } from "./operations/operationService.js";
 import type { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
 import type { ExportCoordinator } from "./exportCoordinator.js";
@@ -47,6 +48,7 @@ interface AppServices {
   exportArtifactMaintenance: ExportArtifactMaintenance;
   exportCoordinator: ExportCoordinator;
   storageDatabase: StorageDatabase;
+  moduleRegistry: ModuleRegistry;
   modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
   resourceStatsRepository: ResourceStatsRepository;
   timelineEventsRepository: TimelineEventsRepository;

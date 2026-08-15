@@ -1,6 +1,7 @@
 import type {
   ModCompatibility,
   ModrinthInstallVersionStatus,
+  ModuleAccessState,
   NodeInstallInstructions,
   PublicNode,
   PublicServer,
@@ -19,6 +20,9 @@ export type {
   CreateNodeResponse,
   FileEditLease,
   ModCompatibility,
+  ModuleAccessState,
+  ModuleDescriptor,
+  ModuleId,
   ModUpdatePlan,
   ModUpdatePlanEntry,
   NodeInstallInstructions,
@@ -138,6 +142,11 @@ export type AppState = {
   timeZone?: string;
   modrinthApiConfigured: boolean;
   playerHeads: PlayerHeadsState;
+  /**
+   * Optional features, as this installation has them configured and this account may use them.
+   * Absent until `/api/app` has answered, which the shell treats as "no module available yet".
+   */
+  modules?: ModuleAccessState[];
   onboarding: OnboardingState;
   dockerSocketMounted: boolean;
   totalMemory: number;

@@ -31,6 +31,10 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     playerHeadsBusy: false,
     onPlayerHeadsEnabledChange: vi.fn(),
     onClearPlayerHeadCache: vi.fn(),
+    modules: [{ id: "schedules", enabled: true, accessible: true }],
+    modulesBusy: false,
+    canManageModules: false,
+    onModuleEnabledChange: vi.fn(),
     canViewUsers: false,
     userState: {
       users: [],
@@ -133,6 +137,27 @@ describe("SettingsPage", () => {
     expect(html).toContain("42 cached heads · 12 KiB");
     expect(html).toContain("Clear cache");
     expect(html).toContain('href="https://www.mc-heads.net/"');
+  });
+
+  it("lists optional modules with the permission that scopes them, and locks the switch without permission", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "modules" })} />);
+    expect(html).toContain('id="settings-tab-modules"');
+    expect(html).toContain("Schedules");
+    expect(html).toContain("schedules.view");
+    expect(html).toContain("Whole installation");
+    expect(html).toContain('aria-label="Enable the Schedules module"');
+    expect(html).toContain("Manage integrations permission is required");
+  });
+
+  it("explains what stops happening while a module is switched off", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "modules",
+      canManageModules: true,
+      modules: [{ id: "schedules", enabled: false, accessible: false }]
+    })} />);
+    expect(html).toContain("Nothing is scheduled while this is off");
+    expect(html).toContain("Disabled");
+    expect(html).not.toContain("Manage integrations permission is required");
   });
 
   it("renders console defaults and command-history state", () => {

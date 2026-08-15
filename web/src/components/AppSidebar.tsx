@@ -17,6 +17,7 @@ export function AppSidebar({
   activePage,
   onNavigate,
   onPrefetch,
+  isPageAvailable,
   servers,
   activeServer,
   onSelectServer,
@@ -37,6 +38,8 @@ export function AppSidebar({
   activePage: ActivePage;
   onNavigate: (page: ActivePage) => void;
   onPrefetch: (page: ActivePage) => void;
+  /** False for a page whose optional module this installation, or this account, cannot reach. */
+  isPageAvailable: (page: ActivePage) => boolean;
   servers: ManagedServer[];
   activeServer: ManagedServer | undefined;
   onSelectServer: (serverId: string) => void;
@@ -165,10 +168,12 @@ export function AppSidebar({
                 <span className="navLabel">{managedContent.pluralTitle}</span>
               </button>
             )}
-            <button {...serverNavItem("schedule", "Open schedules")}>
-              <SidebarIcon name="schedule" />
-              <span className="navLabel">Schedules</span>
-            </button>
+            {isPageAvailable("schedule") && (
+              <button {...serverNavItem("schedule", "Open schedules")}>
+                <SidebarIcon name="schedule" />
+                <span className="navLabel">Schedules</span>
+              </button>
+            )}
             <button {...serverNavItem("properties", "Open properties")}>
               <SidebarIcon name="properties" />
               <span className="navLabel">Properties</span>

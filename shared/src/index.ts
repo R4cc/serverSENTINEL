@@ -1,4 +1,5 @@
 export * from "./cron.js";
+export * from "./modules.js";
 
 export function compareVersionStrings(left?: string, right?: string) {
   if (!left || !right) return null;

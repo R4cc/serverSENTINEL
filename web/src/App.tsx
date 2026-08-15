@@ -2,7 +2,7 @@ import { FormEvent, Fragment, Suspense, useCallback, useEffect, useRef, useState
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, NotificationTone, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, ModuleAccessState, NotificationTone, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue } from "./utils/validation";
@@ -17,6 +17,7 @@ import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, 
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
+import { isPageAvailable, moduleForPage, SchedulesModule } from "./app/moduleRegistry";
 import { useServerContext } from "./app/serverContext";
 import { copyToClipboard } from "./utils/clipboard";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -48,8 +49,8 @@ import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
 import { nodeUpdateGraceMs, useNodesWorkspace } from "./features/nodes/useNodesWorkspace";
 import { useNodeUpdateVisitNotification } from "./features/nodes/useNodeUpdateVisitNotification";
-import { useSchedulesWorkspace } from "./features/schedules/useSchedulesWorkspace";
 import { useIntegrationSettings } from "./features/settings/useIntegrationSettings";
+import { useModuleSettings } from "./features/settings/useModuleSettings";
 import { uiCacheLocalBlockedReason, useUiCacheClear } from "./features/settings/useUiCacheClear";
 import { useExportWorkspace } from "./features/exports/useExportWorkspace";
 import { ExportModal } from "./features/exports/ExportModal";
@@ -57,7 +58,6 @@ import { ImportModal } from "./features/exports/ImportModal";
 
 const importServerEditPage = () => import("./pages/ServerEditPage");
 
-const { Component: SchedulePage, preload: loadSchedulePage } = lazyPage(() => import("./pages/SchedulesPage"), (module) => module.SchedulePage);
 const { Component: NodesPage, preload: loadNodesPage } = lazyPage(() => import("./pages/NodesPage"), (module) => module.NodesPage);
 const serverEditForm = lazyPage(importServerEditPage, (module) => module.ServerEditForm);
 const deleteServerPanel = lazyPage(importServerEditPage, (module) => module.DeleteServerPanel);
@@ -72,12 +72,18 @@ const { Component: ModsPage, preload: loadModsPage } = lazyPage(() => import("./
 const { Component: FilesPage, preload: loadFilesPage } = lazyPage(() => import("./features/files/FilesPage"), (module) => module.FilesPage);
 const { Component: SettingsPage, preload: loadSettingsPage } = lazyPage(() => import("./pages/SettingsPage"), (module) => module.SettingsPage);
 
-function preloadActivePage(page: ActivePage) {
+/**
+ * Module-owned pages resolve through the module registry, and only once the panel has confirmed
+ * that this account can reach them — an unavailable module is never downloaded, whether the request
+ * came from a hover, the idle prefetch queue, or a restored navigation.
+ */
+function preloadActivePage(page: ActivePage, modules: ModuleAccessState[] | undefined) {
+  const moduleOwner = moduleForPage(page);
+  if (moduleOwner) return isPageAvailable(modules, page) ? moduleOwner.preload() : Promise.resolve();
   if (page === "console") return loadMinecraftTerminal();
   if (page === "overview") return loadServerTimeline();
   if (page === "files") return loadFilesPage();
   if (page === "mods") return loadModsPage();
-  if (page === "schedule") return loadSchedulePage();
   if (page === "nodes") return loadNodesPage();
   if (page === "create") return loadServerCreatePage();
   if (page === "properties") return loadServerEditPage();
@@ -137,6 +143,9 @@ export default function App() {
   const [runtimeFeedbackAction, setRuntimeFeedbackAction] = useState<"start" | "restart" | null>(null);
   const [activePage, setActivePage] = useState<ActivePage>(() => readStoredActivePage());
   const [scheduleNavigationTarget, setScheduleNavigationTarget] = useState<ScheduleNavigationTarget | null>(null);
+  // Reported up by the schedules module rather than read from its workspace, which now lives inside
+  // the module's own chunk. The UI cache control is the only thing outside the module that needs it.
+  const [scheduleMutationBusy, setScheduleMutationBusy] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const phoneLayout = useMobileViewport();
   const overviewTimelineVisible = useOverviewTimelineVisibility();
@@ -347,8 +356,13 @@ export default function App() {
   const canInstallMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install");
   const canViewMods = activeServerIsDemo || hasPermission(permissionUser, "mods.view");
   const canManageMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update");
-  const canViewSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.view");
-  const canManageSchedules = activeServerIsDemo || hasPermission(permissionUser, "schedules.manage");
+  // The installation gate. The permission flags below stay exactly as they were: a module surfaces
+  // only where both agree, which is what keeps "switched off for everyone" and "not granted to you"
+  // from having to be modelled twice.
+  const activeModules = effectiveAppState.modules;
+  const schedulesAvailable = isPageAvailable(activeModules, "schedule");
+  const canViewSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.view"));
+  const canManageSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.manage"));
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
   const canExportServers = !demoMode && hasPermission(permissionUser, "servers.export");
   const canManageIntegrations = !demoMode && hasPermission(permissionUser, "integrations.manage");
@@ -385,6 +399,11 @@ export default function App() {
   useEffect(() => {
     if (activePage === "mods" && activeServer && !supportsManagedMods) setActivePage("overview");
   }, [activePage, activeServer, supportsManagedMods]);
+  // A page restored from the last visit, or one left open while an administrator switched its
+  // module off, has to give way rather than render an empty workspace.
+  useEffect(() => {
+    if (applicationReady && !isPageAvailable(activeModules, activePage)) setActivePage("overview");
+  }, [applicationReady, activeModules, activePage]);
   const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
     if (!activeServer) throw new Error("Select a server to load its timeline");
     if (demoMode && isDemoServerId(activeServer.id)) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to, activeServer.id);
@@ -487,6 +506,12 @@ export default function App() {
     setAppState,
     notify,
     refreshApp: () => refreshApp(),
+    requestConfirmation
+  });
+  const { modulesBusy, setModuleEnabled } = useModuleSettings({
+    canManage: canManageIntegrations,
+    setAppState,
+    notify,
     requestConfirmation
   });
   const usersWorkspace = useUsersWorkspace({
@@ -609,27 +634,8 @@ export default function App() {
   useEffect(() => {
     refreshModsAfterFileMutationRef.current = () => modsWorkspace.actions.refresh(false);
   }, [modsWorkspace.actions]);
-  const schedulesWorkspace = useSchedulesWorkspace({
-    activeServer: activeServer ?? null,
-    activeServerIsDemo,
-    demoRunning,
-    setDemoRunning,
-    setDemoSchedules,
-    setStatus,
-    loading: !appStateLoaded && !appLoadError,
-    error: appLoadError,
-    isProvisioning,
-    dockerOperationalLock,
-    serverMutationLocked: exportMutationLocked,
-    serverMutationBlockedReason: exportMutationBlockedReason,
-    runtimeControlsDisabledReason,
-    canManage: canManageSchedules,
-    notify,
-    setNotice,
-    requestConfirmation,
-    handleStaleSession,
-    refreshApp: () => refreshApp()
-  });
+  // Stable so the schedules module can depend on it without re-running its effect every render.
+  const handleScheduleNavigationTargetHandled = useCallback(() => setScheduleNavigationTarget(null), []);
   const uiCacheLocalReason = uiCacheLocalBlockedReason({
     runningTasks: activeJobs.some((job) => job.status === "queued" || job.status === "running")
       || exportMutationLocked
@@ -643,9 +649,9 @@ export default function App() {
     serverSettingsMutation: serverSettingsSaving,
     consoleCommand: commandSending,
     nodeMutation: nodesWorkspace.busy,
-    scheduleMutation: schedulesWorkspace.busy,
+    scheduleMutation: scheduleMutationBusy,
     userMutation: usersWorkspace.busy,
-    integrationMutation: integrationBusy,
+    integrationMutation: integrationBusy || modulesBusy,
     transferMutation: exportWorkspace.exportBusy || exportWorkspace.importBusy,
     modMutation: isAnyModJobRunning
       || modsWorkspace.state.batchUpdateRunning
@@ -693,8 +699,8 @@ export default function App() {
   useEffect(() => {
     if (!authSession?.authenticated) return;
     if (activePage === "overview" && !overviewTimelineVisible) return;
-    void preloadActivePage(activePage);
-  }, [activePage, authSession?.authenticated, overviewTimelineVisible]);
+    void preloadActivePage(activePage, activeModules);
+  }, [activePage, activeModules, authSession?.authenticated, overviewTimelineVisible]);
 
   // The effect above only starts a page's chunk once that page is already open, so it arrives no
   // sooner than React asks for it. Walk the rest of the pages while the browser is idle, once the
@@ -702,7 +708,7 @@ export default function App() {
   // was hovered, opened, or already queued costs nothing here.
   useEffect(() => {
     if (!applicationReady || !pagePrefetchAllowed(networkInformation())) return;
-    const queue = [...pagePrefetchOrder];
+    const queue = pagePrefetchOrder.filter((page) => isPageAvailable(activeModules, page));
     let cancelled = false;
     let cancelIdle: (() => void) | null = null;
 
@@ -710,7 +716,7 @@ export default function App() {
       cancelIdle = null;
       const page = queue.shift();
       if (cancelled || !page) return;
-      void preloadActivePage(page)
+      void preloadActivePage(page, activeModules)
         .catch(() => undefined)
         .then(() => {
           if (!cancelled) schedule();
@@ -725,7 +731,7 @@ export default function App() {
       cancelled = true;
       cancelIdle?.();
     };
-  }, [applicationReady]);
+  }, [applicationReady, activeModules]);
 
   useEffect(() => {
     return () => {
@@ -2142,7 +2148,8 @@ export default function App() {
           sidebarToggleRef={sidebarToggleRef}
           activePage={activePage}
           onNavigate={openSidebarPage}
-          onPrefetch={(page) => { void preloadActivePage(page).catch(() => undefined); }}
+          onPrefetch={(page) => { void preloadActivePage(page, activeModules).catch(() => undefined); }}
+          isPageAvailable={(page) => isPageAvailable(activeModules, page)}
           servers={effectiveAppState.servers}
           activeServer={activeServer}
           onSelectServer={openServerFromNode}
@@ -2233,6 +2240,10 @@ export default function App() {
             playerHeadsBusy={playerHeadsBusy}
             onPlayerHeadsEnabledChange={(enabled) => void updatePlayerHeads(enabled)}
             onClearPlayerHeadCache={() => void clearPlayerHeadCache()}
+            modules={activeModules}
+            modulesBusy={modulesBusy}
+            canManageModules={canManageIntegrations && !demoMode}
+            onModuleEnabledChange={(id, enabled) => void setModuleEnabled(id, enabled)}
             canViewUsers={canViewUsers}
             userState={usersWorkspace}
             systemInfo={{
@@ -2425,25 +2436,35 @@ export default function App() {
               </Suspense>
             )}
 
-            {activePage === "schedule" && (
+            {activePage === "schedule" && schedulesAvailable && (
               <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading schedules" page="schedule" />}>
-                <SchedulePage
-                  schedules={schedulesWorkspace.schedules}
-                  formatDate={formatDisplayDate}
+                <SchedulesModule
+                  activeServer={activeServer}
+                  activeServerIsDemo={activeServerIsDemo}
+                  demoRunning={demoRunning}
+                  setDemoRunning={setDemoRunning}
+                  setDemoSchedules={setDemoSchedules}
+                  setStatus={setStatus}
+                  loading={!appStateLoaded && !appLoadError}
+                  error={appLoadError}
+                  isProvisioning={isProvisioning}
+                  dockerOperationalLock={dockerOperationalLock}
+                  serverMutationLocked={exportMutationLocked}
+                  serverMutationBlockedReason={exportMutationBlockedReason}
+                  runtimeControlsDisabledReason={runtimeControlsDisabledReason}
+                  canManage={canManageSchedules}
+                  notify={notify}
+                  setNotice={setNotice}
+                  requestConfirmation={requestConfirmation}
+                  handleStaleSession={handleStaleSession}
+                  refreshApp={() => refreshApp()}
+                  onBusyChange={setScheduleMutationBusy}
                   relativeTimestamps={relativeTimestamps}
                   scheduleTimeZone={panelTimeZone}
                   displayTimeZone={displayTimeZone}
                   navigationTarget={scheduleNavigationTarget}
-                  onNavigationTargetHandled={() => setScheduleNavigationTarget(null)}
-                  onCreate={schedulesWorkspace.actions.create}
-                  onToggle={schedulesWorkspace.actions.toggle}
-                  onUpdate={schedulesWorkspace.actions.update}
-                  onDelete={schedulesWorkspace.actions.delete}
-                  onRunNow={schedulesWorkspace.actions.runNow}
-                  onCancelRun={schedulesWorkspace.actions.cancelRun}
-                  onLoadRunLogs={schedulesWorkspace.actions.loadRunLogs}
-                  disabled={schedulesWorkspace.disabled}
-                  disabledReason={schedulesWorkspace.disabledReason}
+                  onNavigationTargetHandled={handleScheduleNavigationTargetHandled}
+                  formatDate={formatDisplayDate}
                 />
               </Suspense>
             )}

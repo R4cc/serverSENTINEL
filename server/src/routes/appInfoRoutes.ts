@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { moduleAccessStates } from "@serversentinel/contracts";
 import { config } from "../config.js";
 import { services } from "../appServices.js";
 import { appBuildId, appVersion } from "../buildInfo.js";
@@ -46,6 +47,10 @@ app.get("/api/app", async (request) => {
       timeZone: config.timeZone,
       modrinthApiConfigured: false,
       playerHeads: publicPlayerHeadsState(true),
+      // The demo replaces this installation's data, not its configuration: a module the operator
+      // switched off is absent from the demo too, and the demo account reaches every module that
+      // is on. Reporting them all as present would make the Modules settings lie in demo mode.
+      modules: moduleAccessStates({ isEnabled: (id) => services.moduleRegistry.isEnabled(id), hasPermission: () => true }),
       onboarding: { currentVersion: onboardingCurrentVersion, completedVersion: onboardingCurrentVersion },
       dockerSocketMounted: false,
       totalMemory: 0
@@ -64,6 +69,7 @@ app.get("/api/app", async (request) => {
     timeZone: config.timeZone,
     modrinthApiConfigured: Boolean(await modrinthApiKey()),
     playerHeads: publicPlayerHeadsState(),
+    modules: services.moduleRegistry.states(user),
     onboarding: publicOnboardingState(services.storageDatabase),
     dockerSocketMounted,
     totalMemory,
