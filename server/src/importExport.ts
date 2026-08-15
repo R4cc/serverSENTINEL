@@ -214,7 +214,17 @@ export async function createExportPlan(input: ExportInput): Promise<ExportPlan> 
       for (const warning of plan.warnings) warnings.push(`${server.displayName}: ${warning}`);
     }
 
-    const files = filesForServer(server, collected, includeContent, shipped);
+    const collectedFiles = filesForServer(server, collected, includeContent, shipped);
+    // A backslash is a legal character in a Linux filename but a path separator inside a ZIP member,
+    // so the archive stored such a file under a different path than the manifest recorded — and the
+    // import-side path check rejects the mismatch, making the whole artifact unrestorable. Skipping
+    // the file keeps the rest of the export usable and says so.
+    const files = collectedFiles.filter((file) => !file.relativePath.includes("\\"));
+    for (const file of collectedFiles) {
+      if (file.relativePath.includes("\\")) {
+        warnings.push(`${server.displayName}: skipped ${file.relativePath} because a backslash in the name cannot be represented in a ZIP archive`);
+      }
+    }
     totalBytes += files.reduce((total, file) => total + file.size, 0);
     if (totalBytes > config.exportMaxBytes) {
       throw new Error(`Export exceeds the ${Math.floor(config.exportMaxBytes / 1024 / 1024 / 1024)} GiB limit. Deselect the world or export fewer servers.`);
@@ -972,9 +982,21 @@ export async function applyImportArchive(archivePath: string, manifest: ExportMa
       }
       if (context.restoreContent && item.entry.lockfile.length) {
         context.report?.(base + 3, `Restoring content for ${item.remapped.displayName}`);
-        const report = await context.restoreContent(item.remapped, item.entry.lockfile);
-        for (const failure of report.failures) {
-          contentFailures.push({ serverName: item.remapped.displayName, ...failure });
+        // Reported like a runtime-jar failure rather than thrown. Everything above this point is
+        // already committed — the server rows exist — so letting it escape ran the catch below,
+        // which deletes the imported directories and leaves the panel listing servers whose files
+        // are gone, permanently and across restarts.
+        try {
+          const report = await context.restoreContent(item.remapped, item.entry.lockfile);
+          for (const failure of report.failures) {
+            contentFailures.push({ serverName: item.remapped.displayName, ...failure });
+          }
+        } catch (error) {
+          contentFailures.push({
+            serverName: item.remapped.displayName,
+            filename: "",
+            reason: error instanceof Error ? error.message : "Content could not be restored"
+          });
         }
       }
     }

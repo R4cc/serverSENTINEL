@@ -23,7 +23,7 @@ import { exportOperationResult, exportOperationServerIds } from "../exportArtifa
 import { exportArtifactFilename, exportDownloadStream } from "../importExport.js";
 import { normalizeExportSelection } from "../servers/exportSelection.js";
 import { validateOperationId } from "../http/validation.js";
-import { apiErrorResponse } from "../http/errors.js";
+import { apiErrorResponse, throwHttp } from "../http/errors.js";
 import { isInsideServersDirectory } from "../storage/serverIdentity.js";
 import { services } from "../appServices.js";
 import { isFullAccessUser } from "../permissions.js";
@@ -170,7 +170,8 @@ app.get<{ Params: { operationId: string } }>("/api/exports/:operationId/download
     return reply.code(404).send(apiErrorResponse("EXPORT_NOT_FOUND", "Export operation not found"));
   }
   if (operation.status !== "succeeded") {
-    throw new Error("Export is not ready for download");
+    // Client-state, not a server fault: without an explicit status this became a 500.
+    throwHttp(409, "Export is not ready for download", { code: "EXPORT_NOT_READY" });
   }
   const result = exportOperationResult(operation);
   if (!Array.isArray(result.serverIds) || !result.selection) {

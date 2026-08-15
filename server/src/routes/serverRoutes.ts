@@ -3,7 +3,7 @@ import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js"
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { commandRateLimit, destructiveRateLimit, provisionRateLimit, runtimeActionRateLimit } from "../http/rateLimits.js";
 import { badRequest } from "../http/validation.js";
-import { apiErrorResponse } from "../http/errors.js";
+import { apiErrorResponse, throwHttp } from "../http/errors.js";
 import { consoleLogLineLimit } from "../consoleLogs.js";
 import { hasPermission } from "../permissions.js";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
@@ -174,6 +174,14 @@ app.delete<{
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.delete");
   const server = await getServer(request.params.id);
+  // `withMutation` only excludes exports. Without this, deleting a server whose files another
+  // operation is still writing — a ZIP extraction runs in the background after returning 202 — races
+  // the recursive remove: the container goes first, the tree is partly removed, and an ENOTEMPTY
+  // from a directory that refilled mid-walk aborts before the database row is deleted.
+  const active = services.operationsRepository.listActive(server.id);
+  if (active.length > 0) {
+    throwHttp(409, `Wait for the ${active[0].type} operation to finish before deleting this server`, { code: "OPERATION_IN_PROGRESS" });
+  }
   const deleted = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
   // The buffer and its upstream follow outlive the container otherwise: `dispose` is only reached
   // by the idle timer, which never runs while a viewer is still attached.

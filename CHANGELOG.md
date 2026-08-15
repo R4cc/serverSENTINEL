@@ -3,6 +3,14 @@
 ## Unreleased
 
 - Fixed the Mods action toolbar compressing its bottom spacing against the installed-mods panel at desktop heights.
+- Fixed a small ZIP file with deeply nested entry names exhausting panel or node memory when it was inspected for extraction or import.
+- Fixed cancelling an operation that cannot actually be stopped reporting it as cancelled while the work continued, which also released the guard that kept a second extraction from starting into the same folder.
+- Fixed requesting a server that does not exist, and downloading an export that is not finished, answering with a generic internal error instead of saying what was wrong.
+- Fixed deleting a server while one of its own operations was still writing files, which could leave the container removed, the files half deleted, and the server still listed.
+- Fixed an archive being swapped between the point its contents were approved and the point they were written, so files could be extracted into folders the request was never allowed to touch.
+- Fixed an import that failed while restoring mod content deleting the imported server folders while leaving the servers listed in the panel.
+- Imports now refuse up front when there is not enough free disk space, as exports already did.
+- A server file whose name contains a backslash is now skipped from an export with a warning, instead of producing an archive that could not be imported at all.
 - Fixed changing a server's Minecraft version leaving it on the old Java runtime image, so an upgrade across the 1.20.5 boundary downloaded a jar the container could not load and reported it only as a runtime exit. An image chosen by hand is still left alone.
 - Fixed a stray promise rejection anywhere in the panel or a node agent terminating the process, which for the panel took down the control plane for every managed server.
 - Fixed `server.properties` being renameable, and therefore replaceable, with only file-edit permission on servers hosted by a remote node.

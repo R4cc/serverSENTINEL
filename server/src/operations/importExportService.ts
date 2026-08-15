@@ -158,6 +158,24 @@ async function assertExportDiskSpace(estimatedBytes: number) {
 }
 
 /**
+ * The import counterpart of the export precheck. An import stages the extracted tree under `tmpDir`
+ * and then moves it into `serversDir`, so the archive's own expanded size has to fit alongside the
+ * archive that is already on disk. Export refused up front on space; import had no equivalent and
+ * would run until ENOSPC, part way through writing a server it had already recorded.
+ */
+async function assertImportDiskSpace(archivePath: string) {
+  const free = await availableBytes(config.tmpDir);
+  if (free === undefined) return;
+  const archiveBytes = await stat(archivePath).then((info) => info.size).catch(() => 0);
+  // The expanded tree is at least the archive's size and usually larger; the export headroom is
+  // reused so both sides refuse at the same margin.
+  const needed = archiveBytes + config.exportMinFreeBytes;
+  if (free < needed) {
+    throw new Error(`Not enough free space for this import: about ${Math.ceil(needed / 1024 / 1024)} MiB is needed and ${Math.floor(free / 1024 / 1024)} MiB is available. Free up space and try again.`);
+  }
+}
+
+/**
  * The node that owns the server can build the export ZIP itself, which spares the panel from pulling
  * every file across the node protocol only to compress it here. A node that refuses the request --
  * an agent whose export manifest schema predates the panel's, or one configured with a lower size or
@@ -353,6 +371,7 @@ export function startImportOperation(input: { archivePath: string; targetNodeId:
     }
   }, async (_operation, report) => {
     const manifest = await readExportManifest(input.archivePath);
+    await assertImportDiskSpace(input.archivePath);
     return applyImportArchive(input.archivePath, manifest, {
       targetNodeId: input.targetNodeId,
       localNodeId,

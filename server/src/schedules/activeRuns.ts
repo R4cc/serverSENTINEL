@@ -37,6 +37,11 @@ export function activeScheduledRunsFor(serverId: string, scheduleId: string) {
     .map(publicActiveScheduleRun);
 }
 
+/** The run behind a `schedule.run` operation, so cancelling that operation reaches the real run. */
+export function activeScheduleExecutionForOperation(operationId: string) {
+  return [...activeScheduleExecutions.values()].find((run) => run.operationId === operationId);
+}
+
 /**
  * Cancels every active run of one schedule, so removing the schedule cannot strand an execution
  * that keeps sending commands with no row left in the UI to cancel it from. Reports false without

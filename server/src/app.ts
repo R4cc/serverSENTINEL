@@ -12,7 +12,7 @@ import { findScheduledRun, getServer, listManagedServers, normalizeManagedServer
 import { publicServer } from "./servers/publicViews.js";
 import { supportsManagedMods } from "./servers/versions.js";
 import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExistingPath, localResolveWritablePath, toPublicPath } from "./files/fileService.js";
-import { cancelActiveScheduleRun, cancelActiveScheduleRunsForSchedule } from "./schedules/activeRuns.js";
+import { activeScheduleExecutionForOperation, cancelActiveScheduleRun, cancelActiveScheduleRunsForSchedule } from "./schedules/activeRuns.js";
 import { localNodeId, readNodes } from "./nodes/nodeService.js";
 import { buildUserPermissions, currentUserFromCookie, isDemoModeRequest, normalizeRolePreset, parseCookies, publicUser, readUsers, requireRequestPermission, sessionCookie, sessionCookieName, sessionMaxAgeSeconds, validatePassword } from "./auth/sessionService.js";
 import { isFullAccessUser } from "./permissions.js";
@@ -380,12 +380,28 @@ registerOperationsRoutes(app, {
   requireRequestPermission,
   assertServerExists: getServer,
   mayCancelOperation: (user, operation) => operation.createdBy === user.id || isFullAccessUser(user),
-  cancelOperation: (operation, message) => {
-    if (operation.type !== "export.run") return services.operationsRepository.cancel(operation.id, message);
-    if (!services.exportCoordinator.requestCancel(operation.id)) {
-      throwHttp(409, "Export is no longer cancellable", { code: "EXPORT_NOT_CANCELLABLE" });
+  cancelOperation: (operation) => {
+    if (operation.type === "export.run") {
+      if (!services.exportCoordinator.requestCancel(operation.id)) {
+        throwHttp(409, "Export is no longer cancellable", { code: "EXPORT_NOT_CANCELLABLE" });
+      }
+      return services.operationsRepository.find(operation.id);
     }
-    return services.operationsRepository.find(operation.id);
+    if (operation.type === "schedule.run") {
+      const run = activeScheduleExecutionForOperation(operation.id);
+      if (!run || !cancelActiveScheduleRun(run.serverId, run.scheduleId, run.id)) {
+        throwHttp(409, "Schedule run is no longer cancellable", { code: "OPERATION_NOT_CANCELLABLE" });
+      }
+      return services.operationsRepository.find(operation.id);
+    }
+    /**
+     * Everything else has no way to stop the work it names. Flipping the row to `cancelled` was
+     * worse than doing nothing: `listActive` only counts `queued`/`running`, so leaving that set
+     * released the guards serialising the operation — a second extraction could start into the same
+     * directory while the first was still writing — and every later progress write was rejected by
+     * `WHERE status IN ('queued','running')`, freezing the record while the work ran to completion.
+     */
+    throwHttp(409, "This operation cannot be cancelled once it has started", { code: "OPERATION_NOT_CANCELLABLE" });
   },
   operations: services.operationsRepository
 });

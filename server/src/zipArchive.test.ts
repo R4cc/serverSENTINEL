@@ -31,6 +31,31 @@ afterEach(async () => {
 });
 
 describe("ZIP archive indexing", () => {
+  /**
+   * Indexing synthesizes a record for every ancestor of every entry, so cost grows with the square
+   * of the path depth. A 627 KB archive of 20 empty files nested 8,000 deep measured at 1.28 GB of
+   * heap and 3.5 s of blocked event loop before this was bounded — and neither the entry count nor
+   * the expanded-size limit sees it, because the entries are real and their content is empty.
+   */
+  it("refuses an archive whose entries are nested deeply enough to amplify indexing", async () => {
+    const root = await temporaryRoot();
+    const archive = join(root, "deep.zip");
+    await writeZip(archive, [{ name: `${"a/".repeat(2_000)}f.txt`, content: "" }]);
+
+    const startedAt = Date.now();
+    await expect(indexZipArchive(archive, { maxEntries: 100, maxExpandedBytes: 1024 * 1024 }))
+      .rejects.toThrow(/longer than|nested deeper/);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  it("refuses an entry nested past the segment limit even when the path is short", async () => {
+    const root = await temporaryRoot();
+    const archive = join(root, "segments.zip");
+    await writeZip(archive, [{ name: `${"a/".repeat(70)}f.txt`, content: "" }]);
+
+    await expect(indexZipArchive(archive, limits)).rejects.toThrow("nested deeper");
+  });
+
   it("builds implicit folders for nested entries", async () => {
     const root = await temporaryRoot();
     const archive = join(root, "server.zip");

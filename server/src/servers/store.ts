@@ -4,6 +4,7 @@ import { services } from "../appServices.js";
 import { asArray, asObject, optionalString, requiredString } from "../storage/valueValidation.js";
 import { isInsideServersDirectory } from "../storage/serverIdentity.js";
 import { badRequest, optionalStrictBoolean, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateOperationId, validateScheduleId, validateServerId } from "../http/validation.js";
+import { throwHttp } from "../http/errors.js";
 import { nextCronRun, parseDockerPorts } from "../core.js";
 import { sanitizeScheduleSteps } from "../schedules/steps.js";
 import { activeScheduledRunsFor } from "../schedules/activeRuns.js";
@@ -254,7 +255,10 @@ export async function getServer(serverId?: string) {
   }
   const server = serverId ? services.serversRepository.find(serverId) : (await listManagedServers())[0];
   if (!server) {
-    throw new Error("No managed server instance is registered");
+    // A plain Error here fell through the expected-user-error allowlist and became a 500
+    // INTERNAL_ERROR, which is also what a client polling a server another tab just deleted saw.
+    // Carrying the status makes the NOT_FOUND mapping in http/errors.ts reachable.
+    throwHttp(404, "No managed server instance is registered", { code: "NOT_FOUND" });
   }
   return server;
 }

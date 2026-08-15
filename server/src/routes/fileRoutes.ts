@@ -88,12 +88,13 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const destination = await resolveArchiveDestination(runtime, server, request.body.destinationPath);
   const conflictPolicy = request.body.conflictPolicy;
   if (conflictPolicy !== "replace" && conflictPolicy !== "skip") throw new Error("conflictPolicy must be replace or skip");
-  const plan = await runtime.planArchiveExtraction(server, archive, destination);
-  if (plan.blocked.length) throw new Error(`Extraction is blocked by ${plan.blocked[0].path}`);
-  const touchesMods = await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
   const alreadyRunning = services.operationsRepository.listActive(server.id).some((operation) => operation.type === "file.extract");
   if (alreadyRunning) throw new Error("Another ZIP extraction is already running for this server");
   const user = await requireRequestPermission(request);
+  // The claim is taken before the archive is read. Planning reads it, the permission decision below
+  // is made from that plan, and extraction opens it a third time — so with the claim taken after
+  // planning the archive could be deleted and re-uploaded in between, and files authorized from one
+  // archive were written from another. Every mutating file route honours this claim.
   const operation = services.operationsRepository.create({
     type: "file.extract",
     serverId: server.id,
@@ -106,6 +107,16 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
     result: { archivePath: runtime.publicPath(server, archive), destinationPath: runtime.publicPath(server, destination) }
   });
   services.operationsRepository.start(operation.id, { progress: 5, task: `Validating ${basename(archive)}` });
+  let touchesMods: boolean;
+  try {
+    const plan = await runtime.planArchiveExtraction(server, archive, destination);
+    if (plan.blocked.length) throw new Error(`Extraction is blocked by ${plan.blocked[0].path}`);
+    touchesMods = await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
+  } catch (error) {
+    // The claim must not outlive a refusal, or the server is left unable to accept file mutations.
+    services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed" });
+    throw error;
+  }
   const extract = () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
     services.operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
   });
