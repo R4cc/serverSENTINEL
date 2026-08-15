@@ -14,7 +14,7 @@ export function scheduleExecutionKey(serverId: string, scheduleId: string) {
   return `${serverId}:${scheduleId}`;
 }
 
-export function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveRun {
+function publicActiveScheduleRun(run: ActiveScheduleExecution): ScheduledActiveRun {
   return {
     id: run.id,
     scheduleId: run.scheduleId,
@@ -35,6 +35,11 @@ export function activeScheduledRunsFor(serverId: string, scheduleId: string) {
   return [...activeScheduleExecutions.values()]
     .filter((run) => run.serverId === serverId && run.scheduleId === scheduleId)
     .map(publicActiveScheduleRun);
+}
+
+/** The run behind a `schedule.run` operation, so cancelling that operation reaches the real run. */
+export function activeScheduleExecutionForOperation(operationId: string) {
+  return [...activeScheduleExecutions.values()].find((run) => run.operationId === operationId);
 }
 
 /**

@@ -1,11 +1,8 @@
-import { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS } from "@serversentinel/contracts";
+import { ALL_PERMISSIONS, expandPermissions, inferRolePreset, isPermission, ROLE_PRESETS } from "@serversentinel/contracts";
 import { throwHttp } from "./http/errors.js";
 import type { Permission, RolePreset, StoredUser } from "./types.js";
 
-export { ALL_PERMISSIONS, PERMISSION_DEPENDENCIES, ROLE_PRESETS };
-
-const allPermissionSet = new Set<string>(ALL_PERMISSIONS);
-const permissionOrder = new Map<Permission, number>(ALL_PERMISSIONS.map((permission, index) => [permission, index]));
+export { ALL_PERMISSIONS, expandPermissions, inferRolePreset, ROLE_PRESETS };
 
 const PERMISSION_LABELS: Record<Permission, string> = {
   "servers.view": "view servers",
@@ -35,50 +32,14 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   "users.manage": "manage users"
 };
 
-const normalizedRolePresets: Record<Exclude<RolePreset, "custom">, Permission[]> = {
-  viewer: normalizePermissions(ROLE_PRESETS.viewer),
-  operator: normalizePermissions(ROLE_PRESETS.operator),
-  maintainer: normalizePermissions(ROLE_PRESETS.maintainer),
-  manager: normalizePermissions(ROLE_PRESETS.manager),
-  admin: normalizePermissions(ROLE_PRESETS.admin)
-};
-
-export function isPermission(value: unknown): value is Permission {
-  return typeof value === "string" && allPermissionSet.has(value);
-}
-
-export function assertPermission(value: unknown): Permission {
+function assertPermission(value: unknown): Permission {
   if (isPermission(value)) return value;
   throwPermissionError(`Unknown permission: ${String(value)}`, 400);
 }
 
-export function expandPermissions(permissions: readonly Permission[]) {
-  const expanded = new Set<Permission>();
-  const visit = (permission: Permission) => {
-    if (expanded.has(permission)) return;
-    expanded.add(permission);
-    for (const dependency of PERMISSION_DEPENDENCIES[permission]) {
-      visit(dependency);
-    }
-  };
-  for (const permission of permissions) {
-    visit(permission);
-  }
-  return sortPermissions([...expanded]);
-}
-
+/** The API rejects a permission it does not recognize rather than dropping it silently. */
 export function normalizePermissions(permissions: readonly unknown[]) {
   return expandPermissions(permissions.map(assertPermission));
-}
-
-export function inferRolePreset(permissions: readonly Permission[]): RolePreset {
-  const normalized = normalizePermissions(permissions);
-  for (const preset of ["admin", "manager", "maintainer", "operator", "viewer"] as const) {
-    if (samePermissions(normalized, normalizedRolePresets[preset])) {
-      return preset;
-    }
-  }
-  return "custom";
 }
 
 export function permissionsForRolePreset(rolePreset: RolePreset, customPermissions?: readonly unknown[]) {
@@ -109,10 +70,6 @@ export function requirePermission(permission: Permission) {
 
 export function isFullAccessUser(user: Pick<StoredUser, "permissions">) {
   return ALL_PERMISSIONS.every((permission) => hasPermission(user, permission));
-}
-
-function sortPermissions(permissions: Permission[]) {
-  return permissions.sort((a, b) => permissionOrder.get(a)! - permissionOrder.get(b)!);
 }
 
 /** Both sides must come from normalizePermissions, which sorts into a stable order. */

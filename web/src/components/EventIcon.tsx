@@ -3,7 +3,7 @@ import type { ServerEvent } from "../types";
 export type EventIconKind = ServerEvent["eventType"] | "player_reconnected" | "server_restarted";
 
 export type PlayerEventIconKind = "player_joined" | "player_left";
-export type PlayerEventIconShape =
+type PlayerEventIconShape =
   | { type: "circle"; cx: number; cy: number; r: number }
   | { type: "path"; d: string };
 

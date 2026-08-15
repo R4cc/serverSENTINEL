@@ -1,3 +1,4 @@
+import { javaMajorVersionForMinecraft } from "@serversentinel/contracts";
 import type {
   JavaMajorVersion,
   ManagedServer,
@@ -45,33 +46,16 @@ export class RuntimeResolutionError extends Error {
   }
 }
 
+/** The shared rule, plus the panel's refusal to manage anything it cannot resolve a runtime for. */
 export function minecraftJavaMajorVersion(minecraftVersion: string): JavaMajorVersion {
-  const trimmed = minecraftVersion.trim();
-  const modernMajor = trimmed.match(/^(\d+)\.(\d+)(?:\.(\d+))?(?:[-\w.]*)?$/);
-  if (modernMajor && Number(modernMajor[1]) >= 26) {
-    return 25;
-  }
-  const match = trimmed.match(/^1\.(\d+)(?:\.(\d+))?(?:[-\w.]*)?$/);
-  if (!match) {
-    throw new RuntimeResolutionError("unsupported_minecraft_version", `Minecraft ${minecraftVersion} is not a supported release version`);
-  }
-  const minor = Number(match[1]);
-  const patch = Number(match[2] ?? "0");
-  if (!Number.isInteger(minor) || !Number.isInteger(patch)) {
-    throw new RuntimeResolutionError("unsupported_minecraft_version", `Minecraft ${minecraftVersion} is not a supported release version`);
-  }
-  if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
-  if (minor >= 18) return 17;
-  throw new RuntimeResolutionError("unsupported_minecraft_version", "serverSENTINEL currently supports Minecraft 1.18 and newer for managed runtimes");
-}
-
-export function defaultDockerImageForMinecraftVersion(version?: string) {
-  const [major, minor, patch] = (version ?? "").split(".").map(Number);
-  if (Number.isFinite(major) && major >= 26) return "eclipse-temurin:25-jre";
-  if (major === 1 && Number.isFinite(minor) && minor >= 20 && (minor > 20 || (patch ?? 0) >= 5)) {
-    return "eclipse-temurin:21-jre";
-  }
-  return "eclipse-temurin:17-jre";
+  const javaMajorVersion = javaMajorVersionForMinecraft(minecraftVersion);
+  if (javaMajorVersion) return javaMajorVersion;
+  throw new RuntimeResolutionError(
+    "unsupported_minecraft_version",
+    /^1\.\d+/.test(minecraftVersion.trim())
+      ? "serverSENTINEL currently supports Minecraft 1.18 and newer for managed runtimes"
+      : `Minecraft ${minecraftVersion} is not a supported release version`
+  );
 }
 
 export function runtimeProfileForServer(server: Pick<ManagedServer, "runtimeProfile">): ServerRuntimeProfile {

@@ -10,7 +10,7 @@ export type PlayerHeadCacheEntry = {
   lastAccessedAt: number;
 };
 
-export type PlayerHeadCacheStats = {
+type PlayerHeadCacheStats = {
   entries: number;
   bytes: number;
 };

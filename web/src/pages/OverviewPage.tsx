@@ -503,7 +503,7 @@ export function modUpdateRefreshResultMessage(updatePlan: ModUpdatePlan, content
   return `${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`;
 }
 
-export type UpcomingScheduleSnapshot = {
+type UpcomingScheduleSnapshot = {
   schedules: ScheduledExecution[];
   remainingInNext24Hours: number;
 };
@@ -539,7 +539,7 @@ export function formatRelativeScheduleTime(value: string, now = new Date()) {
   return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }
 
-export function formatActiveScheduleDuration(startedAt: string, now = Date.now()) {
+function formatActiveScheduleDuration(startedAt: string, now = Date.now()) {
   const started = new Date(startedAt).getTime();
   if (!Number.isFinite(started)) return "just now";
   const minutes = Math.max(0, Math.floor((now - started) / 60_000));
@@ -728,7 +728,7 @@ const playerHeadEventKinds = new Set<RecentEventKind>(["player_joined", "player_
 /** Kinds that always collapse into one row, so an occurrence count would be misleading. */
 const uncountedEventKinds = new Set<RecentEventKind>(["player_reconnected", "server_restarted"]);
 
-export type RecentEventGroup = {
+type RecentEventGroup = {
   id: string;
   kind: RecentEventKind;
   severity: ServerEvent["severity"];
@@ -738,7 +738,7 @@ export type RecentEventGroup = {
   events: ServerEvent[];
 };
 
-export type RecentEventTimeSection = {
+type RecentEventTimeSection = {
   id: "just-now" | "last-hour" | "earlier";
   label: "Just now" | "Within the last hour" | "Earlier";
   events: RecentEventGroup[];

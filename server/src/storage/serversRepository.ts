@@ -340,6 +340,18 @@ export class ServersRepository {
     });
   }
 
+  /**
+   * Claims the cron occurrence before the run starts. `last_run_at` is the scheduler's duplicate
+   * guard, and recording it only on completion left the occurrence unclaimed for the whole run: a
+   * panel restart, or a failure of the completion write, let the next 30-second poll match the same
+   * wall-clock minute and start the schedule a second time.
+   */
+  markScheduledRunStarted(serverId: string, scheduleId: string, ranAt: string) {
+    this.storage.connection.prepare(`
+      UPDATE schedules SET last_run_at = ?, updated_at = ? WHERE server_id = ? AND id = ?
+    `).run(ranAt, ranAt, serverId, scheduleId);
+  }
+
   recordScheduledRun(serverId: string, scheduleId: string, run: ScheduledRun) {
     this.storage.transaction((database) => {
       const updated = database.prepare(`

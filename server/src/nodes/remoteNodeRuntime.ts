@@ -195,9 +195,20 @@ export class RemoteNodeRuntime implements NodeRuntime {
     const result = await this.command(server, command, undefined, action === "start" ? defaultRemoteCommandTimeoutMs : lifecycleCommandTimeoutMs);
     this.invalidateObservations(server, ["status", "stats", "players", "logs"]);
     if (action !== "start" && action !== "restart") return result;
+    const commandConfirmedRunning = Boolean((result as { running?: boolean; docker?: { running?: boolean } } | undefined)?.running
+      || (result as { docker?: { running?: boolean } } | undefined)?.docker?.running);
 
     await new Promise((resolve) => setTimeout(resolve, 1_500));
-    const status = await this.serverStatus(server) as { docker?: { running?: boolean } };
+    let status: { docker?: { running?: boolean } };
+    try {
+      status = await this.serverStatus(server) as { docker?: { running?: boolean } };
+    } catch (error) {
+      // The node already confirmed the action and returned a running status. Losing only the
+      // delayed stability probe must not turn that success into a failed operation: callers can
+      // safely converge through the next observation/reconnect instead of retrying the action.
+      if (commandConfirmedRunning) return result;
+      throw error;
+    }
     if (status.docker?.running) return status;
 
     const logs = await this.serverLogs(server).catch(() => ({ text: "" })) as { text?: string };
@@ -375,6 +386,10 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   fileRenamePermission(server: ManagedServer, source: string, target: string): Permission {
+    // Must stay in step with the local implementation in files/fileService.ts. Without the settings
+    // branch, renaming server.properties aside and moving an uploaded file into its place edits the
+    // server's settings with only files.edit.
+    if (this.isServerSettingsFile(server, source) || this.isServerSettingsFile(server, target)) return "servers.editSettings";
     if (this.isModsPath(server, source) || this.isModsPath(server, target)) return "mods.enableDisable";
     return "files.edit";
   }
@@ -432,7 +447,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
           if (event.type === "progress") report?.(event.progress, event.task);
           if (event.type === "result") result = event.result as ZipExtractionResult;
         },
-        (error) => error ? reject(error) : result ? resolvePromise(result) : reject(new Error("Remote ZIP extraction completed without a result"))
+        (error) => error ? reject(error) : result ? resolvePromise(result) : reject(new Error("Remote ZIP extraction completed without a result")),
+        archiveCommandTimeoutMs
       ).catch(reject);
     });
   }

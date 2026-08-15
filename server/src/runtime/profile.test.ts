@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ManagedServer } from "../types.js";
-import { defaultDockerImageForMinecraftVersion, minecraftJavaMajorVersion, normalizeRuntimeProfile, runtimeProfileForServer, runtimeTarget } from "./profile.js";
+import { defaultDockerImageForMinecraftVersion } from "@serversentinel/contracts";
+import { minecraftJavaMajorVersion, normalizeRuntimeProfile, runtimeProfileForServer, runtimeTarget } from "./profile.js";
 
 describe("runtime profile helpers", () => {
   it("derives Java requirements from supported Minecraft versions", () => {
@@ -9,13 +10,17 @@ describe("runtime profile helpers", () => {
     expect(minecraftJavaMajorVersion("1.20.5")).toBe(21);
     expect(minecraftJavaMajorVersion("1.21.8")).toBe(21);
     expect(minecraftJavaMajorVersion("26.1.2")).toBe(25);
+    expect(minecraftJavaMajorVersion("1.21-pre1")).toBe(21);
     expect(() => minecraftJavaMajorVersion("1.17.1")).toThrow("1.18 and newer");
+    expect(() => minecraftJavaMajorVersion("nightly")).toThrow("not a supported release version");
   });
 
   it("uses one Java image rule for local and remote managed runtimes", () => {
     expect(defaultDockerImageForMinecraftVersion("1.20.4")).toBe("eclipse-temurin:17-jre");
     expect(defaultDockerImageForMinecraftVersion("1.20.5")).toBe("eclipse-temurin:21-jre");
     expect(defaultDockerImageForMinecraftVersion("26.1.2")).toBe("eclipse-temurin:25-jre");
+    // The panel's old split(".") parser read this as unparsable and fell back to Java 17.
+    expect(defaultDockerImageForMinecraftVersion("1.21-pre1")).toBe("eclipse-temurin:21-jre");
   });
 
   it("returns the current runtime profile for managed servers", () => {

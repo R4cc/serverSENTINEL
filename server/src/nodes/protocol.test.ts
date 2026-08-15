@@ -78,7 +78,7 @@ describe("node protocol v3.1", () => {
     expect(() => normalizeNodeHello(hello({ protocolVersion: "3.0" }))).toThrow("protocol 3.1 is required");
     expect(() => normalizeNodeHello(hello({ protocolVersion: "2.0" }))).toThrow("protocol 3.1 is required");
     expect(() => normalizeNodeHello({ type: "hello", protocolVersion: "3.1" })).toThrow("capabilities must be an array");
-    expect(() => normalizeNodeHello(hello({ capabilities: ["server.start", "legacy.thing"] }))).toThrow("unsupported capabilities");
+    expect(normalizeNodeHello(hello({ capabilities: ["server.start", "future.safe.command"] })).capabilities).toEqual(["server.start"]);
     expect(() => normalizeNodeHello(hello({ features: ["binary-transfer"] }))).toThrow("missing required protocol features");
   });
 

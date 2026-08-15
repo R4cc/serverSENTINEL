@@ -32,7 +32,7 @@ import type { OperationsRepository } from "./storage/operationsRepository.js";
  * any route can run, so they are typed as always present; collectors and
  * coordinators stay optional because panel-only mode never constructs them.
  */
-export interface AppServices {
+interface AppServices {
   usersRepository: UsersRepository;
   nodesRepository: NodesRepository;
   settingsRepository: SettingsRepository;

@@ -1,10 +1,9 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { serverRuntimeDefinition } from "@serversentinel/contracts";
+import { defaultDockerImageForMinecraftVersion, serverRuntimeDefinition } from "@serversentinel/contracts";
 import { api } from "../api";
 import { dockerContainerNameInputPattern, runtimeJarFilenameInputPattern } from "../utils/inputPatterns";
 import type { ManagedServer, RuntimeVersion } from "../types";
 import {
-  defaultDockerImageForMinecraftVersion,
   formatAdaptiveBytes,
   isValidServerPort,
   maxServerPort,
@@ -229,6 +228,15 @@ export function ServerEditForm({
     ? fallbackFabricRuntimeVersions
     : []);
   const [dockerImage, setDockerImage] = useState(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
+  /**
+   * True once the image no longer matches what serverSENTINEL would pick for the selected version,
+   * which is the signal to stop moving it. Without this the form posts the stored image back
+   * unchanged, so upgrading across a Java boundary leaves the server on a runtime that cannot load
+   * the jar the upgrade downloads.
+   */
+  const [dockerImageCustomized, setDockerImageCustomized] = useState(
+    Boolean(server.dockerImage) && server.dockerImage !== defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion)
+  );
   const [serverJar, setServerJar] = useState(server.runtimeProfile.jarArtifact.filename);
   const [dockerContainer, setDockerContainer] = useState(server.dockerContainer || "");
   const [minimumHeapGb, setMinimumHeapGb] = useState(() => clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max));
@@ -316,6 +324,9 @@ export function ServerEditForm({
     setMinecraftVersion(server.runtimeProfile.minecraftVersion);
     setRuntimeVersion(server.runtimeProfile.runtimeVersion);
     setDockerImage(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
+    setDockerImageCustomized(
+      Boolean(server.dockerImage) && server.dockerImage !== defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion)
+    );
     setServerJar(server.runtimeProfile.jarArtifact.filename);
     setDockerContainer(server.dockerContainer || "");
     setMinimumHeapGb(nextMinimum);
@@ -369,6 +380,7 @@ export function ServerEditForm({
                   <select id="properties-minecraft-version" name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
                     setMinecraftVersion(event.target.value);
                     setRuntimeVersion("");
+                    if (!dockerImageCustomized) setDockerImage(defaultDockerImageForMinecraftVersion(event.target.value));
                   }}>
                     {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
                     {runtime.managedProvisioning && availableMinecraftVersions.length ? availableMinecraftVersions.map((version) => (
@@ -477,7 +489,10 @@ export function ServerEditForm({
                     htmlFor="edit-docker-image"
                     description={<span id="edit-docker-image-description">Java runtime image used for the server container.</span>}
                   >
-                    <select id="edit-docker-image" name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)} aria-describedby="edit-docker-image-description">
+                    <select id="edit-docker-image" name="dockerImage" value={dockerImage} onChange={(event) => {
+                      setDockerImage(event.target.value);
+                      setDockerImageCustomized(event.target.value !== defaultDockerImageForMinecraftVersion(minecraftVersion));
+                    }} aria-describedby="edit-docker-image-description">
                       <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
                       <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
                       <option value="eclipse-temurin:25-jre">Java 25 runtime</option>

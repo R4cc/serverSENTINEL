@@ -127,7 +127,25 @@ export function validateJavaArgs(args: unknown) {
   if (value.length > 512 || /[\r\n;&|`$<>\\]/.test(value)) {
     badRequest("Java arguments contain unsafe shell characters");
   }
+  // Quotes are legitimate inside an argument, but the local runtime interpolates this string into
+  // an `sh -lc` command. An unbalanced quote is not an injection — the chaining characters above are
+  // already refused — but it makes the container exit on a shell parse error the operator cannot see.
+  if (unbalancedQuote(value)) {
+    badRequest("Java arguments contain an unterminated quote");
+  }
   return value;
+}
+
+function unbalancedQuote(value: string) {
+  let quote: "'" | "\"" | null = null;
+  for (const character of value) {
+    if (quote) {
+      if (character === quote) quote = null;
+      continue;
+    }
+    if (character === "'" || character === "\"") quote = character;
+  }
+  return quote !== null;
 }
 
 export function javaArgsToArgv(args: unknown) {

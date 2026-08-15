@@ -65,8 +65,18 @@ export function useServerContext(input: {
   const activeServerIsDemo = input.demoMode && isDemoServerId(activeServer?.id);
   const activeNode = useMemo(() => {
     const serverNodeId = activeServer?.nodeId || "local";
-    return contextNodes.find((node) => node.id === serverNodeId) ?? contextNodes[0] ?? { ...(panelOnlyMode ? emptyPanelContextNode : defaultContextNode), servers: [] };
-  }, [activeServer?.nodeId, contextNodes, panelOnlyMode]);
+    const assigned = contextNodes.find((node) => node.id === serverNodeId);
+    if (assigned) return assigned;
+    if (activeServer) {
+      return {
+        ...emptyPanelContextNode,
+        id: serverNodeId,
+        name: `Unknown node (${serverNodeId})`,
+        servers: [activeServer]
+      };
+    }
+    return contextNodes[0] ?? { ...(panelOnlyMode ? emptyPanelContextNode : defaultContextNode), servers: [] };
+  }, [activeServer, contextNodes, panelOnlyMode]);
 
   const usableContextNodes = useMemo(() => contextNodes.filter(isNodeRuntimeUsable), [contextNodes]);
   const activeMinecraftVersion = activeServer ? versionValue(minecraftVersionInfo(activeServer)) : "Unknown";

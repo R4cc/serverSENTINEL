@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { api } from "../../api";
-import type { AppState, PlayerHeadsState } from "../../types";
+import type { AppState, Notify, PlayerHeadsState } from "../../types";
 import { trimFormValue } from "../../utils/validation";
 import { setValidationNotice } from "../../utils/appHelpers";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
@@ -14,7 +14,7 @@ export function useIntegrationSettings(inputs: {
   canManageIntegrations: boolean;
   playerHeads: PlayerHeadsState;
   setAppState: (update: (current: AppState) => AppState) => void;
-  notify: (type: "success" | "error" | "info" | "warning", text: string) => void;
+  notify: Notify;
   refreshApp: () => Promise<void>;
   requestConfirmation: RequestConfirmation;
 }) {

@@ -1,9 +1,9 @@
 import { asObject } from "../storage/valueValidation.js";
 import type { ScheduleProcedure, ScheduleStep } from "../types.js";
 
-export const scheduleProcedures: ScheduleProcedure[] = ["restart", "stop", "start"];
+const scheduleProcedures: ScheduleProcedure[] = ["restart", "stop", "start"];
 
-export function sanitizeCommands(commands: unknown) {
+function sanitizeCommands(commands: unknown) {
   if (!Array.isArray(commands)) {
     throw new Error("At least one command is required");
   }
@@ -19,7 +19,7 @@ export function sanitizeCommands(commands: unknown) {
   return clean;
 }
 
-export const maximumCommandDelaySeconds = 604_800;
+const maximumCommandDelaySeconds = 604_800;
 
 export function sanitizeScheduleSteps(steps: unknown): ScheduleStep[] {
   if (!Array.isArray(steps) || steps.length === 0) throw new Error("At least one schedule step is required");

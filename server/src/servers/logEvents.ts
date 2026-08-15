@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ServerEvent } from "../types.js";
 
-export type ParsedEventInput = {
+type ParsedEventInput = {
   eventType: ServerEvent["eventType"];
   severity: ServerEvent["severity"];
   message: string;
@@ -13,7 +13,7 @@ export type ParsedEventInput = {
   subject?: string;
 };
 
-export function eventFromParsedLine(input: ParsedEventInput): ServerEvent {
+function eventFromParsedLine(input: ParsedEventInput): ServerEvent {
   const id = `${input.source}-${input.index}-${input.timestamp ?? ""}-${createHash("sha1").update(input.signature).digest("hex").slice(0, 8)}`;
   return {
     id,
@@ -30,12 +30,12 @@ export function eventFromParsedLine(input: ParsedEventInput): ServerEvent {
   };
 }
 
-export function eventSignature(eventType: ServerEvent["eventType"], subject?: string) {
+function eventSignature(eventType: ServerEvent["eventType"], subject?: string) {
   const normalized = subject?.trim().toLowerCase().replace(/\s+/g, " ");
   return normalized ? `${eventType}:${normalized}` : eventType;
 }
 
-export function cleanPlayerName(value: string) {
+function cleanPlayerName(value: string) {
   return value
     .trim()
     .replace(/^"|"$/g, "")
@@ -47,16 +47,16 @@ export function cleanPlayerName(value: string) {
 // /1.2.3.4:5678: ...`) and logs the bare name only once the player is in the world.
 // An addressed disconnect therefore belongs to a client that never joined, so it must
 // not be reported as a player leaving.
-export function connectingClientName(value: string) {
+function connectingClientName(value: string) {
   const trimmed = value.trim();
   return /\(\/?[^)]*:\d+\)$/.test(trimmed) || /^\/?[^\s/]*:\d+$/.test(trimmed);
 }
 
-export function cleanModName(value: string) {
+function cleanModName(value: string) {
   return value.trim().replace(/^["']|["']$/g, "").replace(/\s+/g, " ");
 }
 
-export function conciseEventDetails(value: string) {
+function conciseEventDetails(value: string) {
   const normalized = value.trim().replace(/\s+/g, " ");
   return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
 }
@@ -267,7 +267,7 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
   return null;
 }
 
-export function eventTimestampSecond(timestamp?: string) {
+function eventTimestampSecond(timestamp?: string) {
   if (!timestamp) return "";
   if (/^\d{2}:\d{2}:\d{2}$/.test(timestamp)) return timestamp;
   const date = new Date(timestamp);
@@ -288,4 +288,3 @@ export function compactRecentEvents(events: ServerEvent[], limit: number) {
   }
   return compacted;
 }
-

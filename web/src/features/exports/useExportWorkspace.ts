@@ -19,7 +19,7 @@ export type ServerExportArtifact = {
   downloadUrl?: string;
 };
 
-export type ServerExportTask = Pick<OperationRecord,
+type ServerExportTask = Pick<OperationRecord,
   "id" | "status" | "progress" | "task" | "createdAt" | "startedAt" | "finishedAt" | "errorMessage"
 > & {
   canCancel: boolean;

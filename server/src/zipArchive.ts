@@ -5,7 +5,7 @@ import { pipeline } from "node:stream/promises";
 import yauzl, { type Entry, type ZipFile } from "yauzl";
 import { httpError } from "./http/errors.js";
 
-export type ZipArchiveLimits = {
+type ZipArchiveLimits = {
   maxEntries: number;
   maxExpandedBytes: number;
 };
@@ -21,7 +21,7 @@ type ZipArchiveEntry = {
   unsupported?: boolean;
 };
 
-export type ZipExtractionConflict = {
+type ZipExtractionConflict = {
   path: string;
   kind: "file" | "type" | "symlink";
 };
@@ -62,15 +62,32 @@ function zipError(message: string, code = "invalid_zip_archive") {
   return httpError(400, message, { code });
 }
 
+/**
+ * A ZIP entry name may be 65,535 bytes, which is ~32,000 path segments. Indexing synthesizes a
+ * record for every ancestor of every entry, so cost grows with the square of the depth: a 627 KB
+ * archive of 20 empty files nested 8,000 deep measured at 160,000 records, 1.28 GB of heap, and
+ * 3.5 s of blocked event loop. Neither the entry count nor the expanded-size limit sees it — the
+ * entries are real and their uncompressed size is zero. Depth is what has to be bounded, and no
+ * legitimate archive comes close to this.
+ */
+const maxEntryPathSegments = 64;
+const maxEntryPathLength = 4096;
+
 function normalizedEntryName(rawName: string) {
   if (!rawName || rawName.includes("\0") || rawName.includes("\\") || rawName.startsWith("/") || /^[a-zA-Z]:/.test(rawName)) {
     throw zipError(`Archive entry ${JSON.stringify(rawName)} has an unsafe path`);
+  }
+  if (rawName.length > maxEntryPathLength) {
+    throw zipError(`Archive entry path is longer than ${maxEntryPathLength} characters`, "zip_entry_path_limit");
   }
   const directory = rawName.endsWith("/");
   const value = directory ? rawName.slice(0, -1) : rawName;
   const parts = value.split("/");
   if (!value || parts.some((part) => !part || part === "." || part === "..")) {
     throw zipError(`Archive entry ${JSON.stringify(rawName)} is not normalized`);
+  }
+  if (parts.length > maxEntryPathSegments) {
+    throw zipError(`Archive entry is nested deeper than ${maxEntryPathSegments} directories`, "zip_entry_depth_limit");
   }
   return { path: parts.join("/"), directory };
 }

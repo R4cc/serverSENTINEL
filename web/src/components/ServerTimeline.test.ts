@@ -5,7 +5,6 @@ import type { ServerTimelineResponse } from "../types";
 import {
   annotationPopoverDismissedByPointer,
   clusterTimelineMarkers,
-  formatTimelineDuration,
   mergeTimelineResponses,
   panTimelineWindowByPixels,
   readTimelineMetricLayers,
@@ -22,9 +21,9 @@ import {
   timelineMarkerDisplayLabel,
   timelineMarkerGlyph,
   timelinePlayerRows,
-  timelineSessionGeometry,
   writeTimelineMetricLayers
 } from "./ServerTimeline";
+import { formatTimelineDuration, timelineSessionGeometry } from "./playerTimelineChart";
 
 describe("server timeline controls", () => {
   it("uses the three-hour preset by default and keeps reset disabled for an unmodified preset", () => {

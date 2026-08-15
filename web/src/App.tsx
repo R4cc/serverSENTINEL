@@ -2,7 +2,7 @@ import { FormEvent, Fragment, Suspense, useCallback, useEffect, useRef, useState
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
-import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, NotificationTone, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue } from "./utils/validation";
@@ -1122,7 +1122,7 @@ export default function App() {
   }, [activePage, demoMode, authSession?.authenticated]);
 
   useEffect(() => {
-    if (!activeServer || activeServerUsesInternalNode || demoMode) return;
+    if (demoMode || ((!activeServer || activeServerUsesInternalNode) && activePage !== "nodes")) return;
     const refreshWhenActive = () => {
       if (!document.hidden) void refreshNodeConnectivity();
     };
@@ -1134,7 +1134,7 @@ export default function App() {
       window.clearInterval(interval);
       unsubscribe();
     };
-  }, [activeServer?.id, activeServerUsesInternalNode, demoMode]);
+  }, [activeServer?.id, activeServerUsesInternalNode, activePage, demoMode]);
 
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
@@ -1258,7 +1258,7 @@ export default function App() {
     });
   }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError]);
 
-  function notify(type: "success" | "error" | "info" | "warning", text: string) {
+  function notify(type: NotificationTone, text: string) {
     const options = { duration: type === "error" ? 7000 : 5000, closeButton: true, dismissible: true };
     if (type === "success") {
       toast.success(text, options);
@@ -1476,7 +1476,7 @@ export default function App() {
     setAppRefreshing(true);
     if (!options.silent) setNotice("");
     try {
-      const next = await api<AppState>("/api/app");
+      const next = await api<AppState>("/api/app", { timeoutMs: 20_000 });
       setAppState(next);
       setAppStateLoaded(true);
       setAppLoadError("");
@@ -1505,7 +1505,7 @@ export default function App() {
     if (demoMode || nodeRefreshInFlightRef.current || !authSession?.authenticated) return;
     nodeRefreshInFlightRef.current = true;
     try {
-      const result = await api<{ nodes: ManagedNode[] }>("/api/nodes");
+      const result = await api<{ nodes: ManagedNode[] }>("/api/nodes", { timeoutMs: 15_000 });
       const currentServer = effectiveAppState.servers.find((server) => server.id === activeServerIdRef.current);
       const currentNode = currentServer ? contextNodes.find((node) => node.id === currentServer.nodeId) : undefined;
       const nextNode = currentServer ? result.nodes.find((node) => node.id === currentServer.nodeId) : undefined;
@@ -1555,7 +1555,7 @@ export default function App() {
     if (statusRefreshInFlightRef.current.has(serverId)) return;
     statusRefreshInFlightRef.current.add(serverId);
     try {
-      const nextStatus = await api<ServerStatus>(`/api/servers/${serverId}/status`);
+      const nextStatus = await api<ServerStatus>(`/api/servers/${serverId}/status`, { timeoutMs: 15_000 });
       if (activeServerIdRef.current === serverId) {
         setStatus(nextStatus);
         setStatusError("");

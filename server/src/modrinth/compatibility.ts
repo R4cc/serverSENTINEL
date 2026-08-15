@@ -1,4 +1,5 @@
 import { modrinthFetch } from "./modrinthClient.js";
+import { errorLogFields, logWarn } from "../logging.js";
 import type { ModCompatibility, ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
 
 const channelRank: Record<ReleaseChannel, number> = { release: 0, beta: 1, alpha: 2 };
@@ -11,7 +12,7 @@ export type ModrinthJarFile = {
   hashes?: Record<string, string>;
 };
 
-export type ModrinthCompatibilityMatch = ModCompatibility & {
+type ModrinthCompatibilityMatch = ModCompatibility & {
   matchedVersionId?: string;
   matchedVersionNumber?: string;
   matchedVersionType?: ReleaseChannel;
@@ -20,7 +21,7 @@ export type ModrinthCompatibilityMatch = ModCompatibility & {
   file?: ModrinthJarFile;
 };
 
-export type CompatibilityResolverOptions = {
+type CompatibilityResolverOptions = {
   projectId: string;
   minecraftVersion: string;
   loaders: readonly string[];
@@ -29,7 +30,7 @@ export type CompatibilityResolverOptions = {
   channel: ReleaseChannel;
 };
 
-export type VersionCompatibilityOptions = Omit<CompatibilityResolverOptions, "projectId">;
+type VersionCompatibilityOptions = Omit<CompatibilityResolverOptions, "projectId">;
 
 function compatibilityLoaders(options: Pick<CompatibilityResolverOptions, "loaders">) {
   return Array.from(new Set(options.loaders));
@@ -130,7 +131,7 @@ export async function fetchProjects(projectIds: string[]): Promise<Map<string, M
   return resolved;
 }
 
-export async function fetchProjectVersion(versionId: string): Promise<ModrinthVersion> {
+async function fetchProjectVersion(versionId: string): Promise<ModrinthVersion> {
   const versions = await fetchVersions([versionId]);
   const version = versions.get(versionId);
   if (!version) throw new Error(`Failed to fetch Modrinth version ${versionId}`);
@@ -232,7 +233,7 @@ export function minecraftVersionFacetValues(minecraftVersion: string) {
   return Array.from(values);
 }
 
-export function minecraftVersionMatches(advertisedVersion: string, minecraftVersion: string) {
+function minecraftVersionMatches(advertisedVersion: string, minecraftVersion: string) {
   const advertised = advertisedVersion.trim();
   const target = minecraftVersion.trim();
   if (!advertised || !target) return false;
@@ -263,7 +264,7 @@ export function latestCompatibleProjectVersion(
     .sort((a, b) => new Date(b.date_published ?? 0).getTime() - new Date(a.date_published ?? 0).getTime())[0];
 }
 
-export function modrinthVersionPublishedTime(version?: ModrinthVersion) {
+function modrinthVersionPublishedTime(version?: ModrinthVersion) {
   const value = version?.date_published ? new Date(version.date_published).getTime() : 0;
   return Number.isFinite(value) ? value : 0;
 }
@@ -424,8 +425,17 @@ export async function resolveModrinthProjectCompatibility(options: Compatibility
     }
 
     return resolveCompatibilityFromVersions(await fetchProjectVersions(options.projectId), options, projectSides);
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    // The caller only ever sees "compatibility could not be verified", so the reason — a rejected
+    // API key, a rate limit, a request deadline — has to reach the operator through the structured
+    // log rather than a bare console.error nothing else in this tree writes to.
+    logWarn({
+      projectId: options.projectId,
+      minecraftVersion: options.minecraftVersion,
+      action: "modrinth_compatibility",
+      status: "unknown",
+      ...errorLogFields(error)
+    }, "Modrinth compatibility could not be resolved");
     return unknownCompatibility();
   }
 }

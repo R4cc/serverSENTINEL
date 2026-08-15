@@ -1,7 +1,7 @@
 const MAX_LOG_ENTRIES = 60;
 const MAX_LOG_CHARACTERS = 24_000;
 
-export type ScheduledCommandLogCapture = {
+type ScheduledCommandLogCapture = {
   logs?: string[];
   logCaptureStatus: "captured" | "empty" | "unavailable";
 };

@@ -17,7 +17,7 @@ export type ModUpdatePlanSource = {
   versionInfo?: unknown;
 };
 
-export type { ModUpdatePlan, ModUpdatePlanEntry, ModUpdatePlanStatus, SafeBatchUpdateResult };
+export type { ModUpdatePlan, ModUpdatePlanEntry, SafeBatchUpdateResult };
 
 type ObjectValue = Record<string, unknown>;
 
@@ -33,7 +33,7 @@ function channelValue(value: unknown): "release" | "beta" | "alpha" {
   return value === "beta" || value === "alpha" ? value : "release";
 }
 
-export function classifyModUpdatePlanEntry(source: ModUpdatePlanSource): ModUpdatePlanEntry {
+function classifyModUpdatePlanEntry(source: ModUpdatePlanSource): ModUpdatePlanEntry {
   const filename = stringValue(source.filename) ?? "unknown.jar";
   const displayName = stringValue(source.displayName) ?? filename.replace(/\.jar(?:\.disabled)?$/i, "");
   const metadata = objectValue(source.modrinth);

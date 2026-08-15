@@ -1,7 +1,7 @@
 import type { OperationRecord, OperationType } from "../types.js";
 import type { OperationsRepository } from "../storage/operationsRepository.js";
 
-export type RestartEffect = "mark" | "clear";
+type RestartEffect = "mark" | "clear";
 
 type BaseOperationInput<T> = {
   type: OperationType;
@@ -19,7 +19,7 @@ export type ForegroundOperationInput<T> = BaseOperationInput<T> & {
   restartEffect?: RestartEffect | ((value: T) => RestartEffect | undefined);
 };
 
-export type QueuedOperationInput<T> = BaseOperationInput<T> & {
+type QueuedOperationInput<T> = BaseOperationInput<T> & {
   initialProgress?: number;
   runningProgress?: number;
   failureTask: string;

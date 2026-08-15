@@ -5,7 +5,7 @@ import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline"
 export const timelineRetentionMs = 7 * 24 * 60 * 60 * 1000;
 export const timelineChartGrid = { left: 56, right: 24, top: 48, bottom: 38 } as const;
 export const timelineMetricBandGrid = { left: 220, right: 24, top: 22, bottom: 34 } as const;
-export const timelineTimeDataZoomId = "timeline-inside";
+const timelineTimeDataZoomId = "timeline-inside";
 
 export function buildTimelineTimeAxisOption({
   id,
@@ -64,7 +64,7 @@ export function buildTimelineTimeDataZoomOption({
   };
 }
 
-export function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>, top: number = timelineChartGrid.top) {
+function timelineChartGridForEnabled(enabled: Record<SeriesKey, boolean>, top: number = timelineChartGrid.top) {
   const cpu = enabled.cpuUtilizationPercent;
   const memory = enabled.memoryUsageBytes;
   const network = enabled.networkRxBytesPerSecond || enabled.networkTxBytesPerSecond;

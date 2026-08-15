@@ -814,6 +814,16 @@ button .buttonIcon {
   color: currentColor !important;
 }
 
+@media (max-width: 600px) {
+  .sonnerToast [data-close-button] {
+    right: 0 !important;
+    top: 0 !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+  }
+}
+
 .appForm label,
 .keyForm label,
 .summaryTile span {

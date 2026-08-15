@@ -10,8 +10,8 @@ import { defaultServerContainerName } from "../../storage/serverIdentity.js";
 import { summarizeRuntimeExit } from "../../runtimeErrors.js";
 import { containerConfigHash, isManagedContainer, isManagedContainerFor, managedContainerLabels, type ContainerLabels } from "../containerLabels.js";
 import { computeContainerResourceSample } from "../containerStats.js";
-import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../profile.js";
-export { defaultDockerImageForMinecraftVersion } from "../profile.js";
+import { defaultDockerImageForMinecraftVersion } from "@serversentinel/contracts";
+import { runtimeProfileForServer, runtimeTarget } from "../profile.js";
 import { dockerAvailable, dockerBufferRequest, dockerJsonRequest, dockerLogTailMaxBytes, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../../docker/dockerClient.js";
 import { dockerStopQuery, dockerStopRequestTimeoutMs } from "../../docker/dockerDaemon.js";
 import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
@@ -20,6 +20,9 @@ import { durationSince, errorLogFields, logError, logInfo, logWarn, type LogFiel
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../terminal.js";
 import { parseServerProperties, serializeServerProperties } from "./../serverProperties.js";
 import type { DockerState, ManagedServer } from "../../types.js";
+
+/** A cold pull of a Minecraft runtime image routinely takes minutes on a slow registry link. */
+const imagePullTimeoutMs = 10 * 60 * 1000;
 
 export type DockerContainerInspect = {
   Id?: string;
@@ -31,7 +34,7 @@ export type DockerContainerInspect = {
   NetworkSettings?: { Networks?: Record<string, DockerNetworkAttachment> };
 };
 
-export type DockerNetworkAttachment = {
+type DockerNetworkAttachment = {
   IPAMConfig?: unknown;
   Aliases?: string[];
   DriverOpts?: Record<string, string>;
@@ -46,11 +49,11 @@ export type DockerNetworkAttachment = {
   MacAddress?: string;
 };
 
-export type DockerNetworkingConfig = {
+type DockerNetworkingConfig = {
   EndpointsConfig: Record<string, { IPAMConfig?: unknown; Aliases?: string[]; DriverOpts?: Record<string, string> }>;
 };
 
-export type DockerStats = {
+type DockerStats = {
   read?: string;
   memory_stats?: { usage?: number; limit?: number; stats?: { cache?: number; inactive_file?: number } };
   cpu_stats?: {
@@ -88,14 +91,14 @@ export function dockerControlConfigured(server: ManagedServer) {
   return Boolean(server.dockerContainer || (server.dockerMountSource && runtimeTarget(server).serverJar));
 }
 
-export function serverDockerMountSource(server: ManagedServer) {
+function serverDockerMountSource(server: ManagedServer) {
   if (server.dockerMountSource && server.dockerMountSource !== server.serverDir) {
     return server.dockerMountSource;
   }
   return config.serversDockerVolume || server.dockerMountSource || server.serverDir;
 }
 
-export function serverDockerWorkingDir(server: ManagedServer) {
+function serverDockerWorkingDir(server: ManagedServer) {
   if (server.dockerWorkingDir) {
     return server.dockerWorkingDir;
   }
@@ -105,11 +108,11 @@ export function serverDockerWorkingDir(server: ManagedServer) {
   return "/data/server";
 }
 
-export function serverDockerBindTarget(server: ManagedServer) {
+function serverDockerBindTarget(server: ManagedServer) {
   return serverDockerWorkingDir(server).startsWith("/data/servers/") ? "/data/servers" : "/data/server";
 }
 
-export function dockerContainerMountValid(server: ManagedServer, details: DockerContainerInspect) {
+function dockerContainerMountValid(server: ManagedServer, details: DockerContainerInspect) {
   const expectedDestination = serverDockerBindTarget(server);
   const expectedSource = serverDockerMountSource(server);
   return Boolean(details.Mounts?.some((mount) => {
@@ -135,7 +138,7 @@ function containerOwnershipRefusal(server: ManagedServer, labels: ContainerLabel
   return `Container ${dockerContainerName(server)} ${cause}; refusing to ${verb} it`;
 }
 
-export async function removeDockerContainer(server: ManagedServer) {
+async function removeDockerContainer(server: ManagedServer) {
   logInfo({ ...serverLogFields(server), action: "remove_container" }, "Removing Minecraft runtime container");
   await dockerRequest("DELETE", `/containers/${encodeURIComponent(dockerContainerName(server))}?force=1`, 204);
 }
@@ -153,7 +156,13 @@ export async function removeManagedDockerContainer(server: ManagedServer) {
   return true;
 }
 
-export function splitImage(image: string) {
+function splitImage(image: string) {
+  // A digest-pinned reference keeps its whole digest as the tag. Splitting on the last colon would
+  // cut `sha256` off the hash and produce a reference the registry cannot resolve.
+  const digestIndex = image.lastIndexOf("@");
+  if (digestIndex > 0) {
+    return { fromImage: image.slice(0, digestIndex), tag: image.slice(digestIndex + 1) };
+  }
   const slashIndex = image.lastIndexOf("/");
   const colonIndex = image.lastIndexOf(":");
   if (colonIndex > slashIndex) {
@@ -162,19 +171,44 @@ export function splitImage(image: string) {
   return { fromImage: image, tag: "latest" };
 }
 
-export async function ensureDockerImage(image: string) {
+/**
+ * `POST /images/create` answers 200 and then streams progress, so a pull that fails on
+ * authentication, a rate limit, or an unknown tag reports its reason inside a successful response.
+ * Left unread, provisioning continued and failed later with "No such image", naming the wrong cause.
+ */
+function assertDockerPullSucceeded(image: string, body: Buffer) {
+  for (const line of body.toString("utf8").split("\n")) {
+    if (!line.trim()) continue;
+    let parsed: { error?: string; errorDetail?: { message?: string } };
+    try {
+      parsed = JSON.parse(line) as typeof parsed;
+    } catch {
+      continue;
+    }
+    const message = parsed.errorDetail?.message ?? parsed.error;
+    if (message) throw new Error(`Could not pull Docker image ${image}: ${message}`);
+  }
+}
+
+async function ensureDockerImage(image: string) {
   try {
     await dockerRequest("GET", `/images/${encodeURIComponent(image)}/json`, 200);
     return;
-  } catch {
-    logInfo({ image }, "Pulling Minecraft runtime image");
-    const { fromImage, tag } = splitImage(image);
-    await dockerBufferRequest(
-      "POST",
-      `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
-      200
-    );
+  } catch (error) {
+    // Only a genuinely absent image is worth a pull. A daemon that is unreachable or unconfigured
+    // must surface that, not be retried as if the image were merely missing.
+    if (!dockerAvailable()) throw error;
   }
+  logInfo({ image }, "Pulling Minecraft runtime image");
+  const { fromImage, tag } = splitImage(image);
+  const body = await dockerBufferRequest(
+    "POST",
+    `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
+    200,
+    // A first pull of a Minecraft runtime image routinely outruns the default socket idle timeout.
+    imagePullTimeoutMs
+  );
+  assertDockerPullSucceeded(image, body);
 }
 
 export async function inspectDockerContainer(server: ManagedServer) {
@@ -193,7 +227,7 @@ export async function inspectDockerContainer(server: ManagedServer) {
   }
 }
 
-export function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; restartPolicy: "no" | "unless-stopped" }) {
+function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeTerminal: boolean; restartPolicy: "no" | "unless-stopped" }) {
   const targetRuntime = runtimeTarget(server);
   return {
     image: server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion),
@@ -231,7 +265,7 @@ export async function reconcileDockerRestartPolicy(server: ManagedServer, detail
 export async function detectedTotalMemory() {
   if (dockerAvailable()) {
     try {
-      const info = await dockerRequest<DockerInfo>("GET", "/info", 200);
+      const info = await dockerRequest<DockerInfo>("GET", "/info", 200, undefined, 5_000);
       if (typeof info.MemTotal === "number" && info.MemTotal > 0) {
         return info.MemTotal;
       }
@@ -242,7 +276,7 @@ export async function detectedTotalMemory() {
   return totalmem();
 }
 
-export function currentContainerId() {
+function currentContainerId() {
   return process.env.HOSTNAME || "";
 }
 
@@ -268,13 +302,18 @@ export function minecraftContainerNetworkingConfig(existing?: Pick<DockerContain
   return dockerNetworkingConfigFromInspect(existing) ?? dockerNetworkingConfigFromInspect(fallback);
 }
 
-export async function currentContainerNetworkingConfig() {
+async function currentContainerNetworkingConfig() {
   return dockerNetworkingConfigFromInspect(await currentContainerInspect().catch(() => null));
 }
 
 export async function ensureDockerContainer(server: ManagedServer, preferredNetworkingConfig?: DockerNetworkingConfig) {
-  const expectedConfigHash = dockerRuntimeConfigHash(server);
+  // The terminal settings are applied at create time, so they belong in the fingerprint: without
+  // them a change to the terminal profile could never invalidate an existing container, which is
+  // the one input this hash exists to notice. Every hash a running container may already carry is
+  // accepted below, so adding it does not recreate anything that is currently live.
+  const expectedConfigHash = dockerRuntimeConfigHash(server, { includeTerminal: true, restartPolicy: "no" });
   const legacyConfigHashes = new Set([
+    dockerRuntimeConfigHash(server, { includeTerminal: false, restartPolicy: "no" }),
     dockerRuntimeConfigHash(server, { includeTerminal: false, restartPolicy: "unless-stopped" }),
     dockerRuntimeConfigHash(server, { includeTerminal: true, restartPolicy: "unless-stopped" })
   ]);

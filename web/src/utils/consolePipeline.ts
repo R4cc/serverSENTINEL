@@ -1,6 +1,6 @@
 export type ConsoleConnectionState = "connecting" | "live" | "polling" | "reconnecting" | "offline" | "error";
 
-export type ConsoleUnavailableMessage = {
+type ConsoleUnavailableMessage = {
   message?: string;
   code?: string;
   retryable?: boolean;

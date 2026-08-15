@@ -2,7 +2,7 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { api } from "../../api";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { demoFixtures } from "../../demoRuntime";
-import type { ManagedServer, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails, ServerStatus } from "../../types";
+import type { ManagedServer, Notify, ScheduledActiveRun, ScheduledExecution, ScheduledRun, ScheduledRunStepDetails, ServerStatus } from "../../types";
 import { errorMessage } from "../../utils/appHelpers";
 import { clientId } from "../../utils/files";
 import {
@@ -13,8 +13,6 @@ import {
   scheduleValidationMessage,
   type SchedulePatch
 } from "./scheduleWorkspaceHelpers";
-
-type Notify = (type: "success" | "error" | "info" | "warning", text: string) => void;
 
 type SchedulesWorkspaceInputs = {
   activeServer: ManagedServer | null;

@@ -45,23 +45,23 @@ export function modrinthSearchFacets(loaders: string | readonly string[], minecr
   }
   return facets;
 }
-export const remoteModListRequests = new Map<string, Promise<unknown>>();
-export const remoteHashBatchRequests = new Map<string, Promise<Map<string, ModrinthVersion>>>();
-export const localModHashCache = new ModHashCache();
+const remoteModListRequests = new Map<string, Promise<unknown>>();
+const remoteHashBatchRequests = new Map<string, Promise<Map<string, ModrinthVersion>>>();
+const localModHashCache = new ModHashCache();
 
 export async function modrinthApiKey() {
   return services.settingsRepository.get().modrinthApiKey || process.env.MODRINTH_API_KEY || "";
 }
 
-export async function readModPreferences(server: ManagedServer): Promise<Record<string, ModPreference>> {
+async function readModPreferences(server: ManagedServer): Promise<Record<string, ModPreference>> {
   return normalizeModPreferences(services.modPreferencesRepository.list(server.id));
 }
 
-export async function writeModPreferences(server: ManagedServer, data: Record<string, ModPreference>) {
+async function writeModPreferences(server: ManagedServer, data: Record<string, ModPreference>) {
   services.modPreferencesRepository.replaceAll(server.id, normalizeModPreferences(data));
 }
 
-export function normalizeModPreferences(value: unknown): Record<string, ModPreference> {
+function normalizeModPreferences(value: unknown): Record<string, ModPreference> {
   const raw = asObject(value, "mod preferences");
   const normalized: Record<string, ModPreference> = {};
   for (const [filename, preference] of Object.entries(raw)) {
@@ -75,7 +75,7 @@ export function normalizeModPreferences(value: unknown): Record<string, ModPrefe
   return normalized;
 }
 
-export function installedModCompatibility(server: ManagedServer, metadata?: InstalledModMetadata): ModCompatibility {
+function installedModCompatibility(server: ManagedServer, metadata?: InstalledModMetadata): ModCompatibility {
   const content = managedContentRuntime(server);
   if (!metadata) {
     return { status: "unknown", compatible: false, reason: "Server-side support unknown" };
@@ -138,7 +138,7 @@ export function installedModCompatibility(server: ManagedServer, metadata?: Inst
   return { status: "compatible", compatible: true, reason: "Compatibility verified for this server.", serverSide, clientSide };
 }
 
-export function installedModReviewCanBeAcknowledged(server: ManagedServer, metadata?: InstalledModMetadata) {
+function installedModReviewCanBeAcknowledged(server: ManagedServer, metadata?: InstalledModMetadata) {
   if (!metadata) return false;
   if (metadata.reviewAcknowledgedVersionId === metadata.versionId) return false;
   if (metadata.installedWithForceIncompatible || metadata.forceIncompatible || metadata.overrideMinecraftVersion || metadata.incompatibilityReason || metadata.overrideReason) return false;
@@ -152,7 +152,7 @@ export function installedModReviewCanBeAcknowledged(server: ManagedServer, metad
     || compatibility.reason === "Server-side support could not be verified";
 }
 
-export type InstalledModUpdateCurrent = {
+type InstalledModUpdateCurrent = {
   project_id?: string;
   id?: string;
   version_id?: string;
@@ -160,7 +160,7 @@ export type InstalledModUpdateCurrent = {
   version_type?: string;
 };
 
-export type InstalledModUpdateInfo = {
+type InstalledModUpdateInfo = {
   projectId: string;
   currentVersion?: string;
   currentChannel: ReleaseChannel;
@@ -171,7 +171,7 @@ export type InstalledModUpdateInfo = {
   upToDate: boolean;
 };
 
-export async function lookupModrinthUpdateForCurrent(server: ManagedServer, current: InstalledModUpdateCurrent | undefined, preferredChannel: ReleaseChannel, options: { forceRefresh?: boolean } = {}) {
+async function lookupModrinthUpdateForCurrent(server: ManagedServer, current: InstalledModUpdateCurrent | undefined, preferredChannel: ReleaseChannel, options: { forceRefresh?: boolean } = {}) {
   const targetRuntime = runtimeTarget(server);
   const content = managedContentRuntime(server);
   if (!targetRuntime.minecraftVersion) return null;
@@ -222,7 +222,7 @@ export async function lookupModrinthUpdateForCurrent(server: ManagedServer, curr
   } satisfies InstalledModUpdateInfo;
 }
 
-export async function lookupModrinthUpdateFromMetadata(server: ManagedServer, metadata: InstalledModMetadata, preferredChannel: ReleaseChannel, options: { forceRefresh?: boolean } = {}) {
+async function lookupModrinthUpdateFromMetadata(server: ManagedServer, metadata: InstalledModMetadata, preferredChannel: ReleaseChannel, options: { forceRefresh?: boolean } = {}) {
   return lookupModrinthUpdateForCurrent(server, {
     project_id: metadata.projectId,
     version_id: metadata.versionId,
@@ -231,7 +231,7 @@ export async function lookupModrinthUpdateFromMetadata(server: ManagedServer, me
   }, preferredChannel, options);
 }
 
-export async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel, metadata?: InstalledModMetadata, options: { forceRefresh?: boolean } = {}) {
+async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel, metadata?: InstalledModMetadata, options: { forceRefresh?: boolean } = {}) {
   if (metadata?.projectId) {
     return lookupModrinthUpdateFromMetadata(server, metadata, preferredChannel, options);
   }
@@ -330,7 +330,7 @@ export function requireNoActiveModMutation(serverId: string) {
   if (activeModMutations.has(serverId)) operationInProgress("A mod change is already running for this server", "MOD_OPERATION_IN_PROGRESS");
 }
 
-export async function enrichInstalledModUpdates(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
+async function enrichInstalledModUpdates(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
   if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
   const base = result as { mods: Array<Record<string, unknown>> };
   const mods = await Promise.all(base.mods.map(async (mod) => {
@@ -356,7 +356,7 @@ export async function batchVersionsFromSha1(hashes: string[]) {
   return request;
 }
 
-export async function loadBatchVersionsFromSha1(hashes: string[]) {
+async function loadBatchVersionsFromSha1(hashes: string[]) {
   const resolved = new Map<string, ModrinthVersion>();
   for (let index = 0; index < hashes.length; index += 100) {
     const chunk = hashes.slice(index, index + 100);
@@ -370,7 +370,7 @@ export async function loadBatchVersionsFromSha1(hashes: string[]) {
   return resolved;
 }
 
-export async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
+async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
   if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
   const base = result as { mods: Array<Record<string, unknown>> };
   const prefs = await readModPreferences(server);
@@ -629,8 +629,33 @@ export async function localModIcon(server: ManagedServer, filenameInput: unknown
   return { contentType: iconContentType(icon.filename), stream };
 }
 
+/**
+ * Install staging writes `<name>.serversentinel-<uuid>.tmp` next to its destination. Every in-process
+ * failure path removes it, but a crash or a SIGKILL mid-download cannot — and nothing else sweeps,
+ * while the `.jar` filter on the mod list hides the leftovers from whoever is paying for the disk.
+ */
+const abandonedInstallTemporaryMaxAgeMs = 60 * 60 * 1000;
+
+async function sweepAbandonedInstallTemporaries(server: ManagedServer, directory: string) {
+  try {
+    const root = await validateExistingInsideServer(server, directory);
+    const cutoff = Date.now() - abandonedInstallTemporaryMaxAgeMs;
+    const entries = await readdir(root);
+    await Promise.all(entries
+      .filter((entry) => /\.serversentinel-[0-9a-f-]{36}\.tmp$/i.test(entry))
+      .map(async (entry) => {
+        const target = join(root, entry);
+        const info = await stat(target).catch(() => null);
+        if (!info?.isFile() || info.mtimeMs > cutoff) return;
+        await rm(target, { force: true }).catch(() => undefined);
+      }));
+  } catch {
+    // A directory that cannot be read is not a reason to refuse the install that follows.
+  }
+}
+
 export async function localToggleMod(server: ManagedServer, filenameInput: unknown, enabledInput: unknown) {
-  const { directory, singular } = managedContentRuntime(server);
+  const { directory, Singular } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const enabled = requireStrictBoolean(enabledInput, "enabled");
   const sourceName = filename.endsWith(".jar") && !existsSync(ensureInsideServer(server, join(directory, filename)))
@@ -656,12 +681,12 @@ export async function localToggleMod(server: ManagedServer, filenameInput: unkno
     delete prefs[sourceName];
     await writeModPreferences(server, prefs);
   }
-  logInfo({ ...serverLogFields(server), filename: basename(target), enabled, action: "toggle_mod" }, `${singular === "plugin" ? "Plugin" : "Mod"} state changed`);
+  logInfo({ ...serverLogFields(server), filename: basename(target), enabled, action: "toggle_mod" }, `${Singular} state changed`);
   return { ok: true, filename: basename(target), enabled };
 }
 
 export async function localRemoveMod(server: ManagedServer, filenameInput: unknown) {
-  const { directory, singular } = managedContentRuntime(server);
+  const { directory, Singular } = managedContentRuntime(server);
   const filename = safeInstalledModFilename(filenameInput as string | undefined);
   const target = await validateExistingInsideServer(server, join(directory, filename));
   await rm(target, { force: true });
@@ -671,7 +696,7 @@ export async function localRemoveMod(server: ManagedServer, filenameInput: unkno
     delete prefs[filename];
     await writeModPreferences(server, prefs);
   }
-  logInfo({ ...serverLogFields(server), filename, action: "remove_mod" }, `${singular === "plugin" ? "Plugin" : "Mod"} removed`);
+  logInfo({ ...serverLogFields(server), filename, action: "remove_mod" }, `${Singular} removed`);
   return { ok: true, filename };
 }
 
@@ -741,7 +766,7 @@ export async function downloadModrinthJar(file: NonNullable<ReturnType<typeof mo
   return content;
 }
 
-export async function replaceManagedContentJar(
+async function replaceManagedContentJar(
   server: ManagedServer,
   currentFilename: string,
   targetFilename: string,
@@ -849,7 +874,12 @@ export async function updateModrinthMod(server: ManagedServer, input: unknown) {
     const targetFilename = safeModFilename(safeInstalledModFilename(file.filename));
     const currentEnabled = !filename.endsWith(".disabled");
     const existingTarget = mods.find((mod) => mod.filename === targetFilename || mod.filename === `${targetFilename}.disabled`);
-    if (existingTarget && existingTarget.filename !== filename) {
+    // Dropping the file being updated is only safe when what survives is in the same enabled state.
+    // A disabled copy of the target used to satisfy this, so updating an enabled mod deleted it and
+    // left only the disabled one — reported, including in batch updates, as a successful update.
+    const existingTargetFilename = typeof existingTarget?.filename === "string" ? existingTarget.filename : "";
+    const existingTargetEnabled = Boolean(existingTargetFilename) && !existingTargetFilename.endsWith(".disabled");
+    if (existingTarget && existingTargetFilename !== filename && existingTargetEnabled === currentEnabled) {
       await runtime.removeMod(server, filename);
       logInfo({ ...serverLogFields(server), filename, targetFilename, versionId: latest.id, action: "update_mod", status: "deduplicated", durationMs: durationSince(startedAt) }, "Mod update removed older duplicate");
       return { ok: true, filename: existingTarget.filename, version: latest.version_number, channel: versionChannel(latest.version_type), replaced: filename };
@@ -882,7 +912,7 @@ export async function updateModrinthMod(server: ManagedServer, input: unknown) {
     };
     await writeModPreferences(server, prefs);
 
-    logInfo({ ...serverLogFields(server), filename, targetFilename: finalFilename, versionId: latest.id, action: "update_mod", status: "succeeded", durationMs: durationSince(startedAt) }, `${contentDefinition.singular === "plugin" ? "Plugin" : "Mod"} update succeeded`);
+    logInfo({ ...serverLogFields(server), filename, targetFilename: finalFilename, versionId: latest.id, action: "update_mod", status: "succeeded", durationMs: durationSince(startedAt) }, `${contentDefinition.Singular} update succeeded`);
     return { ok: true, filename: finalFilename, version: latest.version_number, channel: versionChannel(latest.version_type), replaced: filename };
   } catch (error) {
     logOperationFailure({ ...serverLogFields(server), filename, action: "update_mod", status: "failed", durationMs: durationSince(startedAt) }, "Mod update failed", error);
@@ -1048,7 +1078,7 @@ export async function acknowledgeInstalledModReview(server: ManagedServer, input
   return { ok: true, filename, reviewAcknowledgedVersionId: metadata.versionId, reviewAcknowledgedAt: acknowledgedAt };
 }
 
-export type ModrinthInstallRequest = {
+type ModrinthInstallRequest = {
   projectId: string;
   versionId?: string;
   forceIncompatible: boolean;
@@ -1057,7 +1087,7 @@ export type ModrinthInstallRequest = {
   channel: ReleaseChannel;
 };
 
-export type ModrinthSwitchVersionRequest = {
+type ModrinthSwitchVersionRequest = {
   filename: string;
   versionId: string;
   forceIncompatible: boolean;
@@ -1065,7 +1095,7 @@ export type ModrinthSwitchVersionRequest = {
   channel: ReleaseChannel;
 };
 
-export function parseModrinthInstallRequest(input: unknown): ModrinthInstallRequest {
+function parseModrinthInstallRequest(input: unknown): ModrinthInstallRequest {
   const body = asObject(input, "mod install request");
   return {
     projectId: validateModrinthProjectId(body.projectId),
@@ -1077,7 +1107,7 @@ export function parseModrinthInstallRequest(input: unknown): ModrinthInstallRequ
   };
 }
 
-export function parseModrinthSwitchVersionRequest(input: unknown): ModrinthSwitchVersionRequest {
+function parseModrinthSwitchVersionRequest(input: unknown): ModrinthSwitchVersionRequest {
   const body = asObject(input, "mod version switch request");
   const versionId = validateModrinthVersionId(body.versionId);
   if (!versionId) {
@@ -1092,7 +1122,7 @@ export function parseModrinthSwitchVersionRequest(input: unknown): ModrinthSwitc
   };
 }
 
-export type PlannedModInstall = {
+type PlannedModInstall = {
   projectId: string;
   project: ModrinthProject;
   version: ModrinthVersion;
@@ -1101,14 +1131,14 @@ export type PlannedModInstall = {
   dependencyType: "root" | "required";
 };
 
-export type OptionalModDependency = {
+type OptionalModDependency = {
   projectId?: string;
   versionId?: string;
   dependencyType: string;
   reason: string;
 };
 
-export async function planRequiredModrinthInstalls(input: {
+async function planRequiredModrinthInstalls(input: {
   rootProjectId: string;
   rootProject: ModrinthProject;
   rootVersion: ModrinthVersion;
@@ -1305,6 +1335,7 @@ export async function localInstallMod(server: ManagedServer, input: unknown) {
     const prefs = { ...previousPrefs };
     const installedProjectIds = new Set(Object.values(previousPrefs).map((pref) => pref.modrinth?.projectId).filter(Boolean));
     const staged: Array<{ planned: PlannedModInstall; destination: string; temporaryDestination: string }> = [];
+    await sweepAbandonedInstallTemporaries(server, contentDefinition.directory);
 
     try {
       for (const planned of installPlan.installs) {

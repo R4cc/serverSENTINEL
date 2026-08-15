@@ -2,7 +2,7 @@ import type { PermissionKey } from "../../types";
 import { normalizePermissions } from "../../utils/permissions";
 import { trimFormValue, validatePassword, validateUsername } from "../../utils/validation";
 
-export type UserFormError = {
+type UserFormError = {
   field: string;
   message: string;
 };

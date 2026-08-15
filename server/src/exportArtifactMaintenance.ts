@@ -12,7 +12,7 @@ type ExportArtifactMetadata = {
   downloadUrl?: string;
 };
 
-export type ExportOperationResult = {
+type ExportOperationResult = {
   artifact?: ExportArtifactMetadata;
   artifactPath?: string;
   serverIds?: string[];
@@ -20,7 +20,7 @@ export type ExportOperationResult = {
   [key: string]: unknown;
 };
 
-export type ExportMaintenanceReport = {
+type ExportMaintenanceReport = {
   abandonedArtifacts: number;
   orphanedArtifacts: number;
   prunedOperations: number;

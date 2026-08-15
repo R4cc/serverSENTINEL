@@ -22,7 +22,7 @@ export type CreateServerInput = {
   serverPort?: string;
 };
 
-export type ProvisionPortReservation = {
+type ProvisionPortReservation = {
   nodeId: string;
   dockerPorts: string;
   displayName: string;
@@ -35,7 +35,7 @@ export function isValidServerPort(port: string) {
   return value >= minServerPort && value <= maxServerPort;
 }
 
-export const defaultQueryPort = 25566;
+const defaultQueryPort = 25566;
 
 export function assertUniqueDockerHostPorts(dockerPorts: string) {
   const seen = new Map<string, DockerHostPortBinding>();
@@ -48,7 +48,7 @@ export function assertUniqueDockerHostPorts(dockerPorts: string) {
   }
 }
 
-export function parsePortNumber(value: string, field: string) {
+function parsePortNumber(value: string, field: string) {
   if (!isValidServerPort(value)) {
     throw new Error(`${field} must be between ${minServerPort} and ${maxServerPort}`);
   }
@@ -69,11 +69,11 @@ export function queryPortEntry(port: number, internalPort = port): ManagedServer
   };
 }
 
-export function portEntryBinding(port: ManagedServerPort) {
+function portEntryBinding(port: ManagedServerPort) {
   return `${port.externalPort}:${port.internalPort}/${port.protocol}`;
 }
 
-export function managedPortsForDockerPorts(dockerPorts: string, existing: ManagedServerPort[] = []) {
+function managedPortsForDockerPorts(dockerPorts: string, existing: ManagedServerPort[] = []) {
   const queryPort = existing.find((port) => port.type === "query")?.externalPort;
   const seen = new Set<string>();
   const ports: ManagedServerPort[] = [];
@@ -128,7 +128,7 @@ export function dockerPortsWithManagedEntries(dockerPorts: string, managedPorts:
   return [...bindings.values()].join(",");
 }
 
-export function usedPortKeysForNode(servers: ManagedServer[], nodeId: string, ignoreServerId?: string) {
+function usedPortKeysForNode(servers: ManagedServer[], nodeId: string, ignoreServerId?: string) {
   const used = new Set<string>();
   for (const server of servers) {
     if (server.nodeId !== nodeId || server.id === ignoreServerId) continue;
@@ -142,7 +142,7 @@ export function usedPortKeysForNode(servers: ManagedServer[], nodeId: string, ig
   return used;
 }
 
-export function usedProvisionPortKeys(nodeId: string, ignoreJobId?: string) {
+function usedProvisionPortKeys(nodeId: string, ignoreJobId?: string) {
   const used = new Set<string>();
   for (const [jobId, reservation] of activeProvisionPortReservations) {
     if (jobId === ignoreJobId || reservation.nodeId !== nodeId) continue;

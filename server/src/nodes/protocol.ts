@@ -59,7 +59,7 @@ export const nodeCapabilities = [
 export const nodeFeatures = ["request-cancel", "binary-transfer"] as const;
 
 export type NodeCapability = typeof nodeCapabilities[number];
-export type NodeFeature = typeof nodeFeatures[number];
+type NodeFeature = typeof nodeFeatures[number];
 
 export type NodeHello = {
   type: "hello";
@@ -84,7 +84,7 @@ export type NodeHello = {
   updateFailure?: NodeUpdateFailure;
 };
 
-export const nodeUpdateFailureStages = ["pull", "create", "start", "verify", "session", "cleanup", "reconnect"] as const;
+const nodeUpdateFailureStages = ["pull", "create", "start", "verify", "session", "cleanup", "reconnect"] as const;
 
 export type PanelWelcome = {
   type: "welcome";
@@ -133,7 +133,7 @@ export type NodeStreamEvent =
 export type NodeStreamDataMessage = { type: "streamData"; id: string; event: NodeStreamEvent };
 export type NodeStreamEndMessage = { type: "streamEnd"; id: string; error?: NodeWireError };
 
-export type NodeWireError = {
+type NodeWireError = {
   code: string;
   message: string;
   details?: string;
@@ -150,7 +150,7 @@ export type NodeResponseMessage = {
 
 export type ServerObservationSection = "status" | "stats" | "players" | "logs" | "overviewFiles";
 
-export type NodeServerSpec = Pick<ManagedServer,
+type NodeServerSpec = Pick<ManagedServer,
   | "id" | "nodeId" | "displayName" | "serverDir" | "storageName"
   | "dockerContainer" | "dockerImage" | "dockerMountSource" | "dockerWorkingDir" | "dockerPorts" | "managedPorts" | "javaArgs"
   | "runtimeProfile"
@@ -168,7 +168,7 @@ export type ServerObservationItem = {
   logCursor?: ServerLogCursor;
 };
 
-export type ServerObservationRequest = { items: ServerObservationItem[] };
+type ServerObservationRequest = { items: ServerObservationItem[] };
 export type ServerObservationResultItem = {
   serverId: string;
   status?: unknown;
@@ -249,7 +249,7 @@ export function normalizeServerObservationResponse(value: unknown): ServerObserv
   }) };
 }
 
-export type NodeTransferDirection = "upload" | "download";
+type NodeTransferDirection = "upload" | "download";
 export type NodeTransferStartMessage = {
   type: "transferStart";
   id: string;
@@ -265,13 +265,13 @@ export type NodeTransferFinishMessage = { type: "transferFinish"; id: string; si
 export type NodeTransferResultMessage = { type: "transferResult"; id: string; ok: boolean; result?: unknown; error?: NodeWireError };
 export type NodeTransferCancelMessage = { type: "transferCancel"; id: string; reason?: string };
 
-export type PanelToNodeMessage = PanelWelcome | NodeRequestMessage | NodeCancelMessage | NodeStreamStartMessage | NodeStreamStopMessage | NodeTransferStartMessage | NodeTransferFinishMessage | NodeTransferResultMessage | NodeTransferCancelMessage;
-export type NodeToPanelMessage = NodeResponseMessage | NodeStreamDataMessage | NodeStreamEndMessage | NodeTransferReadyMessage | NodeTransferFinishMessage | NodeTransferResultMessage | NodeTransferCancelMessage;
+type PanelToNodeMessage = PanelWelcome | NodeRequestMessage | NodeCancelMessage | NodeStreamStartMessage | NodeStreamStopMessage | NodeTransferStartMessage | NodeTransferFinishMessage | NodeTransferResultMessage | NodeTransferCancelMessage;
+type NodeToPanelMessage = NodeResponseMessage | NodeStreamDataMessage | NodeStreamEndMessage | NodeTransferReadyMessage | NodeTransferFinishMessage | NodeTransferResultMessage | NodeTransferCancelMessage;
 
 const nodeCapabilitySet = new Set<string>(nodeCapabilities);
 const nodeFeatureSet = new Set<string>(nodeFeatures);
 
-export function protocolCompatible(version?: string) {
+function protocolCompatible(version?: string) {
   return version === nodeProtocolVersion;
 }
 
@@ -309,9 +309,9 @@ export function normalizeNodeHello(value: unknown): NodeHello {
   const protocolVersion = requiredString(hello.protocolVersion, "protocolVersion");
   if (protocolVersion !== nodeProtocolVersion) throw new Error(`Unsupported node protocol ${protocolVersion}; protocol ${nodeProtocolVersion} is required`);
   const nodeId = hello.nodeId === null ? null : optionalString(hello.nodeId, "nodeId") ?? null;
-  const capabilities = requiredStringArray(hello.capabilities, "capabilities");
-  const unsupportedCapabilities = capabilities.filter((capability) => !nodeCapabilitySet.has(capability));
-  if (unsupportedCapabilities.length) throw new Error(`Node advertised unsupported capabilities: ${unsupportedCapabilities.join(", ")}`);
+  // Capabilities are additive command names. A newer node can safely advertise commands this panel
+  // never sends, so intersect them instead of turning an otherwise compatible 3.1 session offline.
+  const capabilities = requiredStringArray(hello.capabilities, "capabilities").filter(isNodeCapability);
   const rawFeatures = requiredStringArray(hello.features, "features");
   const unsupportedFeatures = rawFeatures.filter((feature) => !nodeFeatureSet.has(feature));
   if (unsupportedFeatures.length) throw new Error(`Node advertised unsupported features: ${unsupportedFeatures.join(", ")}`);
@@ -433,8 +433,10 @@ export function normalizeNodeToPanelMessage(value: unknown): NodeToPanelMessage 
   throw new Error(`Unsupported node message type ${String(message.type)}`);
 }
 
-export function structuredNodeProtocolError(code: string, message: string, details?: string) {
-  return httpError(400, message, { code, details: details || undefined }) as Error & { code?: string; statusCode?: number; details?: string };
+export function structuredNodeProtocolError(code: string, message: string, details?: string, retryable?: boolean) {
+  const error = httpError(400, message, { code, details: details || undefined }) as Error & { code?: string; statusCode?: number; details?: string; retryable?: boolean };
+  if (retryable !== undefined) error.retryable = retryable;
+  return error;
 }
 
 function optionalWireError(value: unknown): NodeWireError | undefined {

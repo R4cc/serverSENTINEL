@@ -92,7 +92,7 @@ function padClock(value: number) {
  * Carries the time of day across a mode change wherever the new shape has somewhere to put it, so
  * switching between Every day and On chosen weekdays does not silently reset a time already chosen.
  */
-export function defaultSchedulePlan(mode: CronScheduleMode, current: CronSchedulePlan): CronSchedulePlan {
+function defaultSchedulePlan(mode: CronScheduleMode, current: CronSchedulePlan): CronSchedulePlan {
   const hour = current.mode === "daily" || current.mode === "weekly" ? current.hour : 4;
   const minute = current.mode === "daily" || current.mode === "weekly" ? current.minute : 0;
   if (mode === "minutes") return { mode, every: current.mode === "hours" ? 1 : 15 };

@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 
-export const cachedIconExtensions = [".webp", ".jpg", ".jpeg", ".png", ".gif"] as const;
+const cachedIconExtensions = [".webp", ".jpg", ".jpeg", ".png", ".gif"] as const;
 
 function isMissingPathError(error: unknown) {
   return (error as NodeJS.ErrnoException).code === "ENOENT";

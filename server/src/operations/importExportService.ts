@@ -42,7 +42,7 @@ export function targetNodeIdFromBody(value: unknown) {
   return targetNodeId;
 }
 
-export async function resolveExportServers(serverIds: string[] | undefined) {
+async function resolveExportServers(serverIds: string[] | undefined) {
   const all = await listManagedServers();
   if (serverIds === undefined) return all;
   const selected = new Set(serverIds);
@@ -67,7 +67,7 @@ async function serverIsRunning(server: ManagedServer) {
  * place while chunks are saved, so the archive can contain half-written chunks that roll back or
  * corrupt on restore. Rather than warn, exports require every selected server to be stopped.
  */
-export async function assertServersStopped(servers: ManagedServer[]) {
+async function assertServersStopped(servers: ManagedServer[]) {
   const running: string[] = [];
   for (const server of servers) {
     if (await serverIsRunning(server)) running.push(server.displayName);
@@ -147,13 +147,31 @@ export async function estimateExport(serverIds: string[] | undefined, selection:
  * pessimistic: it refuses only when even an uncompressed copy plus the configured headroom would not
  * fit. A false pass still fails cleanly on ENOSPC while writing.
  */
-export async function assertExportDiskSpace(estimatedBytes: number) {
+async function assertExportDiskSpace(estimatedBytes: number) {
   const free = await availableBytes(config.exportsDir);
   if (free === undefined) return;
   if (free < estimatedBytes + config.exportMinFreeBytes) {
     const needed = Math.ceil((estimatedBytes + config.exportMinFreeBytes) / 1024 / 1024);
     const have = Math.floor(free / 1024 / 1024);
     throw new Error(`Not enough free space for this export: about ${needed} MiB is needed and ${have} MiB is available. Deselect the world, or free up space.`);
+  }
+}
+
+/**
+ * The import counterpart of the export precheck. An import stages the extracted tree under `tmpDir`
+ * and then moves it into `serversDir`, so the archive's own expanded size has to fit alongside the
+ * archive that is already on disk. Export refused up front on space; import had no equivalent and
+ * would run until ENOSPC, part way through writing a server it had already recorded.
+ */
+async function assertImportDiskSpace(archivePath: string) {
+  const free = await availableBytes(config.tmpDir);
+  if (free === undefined) return;
+  const archiveBytes = await stat(archivePath).then((info) => info.size).catch(() => 0);
+  // The expanded tree is at least the archive's size and usually larger; the export headroom is
+  // reused so both sides refuse at the same margin.
+  const needed = archiveBytes + config.exportMinFreeBytes;
+  if (free < needed) {
+    throw new Error(`Not enough free space for this import: about ${Math.ceil(needed / 1024 / 1024)} MiB is needed and ${Math.floor(free / 1024 / 1024)} MiB is available. Free up space and try again.`);
   }
 }
 
@@ -353,6 +371,7 @@ export function startImportOperation(input: { archivePath: string; targetNodeId:
     }
   }, async (_operation, report) => {
     const manifest = await readExportManifest(input.archivePath);
+    await assertImportDiskSpace(input.archivePath);
     return applyImportArchive(input.archivePath, manifest, {
       targetNodeId: input.targetNodeId,
       localNodeId,

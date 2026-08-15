@@ -16,10 +16,10 @@ import { modrinthFetch } from "../modrinth/modrinthClient.js";
 import { fetchProject } from "../modrinth/compatibility.js";
 import type { InstalledModMetadata, ManagedServer } from "../types.js";
 
-export const modrinthIconCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
-export const modrinthAssetTimeoutMs = 10_000;
-export const modrinthIconRequests = new Map<string, Promise<{ bytes: Buffer; contentType: string }>>();
-export const modrinthIconRefreshRequests = new Map<string, Promise<void>>();
+const modrinthIconCacheMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
+const modrinthAssetTimeoutMs = 10_000;
+const modrinthIconRequests = new Map<string, Promise<{ bytes: Buffer; contentType: string }>>();
+const modrinthIconRefreshRequests = new Map<string, Promise<void>>();
 
 export function modIconKey(filename: string) {
   return Buffer.from(filename.replace(/\.jar\.disabled$/, ".jar"), "utf8").toString("base64url");
@@ -29,7 +29,7 @@ export function isMissingPathError(error: unknown) {
   return (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
-export async function modIconUrl(server: ManagedServer, filename: string) {
+async function modIconUrl(server: ManagedServer, filename: string) {
   const { directory } = managedContentRuntime(server);
   let iconsDir: string;
   try {
@@ -64,7 +64,7 @@ export async function deleteModIcon(server: ManagedServer, filename: string) {
   }));
 }
 
-export function iconExtension(iconUrl: string, contentType: string | null) {
+function iconExtension(iconUrl: string, contentType: string | null) {
   if (contentType?.includes("webp")) return ".webp";
   if (contentType?.includes("jpeg")) return ".jpg";
   if (contentType?.includes("png")) return ".png";
@@ -80,7 +80,7 @@ export function iconContentType(filename: string) {
   return "image/png";
 }
 
-export async function persistModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
+async function persistModIcon(server: ManagedServer, filename: string, iconUrl?: string | null) {
   const { directory, plural } = managedContentRuntime(server);
   if (!iconUrl) return;
   let safeIconUrl: string;
@@ -129,11 +129,11 @@ export function modrinthIconProxyUrl(iconUrl?: string | null) {
   return `/api/modrinth/icon?url=${encodeURIComponent(parsed.toString())}`;
 }
 
-export function modrinthIconNotFound(): never {
+function modrinthIconNotFound(): never {
   notFound("Icon not found");
 }
 
-export async function readCachedModrinthIcon(url: string, options: { allowStale?: boolean } = {}) {
+async function readCachedModrinthIcon(url: string, options: { allowStale?: boolean } = {}) {
   const cacheDir = join(config.dataDir, "modrinth-icon-cache");
   const key = createHash("sha256").update(url).digest("hex");
   const entry = await findCachedIconFile(cacheDir, key);
@@ -184,7 +184,7 @@ export async function writeCachedModrinthIcon(url: string, bytes: Buffer, iconUr
   await evictExcessCachedIcons(cacheDir);
 }
 
-export async function loadModrinthIcon(normalizedUrl: string) {
+async function loadModrinthIcon(normalizedUrl: string) {
   const cached = await readCachedModrinthIcon(normalizedUrl);
   if (cached) return cached;
 
@@ -203,7 +203,7 @@ export async function loadModrinthIcon(normalizedUrl: string) {
   return downloadModrinthIcon(normalizedUrl);
 }
 
-export async function downloadModrinthIcon(normalizedUrl: string) {
+async function downloadModrinthIcon(normalizedUrl: string) {
 
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
@@ -265,6 +265,15 @@ export async function fetchModrinthIcon(iconUrl: unknown) {
  * list needs the value anyway, so the result is returned rather than looked up a second time by the
  * caller. That halves the per-mod filesystem work in the common case where the icon is already cached.
  */
+/**
+ * Jars that Modrinth does not recognize, keyed by content hash. Without this the lookup below —
+ * a full file read, a fresh sha1, and an API call — repeated on every mod-list load for every
+ * manually uploaded jar, concurrently, because a miss caches nothing and there is no icon to find
+ * on the next pass either.
+ */
+const unknownModrinthJarHashes = new Set<string>();
+const unknownModrinthJarHashLimit = 2_000;
+
 export async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string, metadata?: InstalledModMetadata) {
   const cached = await modIconUrl(server, filename);
   if (cached) return cached;
@@ -275,11 +284,16 @@ export async function ensureModrinthIconForFile(server: ManagedServer, filename:
     } else {
       const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
       const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
+      if (unknownModrinthJarHashes.has(hash)) return undefined;
       const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
       const version = await versionResponse.json() as { project_id?: string };
       if (version.project_id) {
         const project = await fetchProject(version.project_id);
         await saveModIcon(server, filename, project.icon_url);
+      } else {
+        if (unknownModrinthJarHashes.size >= unknownModrinthJarHashLimit) unknownModrinthJarHashes.clear();
+        unknownModrinthJarHashes.add(hash);
+        return undefined;
       }
     }
   } catch {

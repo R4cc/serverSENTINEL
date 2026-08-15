@@ -3,7 +3,7 @@ import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js"
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { commandRateLimit, destructiveRateLimit, provisionRateLimit, runtimeActionRateLimit } from "../http/rateLimits.js";
 import { badRequest } from "../http/validation.js";
-import { apiErrorResponse } from "../http/errors.js";
+import { apiErrorResponse, throwHttp } from "../http/errors.js";
 import { consoleLogLineLimit } from "../consoleLogs.js";
 import { hasPermission } from "../permissions.js";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
@@ -174,7 +174,19 @@ app.delete<{
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.delete");
   const server = await getServer(request.params.id);
-  return services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
+  // `withMutation` only excludes exports. Without this, deleting a server whose files another
+  // operation is still writing — a ZIP extraction runs in the background after returning 202 — races
+  // the recursive remove: the container goes first, the tree is partly removed, and an ENOTEMPTY
+  // from a directory that refilled mid-walk aborts before the database row is deleted.
+  const active = services.operationsRepository.listActive(server.id);
+  if (active.length > 0) {
+    throwHttp(409, `Wait for the ${active[0].type} operation to finish before deleting this server`, { code: "OPERATION_IN_PROGRESS" });
+  }
+  const deleted = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
+  // The buffer and its upstream follow outlive the container otherwise: `dispose` is only reached
+  // by the idle timer, which never runs while a viewer is still attached.
+  consoleHub.dispose(server.id);
+  return deleted;
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
@@ -245,6 +257,12 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
     const server = await getServer(serverId);
     stopHeartbeat = startConsoleHeartbeat(client);
     socket.on("close", stopHeartbeat);
+    // `attach` below subscribes synchronously and then awaits its upstream, which for a remote node
+    // is a round trip. A viewer that gives up inside that window would otherwise register its close
+    // handler on an already-closed socket, stranding the subscriber and holding the upstream follow
+    // open for the life of the process.
+    let closedDuringAttach = false;
+    socket.on("close", () => { closedDuringAttach = true; });
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
 
     // Per viewer, not per buffer: a viewer that cannot keep up drops its own frames and resumes
@@ -256,6 +274,10 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
       empty: (message) => { sender.send({ type: "empty", message }); }
     }, consoleCursor(url.searchParams));
     socket.on("close", session.detach);
+    if (closedDuringAttach) {
+      session.detach();
+      return;
+    }
 
     sender.send({ type: "backlog", ...session.backlog });
     session.start();

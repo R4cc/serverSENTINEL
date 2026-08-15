@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { defaultRuntimeDataDir, runtimeDataPaths } from "./storage/runtimePaths.js";
 
-export const defaultServersDockerVolumeName = "serversentinel-minecraft-servers";
+const defaultServersDockerVolumeName = "serversentinel-minecraft-servers";
 
 function configuredRuntimeTimeZone() {
   const value = process.env.TZ?.trim() || "UTC";

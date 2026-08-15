@@ -8,9 +8,11 @@ import { allowedForChannel, minecraftVersionsInclude, modrinthJarFile, modrinthS
  * mods.install command, so both reject the same versions for the same reasons.
  */
 
-export type ManagedContentNaming = {
+type ManagedContentNaming = {
   displayName: string;
   singular: "mod" | "plugin";
+  /** The same word at the start of a sentence, which operation titles and error messages need. */
+  Singular: "Mod" | "Plugin";
   plural: string;
   directory: string;
   loaders: readonly string[];
@@ -18,9 +20,11 @@ export type ManagedContentNaming = {
 
 export function managedContentNaming(runtimeType: ServerRuntimeType): ManagedContentNaming {
   const definition = serverRuntimeDefinition(runtimeType);
+  const singular = definition.contentKind === "plugins" ? "plugin" : "mod";
   return {
     displayName: definition.displayName,
-    singular: definition.contentKind === "plugins" ? "plugin" : "mod",
+    singular,
+    Singular: capitalized(singular),
     plural: definition.contentKind,
     directory: definition.contentDirectory,
     loaders: definition.compatibleModrinthLoaders
@@ -53,7 +57,7 @@ export function compatibilityFromSelectedVersion(input: {
   };
 }
 
-export type InstallCandidate = {
+type InstallCandidate = {
   file: ModrinthJarFile;
   hasCompatibleLoader: boolean;
   matchesMinecraft: boolean;

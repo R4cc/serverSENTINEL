@@ -59,6 +59,10 @@
   .authPanel--setup .appForm fieldset > .uiButton {
     grid-column: 1;
   }
+
+  .authPanel .uiButton {
+    min-height: 44px;
+  }
 }
 
 /* The auth card is large enough that the shared rim reads as a second nested

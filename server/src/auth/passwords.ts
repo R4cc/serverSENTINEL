@@ -13,3 +13,16 @@ export function verifyPassword(password: string, user: Pick<StoredUser, "passwor
   const stored = Buffer.from(user.passwordHash, "hex");
   return attempted.length === stored.length && timingSafeEqual(attempted, stored);
 }
+
+/**
+ * A stand-in for a username that does not exist. Skipping the hash entirely when no user matches
+ * answered in microseconds where a real account costs a full scrypt, which tells an unauthenticated
+ * caller which usernames exist from response latency alone. Verifying against this keeps the two
+ * paths the same shape.
+ */
+const decoyUser = hashPassword(randomBytes(32).toString("hex"));
+
+export function verifyPasswordAgainstDecoy(password: string) {
+  verifyPassword(password, decoyUser);
+  return false;
+}

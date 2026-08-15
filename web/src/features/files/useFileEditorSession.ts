@@ -1,16 +1,14 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../../api";
 import { demoFixtures } from "../../demoRuntime";
-import type { FileEditLease, FileListing, InstalledMod, ManagedServer, PublicUser } from "../../types";
+import type { FileEditLease, FileListing, InstalledMod, ManagedServer, Notify, PublicUser } from "../../types";
 import { isEditableFile } from "../../utils/files";
 import { hasFileManagerPermission } from "../../utils/permissions";
 import { validateSafePath } from "../../utils/validation";
 import { errorMessage } from "../../utils/appHelpers";
 import { fileEditBlockedReason, fileLeaseConflictMessage, fileSaveError, unsupportedEditorMessage } from "./fileEditorSession";
 
-export type DiscardEditorRequest = { action: "close" } | { action: "switch"; path: string };
-
-type Notify = (type: "success" | "error" | "info" | "warning", text: string) => void;
+type DiscardEditorRequest = { action: "close" } | { action: "switch"; path: string };
 
 type FileEditorSessionInputs = {
   activeServer: ManagedServer | null | undefined;

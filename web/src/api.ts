@@ -37,7 +37,10 @@ export async function apiErrorFromResponse(response: Response, fallback?: string
   return new ApiError(message, response.status, code, details);
 }
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+export type ApiRequestInit = RequestInit & { timeoutMs?: number };
+
+export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
+  const { timeoutMs, ...requestInit } = init ?? {};
   const multipartBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers = {
     "X-Requested-With": "XMLHttpRequest",
@@ -46,12 +49,20 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   };
   let response: Response;
   try {
+    const timeoutSignal = timeoutMs === undefined ? undefined : AbortSignal.timeout(timeoutMs);
+    const signal = timeoutSignal && requestInit.signal
+      ? AbortSignal.any([requestInit.signal, timeoutSignal])
+      : timeoutSignal ?? requestInit.signal;
     response = await fetch(path, {
-      ...init,
+      ...requestInit,
       headers,
-      credentials: "same-origin"
+      credentials: "same-origin",
+      signal
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new ApiError("The panel did not respond before the request deadline. Try again.", 0, "REQUEST_TIMEOUT");
+    }
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("The request was cancelled.");
     }

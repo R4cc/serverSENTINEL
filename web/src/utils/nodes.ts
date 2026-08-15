@@ -1,7 +1,7 @@
 import { NODE_PROTOCOL_VERSION } from "@serversentinel/contracts";
 import type { NodeView, NodeOperation } from "../types";
 
-export type NodeOperationAdvanceResult = {
+type NodeOperationAdvanceResult = {
   operation?: NodeOperation;
   outcome: "pending" | "completed" | "mismatch";
 };

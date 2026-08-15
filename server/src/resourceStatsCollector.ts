@@ -18,7 +18,7 @@ export type ResourceStatsSample = {
   sampledAt: number;
 };
 
-export type ResourceStatsHistory = {
+type ResourceStatsHistory = {
   samples: ResourceStatsSample[];
 };
 

@@ -3,11 +3,11 @@ import type { PlayerHeadCacheEntry, PlayerHeadCacheRepository } from "./storage/
 
 export const playerHeadProvider = "mc-heads.net";
 export const playerHeadFreshMs = 24 * 60 * 60 * 1000;
-export const playerHeadRequestIntervalMs = 1_000;
-export const playerHeadMaxConcurrentRequests = 2;
-export const playerHeadMaxBytes = 64 * 1024;
-export const playerHeadCacheMaxEntries = 10_000;
-export const playerHeadCacheMaxBytes = 64 * 1024 * 1024;
+const playerHeadRequestIntervalMs = 1_000;
+const playerHeadMaxConcurrentRequests = 2;
+const playerHeadMaxBytes = 64 * 1024;
+const playerHeadCacheMaxEntries = 10_000;
+const playerHeadCacheMaxBytes = 64 * 1024 * 1024;
 
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const defaultRateLimitCooldownMs = 5 * 60 * 1000;
@@ -25,7 +25,7 @@ type QueueItem = {
   resolve: () => void;
 };
 
-export type PlayerHeadServiceOptions = {
+type PlayerHeadServiceOptions = {
   settings: SettingsRepository;
   cache: PlayerHeadCacheRepository;
   fetch?: Fetch;

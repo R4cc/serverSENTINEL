@@ -7,13 +7,13 @@ import type { FastifyInstance } from "fastify";
  * Anything this misses still falls through to the mime-db `compressible` flag, which covers
  * JavaScript and marks the archive, image, and font types we serve as incompressible.
  */
-export const compressibleResponseTypes = /^text\/(?!event-stream)|(?:\+|\/)json(?:;|$)|(?:\+|\/)xml(?:;|$)/u;
+const compressibleResponseTypes = /^text\/(?!event-stream)|(?:\+|\/)json(?:;|$)|(?:\+|\/)xml(?:;|$)/u;
 
 /**
  * Smallest body worth encoding. Below roughly a packet the framing overhead and the lost
  * `Content-Length` cost more than the saved bytes, and most API replies here are small.
  */
-export const compressionThresholdBytes = 1024;
+const compressionThresholdBytes = 1024;
 
 /**
  * Compresses text responses -- the frontend bundle and stylesheet, and every JSON API reply.

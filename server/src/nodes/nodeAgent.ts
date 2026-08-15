@@ -2,14 +2,14 @@ import { existsSync } from "node:fs";
 import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { totalmem } from "node:os";
 import { Readable } from "node:stream";
 import http from "node:http";
 import WebSocket from "ws";
-import { EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
+import { defaultDockerImageForMinecraftVersion, EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { containerConfigHash, isManagedContainerFor, managedContainerLabels } from "../runtime/containerLabels.js";
 import { computeContainerResourceSample, type DockerStatsSample } from "../runtime/containerStats.js";
+import { isValidServerPort, queryPortEntry } from "../servers/ports.js";
 import { planServerUpdate } from "../servers/serverUpdatePlan.js";
 import { storageSpaceForPath } from "../servers/storageSpace.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
@@ -50,11 +50,13 @@ import {
   toPublicServerPath,
   writeServerTextFile
 } from "../runtime/local/fileService.js";
-import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
+import { detectedTotalMemory, minecraftContainerNetworkingConfig } from "../runtime/local/dockerContainers.js";
+import { detailedError, detailedErrorMessage } from "../logging.js";
+import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { runtimeSelection } from "../runtime/selection.js";
 import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
-import type { ManagedServer, ManagedServerPort, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
+import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizeNodeUpdateFailure, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
@@ -114,9 +116,6 @@ type DockerContainerListItem = {
   State?: string;
   Status?: string;
 };
-type DockerInfo = {
-  MemTotal?: number;
-};
 type CreateInput = {
   nodeId?: string;
   displayName?: string;
@@ -150,22 +149,13 @@ const panelHeartbeatTimeoutMs = 45_000;
 
 export function nodeReconnectDelayMs(attempt: number, random = Math.random) {
   const ceiling = Math.min(reconnectMaxDelayMs, reconnectBaseDelayMs * (2 ** Math.min(Math.max(0, attempt), 5)));
-  return Math.round(reconnectBaseDelayMs + (ceiling - reconnectBaseDelayMs) * Math.min(1, Math.max(0, random())));
+  const floor = Math.max(500, ceiling / 2);
+  return Math.round(floor + (ceiling - floor) * Math.min(1, Math.max(0, random())));
 }
 const removablePreviousNodeStates = new Set(["created", "dead", "exited", "removing"]);
-
-function detailedError(error: Error, details: string) {
-  (error as Error & { details?: string }).details = details;
-  return error;
-}
-
-function detailedErrorMessage(error: unknown) {
-  if (error instanceof Error && "details" in error && typeof error.details === "string" && error.details.trim()) {
-    return error.details.trim();
-  }
-  if (error instanceof Error) return `${error.name}: ${error.message}${error.stack ? `\n${error.stack}` : ""}`;
-  return String(error);
-}
+/** Queued console bytes on the panel socket past which the node stops reading container logs. */
+const consoleStreamHighWaterMark = 4 * 1024 * 1024;
+const consoleStreamDrainPollMs = 50;
 
 let nodeStorageDatabase: StorageDatabase | undefined;
 let nodeUpdateInProgress = false;
@@ -331,26 +321,6 @@ async function dockerServerRoot(server: ManagedServer) {
   return join(config.nodeDockerDataDir, rel);
 }
 
-function isValidServerPort(port: string) {
-  if (!/^\d+$/.test(port)) return false;
-  const value = Number(port);
-  return value >= minServerPort && value <= maxServerPort;
-}
-
-function queryPortEntry(port: number, internalPort = port): ManagedServerPort {
-  return {
-    id: "minecraft-query",
-    name: "Minecraft Query",
-    type: "query",
-    protocol: "udp",
-    internalPort,
-    externalPort: port,
-    required: true,
-    removable: false,
-    advanced: true
-  };
-}
-
 function queryPortFromInput(input: { queryPort?: string; dockerPorts?: string }) {
   if (input.queryPort?.trim() && isValidServerPort(input.queryPort.trim())) return Number(input.queryPort.trim());
   const udpBinding = (input.dockerPorts || "").split(",").map((part) => part.trim()).find((part) => part.endsWith("/udp"));
@@ -417,9 +387,9 @@ async function createContainer(server: ManagedServer, networkingConfig?: NodeNet
     Env: minecraftContainerEnvironment(),
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "no" } },
-    NetworkingConfig: networkingConfig ?? createNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
+    NetworkingConfig: networkingConfig ?? minecraftContainerNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
     Labels: managedContainerLabels(server.id, runtimeConfigHash(server))
-  }, [201, 409]);
+  }, 201);
 }
 
 function minecraftContainerCommand(server: ManagedServer) {
@@ -453,7 +423,7 @@ async function removeManagedContainer(server: ManagedServer) {
 }
 
 async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?: NodeNetworkingConfig) {
-  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  const details = await inspectOrMissing(server);
   if (!details) {
     await createContainer(server, preferredNetworkingConfig);
     return;
@@ -474,7 +444,7 @@ async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?
 }
 
 async function recreateContainerAfterMissingNetwork(server: ManagedServer) {
-  const details = await inspect(server).catch(() => null) as NodeContainerInspect | null;
+  const details = await inspectOrMissing(server);
   const networkingConfig = minecraftContainerNetworkingConfig(details, await inspectCurrentContainer().catch(() => null));
   await removeManagedContainer(server);
   await createContainer(server, networkingConfig);
@@ -649,7 +619,7 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
     }), "utf8");
   }
   if (containerConfigChanged && dockerAvailable() && !running) {
-    const networkingConfig = minecraftContainerNetworkingConfig(await inspect(server).catch(() => null) as NodeContainerInspect | null);
+    const networkingConfig = minecraftContainerNetworkingConfig(await inspectOrMissing(server));
     await removeManagedContainer(server);
     await ensureContainer(updated, networkingConfig);
   }
@@ -660,8 +630,29 @@ async function inspect(server: ManagedServer) {
   return dockerRequest("GET", `/containers/${encodeURIComponent(containerName(server))}/json`);
 }
 
+function isMissingContainerError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /No such container|Docker API (?:request )?(?:returned|failed with) 404|status(?:Code)? 404/i.test(message);
+}
+
+async function inspectOrMissing(server: ManagedServer) {
+  try {
+    return await inspect(server) as NodeContainerInspect;
+  } catch (error) {
+    if (isMissingContainerError(error)) return null;
+    throw error;
+  }
+}
+
+function assertContainerOwnership(server: ManagedServer, details: NodeContainerInspect | null) {
+  if (details && !isManagedContainerFor(details.Config?.Labels, server.id)) {
+    throw new Error(`Container ${containerName(server)} exists but is not managed by this server; refusing to access it`);
+  }
+  return details;
+}
+
 async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeContainerInspect | null) {
-  const details = prefetchedDetails === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : prefetchedDetails;
+  const details = prefetchedDetails === undefined ? await inspectOrMissing(server) : prefetchedDetails;
   const running = Boolean(details?.State?.Running);
   const managed = isManagedContainerFor(details?.Config?.Labels, server.id);
   if (details && managed) await reconcileRestartPolicy(server, details);
@@ -709,7 +700,7 @@ async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeCont
 }
 
 async function resourceStats(server: ManagedServer, details?: NodeContainerInspect | null) {
-  const inspected = details === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : details;
+  const inspected = assertContainerOwnership(server, details === undefined ? await inspectOrMissing(server) : details);
   const running = inspected?.State?.Running === true;
   if (!running) return { available: true, running: false, cpuPercent: 0, memoryUsageBytes: 0, memoryLimitBytes: 0, networkRxBytes: 0, networkTxBytes: 0, sampledAt: new Date().toISOString() };
   const name = encodeURIComponent(containerName(server));
@@ -727,7 +718,7 @@ async function resourceStats(server: ManagedServer, details?: NodeContainerInspe
 async function playerObservation(server: ManagedServer, details?: NodeContainerInspect | null) {
   const propsPath = await inside(server, "server.properties", false);
   const props = parseServerProperties(await readFile(propsPath, "utf8").catch(() => ""));
-  const minecraftInspect = details === undefined ? await inspect(server).catch(() => null) as NodeContainerInspect | null : details;
+  const minecraftInspect = assertContainerOwnership(server, details === undefined ? await inspectOrMissing(server) : details);
   const running = minecraftInspect?.State?.Running === true;
   const callerInspect = running ? await inspectCurrentContainer().catch(() => null) : null;
   const [endpoint = null, ...fallbackEndpoints] = running ? resolveMinecraftQueryEndpoints(server, props, minecraftInspect, callerInspect) : [];
@@ -755,20 +746,6 @@ function sendStreamEnd(socket: WebSocket, id: string, error?: NodeStreamEndMessa
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "streamEnd", id, error } satisfies NodeStreamEndMessage));
   }
-}
-
-async function detectedTotalMemory() {
-  if (dockerAvailable()) {
-    try {
-      const info = await dockerRequest<DockerInfo>("GET", "/info");
-      if (typeof info.MemTotal === "number" && info.MemTotal > 0) {
-        return info.MemTotal;
-      }
-    } catch {
-      // Fall through to Node's view when Docker host info cannot be read.
-    }
-  }
-  return totalmem();
 }
 
 function startConsoleStream(server: ManagedServer, streamId: string, socket: WebSocket, onDone: () => void) {
@@ -809,11 +786,37 @@ function startConsoleStream(server: ManagedServer, streamId: string, socket: Web
       }
 
       const decoder = new DockerLogDecoder();
+      let drainTimer: NodeJS.Timeout | undefined;
+      // A container can write faster than the panel's socket drains — a crash loop, a mod logging
+      // per tick. Every other high-volume path here awaits its send; this one cannot, so it pauses
+      // the docker response instead. Without it the frames queue in the agent's heap without limit
+      // and take the whole node down, not just the console.
+      const applyBackpressure = () => {
+        if (closed || drainTimer || socket.bufferedAmount <= consoleStreamHighWaterMark) return;
+        response.pause();
+        drainTimer = setInterval(() => {
+          if (closed || socket.readyState !== WebSocket.OPEN) {
+            clearInterval(drainTimer);
+            drainTimer = undefined;
+            return;
+          }
+          if (socket.bufferedAmount > consoleStreamHighWaterMark) return;
+          clearInterval(drainTimer);
+          drainTimer = undefined;
+          response.resume();
+        }, consoleStreamDrainPollMs);
+        drainTimer.unref?.();
+      };
       response.on("data", (chunk: Buffer) => {
         const text = decoder.write(chunk).toString("utf8");
         if (text) {
           sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
+          applyBackpressure();
         }
+      });
+      response.on("close", () => {
+        if (drainTimer) clearInterval(drainTimer);
+        drainTimer = undefined;
       });
       response.on("end", () => finish());
       response.on("error", (error) => {
@@ -852,34 +855,20 @@ function cleanContainerName(name?: string) {
   return (name || "").replace(/^\/+/, "");
 }
 
-function validateNodeDockerImageName(image: string) {
-  const value = image.trim();
-  if (!value || value.length > 255 || /\s/.test(value) || !/^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(value)) {
-    throw new Error("Docker image name contains invalid characters");
-  }
-  return value;
-}
-
-function createNetworkingConfig(inspect?: Pick<NodeContainerInspect, "NetworkSettings"> | null): NodeNetworkingConfig | undefined {
-  const networks = inspect?.NetworkSettings?.Networks;
-  if (!networks || Object.keys(networks).length === 0) return undefined;
-  return {
-    EndpointsConfig: Object.fromEntries(Object.entries(networks).map(([name, network]) => [name, {
-      IPAMConfig: network.IPAMConfig,
-      Aliases: network.Aliases,
-      DriverOpts: network.DriverOpts
-    }]))
-  };
-}
-
-function minecraftContainerNetworkingConfig(existing?: Pick<NodeContainerInspect, "NetworkSettings"> | null, fallback?: Pick<NodeContainerInspect, "NetworkSettings"> | null) {
-  return createNetworkingConfig(existing) ?? createNetworkingConfig(fallback);
-}
-
 async function prepareNodeUpdate(payload: unknown) {
   if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
+  nodeUpdateInProgress = true;
+  try {
+    return await prepareNodeUpdateUnlocked(payload);
+  } catch (error) {
+    nodeUpdateInProgress = false;
+    throw error;
+  }
+}
+
+async function prepareNodeUpdateUnlocked(payload: unknown) {
   const input = (typeof payload === "object" && payload !== null ? payload : {}) as NodeUpdateRequest;
-  const image = validateNodeDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${appVersion}`);
+  const image = validateDockerImageName(typeof input.image === "string" && input.image.trim() ? input.image.trim() : config.nodeImage || `nl2109/serversentinel:${appVersion}`);
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Mount the Docker socket before updating the node from the panel.");
   }
@@ -903,8 +892,6 @@ async function prepareNodeUpdate(payload: unknown) {
   await mkdir(nodeUpdateDir, { recursive: true });
   const planPath = join(nodeUpdateDir, `node-update-${Date.now()}.json`);
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
-  nodeUpdateInProgress = true;
-
   await clearStoredNodeUpdateFailure();
   setTimeout(() => {
     void selfUpdateContainer(inspect, image, currentName, planPath).catch((error) => {
@@ -942,6 +929,7 @@ async function prepareNodeUpdate(payload: unknown) {
 }
 
 async function prepareNodeRestart() {
+  if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Mount the Docker socket before restarting the node from the panel.");
   }
@@ -963,6 +951,7 @@ async function prepareNodeRestart() {
 }
 
 async function prepareNodeRemoval() {
+  if (nodeUpdateInProgress) throw new Error("A node update is already in progress");
   if (!dockerAvailable()) {
     throw new Error("Docker socket is not mounted on this node. Stop the node container manually after removing it from the panel.");
   }
@@ -1031,7 +1020,7 @@ export function nodeReplacementContainerConfig(
     MacAddress: undefined,
     NetworkDisabled: undefined,
     HostConfig: inspect.HostConfig,
-    NetworkingConfig: createNetworkingConfig(inspect)
+    NetworkingConfig: minecraftContainerNetworkingConfig(inspect)
   };
 }
 
@@ -1062,8 +1051,12 @@ async function selfUpdateContainer(inspect: NodeContainerInspect, image: string,
     const previousImageConfig = await inspectImageConfig(inspect.Image || inspect.Config?.Image);
 
     stage = "create";
-    oldName = `${currentName}-previous-${Date.now()}`;
-    await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(oldName)}`, 204);
+    const previousName = `${currentName}-previous-${Date.now()}`;
+    await dockerRequest("POST", `/containers/${encodeURIComponent(inspect.Id)}/rename?name=${encodeURIComponent(previousName)}`, 204);
+    // Only now does the old container answer to that name. Recording it before the rename made a
+    // failed rename look like one that had happened, so recovery tried to rename the container to
+    // the name it still held and reported an unrecovered failure for an untouched node.
+    oldName = previousName;
     const created = await dockerJsonRequest<{ Id?: string }>("POST", `/containers/create?name=${encodeURIComponent(currentName)}`, nodeReplacementContainerConfig(inspect, image, previousImageConfig), 201);
     replacementId = created?.Id || currentName;
     await writeStatus("created", { oldName });
@@ -1364,7 +1357,7 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   const result: ServerObservationResultItem = { serverId: server.id };
   const errors: ServerObservationResultItem["errors"] = {};
   const needsInspect = sections.has("status") || sections.has("stats") || sections.has("players");
-  const details = needsInspect ? await inspect(server).catch(() => null) as NodeContainerInspect | null : undefined;
+  const details = needsInspect ? await inspectOrMissing(server) : undefined;
   const tasks: Promise<void>[] = [];
   const run = (section: ServerObservationSection, operation: () => Promise<unknown>, assign: (value: any) => void) => {
     tasks.push(operation().then(assign).catch((error) => { errors[section] = observationError(error); }));
@@ -1493,15 +1486,14 @@ async function modsList(server: ManagedServer) {
 }
 
 async function writeManagedContentBuffer(server: ManagedServer, filename: unknown, content: Buffer) {
-  const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
-  const singular = runtime.contentKind === "plugins" ? "Plugin" : "Mod";
+  const { directory, singular, Singular } = managedContentNaming(runtimeTarget(server).runtimeType);
   const name = safeModFilename(safeInstalledModFilename(filename as string | undefined));
-  if (!name.endsWith(".jar")) throw new Error(`${singular} uploads must be .jar files`);
-  if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular.toLowerCase()} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
-  assertJarBuffer(content, singular.toLowerCase());
-  await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
-  await inside(server, runtime.contentDirectory);
-  return writeRelativeFile(server, posix.join(runtime.contentDirectory, name), content);
+  if (!name.endsWith(".jar")) throw new Error(`${Singular} uploads must be .jar files`);
+  if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
+  assertJarBuffer(content, singular);
+  await mkdir(await inside(server, directory, false), { recursive: true });
+  await inside(server, directory);
+  return writeRelativeFile(server, posix.join(directory, name), content);
 }
 
 type PreparedBinaryUpload = {
@@ -1530,14 +1522,15 @@ async function prepareBinaryUpload(message: NodeTransferStartMessage): Promise<P
     targetPath = await writableResolvedInside(server, join(parent, safeName(payload.filename)));
   } else {
     maximumBytes = uploadLimit;
-    const runtime = serverRuntimeDefinition(runtimeTarget(server).runtimeType);
+    const runtimeType = runtimeTarget(server).runtimeType;
+    const runtime = serverRuntimeDefinition(runtimeType);
     const expectedPrefix = runtime.contentKind === "mods" ? "mods" : "content";
     if (!runtime.managedContent || !message.command.startsWith(`${expectedPrefix}.`)) throw new Error(`${runtime.displayName} does not support this managed-content upload`);
-    const singular = runtime.contentKind === "plugins" ? "plugin" : "mod";
+    const { directory, singular, Singular } = managedContentNaming(runtimeType);
     const name = safeModFilename(safeInstalledModFilename(payload.filename as string | undefined));
-    if (!name.endsWith(".jar")) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} uploads must be .jar files`);
-    await mkdir(await inside(server, runtime.contentDirectory, false), { recursive: true });
-    targetPath = await writableInside(server, posix.join(runtime.contentDirectory, name));
+    if (!name.endsWith(".jar")) throw new Error(`${Singular} uploads must be .jar files`);
+    await mkdir(await inside(server, directory, false), { recursive: true });
+    targetPath = await writableInside(server, posix.join(directory, name));
     managedContentName = singular;
   }
   if (message.size < (managedContentName ? 1 : 0) || message.size > maximumBytes) {
@@ -1621,7 +1614,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const channel: ReleaseChannel = payload.channel === "alpha" || payload.channel === "beta" ? payload.channel : "release";
   const targetRuntime = runtimeTarget(server);
   const naming = managedContentNaming(targetRuntime.runtimeType);
-  const singular = naming.singular;
+  const { singular, Singular } = naming;
   if (!targetRuntime.minecraftVersion) throw new Error(`A resolved ${naming.displayName} runtime profile is required before installing compatible ${naming.plural}`);
 
   if (!versionId) {
@@ -1631,7 +1624,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     if (!file?.url || !file.filename) throw new Error("No installable .jar file was found for that version");
     assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
     const response = await modrinthFetch(file.url, { signal });
-    if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
+    if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
     const content = Buffer.from(await response.arrayBuffer());
     assertModrinthJarHashes(content, file);
     const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
@@ -1665,7 +1658,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
   assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
   const response = await modrinthFetch(file.url, { signal });
-  if (!response.ok) throw new Error(`${singular === "plugin" ? "Plugin" : "Mod"} download failed: ${response.statusText}`);
+  if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
   const content = Buffer.from(await response.arrayBuffer());
   assertModrinthJarHashes(content, file);
   const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
@@ -1702,7 +1695,7 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     return updateServer(server, payload?.input as UpdateInput, signal);
   }
   if (command === "server.delete") {
-    const status = await inspect(server).catch(() => null) as any;
+    const status = await inspectOrMissing(server);
     if (status?.State?.Running) throw new Error("Stop the server before deleting it");
     const deletedContainer = await removeManagedContainer(server);
     if (payload?.input?.deleteFiles) await rm(await serverRoot(server), { recursive: true, force: true });
@@ -1715,7 +1708,13 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
     await requestContainerLifecycleAction(server, "start", signal);
     return runtimeStatus(server);
   }
-  if (command === "server.stop") { signal?.throwIfAborted(); await dockerRequest("POST", `/containers/${name}/stop${dockerStopQuery()}`, [204, 304], signal, dockerStopRequestTimeoutMs()); return runtimeStatus(server); }
+  if (command === "server.stop") {
+    signal?.throwIfAborted();
+    const details = assertContainerOwnership(server, await inspectOrMissing(server));
+    if (!details) return runtimeStatus(server, null);
+    await dockerRequest("POST", `/containers/${name}/stop${dockerStopQuery()}`, [204, 304], signal, dockerStopRequestTimeoutMs());
+    return runtimeStatus(server);
+  }
   if (command === "server.restart") {
     await ensureContainer(server);
     await requestContainerLifecycleAction(server, "restart", signal);
@@ -1822,7 +1821,6 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
 
 export const __nodeAgentTestHooks = {
   cleanupPreviousNodeContainers,
-  createNetworkingConfig,
   createdServerRecord,
   handleCommand,
   minecraftContainerNetworkingConfig,
@@ -1875,7 +1873,7 @@ export async function startNodeAgent() {
     const activeStreams = new Map<string, () => void>();
     const activeRequests = new Map<string, AbortController>();
     type ActiveTransfer =
-      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void> }
+      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void>; cancelled: boolean; writeError?: Error }
       | { direction: "download"; stream?: NodeJS.ReadableStream; cancelled: boolean };
     const activeTransfers = new Map<string, ActiveTransfer>();
     let accepted = false;
@@ -1889,8 +1887,10 @@ export async function startNodeAgent() {
       activeRequests.clear();
       for (const transfer of activeTransfers.values()) {
         if (transfer.direction === "upload") {
-          void transfer.file.close().catch(() => undefined);
-          void rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
+          transfer.cancelled = true;
+          void transfer.writes.catch(() => undefined)
+            .then(() => transfer.file.close().catch(() => undefined))
+            .then(() => rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined));
         } else {
           transfer.cancelled = true;
           if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();
@@ -1906,6 +1906,14 @@ export async function startNodeAgent() {
       if (heartbeatWatchdog) clearInterval(heartbeatWatchdog);
       if (stableSessionTimer) clearTimeout(stableSessionTimer);
       if (stopping) return;
+      // During a self-update the replacement container handshakes with this node's identity, so the
+      // panel closes this session on purpose. Reconnecting here would evict the replacement, which
+      // reconnects and evicts this one, flapping the node until the outgoing container is removed.
+      // A failed update clears the flag before calling reconnectToPanel, so the report still lands.
+      if (nodeUpdateInProgress) {
+        console.warn(`Node agent disconnected during a self-update: ${reason}. The replacement container owns the session.`);
+        return;
+      }
       const reconnectDelayMs = nodeReconnectDelayMs(reconnectAttempt);
       reconnectAttempt += 1;
       console.warn(`Node agent disconnected: ${reason}. Reconnecting in ${Math.max(1, Math.round(reconnectDelayMs / 1000))}s.`);
@@ -1954,10 +1962,22 @@ export async function startNodeAgent() {
           const { id, payload } = decodeTransferChunk(rawBuffer);
           const transfer = activeTransfers.get(id);
           if (!transfer || transfer.direction !== "upload") return;
+          if (transfer.cancelled || transfer.writeError) return;
           transfer.received += payload.byteLength;
           if (transfer.received > transfer.expectedSize || transfer.received > transfer.prepared.maximumBytes) throw new Error("Upload exceeded its declared limit");
           transfer.hash.update(payload);
+          // Pause the shared socket until this chunk reaches disk. Without this backpressure a slow
+          // volume retained every upload chunk in a promise chain (up to the full transfer limit),
+          // and an early ENOSPC rejection could go unobserved until transferFinish.
+          socket.pause();
           transfer.writes = transfer.writes.then(async () => { await transfer.file.write(payload); });
+          void transfer.writes.then(
+            () => { if (socket.readyState === WebSocket.OPEN) socket.resume(); },
+            (error) => {
+              transfer.writeError = error as Error;
+              if (socket.readyState === WebSocket.OPEN) socket.resume();
+            }
+          );
         } catch {
           socket.close(1002, "Invalid binary transfer frame");
         }
@@ -2019,10 +2039,13 @@ export async function startNodeAgent() {
       }
       if (message.type === "cancel") {
         activeRequests.get(message.id)?.abort();
-        activeRequests.delete(message.id);
         return;
       }
       if (message.type === "transferStart") {
+        if (activeTransfers.has(message.id)) {
+          socket.close(1002, "Duplicate transfer id");
+          return;
+        }
         if (activeTransfers.size >= nodeProtocolMaxActiveTransfers) {
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "node_overloaded", message: "Node transfer limit reached", retryable: true } } satisfies NodeTransferResultMessage));
           return;
@@ -2031,7 +2054,7 @@ export async function startNodeAgent() {
           try {
             const prepared = await prepareBinaryUpload(message);
             const file = await open(prepared.temporaryPath, "wx");
-            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve() });
+            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve(), cancelled: false });
             socket.send(JSON.stringify({ type: "transferReady", id: message.id }));
           } catch (error) {
             socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_rejected", message: (error as Error).message } } satisfies NodeTransferResultMessage));
@@ -2074,6 +2097,7 @@ export async function startNodeAgent() {
         if (!transfer || transfer.direction !== "upload") return;
         try {
           await transfer.writes;
+          if (transfer.writeError) throw transfer.writeError;
           if (transfer.received !== transfer.expectedSize || transfer.received !== message.size || transfer.hash.digest("hex") !== message.sha256) {
             throw new Error("Transfer size or SHA-256 did not match");
           }
@@ -2111,6 +2135,8 @@ export async function startNodeAgent() {
         const transfer = activeTransfers.get(message.id);
         activeTransfers.delete(message.id);
         if (transfer?.direction === "upload") {
+          transfer.cancelled = true;
+          await transfer.writes.catch(() => undefined);
           await transfer.file.close().catch(() => undefined);
           await rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
         } else if (transfer) {
@@ -2160,6 +2186,10 @@ export async function startNodeAgent() {
         return;
       }
       if (message.type !== "request") return;
+      if (activeRequests.has(message.id)) {
+        socket.close(1002, "Duplicate request id");
+        return;
+      }
       if (activeRequests.size >= nodeProtocolMaxActiveRequests) {
         socket.send(JSON.stringify({ type: "response", id: message.id, ok: false, error: { code: "node_overloaded", message: "Node command limit reached", retryable: true } } satisfies NodeResponseMessage));
         return;

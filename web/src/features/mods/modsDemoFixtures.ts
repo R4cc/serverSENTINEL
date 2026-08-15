@@ -4,7 +4,7 @@ const modsDemoFixtureQuery = "mods-fixture";
 const modsDemoFixtureNames = ["default", "empty", "large", "mixed", "updates", "missing-modrinth", "fail-update-plan", "fail-search", "fail-versions"] as const;
 export type ModsDemoFixtureName = typeof modsDemoFixtureNames[number];
 
-export type ModsDemoFailure = "update-plan" | "search" | "versions";
+type ModsDemoFailure = "update-plan" | "search" | "versions";
 
 export function readModsDemoFixture(search = window.location.search): ModsDemoFixtureName {
   const requested = new URLSearchParams(search).get(modsDemoFixtureQuery);

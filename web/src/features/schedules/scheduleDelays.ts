@@ -1,4 +1,4 @@
-export type ScheduleDelayUnit = "seconds" | "minutes" | "hours";
+type ScheduleDelayUnit = "seconds" | "minutes" | "hours";
 
 const secondsPerUnit: Record<ScheduleDelayUnit, number> = {
   seconds: 1,

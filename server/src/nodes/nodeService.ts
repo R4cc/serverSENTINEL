@@ -4,10 +4,9 @@ import { appBuildId, appVersion } from "../buildInfo.js";
 import { panelNodeConnections, services } from "../appServices.js";
 import { detectedTotalMemory } from "../runtime/local/dockerContainers.js";
 import { buildNodeInstallInstructions } from "./installInstructions.js";
-import type { NodeInstallInstructions, NodeUpdateFailure } from "@serversentinel/contracts";
+import { compareVersionStrings, type NodeInstallInstructions, type NodeUpdateFailure } from "@serversentinel/contracts";
 import { totalmem } from "node:os";
 import { badRequest } from "../http/validation.js";
-import { compareVersionStrings } from "../servers/versions.js";
 import { throwHttp } from "../http/errors.js";
 import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
 import { normalizeNode } from "../storage/nodesRepository.js";
@@ -16,8 +15,8 @@ import { nodeUpdateNotificationsEnabled } from "./nodeUpdateNotifications.js";
 import { readNodeUpdateFailure } from "./nodeUpdateStatus.js";
 
 export const localNodeId = "local";
-export const nodeImageRepository = "nl2109/serversentinel";
-export const nodeImage = config.nodeImage || `${nodeImageRepository}:${appVersion}`;
+const nodeImageRepository = "nl2109/serversentinel";
+const nodeImage = config.nodeImage || `${nodeImageRepository}:${appVersion}`;
 
 export function nodeUpdateImageForBuild(configuredImage?: string, buildId?: string, version = appVersion) {
   const configured = configuredImage?.trim();
@@ -32,7 +31,7 @@ export function nodeUpdateAlreadyCurrent(node: Pick<ManagedNode, "agentVersion" 
 }
 
 /** The release where the node image moved to Distroless and its entrypoint changed. */
-export const nodeEntrypointChangeVersion = "26.8.11";
+const nodeEntrypointChangeVersion = "26.8.11";
 
 /**
  * Whether a node has to be recreated by hand instead of updating itself. Agents older than the
@@ -47,8 +46,8 @@ export function nodeUpdateNeedsManualRecreate(agentVersion?: string, requestedIm
     && (compareVersionStrings(targetVersion, nodeEntrypointChangeVersion) ?? -1) >= 0;
 }
 
-export const minNodeJoinTokenTtlMinutes = 5;
-export const maxNodeJoinTokenTtlMinutes = 1440;
+const minNodeJoinTokenTtlMinutes = 5;
+const maxNodeJoinTokenTtlMinutes = 1440;
 
 export function hashNodeSecret(secret: string) {
   return createHash("sha256").update(secret).digest("hex");
@@ -125,7 +124,7 @@ function persistedNodeSnapshot(node: ManagedNode) {
   return JSON.stringify(normalizeNode(node));
 }
 
-export function publicNode(node: ManagedNode, updateNotificationsEnabled = true, lastUpdateFailure?: NodeUpdateFailure): PublicNode {
+function publicNode(node: ManagedNode, updateNotificationsEnabled = true, lastUpdateFailure?: NodeUpdateFailure): PublicNode {
   const normalized = normalizeNode(node);
   const { secretHash: _secretHash, joinTokenHash: _joinTokenHash, ...publicFields } = normalized;
   return {
@@ -209,13 +208,13 @@ export function findServerNode(server: ManagedServer, nodes: ManagedNode[]) {
   return nodes.find((node) => node.id === server.nodeId);
 }
 
-export type NodeServerCleanupFailure = {
+type NodeServerCleanupFailure = {
   serverId: string;
   serverName: string;
   message: string;
 };
 
-export type NodeServerCleanupSummary = {
+type NodeServerCleanupSummary = {
   attempted: number;
   deletedContainers: number;
   failed: NodeServerCleanupFailure[];
@@ -259,4 +258,21 @@ export function nodeServerCleanupError(summary: NodeServerCleanupSummary) {
   return `Could not clean up ${summary.failed.length} managed server container${summary.failed.length === 1 ? "" : "s"} before deleting the node: ${names}.`;
 }
 
-export const activeNodeUpdates = new Map<string, { version?: string; buildId?: string }>();
+/**
+ * Updates the panel is waiting to see land. A panel-built image has a predictable target, so the
+ * reconnect must report exactly that version and build. A custom image does not, so the target is
+ * recorded as the identity the node had *before* the update and completion means it changed —
+ * without that, an empty expectation matched any reconnect at all, including the outgoing agent's.
+ */
+export type ActiveNodeUpdate =
+  | { version: string; buildId?: string }
+  | { fromVersion?: string; fromBuildId?: string };
+
+export const activeNodeUpdates = new Map<string, ActiveNodeUpdate>();
+
+export function nodeUpdateHasLanded(expected: ActiveNodeUpdate, node: Pick<ManagedNode, "agentVersion" | "buildId">) {
+  if ("version" in expected) {
+    return node.agentVersion === expected.version && (!expected.buildId || node.buildId === expected.buildId);
+  }
+  return node.agentVersion !== expected.fromVersion || node.buildId !== expected.fromBuildId;
+}

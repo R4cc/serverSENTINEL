@@ -5,6 +5,7 @@ import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "..
 import { requestUsesPublicHttps } from "../http/requestOrigin.js";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
 import { setRequestLogActor } from "../logging.js";
+import { verifyPasswordAgainstDecoy } from "../auth/passwords.js";
 import { throwHttp } from "../http/errors.js";
 
 type UserPermissionData = {
@@ -114,7 +115,9 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const password = typeof body.password === "string" && body.password.length <= 256 ? body.password : "";
     const users = context.users.list();
     const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
-    if (!user || !context.verifyPassword(password, user)) {
+    // Both branches run one scrypt, so an unknown username costs the same as a wrong password.
+    const credentialsValid = user ? context.verifyPassword(password, user) : verifyPasswordAgainstDecoy(password);
+    if (!user || !credentialsValid) {
       context.logWarn({
         attemptedUsername: username.slice(0, 64),
         usernameTruncated: username.length > 64 || undefined,

@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 
 export const defaultRuntimeDataDir = "/data";
 
-export type RuntimeDataPaths = {
+type RuntimeDataPaths = {
   dataDir: string;
   databasePath: string;
   serversDir: string;
@@ -13,7 +13,7 @@ export type RuntimeDataPaths = {
   nodeUpdatesDir: string;
 };
 
-export function resolveRuntimeDataDir(value?: string) {
+function resolveRuntimeDataDir(value?: string) {
   const trimmed = value?.trim();
   return resolve(trimmed || defaultRuntimeDataDir);
 }

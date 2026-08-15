@@ -3,9 +3,9 @@ import { createPortal } from "react-dom";
 import type { ActionMenuItem } from "./ActionMenu";
 import { focusNextMenuItem } from "./menuFocus";
 
-export type ContextMenuPoint = { x: number; y: number };
-export type ContextMenuSize = { width: number; height: number };
-export type ContextMenuViewport = { width: number; height: number };
+type ContextMenuPoint = { x: number; y: number };
+type ContextMenuSize = { width: number; height: number };
+type ContextMenuViewport = { width: number; height: number };
 
 export function contextMenuPosition(
   point: ContextMenuPoint,

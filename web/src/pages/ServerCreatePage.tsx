@@ -1,15 +1,13 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { serverRuntimeDefinitions, serverRuntimeTypes, type ServerRuntimeDefinition, type ServerRuntimeType } from "@serversentinel/contracts";
+import { defaultDockerImageForMinecraftVersion, javaMajorVersionForMinecraft, serverRuntimeDefinitions, serverRuntimeTypes, type ServerRuntimeDefinition, type ServerRuntimeType } from "@serversentinel/contracts";
 import { api } from "../api";
 import { dockerContainerNameInputPattern } from "../utils/inputPatterns";
 import type { ContextNode, RuntimeVersion } from "../types";
 import {
-  defaultDockerImageForMinecraftVersion,
   defaultQueryPort,
   defaultServerPort,
   formatBytes,
   isValidServerPort,
-  javaMajorVersionForMinecraft,
   maxServerPort,
   minServerPort
 } from "../utils/format";
@@ -121,7 +119,8 @@ export function ManagedServerForm({
     return showSnapshots ? source : source.filter((version) => version.stable !== false);
   }, [compatibleRuntimeVersions, runtimeType, showSnapshots]);
   const recommendedRuntime = runtimeOptions.find((version) => version.recommended) || runtimeOptions.find((version) => version.stable !== false) || runtimeOptions[0];
-  const summaryJavaVersion = javaMajorVersionForMinecraft(minecraftVersion);
+  // 21 stands in until a version is picked; it is what every current release resolves to.
+  const summaryJavaVersion = javaMajorVersionForMinecraft(minecraftVersion) ?? 21;
   const runtimeCompatible = runtimeDefinition.managedProvisioning
     && !minecraftVersionsLoading
     && !runtimeVersionsLoading

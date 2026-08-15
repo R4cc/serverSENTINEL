@@ -1,12 +1,12 @@
 import type { FastifyRequest } from "fastify";
 import { config } from "../config.js";
 import { forbidden } from "./validation.js";
-export type OriginRequest = {
+type OriginRequest = {
   protocol: string;
   headers: Record<string, unknown>;
 };
 
-export function firstHeaderToken(value: unknown) {
+function firstHeaderToken(value: unknown) {
   const raw = Array.isArray(value) ? value[0] : value;
   return typeof raw === "string" ? raw.split(",", 1)[0]?.trim() ?? "" : "";
 }

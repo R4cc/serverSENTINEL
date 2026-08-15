@@ -44,7 +44,7 @@ type DemoTimelineScenarioPlayers = {
   blink: string;
 };
 
-export type DemoSession = {
+type DemoSession = {
   startedAt: number;
   playerCount: number;
   maxPlayers: number;
@@ -381,7 +381,7 @@ export function schedulesForDemoFixture(fixture: "default" | "active" = "default
   return schedules;
 }
 
-export const initialDemoMods: InstalledMod[] = [
+const initialDemoMods: InstalledMod[] = [
   {
     filename: "distanthorizons-3.0.3-b-26.1.2-fabric-neoforge.jar",
     displayName: "Distant Horizons",

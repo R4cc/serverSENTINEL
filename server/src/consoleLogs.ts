@@ -1,7 +1,7 @@
 import { open } from "node:fs/promises";
 
-export const defaultConsoleLogLineLimit = 5_000;
-export const maxConsoleLogLineLimit = 25_000;
+const defaultConsoleLogLineLimit = 5_000;
+const maxConsoleLogLineLimit = 25_000;
 
 const logReadChunkBytes = 64 * 1024;
 const maxConsoleLogBytes = 32 * 1024 * 1024;

@@ -12,7 +12,7 @@ function canonicalFilename(filename: string) {
   return filename.replace(/\.jar\.disabled$/i, ".jar").toLowerCase();
 }
 
-export function modIdentity(mod: Record<string, unknown>) {
+function modIdentity(mod: Record<string, unknown>) {
   const metadata = record(mod.modrinth);
   const projectId = stringValue(metadata.projectId);
   if (projectId) return `modrinth:${projectId}`;

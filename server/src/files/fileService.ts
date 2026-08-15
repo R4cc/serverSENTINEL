@@ -13,7 +13,7 @@ import { safeArchiveFilename, type FileArchiveEntry } from "../downloadArchive.j
 import type { NodeRuntime } from "../nodes/types.js";
 import type { FileEditLease, ManagedServer, Permission, StoredUser } from "../types.js";
 
-export type DownloadIntentEntry = {
+type DownloadIntentEntry = {
   name: string;
   path: string;
   type: "file" | "directory";
@@ -25,13 +25,13 @@ export type DownloadSelection = DownloadIntentEntry & {
   target: string;
 };
 
-export type PreparedDownload = {
+type PreparedDownload = {
   entries: FileArchiveEntry[];
   totalSize: number;
   archiveFilename: string;
 };
 
-export type ArchiveDownloadToken = {
+type ArchiveDownloadToken = {
   serverId: string;
   entries: FileArchiveEntry[];
   filename: string;
@@ -42,7 +42,7 @@ export type ArchiveDownloadToken = {
 export const archiveDownloadTokens = new Map<string, ArchiveDownloadToken>();
 
 export const filePreviewSizeLimit = 96 * 1024;
-export const fileDownloadMaxBytes = config.fileDownloadMaxBytes;
+const fileDownloadMaxBytes = config.fileDownloadMaxBytes;
 /**
  * The byte limit alone does not bound a download plan: a tree of empty files costs nothing in bytes but
  * retains one entry object per descendant, and the plan then lives in a global token map for minutes.
@@ -53,8 +53,8 @@ export const fileDownloadMaxEntries = config.fileDownloadMaxEntries;
 export const fileDownloadMaxDepth = 64;
 export const archiveDownloadTokenMaxCount = 64;
 export const fileZipLimits = { maxEntries: config.fileZipMaxEntries, maxExpandedBytes: config.fileZipMaxExpandedBytes };
-export const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;
-export const fileDownloadZipThresholdCount = config.fileDownloadZipThresholdCount;
+const fileDownloadZipThresholdBytes = config.fileDownloadZipThresholdBytes;
+const fileDownloadZipThresholdCount = config.fileDownloadZipThresholdCount;
 
 export function fileLeaseOwner(request: { headers: { cookie?: string } }, user: StoredUser) {
   const sessionId = parseCookies(request.headers.cookie).get(sessionCookieName);
@@ -136,19 +136,19 @@ export async function requireFilePathPermission(request: { headers: { cookie?: s
   return requireRequestPermission(request, permission);
 }
 
-export function fileDownloadLimitError(size: number): never {
+function fileDownloadLimitError(size: number): never {
   throwHttp(413, `Download is larger than ${Math.floor(fileDownloadMaxBytes / 1024 / 1024)} MiB`, {
     code: "download_size_limit",
     details: { size, limit: fileDownloadMaxBytes }
   });
 }
 
-export function archiveSegment(name: string) {
+function archiveSegment(name: string) {
   const segment = basename(name).trim().replace(/[^a-zA-Z0-9._ -]/g, "_");
   return segment && segment !== "." && segment !== ".." ? segment : "download";
 }
 
-export function publicPathParent(path: string) {
+function publicPathParent(path: string) {
   const normalized = normalizePublicFilePath(path);
   if (normalized === "/") return "/";
   const parts = normalized.slice(1).split("/");
@@ -156,13 +156,13 @@ export function publicPathParent(path: string) {
   return parts.length ? `/${parts.join("/")}` : "/";
 }
 
-export function publicPathName(path: string) {
+function publicPathName(path: string) {
   const normalized = normalizePublicFilePath(path);
   if (normalized === "/") return "server-files";
   return archiveSegment(normalized.split("/").pop() ?? "download");
 }
 
-export function publicPathContains(parent: string, child: string) {
+function publicPathContains(parent: string, child: string) {
   const normalizedParent = normalizePublicFilePath(parent);
   const normalizedChild = normalizePublicFilePath(child);
   return normalizedParent === "/" || normalizedChild === normalizedParent || normalizedChild.startsWith(`${normalizedParent}/`);
@@ -200,7 +200,7 @@ export function parseFileListing(value: unknown) {
   return { path: normalizePublicFilePath(listing.path), entries };
 }
 
-export async function localDownloadSelection(server: ManagedServer, target: string): Promise<DownloadSelection> {
+async function localDownloadSelection(server: ManagedServer, target: string): Promise<DownloadSelection> {
   const targetStat = await lstat(target);
   if (targetStat.isSymbolicLink()) {
     throw new Error("Symlinked files and folders cannot be downloaded");
@@ -217,7 +217,7 @@ export async function localDownloadSelection(server: ManagedServer, target: stri
   };
 }
 
-export async function remoteDownloadSelection(runtime: NodeRuntime, server: ManagedServer, target: string): Promise<DownloadSelection> {
+async function remoteDownloadSelection(runtime: NodeRuntime, server: ManagedServer, target: string): Promise<DownloadSelection> {
   const publicPath = normalizePublicFilePath(runtime.publicPath(server, target));
   try {
     await runtime.listFiles(server, target);
@@ -355,7 +355,7 @@ export function createArchiveDownloadToken(serverId: string, prepared: PreparedD
   return token;
 }
 
-export function pathIsInsideRoot(root: string, target: string) {
+function pathIsInsideRoot(root: string, target: string) {
   const rel = relative(resolve(root), resolve(target));
   return !rel || (!rel.startsWith("..") && !isAbsolute(rel));
 }

@@ -1,6 +1,7 @@
+import { defaultDockerImageForMinecraftVersion } from "@serversentinel/contracts";
 import { maxServerPort, minServerPort } from "../config.js";
 import { optionalStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../http/validation.js";
-import { defaultDockerImageForMinecraftVersion, runtimeProfileForServer } from "../runtime/profile.js";
+import { runtimeProfileForServer } from "../runtime/profile.js";
 import { runtimeSelection, runtimeUpdatePlan } from "../runtime/selection.js";
 import { defaultServerContainerName } from "../storage/serverIdentity.js";
 import { isValidServerPort } from "./ports.js";
@@ -14,7 +15,7 @@ import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
  * server and so reserves ports globally, while a node agent only knows about its own.
  */
 
-export type ServerUpdateInput = {
+type ServerUpdateInput = {
   displayName?: string;
   runtime?: unknown;
   dockerContainer?: string;
@@ -26,7 +27,7 @@ export type ServerUpdateInput = {
   startOnNodeStart?: boolean;
 };
 
-export type ServerUpdatePlan = {
+type ServerUpdatePlan = {
   runtimeProfile: ServerRuntimeProfile;
   displayName: string;
   dockerContainer: string;
@@ -92,9 +93,14 @@ export async function planServerUpdate(
   const dockerContainer = validateDockerContainerName(
     input.dockerContainer?.trim() || current.dockerContainer || defaultServerContainerName(current.id)
   );
-  const dockerImage = validateDockerImageName(
-    input.dockerImage?.trim() || current.dockerImage || defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion)
-  );
+  // A stored image is normally kept, but a Minecraft upgrade can cross a Java boundary (1.20.5
+  // moves from 17 to 21), and the stored image then cannot load the jar this same update downloads.
+  // Only an image serverSENTINEL picked itself is re-derived; one the owner chose is left alone.
+  const previousDefaultImage = defaultDockerImageForMinecraftVersion(currentRuntime.minecraftVersion);
+  const keptDockerImage = current.dockerImage && current.dockerImage !== previousDefaultImage
+    ? current.dockerImage
+    : defaultDockerImageForMinecraftVersion(runtimeProfile.minecraftVersion);
+  const dockerImage = validateDockerImageName(input.dockerImage?.trim() || keptDockerImage);
   const requestedDockerPorts = input.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : current.dockerPorts);
   const javaArgs = validateJavaArgs(input.javaArgs?.trim() || current.javaArgs || "-Xms2G -Xmx4G");
   const startOnNodeStart = optionalStrictBoolean(input.startOnNodeStart, "startOnNodeStart", current.startOnNodeStart ?? false);

@@ -19,6 +19,7 @@ type ConnectedNode = {
   node: ManagedNode;
   socket: WebSocket;
   pending: Map<string, {
+    command: NodeCapability;
     resolve: (value: unknown) => void;
     reject: (error: Error) => void;
     timeout: NodeJS.Timeout;
@@ -26,6 +27,7 @@ type ConnectedNode = {
   streams: Map<string, {
     onData: (event: NodeStreamEvent) => void;
     onClose?: (error?: Error) => void;
+    timeout?: NodeJS.Timeout;
   }>;
   transfers: Map<string, TransferState>;
   lastPongAt: number;
@@ -44,6 +46,7 @@ type TransferState = {
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
   stream?: PassThrough;
+  source?: Readable;
   hash?: ReturnType<typeof createHash>;
   received?: number;
   maxBytes?: number;
@@ -77,26 +80,30 @@ export class PanelNodeConnections {
     if (!connected) return;
     if (socket && connected.socket !== socket) return;
     this.connected.delete(nodeId);
-    for (const [id, pending] of connected.pending) {
+    for (const pending of connected.pending.values()) {
       clearTimeout(pending.timeout);
-      pending.reject(structuredNodeProtocolError("node_offline", `Node ${nodeId} disconnected before command ${id} completed`));
+      pending.reject(structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected before ${pending.command} completed`));
     }
     connected.pending.clear();
     for (const stream of connected.streams.values()) {
-      stream.onData({ type: "unavailable", message: "Node disconnected", code: "NODE_OFFLINE", retryable: true });
-      stream.onClose?.();
+      if (stream.timeout) clearTimeout(stream.timeout);
+      const error = structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected during stream`);
+      stream.onClose?.(error);
     }
     connected.streams.clear();
     for (const transfer of connected.transfers.values()) {
       clearTimeout(transfer.timeout);
-      transfer.stream?.destroy(structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected during transfer`));
-      transfer.reject(structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected during transfer`));
+      const error = structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected during transfer`);
+      transfer.stream?.destroy(error);
+      transfer.source?.destroy(error);
+      transfer.reject(error);
     }
     connected.transfers.clear();
   }
 
   isConnected(nodeId: string) {
-    return this.connected.has(nodeId);
+    const connected = this.connected.get(nodeId);
+    return Boolean(connected && connected.socket.readyState === connected.socket.OPEN);
   }
 
   connectedNode(nodeId: string) {
@@ -118,7 +125,7 @@ export class PanelNodeConnections {
     if (!connected || connected.socket.readyState !== connected.socket.OPEN) {
       throw structuredNodeProtocolError("node_offline", `Node ${node.name} is offline`);
     }
-    assertNodeSupports(node, requireNodeCapability(command));
+    assertNodeSupports(connected.node, requireNodeCapability(command));
     if (connected.pending.size >= nodeProtocolMaxActiveRequests) {
       throw structuredNodeProtocolError("node_overloaded", `Node ${node.name} already has ${nodeProtocolMaxActiveRequests} active commands`);
     }
@@ -132,7 +139,7 @@ export class PanelNodeConnections {
       deadlineMs: nodeAdvertisesFeature(connected.node, "request-cancel") ? timeoutMs : undefined
     };
     const serialized = JSON.stringify(message);
-    if (node.protocolVersion === nodeProtocolVersion && Buffer.byteLength(serialized) > nodeProtocolControlMessageMaxBytes) {
+    if (connected.node.protocolVersion === nodeProtocolVersion && Buffer.byteLength(serialized) > nodeProtocolControlMessageMaxBytes) {
       throw structuredNodeProtocolError("message_too_large", "Protocol 3.1 control messages are limited to 8 MiB; use a streamed transfer");
     }
     return new Promise<unknown>((resolve, reject) => {
@@ -145,9 +152,8 @@ export class PanelNodeConnections {
         reject(structuredNodeProtocolError("command_timeout", `Node command ${command} timed out`));
       }, timeoutMs);
       timeout.unref?.();
-      connected.pending.set(id, { resolve, reject, timeout });
-      connected.socket.send(serialized, (error) => {
-        if (!error) return;
+      connected.pending.set(id, { command, resolve, reject, timeout });
+      void this.send(connected.socket, serialized).catch((error) => {
         clearTimeout(timeout);
         connected.pending.delete(id);
         reject(structuredNodeProtocolError("command_failed", error.message));
@@ -160,36 +166,53 @@ export class PanelNodeConnections {
     command: NodeCapability,
     payload: unknown,
     onData: (event: NodeStreamEvent) => void,
-    onClose?: (error?: Error) => void
+    onClose?: (error?: Error) => void,
+    timeoutMs?: number
   ) {
     const connected = this.connected.get(node.id);
     if (!connected || connected.socket.readyState !== connected.socket.OPEN) {
       throw structuredNodeProtocolError("node_offline", `Node ${node.name} is offline`);
     }
-    assertNodeSupports(node, requireNodeCapability(command));
+    assertNodeSupports(connected.node, requireNodeCapability(command));
     if (connected.streams.size >= nodeProtocolMaxActiveStreams) {
       throw structuredNodeProtocolError("node_overloaded", `Node ${node.name} already has ${nodeProtocolMaxActiveStreams} active streams`);
     }
 
     const id = randomUUID();
     const message: NodeStreamStartMessage = { type: "streamStart", id, command, payload };
+    const serialized = JSON.stringify(message);
+    if (connected.node.protocolVersion === nodeProtocolVersion && Buffer.byteLength(serialized) > nodeProtocolControlMessageMaxBytes) {
+      throw structuredNodeProtocolError("message_too_large", "Protocol 3.1 control messages are limited to 8 MiB; use a streamed transfer");
+    }
     return new Promise<() => void>((resolve, reject) => {
-      connected.streams.set(id, { onData, onClose });
-      const cleanup = () => {
+      const timeout = timeoutMs === undefined ? undefined : setTimeout(() => {
         const current = this.connected.get(node.id);
         const stream = current?.streams.get(id);
         if (!current || !stream) return;
         current.streams.delete(id);
         if (current.socket.readyState === current.socket.OPEN) {
           const stop: NodeStreamStopMessage = { type: "streamStop", id };
-          current.socket.send(JSON.stringify(stop));
+          void this.send(current.socket, JSON.stringify(stop)).catch(() => undefined);
+        }
+        stream.onClose?.(structuredNodeProtocolError("stream_timeout", `Node stream ${command} timed out`));
+      }, timeoutMs);
+      timeout?.unref?.();
+      connected.streams.set(id, { onData, onClose, timeout });
+      const cleanup = () => {
+        const current = this.connected.get(node.id);
+        const stream = current?.streams.get(id);
+        if (!current || !stream) return;
+        current.streams.delete(id);
+        if (stream.timeout) clearTimeout(stream.timeout);
+        if (current.socket.readyState === current.socket.OPEN) {
+          const stop: NodeStreamStopMessage = { type: "streamStop", id };
+          void this.send(current.socket, JSON.stringify(stop)).catch(() => undefined);
         }
       };
-      connected.socket.send(JSON.stringify(message), (error) => {
-        if (!error) {
+      void this.send(connected.socket, serialized).then(() => {
         resolve(cleanup);
-          return;
-        }
+      }, (error) => {
+        if (timeout) clearTimeout(timeout);
         connected.streams.delete(id);
         reject(structuredNodeProtocolError("stream_failed", error.message));
       });
@@ -212,7 +235,7 @@ export class PanelNodeConnections {
     let resultReject!: (error: Error) => void;
     const result = new Promise<unknown>((resolve, reject) => { resultResolve = resolve; resultReject = reject; });
     const timeout = this.transferTimeout(connected, id, command, timeoutMs, resultReject);
-    connected.transfers.set(id, { direction: "upload", ready: readyResolve, resolve: resultResolve, reject: resultReject, timeout });
+    connected.transfers.set(id, { direction: "upload", ready: readyResolve, resolve: resultResolve, reject: resultReject, timeout, source });
     const start: NodeTransferStartMessage = { type: "transferStart", id, direction: "upload", command, payload, size };
     try {
       await this.send(connected.socket, JSON.stringify(start));
@@ -347,8 +370,12 @@ export class PanelNodeConnections {
       if (!transfer) return;
       clearTimeout(transfer.timeout);
       connected.transfers.delete(message.id);
-      if (message.ok) transfer.resolve(message.result);
-      else transfer.reject(structuredNodeProtocolError(message.error?.code ?? "transfer_failed", message.error?.message ?? "Node transfer failed", message.error?.details));
+      if (message.ok && transfer.direction === "download") {
+        const error = structuredNodeProtocolError("unexpected_transfer_result", "Node completed a download without transfer integrity metadata");
+        transfer.stream?.destroy(error);
+        transfer.reject(error);
+      } else if (message.ok) transfer.resolve(message.result);
+      else transfer.reject(structuredNodeProtocolError(message.error?.code ?? "transfer_failed", message.error?.message ?? "Node transfer failed", message.error?.details, message.error?.retryable));
       return;
     }
     if (message.type === "transferCancel") {
@@ -358,6 +385,7 @@ export class PanelNodeConnections {
       connected.transfers.delete(message.id);
       const error = structuredNodeProtocolError("transfer_cancelled", message.reason ?? "Node cancelled the transfer");
       transfer.stream?.destroy(error);
+      transfer.source?.destroy(error);
       transfer.reject(error);
       return;
     }
@@ -370,7 +398,8 @@ export class PanelNodeConnections {
       const stream = connected.streams.get(message.id);
       if (!stream) return;
       connected.streams.delete(message.id);
-      stream.onClose?.(message.error ? structuredNodeProtocolError(message.error.code, message.error.message, message.error.details) : undefined);
+      if (stream.timeout) clearTimeout(stream.timeout);
+      stream.onClose?.(message.error ? structuredNodeProtocolError(message.error.code, message.error.message, message.error.details, message.error.retryable) : undefined);
       return;
     }
     if (message.type !== "response") return;
@@ -382,13 +411,13 @@ export class PanelNodeConnections {
       pending.resolve(message.result);
       return;
     }
-    pending.reject(structuredNodeProtocolError(message.error?.code ?? "command_failed", message.error?.message ?? "Node command failed", message.error?.details));
+    pending.reject(structuredNodeProtocolError(message.error?.code ?? "command_failed", message.error?.message ?? "Node command failed", message.error?.details, message.error?.retryable));
   }
 
   private transferConnection(node: ManagedNode, command: NodeCapability) {
     const connected = this.connected.get(node.id);
     if (!connected || connected.socket.readyState !== connected.socket.OPEN) throw structuredNodeProtocolError("node_offline", `Node ${node.name} is offline`);
-    assertNodeSupports(node, requireNodeCapability(command));
+    assertNodeSupports(connected.node, requireNodeCapability(command));
     if (!nodeAdvertisesFeature(connected.node, "binary-transfer")) throw structuredNodeProtocolError("missing_feature", `Node ${node.name} does not support streamed binary transfers`);
     if (connected.transfers.size >= nodeProtocolMaxActiveTransfers) throw structuredNodeProtocolError("node_overloaded", `Node ${node.name} already has ${nodeProtocolMaxActiveTransfers} active transfers`);
     return connected;
@@ -396,9 +425,13 @@ export class PanelNodeConnections {
 
   private transferTimeout(connected: ConnectedNode, id: string, command: string, timeoutMs: number, reject: (error: Error) => void) {
     const timeout = setTimeout(() => {
+      const transfer = connected.transfers.get(id);
       connected.transfers.delete(id);
+      const error = structuredNodeProtocolError("transfer_timeout", `Node transfer ${command} timed out`);
+      transfer?.stream?.destroy(error);
+      transfer?.source?.destroy(error);
       if (connected.socket.readyState === connected.socket.OPEN) connected.socket.send(JSON.stringify({ type: "transferCancel", id, reason: `${command} timed out` }));
-      reject(structuredNodeProtocolError("transfer_timeout", `Node transfer ${command} timed out`));
+      reject(error);
     }, timeoutMs);
     timeout.unref?.();
     return timeout;
@@ -410,6 +443,7 @@ export class PanelNodeConnections {
     clearTimeout(transfer.timeout);
     connected.transfers.delete(id);
     transfer.stream?.destroy();
+    transfer.source?.destroy();
     if (connected.socket.readyState === connected.socket.OPEN) connected.socket.send(JSON.stringify({ type: "transferCancel", id, reason }));
   }
 

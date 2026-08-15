@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Fixed mobile Node Details opening below its header, standardized compact tap targets, reduced Mods toolbar height, and expanded the mobile smoke coverage for those interactions.
+- Fixed the Mods action toolbar compressing its bottom spacing against the installed-mods panel at desktop heights.
+- Fixed a small ZIP file with deeply nested entry names exhausting panel or node memory when it was inspected for extraction or import.
+- Fixed cancelling an operation that cannot actually be stopped reporting it as cancelled while the work continued, which also released the guard that kept a second extraction from starting into the same folder.
+- Fixed requesting a server that does not exist, and downloading an export that is not finished, answering with a generic internal error instead of saying what was wrong.
+- Fixed deleting a server while one of its own operations was still writing files, which could leave the container removed, the files half deleted, and the server still listed.
+- Fixed an archive being swapped between the point its contents were approved and the point they were written, so files could be extracted into folders the request was never allowed to touch.
+- Fixed an import that failed while restoring mod content deleting the imported server folders while leaving the servers listed in the panel.
+- Imports now refuse up front when there is not enough free disk space, as exports already did.
+- A server file whose name contains a backslash is now skipped from an export with a warning, instead of producing an archive that could not be imported at all.
+- Fixed changing a server's Minecraft version leaving it on the old Java runtime image, so an upgrade across the 1.20.5 boundary downloaded a jar the container could not load and reported it only as a runtime exit. An image chosen by hand is still left alone.
+- Fixed a stray promise rejection anywhere in the panel or a node agent terminating the process, which for the panel took down the control plane for every managed server.
+- Fixed `server.properties` being renameable, and therefore replaceable, with only file-edit permission on servers hosted by a remote node.
+- Fixed a console viewer that disconnected while its stream was still attaching leaking its subscription and holding the container log follow open for the life of the process. Deleting a server now also releases its console buffer.
+- Fixed a schedule running twice for one cron occurrence when the panel restarted inside the matched minute, or when recording the previous run failed.
+- Fixed a node agent flapping between its outgoing and replacement container during a self-update, and fixed an update started with a custom image being closed out by any reconnect at all.
+- Fixed a failed Docker image pull being reported as success and resurfacing later as "No such image", and gave a first pull room to finish instead of timing out after 15 seconds.
+- Fixed a node agent buffering console output without limit when a server outran the panel connection, which could exhaust the node's memory.
+- Fixed updating a mod deleting the running copy when a disabled copy of the target version was also present, and reporting it as a successful update.
+- Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
+- Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
+
+## 26.8.17 - 2026-08-14
+
+- Fixed servers on a pre-release Minecraft version, such as `1.21-pre1`, defaulting to the Java 17 container image instead of the Java 21 one the version needs. The panel, the node agent, and the create-server preview now all read the same rule.
+
 ## 26.8.16 - 2026-08-14
 
 - Fixed renaming a server that runs on a node, or changing any of its settings, failing with "server.createdAt must be a non-empty string". The panel now keeps its own record of the server when a node answers an update, instead of expecting the node to return bookkeeping it was never sent.

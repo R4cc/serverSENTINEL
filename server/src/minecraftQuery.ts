@@ -1,14 +1,14 @@
 import dgram from "node:dgram";
 import { randomBytes } from "node:crypto";
 
-export type MinecraftQueryMetrics = {
+type MinecraftQueryMetrics = {
   responding: true;
   playersOnline: number;
   maxPlayers: number | null;
   playerNames: string[];
 };
 
-export type MinecraftQueryErrorCode = "QUERY_TIMEOUT" | "QUERY_RESPONSE_INCOMPLETE" | "QUERY_RESPONSE_INVALID";
+type MinecraftQueryErrorCode = "QUERY_TIMEOUT" | "QUERY_RESPONSE_INCOMPLETE" | "QUERY_RESPONSE_INVALID";
 
 export class MinecraftQueryError extends Error {
   constructor(readonly code: MinecraftQueryErrorCode, message: string) {
@@ -28,7 +28,7 @@ const playerMarker = Buffer.from("\0\0\x01player_\0\0", "latin1");
 const maximumFragments = 32;
 const maximumResponseBytes = 64 * 1024;
 
-export function normalizePlayerNames(names: string[] = []) {
+function normalizePlayerNames(names: string[] = []) {
   const unique = new Map<string, string>();
   for (const value of names) {
     const name = value.trim();
@@ -110,7 +110,7 @@ export function parseMinecraftQueryPayload(payload: Buffer): MinecraftQueryMetri
   return { responding: true, playersOnline, maxPlayers, playerNames };
 }
 
-export function parseMinecraftQueryFragment(packet: Buffer, expectedSessionId: Buffer): QueryFragment {
+function parseMinecraftQueryFragment(packet: Buffer, expectedSessionId: Buffer): QueryFragment {
   if (packet.length < 16 || packet[0] !== 0 || !packet.subarray(1, 5).equals(expectedSessionId)) {
     throw new MinecraftQueryError("QUERY_RESPONSE_INVALID", "Invalid Minecraft Query stat response");
   }
@@ -189,7 +189,12 @@ async function receiveChallenge(socket: dgram.Socket, sessionId: Buffer, deadlin
     if (packet.length < 5 || packet[0] !== 9 || !packet.subarray(1, 5).equals(sessionId)) return undefined;
     return parseMinecraftQueryChallenge(packet, sessionId);
   });
-  await sendPacket(socket, handshake);
+  // `response` already holds a live rejection timer. Letting a send failure throw past it would
+  // leave that timer to reject into nobody, which Node reports as an unhandled rejection.
+  await sendPacket(socket, handshake).catch((error: unknown) => {
+    response.catch(() => undefined);
+    throw error;
+  });
   return response;
 }
 
@@ -229,7 +234,11 @@ async function receiveFullStat(socket: dgram.Socket, sessionId: Buffer, deadline
     }
     return Buffer.concat(ordered);
   });
-  await sendPacket(socket, request);
+  // Same ordering hazard as receiveChallenge: the receive timer is already armed.
+  await sendPacket(socket, request).catch((error: unknown) => {
+    response.catch(() => undefined);
+    throw error;
+  });
   try {
     return await response;
   } catch (error) {
