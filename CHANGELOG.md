@@ -24,6 +24,10 @@
 - Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
 - Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
 
+## 26.8.21 - 2026-08-15
+
+- Fixed the user and reset-password dialogs drawing a grey browser border around their contents and leaving empty strips above and below it.
+
 ## 26.8.20 - 2026-08-15
 
 - A module that fails to start is now handled cleanly: enabling one reports the failure and leaves it switched off rather than recording a module that does not work, and one that fails while the panel starts is hidden from the interface and refuses its API instead of half-answering, while Settings keeps showing the setting you chose.

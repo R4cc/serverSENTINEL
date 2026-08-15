@@ -1285,9 +1285,14 @@ button .buttonIcon {
   background: var(--surface);
 }
 
+/* The body is a fieldset, so the user-agent border, inline margin, and min-content
+   floor have to go or they draw a grooved box inside the modal shell. */
 .userModalBody {
   overflow: auto;
+  margin: 0;
+  border: 0;
   padding: var(--space-4);
+  min-inline-size: 0;
 }
 
 .userModalFields {

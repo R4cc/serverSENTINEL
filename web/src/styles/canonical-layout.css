@@ -387,9 +387,14 @@
 }
 
 .appForm,
-.userModalForm,
 .keyForm {
   gap: var(--space-3);
+}
+
+/* A modal shell separates its header, body, and footer with dividers and their own
+   padding; a flex gap only adds dead space against those dividers. */
+.userModalForm {
+  gap: 0;
 }
 
 .appForm fieldset,
