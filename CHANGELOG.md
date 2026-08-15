@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed mobile Node Details opening below its header, standardized compact tap targets, reduced Mods toolbar height, and expanded the mobile smoke coverage for those interactions.
 - Fixed the Mods action toolbar compressing its bottom spacing against the installed-mods panel at desktop heights.
 - Fixed a small ZIP file with deeply nested entry names exhausting panel or node memory when it was inspected for extraction or import.
 - Fixed cancelling an operation that cannot actually be stopped reporting it as cancelled while the work continued, which also released the guard that kept a second extraction from starting into the same folder.

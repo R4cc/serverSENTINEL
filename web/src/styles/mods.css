@@ -661,22 +661,16 @@
   }
 }
 
-@media (max-width: 420px) {
-  .modsWorkspacePrimaryActions,
-  .modsWorkspaceUpdateActions {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .modsWorkspaceBatchAction {
-    grid-column: auto;
-  }
-}
-
 /* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
 
 .modsWorkspaceInstalled { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 @media (max-width: 720px) {
+
+  .modsWorkspaceIdentity,
+  .modsWorkspaceUpdate .modsUpdateAction {
+    min-height: 44px;
+  }
 
   .modsDrawerHeader button {
     width: 44px;

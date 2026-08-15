@@ -535,6 +535,13 @@ export function NodesPage({
   const selectedOperation = selectedDetailsNode ? nodeOperations[selectedDetailsNode.id] : undefined;
   const selectedManualRecovery = selectedDetailsNode ? nodeManualRecoveryById[selectedDetailsNode.id] : undefined;
 
+  const openNodeDetails = (node: NodeView) => {
+    if (window.matchMedia("(max-width: 720px)").matches && document.scrollingElement) {
+      document.scrollingElement.scrollTop = 0;
+    }
+    onViewDetails(node);
+  };
+
   const fleet = useMemo(() => {
     const servers = sortedNodes.flatMap((node) => node.servers);
     return {
@@ -695,7 +702,7 @@ export function NodesPage({
                         {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
                       </Button>
                     )}
-                    <Button variant="secondary" compact onClick={() => onViewDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
+                    <Button variant="secondary" compact onClick={() => openNodeDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
                   </div>
                 </header>
 

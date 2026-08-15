@@ -1601,6 +1601,18 @@
 }
 
 @media (max-width: 720px) {
+  .scheduleActionMenuTrigger.uiButton,
+  .scheduledRunCancelButton.uiButton {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .scheduledRunDetailsButton.uiButton {
+    min-height: 44px;
+  }
+
   /* Upward and leftward, because the frame and the panel both clip their overflow: the menu has to
      stay inside the card it belongs to, and the card layout puts its trigger in the bottom-right. */
   .scheduleActionMenu .actionMenuPopover {
@@ -1729,6 +1741,7 @@
 
   .scheduleModalFooterActions .uiButton {
     flex: 1 1 0;
+    min-height: 44px;
   }
 }
 

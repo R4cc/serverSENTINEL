@@ -1469,6 +1469,14 @@ textarea:hover:not(:disabled),
     margin-top: auto;
   }
 
+  .mobileNavigationOpen .accountLogoutButton {
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    height: 44px;
+    min-height: 44px;
+  }
+
   .workspaceServerPage > .activeServerStrip .serverStripRight {
     grid-template-columns: minmax(0, 1fr) 44px;
   }

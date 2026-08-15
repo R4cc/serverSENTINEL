@@ -124,10 +124,11 @@ export async function waitForAppShell(page, timeoutMs = 15_000) {
 }
 
 /** Signs in through the login form, exercising the same path a real visitor takes. */
-export async function signInThroughForm(page, baseUrl) {
+export async function signInThroughForm(page, baseUrl, beforeSubmit) {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.getByLabel("Username").fill("demo");
   await page.getByLabel("Password").fill("demo");
+  if (beforeSubmit) await beforeSubmit();
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await waitForAppShell(page);
 }
