@@ -241,9 +241,12 @@ export function SettingsPage(props: SettingsPageProps) {
       <>
         <CategoryHeader category="integrations" />
         <div className="settingsHubRows">
-          <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow">
-            <ModrinthKeyForm onSubmit={props.onSubmitModrinthKey} configured={props.modrinthConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
-          </PreferenceRow>
+          {/* Modrinth exists to serve managed content; with that module off there is nothing to configure. */}
+          {isModuleEnabled(props.modules, "managedContent") && (
+            <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow">
+              <ModrinthKeyForm onSubmit={props.onSubmitModrinthKey} configured={props.modrinthConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
+            </PreferenceRow>
+          )}
           <PreferenceRow
             title="Player heads"
             description={<>Show player heads through <a href="https://www.mc-heads.net/" target="_blank" rel="noreferrer">MCHeads</a>. Usernames are shared only when enabled; cached heads refresh on a rolling daily schedule.</>}

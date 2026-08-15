@@ -1054,6 +1054,7 @@ describe("Fastify application factory", () => {
     let app = await buildApp();
     const csrf = { "x-requested-with": "XMLHttpRequest" };
     const scheduleUrl = "/api/servers/11111111-1111-4111-8111-111111111111/schedules";
+    const modsUrl = "/api/servers/11111111-1111-4111-8111-111111111111/mods";
 
     try {
       const registered = await app.inject({
@@ -1067,7 +1068,10 @@ describe("Fastify application factory", () => {
 
       const initial = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: adminCookie } });
       expect(initial.statusCode, initial.body).toBe(200);
-      expect(initial.json().modules).toEqual([{ id: "schedules", enabled: true, accessible: true }]);
+      expect(initial.json().modules).toEqual([
+        { id: "schedules", enabled: true, accessible: true },
+        { id: "managedContent", enabled: true, accessible: true }
+      ]);
 
       // An account without schedules.view sees the module as present but out of reach, which is
       // what keeps the browser from fetching its code for them.
@@ -1086,7 +1090,10 @@ describe("Fastify application factory", () => {
       });
       const viewerCookie = sessionCookieFrom(viewerLogin);
       const viewerApp = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: viewerCookie } });
-      expect(viewerApp.json().modules).toEqual([{ id: "schedules", enabled: true, accessible: false }]);
+      expect(viewerApp.json().modules).toEqual([
+        { id: "schedules", enabled: true, accessible: false },
+        { id: "managedContent", enabled: true, accessible: false }
+      ]);
 
       // Reading the catalog is a settings-level right; changing it is not.
       expect((await app.inject({ method: "GET", url: "/api/modules", headers: { ...csrf, cookie: viewerCookie } })).statusCode).toBe(200);
@@ -1105,14 +1112,24 @@ describe("Fastify application factory", () => {
         payload: { enabled: false }
       });
       expect(disabled.statusCode, disabled.body).toBe(200);
-      expect(disabled.json().modules).toEqual([{ id: "schedules", enabled: false, accessible: false }]);
+      expect(disabled.json().modules).toEqual([
+        { id: "schedules", enabled: false, accessible: false },
+        { id: "managedContent", enabled: true, accessible: true }
+      ]);
 
       const refused = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
       expect(refused.statusCode, refused.body).toBe(403);
       expect(refused.json().error.code).toBe("MODULE_DISABLED");
 
+      // Modules are independent: switching one off leaves the other one's endpoints answering.
+      const otherModule = await app.inject({ method: "GET", url: modsUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(otherModule.json().error?.code).not.toBe("MODULE_DISABLED");
+
       const afterDisable = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: adminCookie } });
-      expect(afterDisable.json().modules).toEqual([{ id: "schedules", enabled: false, accessible: false }]);
+      expect(afterDisable.json().modules).toEqual([
+        { id: "schedules", enabled: false, accessible: false },
+        { id: "managedContent", enabled: true, accessible: true }
+      ]);
       await app.close();
 
       app = await buildApp();
@@ -1129,6 +1146,101 @@ describe("Fastify application factory", () => {
       expect(reEnabled.statusCode, reEnabled.body).toBe(200);
       const reachable = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
       expect(reachable.json().error?.code).not.toBe("MODULE_DISABLED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("stops the managed content module's update checker and endpoints without touching installed content", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-managed-content-module-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18096",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    let app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const contentDirectory = join(dataDir, "servers", "survival", "mods");
+    await mkdir(contentDirectory, { recursive: true });
+    const installedJar = join(contentDirectory, "example-mod.jar");
+    await writeFile(installedJar, "installed content");
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const cookie = sessionCookieFrom(registered);
+
+      // The hourly update check is the module's background work, and it only exists while the
+      // module does: nothing builds it at boot when the module is off.
+      expect(services.modUpdatePlanCoordinator).toBeDefined();
+
+      const disabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/managedContent",
+        headers: { ...csrf, cookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect(services.modUpdatePlanCoordinator).toBeUndefined();
+
+      for (const url of [
+        `/api/servers/${serverId}/mods`,
+        `/api/servers/${serverId}/mods/update-plan`,
+        "/api/modrinth/search?query=sodium"
+      ]) {
+        const response = await app.inject({ method: "GET", url, headers: { ...csrf, cookie } });
+        expect(response.statusCode, `${url} -> ${response.body}`).toBe(403);
+        expect(response.json().error.code).toBe("MODULE_DISABLED");
+      }
+
+      // Installing is refused by the same guard, before any handler could touch the filesystem.
+      const install = await app.inject({
+        method: "POST",
+        url: "/api/modrinth/install",
+        headers: { ...csrf, cookie },
+        payload: { serverId, projectId: "AANobbMI", versionId: "abcdefgh" }
+      });
+      expect(install.statusCode, install.body).toBe(403);
+      expect(install.json().error.code).toBe("MODULE_DISABLED");
+
+      await app.close();
+      app = await buildApp();
+      const { services: restartedServices } = await import("./appServices.js");
+      expect(restartedServices.modUpdatePlanCoordinator).toBeUndefined();
+
+      const stillRefused = await app.inject({ method: "GET", url: `/api/servers/${serverId}/mods`, headers: { ...csrf, cookie } });
+      expect(stillRefused.json().error.code).toBe("MODULE_DISABLED");
+
+      const reEnabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/managedContent",
+        headers: { ...csrf, cookie },
+        payload: { enabled: true }
+      });
+      expect(reEnabled.statusCode, reEnabled.body).toBe(200);
+      expect(restartedServices.modUpdatePlanCoordinator).toBeDefined();
+
+      const reachable = await app.inject({ method: "GET", url: `/api/servers/${serverId}/mods`, headers: { ...csrf, cookie } });
+      expect(reachable.json().error?.code).not.toBe("MODULE_DISABLED");
+
+      // Switching the module off is not an uninstall: what a server has on disk is left alone.
+      expect(await readFile(installedJar, "utf8")).toBe("installed content");
     } finally {
       await app.close();
     }

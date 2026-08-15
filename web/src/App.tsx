@@ -17,7 +17,7 @@ import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, 
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
-import { isPageAvailable, moduleForPage, SchedulesModule } from "./app/moduleRegistry";
+import { isPageAvailable, moduleForPage, ModsModule, SchedulesModule } from "./app/moduleRegistry";
 import { useServerContext } from "./app/serverContext";
 import { copyToClipboard } from "./utils/clipboard";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -36,14 +36,13 @@ import { ConfirmationModal, useConfirmationController } from "./components/Confi
 import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
 import { OnboardingFlow, OnboardingResumeBanner, onboardingRecommendedStep } from "./components/OnboardingFlow";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
-import { modUpdateRefreshResultMessage } from "./pages/OverviewPage";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
 import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTab";
 import { loadServerCreatePage, ServerCreateTab } from "./pages/ServerCreateTab";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
-import { useModsWorkspace } from "./features/mods/useModsWorkspace";
 import { managedContentTerminology } from "./features/mods/contentTerminology";
+import type { ModsModuleBridge } from "./features/mods/ModsModule";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
 import { useFilesWorkspace } from "./features/files/useFilesWorkspace";
 import { useUsersWorkspace } from "./features/users/useUsersWorkspace";
@@ -68,7 +67,6 @@ const { Component: ExportServerPanel } = exportServerPanel;
 // The properties page renders all three inside one boundary, so it only avoids a fallback when
 // every one of them is ready. They share a chunk, so this is one download either way.
 const loadServerEditPage = () => Promise.all([serverEditForm.preload(), deleteServerPanel.preload(), exportServerPanel.preload()]);
-const { Component: ModsPage, preload: loadModsPage } = lazyPage(() => import("./pages/ModsPage"), (module) => module.ModsPage);
 const { Component: FilesPage, preload: loadFilesPage } = lazyPage(() => import("./features/files/FilesPage"), (module) => module.FilesPage);
 const { Component: SettingsPage, preload: loadSettingsPage } = lazyPage(() => import("./pages/SettingsPage"), (module) => module.SettingsPage);
 
@@ -83,7 +81,6 @@ function preloadActivePage(page: ActivePage, modules: ModuleAccessState[] | unde
   if (page === "console") return loadMinecraftTerminal();
   if (page === "overview") return loadServerTimeline();
   if (page === "files") return loadFilesPage();
-  if (page === "mods") return loadModsPage();
   if (page === "nodes") return loadNodesPage();
   if (page === "create") return loadServerCreatePage();
   if (page === "properties") return loadServerEditPage();
@@ -146,6 +143,10 @@ export default function App() {
   // Reported up by the schedules module rather than read from its workspace, which now lives inside
   // the module's own chunk. The UI cache control is the only thing outside the module that needs it.
   const [scheduleMutationBusy, setScheduleMutationBusy] = useState(false);
+  // The managed-content module's view of itself: what the overview card renders, whether a mod
+  // mutation is in flight, and the two actions the shell triggers on the module's behalf. Null
+  // whenever the module is not mounted, which is also how the shell knows not to offer them.
+  const [modsBridge, setModsBridge] = useState<ModsModuleBridge | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const phoneLayout = useMobileViewport();
   const overviewTimelineVisible = useOverviewTimelineVisibility();
@@ -211,7 +212,6 @@ export default function App() {
   const runtimeFeedbackTimeoutRef = useRef<number | null>(null);
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
-  const overviewModRefreshInFlightRef = useRef(false);
   const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
@@ -353,14 +353,16 @@ export default function App() {
   const canExpanded = activeServerIsDemo || hasPermission(permissionUser, "console.command");
   const canEditServerSettings = activeServerIsDemo || hasPermission(permissionUser, "servers.editSettings");
   const canDeleteServers = activeServerIsDemo || hasPermission(permissionUser, "servers.delete");
-  const canInstallMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install");
-  const canViewMods = activeServerIsDemo || hasPermission(permissionUser, "mods.view");
-  const canManageMods = activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update");
-  // The installation gate. The permission flags below stay exactly as they were: a module surfaces
-  // only where both agree, which is what keeps "switched off for everyone" and "not granted to you"
-  // from having to be modelled twice.
+  // The installation gate. The permission flags stay exactly as they were: a module surfaces only
+  // where both agree, which is what keeps "switched off for everyone" and "not granted to you" from
+  // having to be modelled twice. `supportsManagedMods` is a third, unrelated condition — a runtime
+  // with no content directory has nothing to manage — and is applied where the pages are rendered.
   const activeModules = effectiveAppState.modules;
   const schedulesAvailable = isPageAvailable(activeModules, "schedule");
+  const managedContentAvailable = isPageAvailable(activeModules, "mods");
+  const canInstallMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.install"));
+  const canViewMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.view"));
+  const canManageMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update"));
   const canViewSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.view"));
   const canManageSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.manage"));
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
@@ -601,30 +603,6 @@ export default function App() {
     setActiveJobs,
     refreshModsAfterFilesChange: () => refreshModsAfterFileMutationRef.current()
   });
-  const modsWorkspace = useModsWorkspace({
-    activeServer: supportsManagedMods ? activeServer : undefined,
-    activePage,
-    activeServerIsDemo,
-    activeServerUsesInternalNode,
-    activeNodeRuntimeBlocked,
-    activeNodeBlockMessage,
-    demoMode,
-    demoInstalledMods,
-    setDemoInstalledMods,
-    modrinthConfigured: effectiveAppState.modrinthApiConfigured,
-    isProvisioning,
-    canManage: canManageMods,
-    canInstall: canInstallMods,
-    modsLocked,
-    toggleLocked: modToggleLocked,
-    notify,
-    setNotice,
-    setActiveJobs,
-    handleStaleSession,
-    refreshFiles: filesWorkspace.actions.loadFiles,
-    refreshServerState: () => refreshApp({ silent: true }),
-    requestConfirmation
-  });
   useEffect(() => {
     if (!activeServer || activePage !== "files" || demoMode || !authSession?.authenticated) return;
     void api<{ operations: OperationRecord[] }>(`/api/operations?serverId=${encodeURIComponent(activeServer.id)}&limit=25`)
@@ -632,8 +610,8 @@ export default function App() {
       .catch(() => undefined);
   }, [activeServer?.id, activePage, authSession?.authenticated, demoMode]);
   useEffect(() => {
-    refreshModsAfterFileMutationRef.current = () => modsWorkspace.actions.refresh(false);
-  }, [modsWorkspace.actions]);
+    refreshModsAfterFileMutationRef.current = () => modsBridge?.refreshAfterFileChange();
+  }, [modsBridge]);
   // Stable so the schedules module can depend on it without re-running its effect every render.
   const handleScheduleNavigationTargetHandled = useCallback(() => setScheduleNavigationTarget(null), []);
   const uiCacheLocalReason = uiCacheLocalBlockedReason({
@@ -653,9 +631,7 @@ export default function App() {
     userMutation: usersWorkspace.busy,
     integrationMutation: integrationBusy || modulesBusy,
     transferMutation: exportWorkspace.exportBusy || exportWorkspace.importBusy,
-    modMutation: isAnyModJobRunning
-      || modsWorkspace.state.batchUpdateRunning
-      || Boolean(modsWorkspace.state.installState?.installing)
+    modMutation: isAnyModJobRunning || Boolean(modsBridge?.mutating)
   });
   const uiCacheClear = useUiCacheClear({
     enabled: activePage === "settings" && Boolean(authSession?.authenticated),
@@ -1279,45 +1255,6 @@ export default function App() {
       return;
     }
     toast.info(text, options);
-  }
-
-  async function refreshOverviewModUpdates() {
-    if (overviewModRefreshInFlightRef.current) return;
-    overviewModRefreshInFlightRef.current = true;
-    const toastId = `overview-mod-update-check:${activeServer?.id ?? "current"}`;
-    toast.loading("Checking for updates", {
-      id: toastId,
-      duration: Infinity,
-      dismissible: false
-    });
-    try {
-      const updatePlan = await modsWorkspace.actions.refresh(true, false);
-      if (!updatePlan) {
-        toast.error(`Could not check ${managedContent.singular} updates`, {
-          id: toastId,
-          duration: 7000,
-          closeButton: true,
-          dismissible: true
-        });
-        return;
-      }
-      toast.success(modUpdateRefreshResultMessage(updatePlan, managedContent.plural), {
-        id: toastId,
-        duration: 5000,
-        closeButton: true,
-        dismissible: true
-      });
-    } catch (error) {
-      toast.error(`Could not check ${managedContent.singular} updates`, {
-        id: toastId,
-        description: errorMessage(error, `Could not check ${managedContent.singular} updates.`),
-        duration: 7000,
-        closeButton: true,
-        dismissible: true
-      });
-    } finally {
-      overviewModRefreshInFlightRef.current = false;
-    }
   }
 
   function resetSessionRequestGuards() {
@@ -2356,11 +2293,11 @@ export default function App() {
                 loadStorageSummary={loadActiveStorageSummary}
                 playerSnapshot={playerSnapshots[activeServer.id]}
                 playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
-                modUpdatePlan={modsWorkspace.data.updatePlan}
-                modUpdatePlanLoading={modsWorkspace.state.updatePlanLoading}
+                modUpdatePlan={modsBridge?.updatePlan ?? null}
+                modUpdatePlanLoading={modsBridge?.updatePlanLoading ?? false}
                 canViewMods={canViewMods && supportsManagedMods}
                 onOpenMods={() => setActivePage("mods")}
-                onRefreshModUpdates={() => void refreshOverviewModUpdates()}
+                onRefreshModUpdates={() => void modsBridge?.refreshUpdates()}
                 managedContent={managedContent}
                 canViewSchedules={canViewSchedules}
                 onOpenSchedules={(target) => {
@@ -2408,33 +2345,6 @@ export default function App() {
               </Suspense>
             )}
 
-            {activePage === "mods" && supportsManagedMods && (
-              <Suspense fallback={<FeaturePageLoadingSkeleton label={`Loading ${managedContent.plural}`} page="mods" />}>
-                <ModsPage
-                workspace={modsWorkspace}
-                runtimeType={activeServer.runtimeProfile.runtimeType}
-                restartRequiredChanges={activeServer.restartRequiredChanges}
-                serverContext={{
-                  minecraftVersion: activeServer.runtimeProfile.minecraftVersion || "Unknown",
-                  versionsUnknown: activeModVersionsUnknown,
-                  contextMessage: activeModContext
-                }}
-                access={{
-                  changesAllowed: !modsLocked,
-                  locked: modsLocked,
-                  reviewAcknowledgementLocked: modReviewAcknowledgementLocked,
-                  toggleLocked: modToggleLocked,
-                  modrinthConfigured: effectiveAppState.modrinthApiConfigured,
-                  addDisabled: addModFromModrinthDisabled,
-                  addDisabledReason: addModFromModrinthDisabledReason,
-                  uploadDisabled: uploadModDisabled,
-                  uploadDisabledReason: uploadModDisabledReason
-                }}
-                  relativeTimestamps={relativeTimestamps}
-                  formatters={{ date: formatDisplayDate, number: formatDisplayNumber }}
-                />
-              </Suspense>
-            )}
 
             {activePage === "schedule" && schedulesAvailable && (
               <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading schedules" page="schedule" />}>
@@ -2506,6 +2416,59 @@ export default function App() {
             )}
 
           </Fragment>
+        )}
+
+        {/*
+          Outside the workspace fragment on purpose, and outside its per-server key. The overview's
+          content-health card reads the same installed list and update plan as the page, so the
+          module has to outlive its own page: mounting it inside would throw the loaded list away
+          every time Settings or Nodes was visited, and re-fetch it on the way back. It renders
+          nothing until its page is open, so the fallback is a skeleton only when that page is the
+          one waiting, and the page still lands after the server strip in the document.
+        */}
+        {managedContentAvailable && supportsManagedMods && (
+          <Suspense fallback={activePage === "mods" ? <FeaturePageLoadingSkeleton label={`Loading ${managedContent.plural}`} page="mods" /> : null}>
+            <ModsModule
+              active={activePage === "mods"}
+              activePage={activePage}
+              activeServer={activeServer}
+              activeServerIsDemo={activeServerIsDemo}
+              activeServerUsesInternalNode={activeServerUsesInternalNode}
+              activeNodeRuntimeBlocked={activeNodeRuntimeBlocked}
+              activeNodeBlockMessage={activeNodeBlockMessage}
+              demoMode={demoMode}
+              demoInstalledMods={demoInstalledMods}
+              setDemoInstalledMods={setDemoInstalledMods}
+              modrinthConfigured={effectiveAppState.modrinthApiConfigured}
+              isProvisioning={isProvisioning}
+              canManage={canManageMods}
+              canInstall={canInstallMods}
+              modsLocked={modsLocked}
+              reviewAcknowledgementLocked={modReviewAcknowledgementLocked}
+              toggleLocked={modToggleLocked}
+              addDisabled={addModFromModrinthDisabled}
+              addDisabledReason={addModFromModrinthDisabledReason}
+              uploadDisabled={uploadModDisabled}
+              uploadDisabledReason={uploadModDisabledReason}
+              notify={notify}
+              setNotice={setNotice}
+              setActiveJobs={setActiveJobs}
+              handleStaleSession={handleStaleSession}
+              refreshFiles={filesWorkspace.actions.loadFiles}
+              refreshServerState={() => refreshApp({ silent: true })}
+              requestConfirmation={requestConfirmation}
+              onBridgeChange={setModsBridge}
+              managedContent={managedContent}
+              runtimeType={activeServer?.runtimeProfile.runtimeType ?? "fabric"}
+              restartRequiredChanges={activeServer?.restartRequiredChanges}
+              minecraftVersion={activeServer?.runtimeProfile.minecraftVersion || "Unknown"}
+              versionsUnknown={activeModVersionsUnknown}
+              contextMessage={activeModContext}
+              relativeTimestamps={relativeTimestamps}
+              formatDate={formatDisplayDate}
+              formatNumber={formatDisplayNumber}
+            />
+          </Suspense>
         )}
       </section>
       </main>

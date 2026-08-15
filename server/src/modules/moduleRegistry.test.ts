@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MODULE_IDS } from "@serversentinel/contracts";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
+import type { Permission } from "../types.js";
 import { ModuleRegistry } from "./moduleRegistry.js";
 
 const roots: string[] = [];
@@ -36,8 +38,10 @@ async function moduleApp(registry: ModuleRegistry) {
 describe("optional module registry", () => {
   it("treats a module with no stored opinion as enabled, so an upgrade changes nothing", async () => {
     const registry = new ModuleRegistry(await storage());
-    expect(registry.isEnabled("schedules")).toBe(true);
-    expect(registry.states()).toEqual([{ id: "schedules", enabled: true, accessible: false }]);
+    expect(registry.states().map((module) => module.id).sort()).toEqual([...MODULE_IDS].sort());
+    expect(registry.states().every((module) => module.enabled)).toBe(true);
+    // No user, so nothing is reachable: accessibility is a property of a viewer, not the panel.
+    expect(registry.states().every((module) => !module.accessible)).toBe(true);
   });
 
   it("remembers a disabled module across restarts", async () => {
@@ -49,12 +53,18 @@ describe("optional module registry", () => {
 
   it("folds the viewer's permissions into accessibility without changing the installation state", async () => {
     const registry = new ModuleRegistry(await storage());
+    const schedules = (permissions: Permission[]) => registry.states({ permissions }).find((module) => module.id === "schedules");
 
-    expect(registry.states({ permissions: ["schedules.view"] })).toEqual([{ id: "schedules", enabled: true, accessible: true }]);
-    expect(registry.states({ permissions: ["servers.view"] })).toEqual([{ id: "schedules", enabled: true, accessible: false }]);
+    expect(schedules(["schedules.view"])).toEqual({ id: "schedules", enabled: true, accessible: true });
+    expect(schedules(["servers.view"])).toEqual({ id: "schedules", enabled: true, accessible: false });
+
+    // One module's switch says nothing about another's, for the installation or for the viewer.
+    expect(registry.states({ permissions: ["schedules.view", "mods.view"] })
+      .find((module) => module.id === "managedContent")).toEqual({ id: "managedContent", enabled: true, accessible: true });
 
     await registry.setEnabled("schedules", false);
-    expect(registry.states({ permissions: ["schedules.view"] })).toEqual([{ id: "schedules", enabled: false, accessible: false }]);
+    expect(schedules(["schedules.view"])).toEqual({ id: "schedules", enabled: false, accessible: false });
+    expect(registry.isEnabled("managedContent")).toBe(true);
   });
 
   it("refuses a disabled module's endpoints while the rest of the panel keeps answering", async () => {
@@ -113,6 +123,35 @@ describe("optional module registry", () => {
     await registry.startEnabled();
 
     expect(start).not.toHaveBeenCalled();
+  });
+
+  it("opens a module's endpoints only once its runtime has started, and closes them before it stops", async () => {
+    // A module whose runtime publishes the services its own routes call — managed content builds
+    // its update-plan coordinator this way — would answer a request against a half-built module if
+    // the flag moved first. The observed order is the contract, not an implementation detail.
+    const registry = new ModuleRegistry(await storage());
+    const order: string[] = [];
+    registry.registerRuntime("managedContent", {
+      start() {
+        order.push(`start(enabled=${registry.isEnabled("managedContent")})`);
+      },
+      stop() {
+        order.push(`stop(enabled=${registry.isEnabled("managedContent")})`);
+      }
+    });
+
+    await registry.startEnabled();
+    await registry.setEnabled("managedContent", false);
+    await registry.setEnabled("managedContent", true);
+
+    expect(order).toEqual([
+      "start(enabled=true)",
+      // Disabling closes the endpoints first, so nothing can arrive while the runtime is unwinding.
+      "stop(enabled=false)",
+      // Enabling starts the runtime first, so nothing can arrive before the services it publishes exist.
+      "start(enabled=false)"
+    ]);
+    expect(registry.isEnabled("managedContent")).toBe(true);
   });
 
   it("reports a runtime that cannot start instead of leaving it recorded as running", async () => {

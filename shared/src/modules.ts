@@ -15,7 +15,7 @@ import type { Permission } from "./index.js";
  * The browser uses both gates to decide whether to download the module's code at all, but that is
  * an optimization. The panel enforces the same two gates on every request and is the only authority.
  */
-export type ModuleId = "schedules";
+export type ModuleId = "schedules" | "managedContent";
 
 export type ModuleDescriptor = {
   id: ModuleId;
@@ -38,6 +38,14 @@ export const MODULE_DESCRIPTORS = [
     disabledEffect: "Nothing is scheduled while this is off and the Schedules workspace is hidden. Existing schedules and their run history are kept, and resume on their next due time when it is switched back on.",
     accessPermission: "schedules.view",
     permissions: ["schedules.view", "schedules.manage"]
+  },
+  {
+    id: "managedContent",
+    label: "Managed content",
+    summary: "Mods and plugins: the installed list, Modrinth search and installs, and automatic update checks.",
+    disabledEffect: "The Mods workspace, Modrinth browsing, and the hourly update check all stop. Installed mods and plugins are left exactly where they are — servers keep loading them, and they are managed again as soon as this is switched back on.",
+    accessPermission: "mods.view",
+    permissions: ["mods.view", "mods.install", "mods.upload", "mods.enableDisable", "mods.remove", "mods.update"]
   }
 ] as const satisfies readonly ModuleDescriptor[];
 

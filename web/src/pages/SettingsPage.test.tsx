@@ -31,7 +31,10 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     playerHeadsBusy: false,
     onPlayerHeadsEnabledChange: vi.fn(),
     onClearPlayerHeadCache: vi.fn(),
-    modules: [{ id: "schedules", enabled: true, accessible: true }],
+    modules: [
+      { id: "schedules", enabled: true, accessible: true },
+      { id: "managedContent", enabled: true, accessible: true }
+    ],
     modulesBusy: false,
     canManageModules: false,
     onModuleEnabledChange: vi.fn(),
@@ -153,11 +156,30 @@ describe("SettingsPage", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props({
       initialCategory: "modules",
       canManageModules: true,
-      modules: [{ id: "schedules", enabled: false, accessible: false }]
+      modules: [
+        { id: "schedules", enabled: false, accessible: false },
+        { id: "managedContent", enabled: true, accessible: true }
+      ]
     })} />);
     expect(html).toContain("Nothing is scheduled while this is off");
     expect(html).toContain("Disabled");
     expect(html).not.toContain("Manage integrations permission is required");
+  });
+
+  it("drops an integration that only exists to configure a switched-off module", () => {
+    const withManagedContent = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "integrations" })} />);
+    const withoutManagedContent = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "integrations",
+      modules: [
+        { id: "schedules", enabled: true, accessible: true },
+        { id: "managedContent", enabled: false, accessible: false }
+      ]
+    })} />);
+
+    expect(withManagedContent).toContain("Modrinth API key");
+    expect(withoutManagedContent).not.toContain("Modrinth API key");
+    // The unrelated integration in the same category is untouched.
+    expect(withoutManagedContent).toContain("Player heads");
   });
 
   it("renders console defaults and command-history state", () => {

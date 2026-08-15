@@ -15,8 +15,10 @@ import { lazyPage } from "./lazyPage";
  * it. Nothing else in the shell has to change.
  */
 const schedulesChunk = lazyPage(() => import("../features/schedules/SchedulesModule"), (module) => module.SchedulesModule);
+const managedContentChunk = lazyPage(() => import("../features/mods/ModsModule"), (module) => module.ModsModule);
 
 export const SchedulesModule = schedulesChunk.Component;
+export const ModsModule = managedContentChunk.Component;
 
 export type WebModuleDefinition = {
   id: ModuleId;
@@ -26,7 +28,8 @@ export type WebModuleDefinition = {
 };
 
 export const webModules: readonly WebModuleDefinition[] = [
-  { id: "schedules", page: "schedule", preload: schedulesChunk.preload }
+  { id: "schedules", page: "schedule", preload: schedulesChunk.preload },
+  { id: "managedContent", page: "mods", preload: managedContentChunk.preload }
 ];
 
 export function moduleForPage(page: ActivePage) {

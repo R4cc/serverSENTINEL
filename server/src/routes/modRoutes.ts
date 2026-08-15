@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { runtimeForServer, services } from "../appServices.js";
 import { durationSince, errorLogFields, logDebug, logError, logInfo } from "../logging.js";
-import { apiErrorResponse } from "../http/errors.js";
+import { apiErrorResponse, throwHttp } from "../http/errors.js";
 import { modChangeRateLimit } from "../http/rateLimits.js";
 import { multipartUpload } from "../http/multipart.js";
 import { optionalCompatibilityFilter, optionalReleaseChannel, validateModrinthProjectId } from "../http/validation.js";
@@ -22,6 +22,19 @@ import { modFileSizeLimit, withModMutationLock } from "../mods/managedContent.js
 import { acknowledgeInstalledModReview, buildModUpdatePlan, classifyModrinthInstallVersion, enrichInstalledModDependencies, installModWithRemoteVersionFallback, listModsWithPanelMetadata, modrinthSearchFacets, modsFromListResult, remoteModMetadata, switchModrinthModVersion, updateModrinthMod, withTrackedModMutation } from "../mods/modService.js";
 import type { ModrinthProject, ReleaseChannel } from "../types.js";
 
+/**
+ * The cached update plan is published by the managed-content module's runtime. These routes only
+ * answer while that module is enabled, so its absence means the runtime has not finished starting
+ * rather than a configuration the caller can fix.
+ */
+function updatePlanCoordinator() {
+  const coordinator = services.modUpdatePlanCoordinator;
+  if (!coordinator) {
+    throwHttp(503, "The managed content module is still starting. Try again in a moment.", { code: "MODULE_STARTING" });
+  }
+  return coordinator;
+}
+
 export function registerModRoutes(app: FastifyInstance) {
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/api/servers/:id/mods", async (request) => {
   await requireRequestPermission(request, "mods.view");
@@ -38,8 +51,8 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?
   requireManagedModsRuntime(server);
   const channel = optionalReleaseChannel(request.query.channel);
   if (channel) return buildModUpdatePlan(server, { forceRefresh: request.query.forceRefresh === "true", channel });
-  if (request.query.forceRefresh === "true") return services.modUpdatePlanCoordinator.refresh(server);
-  return services.modUpdatePlanCoordinator.get(server.id);
+  if (request.query.forceRefresh === "true") return updatePlanCoordinator().refresh(server);
+  return updatePlanCoordinator().get(server.id);
 });
 
 app.get<{ Params: { id: string }; Querystring: { filename?: string; v?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {

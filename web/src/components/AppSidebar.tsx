@@ -162,7 +162,7 @@ export function AppSidebar({
               <SidebarIcon name="files" />
               <span className="navLabel">Files</span>
             </button>
-            {supportsManagedMods && (
+            {supportsManagedMods && isPageAvailable("mods") && (
               <button {...serverNavItem("mods", `Open ${managedContent.plural}`)}>
                 <SidebarIcon name="mods" />
                 <span className="navLabel">{managedContent.pluralTitle}</span>

@@ -2,14 +2,25 @@ import { describe, expect, it } from "vitest";
 import type { ModuleAccessState } from "../types";
 import { isPageAvailable, moduleForPage, webModules } from "./moduleRegistry";
 
-const enabledForEveryone: ModuleAccessState[] = [{ id: "schedules", enabled: true, accessible: true }];
-const enabledWithoutPermission: ModuleAccessState[] = [{ id: "schedules", enabled: true, accessible: false }];
-const switchedOff: ModuleAccessState[] = [{ id: "schedules", enabled: false, accessible: false }];
+const enabledForEveryone: ModuleAccessState[] = [
+  { id: "schedules", enabled: true, accessible: true },
+  { id: "managedContent", enabled: true, accessible: true }
+];
+const enabledWithoutPermission: ModuleAccessState[] = [
+  { id: "schedules", enabled: true, accessible: false },
+  { id: "managedContent", enabled: true, accessible: false }
+];
+const switchedOff: ModuleAccessState[] = [
+  { id: "schedules", enabled: false, accessible: false },
+  { id: "managedContent", enabled: false, accessible: false }
+];
 
 describe("web module registry", () => {
-  it("owns the schedules workspace page and leaves core pages unowned", () => {
+  it("owns the schedules and mods workspace pages and leaves core pages unowned", () => {
     expect(moduleForPage("schedule")?.id).toBe("schedules");
+    expect(moduleForPage("mods")?.id).toBe("managedContent");
     expect(moduleForPage("console")).toBeUndefined();
+    expect(moduleForPage("files")).toBeUndefined();
     expect(moduleForPage("settings")).toBeUndefined();
   });
 
@@ -21,9 +32,20 @@ describe("web module registry", () => {
   });
 
   it("withholds a module page from an installation that switched it off and from an account without its permission", () => {
-    expect(isPageAvailable(enabledForEveryone, "schedule")).toBe(true);
-    expect(isPageAvailable(enabledWithoutPermission, "schedule")).toBe(false);
-    expect(isPageAvailable(switchedOff, "schedule")).toBe(false);
+    for (const page of ["schedule", "mods"] as const) {
+      expect(isPageAvailable(enabledForEveryone, page)).toBe(true);
+      expect(isPageAvailable(enabledWithoutPermission, page)).toBe(false);
+      expect(isPageAvailable(switchedOff, page)).toBe(false);
+    }
+  });
+
+  it("gates each module independently, so one being off says nothing about the other", () => {
+    const onlySchedules: ModuleAccessState[] = [
+      { id: "schedules", enabled: true, accessible: true },
+      { id: "managedContent", enabled: false, accessible: false }
+    ];
+    expect(isPageAvailable(onlySchedules, "schedule")).toBe(true);
+    expect(isPageAvailable(onlySchedules, "mods")).toBe(false);
   });
 
   it("withholds a module page until the panel has answered, so its chunk is never fetched on a guess", () => {

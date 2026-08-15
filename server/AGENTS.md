@@ -12,7 +12,7 @@ The root `AGENTS.md` still applies. Use this table to enter the backend through 
 | Runtime selection and artifacts | `src/runtime/`; Docker transport and logs live in `src/docker/` |
 | Remote nodes and protocol | `src/nodes/protocol.ts`, `src/nodes/remoteNodeRuntime.ts`, `src/nodes/nodeAgent.ts` |
 | Files and archives | `src/files/fileService.ts`, `src/core.ts`, `src/zipArchive.ts`, `src/downloadArchive.ts` |
-| Mods and Modrinth | `src/mods/modService.ts`, `src/mods/managedContent.ts`, `src/modrinth/` |
+| Mods and Modrinth | `src/mods/modService.ts`, `src/mods/managedContent.ts`, `src/modrinth/`; registered as the `managedContent` module |
 | Optional feature modules | `src/modules/`; the shared catalog is `shared/src/modules.ts` and the API is `src/routes/moduleRoutes.ts` |
 | Schedules | `src/schedules/` and `src/routes/scheduleRoutes.ts`; registered as the `schedules` module |
 | Imports, exports, and operations | `src/operations/`, `src/importExport.ts`, `src/routes/importExportRoutes.ts` |

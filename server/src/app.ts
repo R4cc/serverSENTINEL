@@ -47,6 +47,7 @@ import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
 import { registerModuleRoutes } from "./routes/moduleRoutes.js";
 import { ModuleRegistry } from "./modules/moduleRegistry.js";
 import { createScheduleModuleRuntime } from "./modules/scheduleModule.js";
+import { createManagedContentModuleRuntime, modUpdateCheckIntervalMs } from "./modules/managedContentModule.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
@@ -84,7 +85,6 @@ import { resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, sched
 
 const resourceStatsPollMs = 5_000;
 const timelineEventPollMs = 10_000;
-const modUpdateCheckIntervalMs = 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
 const exportMaintenanceIntervalMs = 15 * 60 * 1000;
@@ -442,7 +442,7 @@ await services.moduleRegistry.registerRoutes(app, "schedules", (scope) => regist
   withServerMutation: (serverId, action) => services.exportCoordinator.withMutation(serverId, action)
 }));
 
-registerModRoutes(app);
+await services.moduleRegistry.registerRoutes(app, "managedContent", registerModRoutes);
 
 const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime({
   publicServer,
@@ -569,16 +569,18 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
 });
 if (config.runtimeMode === "all-in-one") services.serversRepository.markStartOnNodeStart(localNodeId);
 services.runtimeStateCoordinator.start();
-services.modUpdatePlanCoordinator = new ModUpdatePlanCoordinator({
-  intervalMs: modUpdateCheckIntervalMs,
-  readServers: async () => (await readServers()).filter(supportsManagedMods),
-  buildPlan: (server, options) => buildModUpdatePlan(server, options),
-  cache: new ModUpdatePlanRepository(services.storageDatabase),
-  onError: (error, server) => {
-    logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "mod_update_check" }, "Automatic mod update check deferred");
-  }
-});
-services.modUpdatePlanCoordinator.start();
+services.moduleRegistry.registerRuntime("managedContent", createManagedContentModuleRuntime({
+  createCoordinator: () => new ModUpdatePlanCoordinator({
+    intervalMs: modUpdateCheckIntervalMs,
+    readServers: async () => (await readServers()).filter(supportsManagedMods),
+    buildPlan: (server, options) => buildModUpdatePlan(server, options),
+    cache: new ModUpdatePlanRepository(services.storageDatabase),
+    onError: (error, server) => {
+      logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "mod_update_check" }, "Automatic mod update check deferred");
+    }
+  }),
+  publish: (coordinator) => { services.modUpdatePlanCoordinator = coordinator; }
+}));
 services.resourceStatsRepository = new ResourceStatsRepository(services.storageDatabase);
 services.timelineEventsRepository = new TimelineEventsRepository(services.storageDatabase);
 services.resourceStatsCollector = new ResourceStatsCollector({
@@ -611,7 +613,8 @@ services.timelineEventCollector.start();
 app.addHook("onClose", async () => {
   services.remoteObservationCoordinator?.stop();
   services.runtimeStateCoordinator?.stop();
-  services.modUpdatePlanCoordinator?.stop();
+  // The mod update coordinator belongs to the managed-content module and is stopped by the
+  // registry's own shutdown hook below, along with every other module runtime.
   services.resourceStatsCollector?.stop();
   services.timelineEventCollector?.stop();
   services.playerSnapshotCoordinator?.stop();

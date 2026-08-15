@@ -49,7 +49,8 @@ interface AppServices {
   exportCoordinator: ExportCoordinator;
   storageDatabase: StorageDatabase;
   moduleRegistry: ModuleRegistry;
-  modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
+  /** Published by the managed-content module runtime; absent while that module is switched off. */
+  modUpdatePlanCoordinator: ModUpdatePlanCoordinator | undefined;
   resourceStatsRepository: ResourceStatsRepository;
   timelineEventsRepository: TimelineEventsRepository;
   appLogger: FastifyBaseLogger | undefined;

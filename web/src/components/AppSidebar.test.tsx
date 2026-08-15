@@ -50,7 +50,16 @@ describe("AppSidebar navigation semantics", () => {
   });
 
   it("leaves out a destination whose optional module this visitor cannot reach", () => {
-    expect(renderSidebar("overview")).toContain("Schedules");
+    const everything = renderSidebar("overview");
+    expect(everything).toContain("Schedules");
+    expect(everything).toContain("Mods");
+
     expect(renderSidebar("overview", true, (page) => page !== "schedule")).not.toContain("Schedules");
+
+    // Managed content also needs a runtime that has content to manage, and the two conditions are
+    // independent: switching the module off must not take the other module's entry with it.
+    const withoutMods = renderSidebar("overview", true, (page) => page !== "mods");
+    expect(withoutMods).not.toContain("Mods");
+    expect(withoutMods).toContain("Schedules");
   });
 });

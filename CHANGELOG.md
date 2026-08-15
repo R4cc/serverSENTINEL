@@ -24,6 +24,11 @@
 - Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
 - Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
 
+## 26.8.19 - 2026-08-15
+
+- Managed content — mods, plugins, Modrinth browsing, and the hourly update check — is now an optional module alongside Schedules. Switching it off closes its API, stops the update checker being built at all, and takes the workspace, the overview content card, and the Modrinth API key setting with it. Installed jars are left untouched and are managed again as soon as it is switched back on.
+- Accounts without `mods.view` no longer download the managed-content interface, which also makes the panel's initial download smaller for everyone.
+
 ## 26.8.18 - 2026-08-15
 
 - Optional features can now be switched off for an installation. Settings gains a Modules category; Schedules is the first module, and turning it off stops scheduled runs, closes the schedule API, and hides the workspace while keeping every existing schedule and its history intact.

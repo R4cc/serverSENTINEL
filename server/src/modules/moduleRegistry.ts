@@ -58,15 +58,21 @@ export class ModuleRegistry {
     }
   }
 
+  /**
+   * Route guards read `isEnabled` per request, so endpoints follow the flag the moment it moves.
+   * Only the background work has to be told, which is what keeps a toggle from needing a restart.
+   *
+   * The order matters and is not symmetric. A module whose runtime builds the services its own
+   * routes call would answer a request with a half-built module if the flag moved first, so the
+   * runtime is started before the endpoints open and stopped after they have closed.
+   */
   async setEnabled(id: ModuleId, enabled: boolean) {
     if (this.isEnabled(id) === enabled) return this.states();
+    if (enabled) await this.startRuntime(id);
     if (enabled) this.disabled.delete(id);
     else this.disabled.add(id);
     writeDisabledModules(this.storage, this.disabled);
-    // Route guards read `isEnabled` per request, so endpoints follow the flag immediately. Only the
-    // background work has to be told, which is what keeps a toggle from needing a panel restart.
-    if (enabled) await this.startRuntime(id);
-    else await this.stopRuntime(id);
+    if (!enabled) await this.stopRuntime(id);
     return this.states();
   }
 
