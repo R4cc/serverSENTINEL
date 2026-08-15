@@ -11,6 +11,7 @@ type ModuleRoutesContext = {
   states(user: Pick<StoredUser, "permissions">): ModuleAccessState[];
   setEnabled(id: ModuleId, enabled: boolean): Promise<ModuleAccessState[]>;
   logInfo(fields: Record<string, unknown>, message: string): void;
+  logWarn(fields: Record<string, unknown>, message: string): void;
 };
 
 /**
@@ -30,7 +31,14 @@ export function registerModuleRoutes(app: FastifyInstance, context: ModuleRoutes
     const id = request.params.id;
     if (!isModuleId(id)) throwHttp(404, `Unknown module: ${id}`, { code: "MODULE_NOT_FOUND" });
     const enabled = requireStrictBoolean(request.body?.enabled, "enabled");
-    await context.setEnabled(id, enabled);
+    try {
+      await context.setEnabled(id, enabled);
+    } catch (error) {
+      // Enabling starts the module's background work first, so a failure here means nothing was
+      // changed. Saying so is more useful than a generic 500, and the module stays cleanly off.
+      context.logWarn({ action: "configure_module", moduleId: id, enabled, status: "failed", errorDetails: error instanceof Error ? error.message : String(error) }, `${moduleDescriptor(id).label} module could not be ${enabled ? "enabled" : "disabled"}`);
+      throwHttp(503, `The ${moduleDescriptor(id).label} module could not be ${enabled ? "started" : "stopped"}. It is unchanged; check the panel log for the reason.`, { code: "MODULE_CHANGE_FAILED" });
+    }
     context.logInfo({ action: "configure_module", moduleId: id, enabled, status: "succeeded" }, `${moduleDescriptor(id).label} module ${enabled ? "enabled" : "disabled"}`);
     return { ok: true, modules: context.states(user) };
   });

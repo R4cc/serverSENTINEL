@@ -28,7 +28,7 @@ The panel enforces both gates on every request. The browser applies the same two
 
 ## What being switched off means
 
-- **Endpoints are refused.** Every route a module registers sits in its own Fastify scope behind an `onRequest` guard, so a disabled module answers `403 MODULE_DISABLED`. A route added to the module later inherits the guard rather than having to remember it.
+- **Endpoints are refused.** Every route a module registers sits in its own Fastify scope behind an `onRequest` guard, so a disabled module answers `403 MODULE_DISABLED`. A route added to the module later inherits the guard rather than having to remember it. The same guard answers `503 MODULE_UNAVAILABLE` for a module that is switched on but whose runtime is not running, so a failed module refuses cleanly instead of half-answering.
 - **Background work stops, and never starts.** A module's pollers and timers are a `ModuleRuntime` that the registry starts and stops as the switch moves. A runtime may also build the services its own routes use — managed content builds its update-plan coordinator, and the plan cache behind it, in `start` — so a switched-off module is not merely idle: it was never constructed. `setEnabled` is deliberately asymmetric about this: the runtime starts *before* the endpoints open and stops *after* they have closed, so a request can never reach a half-built module.
 - **Frontend code is not downloaded.** Each module owns a dynamic import. Navigation, hover prefetch, idle prefetch, and restored navigation all ask `isPageAvailable` first, so an unreachable module's chunk is never requested.
 - **Data is kept.** Disabling is not deleting. Existing schedules, their history, and their next run times survive; the feature resumes where it left off when it is switched back on.
@@ -37,19 +37,32 @@ Runs already in flight are left to finish. Interrupting a schedule midway throug
 
 Disabling is never destructive to what a server holds. Switching managed content off leaves every installed jar where it is — the server keeps loading them, and they are managed again the moment the module returns. The panel simply stops offering to change them.
 
+## When something goes wrong
+
+`enabled` is the administrator's setting; `accessible` is whether the module can actually be used. They come apart when a runtime fails:
+
+- **Enabling fails.** The runtime starts before anything is written, so a module that cannot start stays off and the caller gets `503 MODULE_CHANGE_FAILED` with the reason in the log. Nothing is left half-changed.
+- **A runtime fails at boot.** The panel still starts — one module is not the rest of the panel's hostage — but that module reports `accessible: false`, so no browser offers it, and its endpoints answer `503`. Settings still shows the operator's setting, and switching it off and on retries.
+- **A start throws partway through.** The registry calls the runtime's `stop` immediately, so a half-built runtime does not linger until shutdown.
+- **Two administrators toggle at once.** Every change is serialized, so starts and stops cannot interleave.
+- **A module id this build does not know.** Its setting is written back untouched, so rolling a panel back and forward again does not silently switch a feature on.
+
 ## Adding a module
 
 1. **Describe it** in `shared/src/modules.ts`: id, label, summary, what stops happening while it is off, the permission that scopes it, and the permissions it owns. Every consumer reads this one catalog.
 2. **Register its routes** in `app.ts` through `services.moduleRegistry.registerRoutes(app, id, register)` instead of calling the route registrar directly.
 3. **Register its background work**, if it has any, with `services.moduleRegistry.registerRuntime(id, runtime)`.
 4. **Add its browser entry** to `web/src/app/moduleRegistry.ts`: a `lazyPage` import for the module's component and one row mapping the module to the workspace page it owns.
-5. **Render it** in `App.tsx` behind that page's availability check.
+5. **Render it** in `App.tsx` behind that page's availability check, and give its navigation entry in `AppSidebar.tsx` the same check.
+6. **Add its page** to the `ActivePage` union, the stored-navigation allowlist, the prefetch queue, and the workspace titles.
 
-Settings needs no change: the Modules category is generated from the shared catalog. Neither does the sidebar beyond wrapping the module's own nav entry in `isPageAvailable`.
+Step 6 is the one that is easy to half-finish, so it is not left to memory: `web/src/app/moduleRegistry.test.ts` walks the registry and fails if any module page is missing from one of those lists, and `AppSidebar.test.tsx` fails if a module's navigation entry is offered when the module is not reachable. Settings needs no change at all — the Modules category is generated from the shared catalog.
 
 ## Where the boundary is
 
 A module's browser code should live behind its dynamic import, state included. Both modules keep their workspace hook inside the module component rather than in the shell, which is what makes "not loaded" true rather than approximately true. Where the shell genuinely needs something from a module it travels outward as a value, not by hoisting the module's state back up: `schedules` reports whether a mutation is in flight, and `managedContent` publishes a small bridge — the update plan, a busy flag, and two actions — that the overview card and the file manager read.
+
+Decisions written in a module's vocabulary belong to the module. The shell passes conditions it already owns for its own sake — provisioning, runtime reachability, an export holding the server, the panel's job list — and the module turns them into its own answers: `features/mods/modAccess.ts` decides what "locked" means for mods and phrases every reason in mods-or-plugins wording, including which job types count as its own. The shell should not be able to describe a module's rules.
 
 **A module that feeds a core page has to outlive its own page.** Managed content backs the overview's content-health card, so it is mounted for as long as a server is selected rather than only while the Mods page is open, and outside the per-server key. Mounting it with its page instead threw its loaded list away on every visit to Settings and re-fetched it on the way back. Its component renders `null` until its page is open, so the longer life costs nothing visually. A module that feeds nothing outside itself — `schedules` — should stay mounted with its page.
 

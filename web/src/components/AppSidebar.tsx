@@ -91,6 +91,10 @@ export function AppSidebar({
   // not only tinted, and so no entry can drift away from the others as items are added.
   const navItem = (page: ActivePage, disabled: boolean, disabledReason: string, label: string) => ({
     type: "button" as const,
+    // Names the destination independently of its wording, which changes with the runtime for
+    // managed content. Tests use it to assert that no module-owned entry survives its module
+    // being unavailable — the check that would otherwise be forgotten when a module is added.
+    "data-nav-page": page,
     className: activePage === page ? "active" : "",
     "aria-current": activePage === page ? ("page" as const) : undefined,
     onClick: () => onNavigate(page),

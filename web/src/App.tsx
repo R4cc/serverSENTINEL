@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
@@ -12,12 +12,12 @@ import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
 import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldLoadPlayerSnapshots, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
-import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
+import { resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./app/navigationStorage";
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
-import { isPageAvailable, moduleForPage, ModsModule, SchedulesModule } from "./app/moduleRegistry";
+import { isPageAvailable, moduleAccessSignature, moduleForPage, ModsModule, resolveAvailablePage, SchedulesModule } from "./app/moduleRegistry";
 import { useServerContext } from "./app/serverContext";
 import { copyToClipboard } from "./utils/clipboard";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -323,7 +323,6 @@ export default function App() {
   }, [themeClassName]);
   const isProvisioning = activeJobs.some((job) => job.type === "provision" && (job.status === "queued" || job.status === "running"));
   const currentProvisionOperation = activeJobs.find((job) => job.type === "provision");
-  const isAnyModJobRunning = activeJobs.some((job) => (job.type === "mod-install" || job.type === "mod-upload") && job.status === "running");
   const panelVersion = appState.appVersion ?? appVersion;
   const panelBuildId = appState.buildId;
   const {
@@ -357,7 +356,12 @@ export default function App() {
   // where both agree, which is what keeps "switched off for everyone" and "not granted to you" from
   // having to be modelled twice. `supportsManagedMods` is a third, unrelated condition — a runtime
   // with no content directory has nothing to manage — and is applied where the pages are rendered.
-  const activeModules = effectiveAppState.modules;
+  // Held stable across app refreshes that did not actually change anything about the catalog, so
+  // effects keyed on it — the prefetch walk above all — do not restart on every poll.
+  const moduleSignature = moduleAccessSignature(effectiveAppState.modules);
+  const modulesRef = useRef(effectiveAppState.modules);
+  modulesRef.current = effectiveAppState.modules;
+  const activeModules = useMemo(() => modulesRef.current, [moduleSignature]);
   const schedulesAvailable = isPageAvailable(activeModules, "schedule");
   const managedContentAvailable = isPageAvailable(activeModules, "mods");
   const canInstallMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.install"));
@@ -401,11 +405,13 @@ export default function App() {
   useEffect(() => {
     if (activePage === "mods" && activeServer && !supportsManagedMods) setActivePage("overview");
   }, [activePage, activeServer, supportsManagedMods]);
-  // A page restored from the last visit, or one left open while an administrator switched its
-  // module off, has to give way rather than render an empty workspace.
+  // A page restored from the last visit, one left open while an administrator switched its module
+  // off, and one whose permission this account has just lost all have to give way rather than
+  // render an empty workspace.
   useEffect(() => {
-    if (applicationReady && !isPageAvailable(activeModules, activePage)) setActivePage("overview");
-  }, [applicationReady, activeModules, activePage]);
+    if (!applicationReady) return;
+    setActivePage((current) => resolveAvailablePage(current, activeModules));
+  }, [applicationReady, activeModules]);
   const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
     if (!activeServer) throw new Error("Select a server to load its timeline");
     if (demoMode && isDemoServerId(activeServer.id)) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to, activeServer.id);
@@ -547,27 +553,6 @@ export default function App() {
     panelBuildId
   });
   const exportServer = effectiveAppState.servers.find((server) => server.id === exportWorkspace.exportServerId);
-  const {
-    modsLocked,
-    modReviewAcknowledgementLocked,
-    modToggleLocked,
-    addModFromModrinthDisabled,
-    uploadModDisabled,
-    addModFromModrinthDisabledReason,
-    uploadModDisabledReason
-  } = resolveModGuards({
-    isProvisioning,
-    dockerOperationalLock,
-    canManageMods,
-    canInstallMods,
-    activeStatus,
-    isAnyModJobRunning,
-    modrinthApiConfigured: effectiveAppState.modrinthApiConfigured,
-    runtimeControlsDisabledReason,
-    managedContent,
-    exportMutationLocked,
-    exportMutationBlockedReason
-  });
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
   const {
     browserTimeZone,
@@ -631,7 +616,7 @@ export default function App() {
     userMutation: usersWorkspace.busy,
     integrationMutation: integrationBusy || modulesBusy,
     transferMutation: exportWorkspace.exportBusy || exportWorkspace.importBusy,
-    modMutation: isAnyModJobRunning || Boolean(modsBridge?.mutating)
+    modMutation: Boolean(modsBridge?.mutating)
   });
   const uiCacheClear = useUiCacheClear({
     enabled: activePage === "settings" && Boolean(authSession?.authenticated),
@@ -2443,13 +2428,12 @@ export default function App() {
               isProvisioning={isProvisioning}
               canManage={canManageMods}
               canInstall={canInstallMods}
-              modsLocked={modsLocked}
-              reviewAcknowledgementLocked={modReviewAcknowledgementLocked}
-              toggleLocked={modToggleLocked}
-              addDisabled={addModFromModrinthDisabled}
-              addDisabledReason={addModFromModrinthDisabledReason}
-              uploadDisabled={uploadModDisabled}
-              uploadDisabledReason={uploadModDisabledReason}
+              dockerOperationalLock={dockerOperationalLock}
+              activeStatus={activeStatus}
+              activeJobs={activeJobs}
+              runtimeControlsDisabledReason={runtimeControlsDisabledReason}
+              exportMutationLocked={exportMutationLocked}
+              exportMutationBlockedReason={exportMutationBlockedReason}
               notify={notify}
               setNotice={setNotice}
               setActiveJobs={setActiveJobs}

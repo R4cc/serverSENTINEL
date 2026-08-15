@@ -41,3 +41,22 @@ export function isPageAvailable(modules: readonly ModuleAccessState[] | undefine
   const owner = moduleForPage(page);
   return !owner || isModuleAccessible(modules, owner.id);
 }
+
+/**
+ * A stable identity for what the module catalog means to this viewer. `/api/app` hands back a new
+ * array on every refresh, and the shell refreshes often; without this, every refresh looked like a
+ * module change and restarted work keyed on it — most visibly the idle prefetch walk.
+ */
+export function moduleAccessSignature(modules: readonly ModuleAccessState[] | undefined) {
+  return (modules ?? []).map((module) => `${module.id}:${module.enabled ? 1 : 0}${module.accessible ? 1 : 0}`).join(",");
+}
+
+/**
+ * The page to actually show. A module page can be reached without passing a navigation entry —
+ * restored from the last visit, or already open when an administrator switches the module off or
+ * an account loses the permission — and each of those has to land somewhere real rather than on an
+ * empty workspace. Core pages are returned untouched.
+ */
+export function resolveAvailablePage(page: ActivePage, modules: readonly ModuleAccessState[] | undefined): ActivePage {
+  return isPageAvailable(modules, page) ? page : "overview";
+}

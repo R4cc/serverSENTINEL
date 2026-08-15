@@ -24,6 +24,11 @@
 - Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
 - Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
 
+## 26.8.20 - 2026-08-15
+
+- A module that fails to start is now handled cleanly: enabling one reports the failure and leaves it switched off rather than recording a module that does not work, and one that fails while the panel starts is hidden from the interface and refuses its API instead of half-answering, while Settings keeps showing the setting you chose.
+- Switching a module on or off can no longer interleave with another administrator doing the same, and a module setting written by a newer release is preserved instead of being dropped when an older one saves.
+
 ## 26.8.19 - 2026-08-15
 
 - Managed content — mods, plugins, Modrinth browsing, and the hourly update check — is now an optional module alongside Schedules. Switching it off closes its API, stops the update checker being built at all, and takes the workspace, the overview content card, and the Modrinth API key setting with it. Installed jars are left untouched and are managed again as soon as it is switched back on.

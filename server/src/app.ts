@@ -421,7 +421,8 @@ registerModuleRoutes(app, {
   requireRequestPermission,
   states: (user) => services.moduleRegistry.states(user),
   setEnabled: (id, enabled) => services.moduleRegistry.setEnabled(id, enabled),
-  logInfo
+  logInfo,
+  logWarn
 });
 
 await services.moduleRegistry.registerRoutes(app, "schedules", (scope) => registerScheduleRoutes(scope, {

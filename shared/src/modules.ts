@@ -64,8 +64,14 @@ export function moduleDescriptor(id: ModuleId): ModuleDescriptor {
 }
 
 /**
- * One module as a client sees it. `enabled` is the installation gate and is the same for everyone;
- * `accessible` folds in the viewer's permissions and is what the UI keys off.
+ * One module as a client sees it.
+ *
+ * `enabled` is the administrator's setting and is the same for everyone: it is what the Modules
+ * settings shows and what survives a restart. `accessible` is whether this viewer can actually use
+ * the module right now, and is what the UI keys off. They differ when the viewer lacks the
+ * permission, and also when the module is switched on but its background work is not running —
+ * a panel that cannot serve a module should not offer it, while still showing the operator the
+ * setting they chose.
  */
 export type ModuleAccessState = {
   id: ModuleId;
@@ -75,14 +81,17 @@ export type ModuleAccessState = {
 
 export function moduleAccessStates(gates: {
   isEnabled(id: ModuleId): boolean;
+  /** Defaults to `isEnabled`, for callers with no notion of a module failing to run. */
+  isServing?(id: ModuleId): boolean;
   hasPermission(permission: Permission): boolean;
 }): ModuleAccessState[] {
   return MODULE_DESCRIPTORS.map((descriptor) => {
     const enabled = gates.isEnabled(descriptor.id);
+    const serving = gates.isServing?.(descriptor.id) ?? enabled;
     return {
       id: descriptor.id,
       enabled,
-      accessible: enabled && gates.hasPermission(descriptor.accessPermission)
+      accessible: serving && gates.hasPermission(descriptor.accessPermission)
     };
   });
 }

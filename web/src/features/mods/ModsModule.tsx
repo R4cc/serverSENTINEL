@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAc
 import { toast } from "sonner";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import type { ServerRuntimeType } from "@serversentinel/contracts";
-import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModUpdatePlan, Notify } from "../../types";
+import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModUpdatePlan, Notify, ServerStatus } from "../../types";
 import { errorMessage } from "../../utils/appHelpers";
 import { ModsPage } from "../../pages/ModsPage";
 import { modUpdateRefreshResultMessage } from "../../pages/OverviewPage";
 import type { ManagedContentTerminology } from "./contentTerminology";
+import { resolveModGuards } from "./modAccess";
 import { useModsWorkspace } from "./useModsWorkspace";
 
 /**
@@ -46,13 +47,13 @@ export type ModsModuleProps = {
   isProvisioning: boolean;
   canManage: boolean;
   canInstall: boolean;
-  modsLocked: boolean;
-  reviewAcknowledgementLocked: boolean;
-  toggleLocked: boolean;
-  addDisabled: boolean;
-  addDisabledReason: string;
-  uploadDisabled: boolean;
-  uploadDisabledReason: string;
+  /** Conditions the shell owns for its own reasons; what they mean for mods is decided here. */
+  dockerOperationalLock: boolean;
+  activeStatus: ServerStatus | null;
+  activeJobs: readonly GeneralJob[];
+  runtimeControlsDisabledReason: string;
+  exportMutationLocked: boolean;
+  exportMutationBlockedReason: string;
   notify: Notify;
   setNotice: Dispatch<SetStateAction<string>>;
   setActiveJobs: Dispatch<SetStateAction<GeneralJob[]>>;
@@ -73,6 +74,19 @@ export type ModsModuleProps = {
 };
 
 export function ModsModule(props: ModsModuleProps) {
+  const guards = resolveModGuards({
+    isProvisioning: props.isProvisioning,
+    dockerOperationalLock: props.dockerOperationalLock,
+    canManageMods: props.canManage,
+    canInstallMods: props.canInstall,
+    activeStatus: props.activeStatus,
+    activeJobs: props.activeJobs,
+    modrinthApiConfigured: props.modrinthConfigured,
+    runtimeControlsDisabledReason: props.runtimeControlsDisabledReason,
+    managedContent: props.managedContent,
+    exportMutationLocked: props.exportMutationLocked,
+    exportMutationBlockedReason: props.exportMutationBlockedReason
+  });
   const workspace = useModsWorkspace({
     activeServer: props.activeServer,
     activePage: props.activePage,
@@ -87,8 +101,8 @@ export function ModsModule(props: ModsModuleProps) {
     isProvisioning: props.isProvisioning,
     canManage: props.canManage,
     canInstall: props.canInstall,
-    modsLocked: props.modsLocked,
-    toggleLocked: props.toggleLocked,
+    modsLocked: guards.modsLocked,
+    toggleLocked: guards.modToggleLocked,
     notify: props.notify,
     setNotice: props.setNotice,
     setActiveJobs: props.setActiveJobs,
@@ -138,7 +152,9 @@ export function ModsModule(props: ModsModuleProps) {
 
   const updatePlan = workspace.data.updatePlan;
   const updatePlanLoading = workspace.state.updatePlanLoading;
-  const mutating = workspace.state.batchUpdateRunning || Boolean(workspace.state.installState?.installing);
+  // Includes the module's own panel jobs, so the shell no longer has to know which job types are
+  // a mod operation in order to decide whether clearing its cache would interrupt one.
+  const mutating = guards.modJobRunning || workspace.state.batchUpdateRunning || Boolean(workspace.state.installState?.installing);
   const bridge = useMemo<ModsModuleBridge>(
     () => ({ updatePlan, updatePlanLoading, mutating, refreshUpdates, refreshAfterFileChange }),
     [updatePlan, updatePlanLoading, mutating, refreshUpdates, refreshAfterFileChange]
@@ -163,15 +179,15 @@ export function ModsModule(props: ModsModuleProps) {
         contextMessage: props.contextMessage
       }}
       access={{
-        changesAllowed: !props.modsLocked,
-        locked: props.modsLocked,
-        reviewAcknowledgementLocked: props.reviewAcknowledgementLocked,
-        toggleLocked: props.toggleLocked,
+        changesAllowed: !guards.modsLocked,
+        locked: guards.modsLocked,
+        reviewAcknowledgementLocked: guards.modReviewAcknowledgementLocked,
+        toggleLocked: guards.modToggleLocked,
         modrinthConfigured: props.modrinthConfigured,
-        addDisabled: props.addDisabled,
-        addDisabledReason: props.addDisabledReason,
-        uploadDisabled: props.uploadDisabled,
-        uploadDisabledReason: props.uploadDisabledReason
+        addDisabled: guards.addModFromModrinthDisabled,
+        addDisabledReason: guards.addModFromModrinthDisabledReason,
+        uploadDisabled: guards.uploadModDisabled,
+        uploadDisabledReason: guards.uploadModDisabledReason
       }}
       relativeTimestamps={props.relativeTimestamps}
       formatters={{ date: props.formatDate, number: props.formatNumber }}

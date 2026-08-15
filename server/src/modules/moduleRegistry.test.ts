@@ -154,6 +154,84 @@ describe("optional module registry", () => {
     expect(registry.isEnabled("managedContent")).toBe(true);
   });
 
+  it("leaves a module off when its runtime cannot start, and says so", async () => {
+    const database = await storage();
+    const registry = new ModuleRegistry(database);
+    registry.registerRuntime("schedules", { start() { throw new Error("scheduler unavailable"); }, stop: vi.fn() });
+    await registry.setEnabled("schedules", false);
+
+    await expect(registry.setEnabled("schedules", true)).rejects.toThrow("scheduler unavailable");
+
+    // Nothing was recorded, so a restart does not come back up in a broken state either.
+    expect(registry.isEnabled("schedules")).toBe(false);
+    expect(new ModuleRegistry(database).isEnabled("schedules")).toBe(false);
+  });
+
+  it("keeps a module that failed to start at boot from answering for itself", async () => {
+    const registry = new ModuleRegistry(await storage());
+    registry.registerRuntime("schedules", { start() { throw new Error("scheduler unavailable"); }, stop: vi.fn() });
+    const app = await moduleApp(registry);
+    try {
+      await registry.startEnabled();
+
+      // The operator's setting still says enabled — that is what Settings should show — but the
+      // module cannot answer, so its endpoints refuse instead of running against half a module.
+      expect(registry.isEnabled("schedules")).toBe(true);
+      expect(registry.isServing("schedules")).toBe(false);
+      // Settings still shows the operator's setting, but nobody is offered a module the panel
+      // cannot serve — the browser hides it instead of loading a workspace that only errors.
+      expect(registry.states({ permissions: ["schedules.view"] }).find((module) => module.id === "schedules"))
+        .toEqual({ id: "schedules", enabled: true, accessible: false });
+      const refused = await app.inject({ method: "GET", url: "/api/servers/abc/schedules" });
+      expect(refused.statusCode).toBe(503);
+      expect(refused.json().message).toContain("not running");
+      expect((await app.inject({ method: "GET", url: "/api/app" })).statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("starts a runtime registered after boot instead of leaving it dormant", async () => {
+    const registry = new ModuleRegistry(await storage());
+    await registry.startEnabled();
+
+    const start = vi.fn();
+    registry.registerRuntime("schedules", { start, stop: vi.fn() });
+    // The start is queued behind whatever else the registry is doing, so settle it the same way a
+    // caller would: any state change awaits the same queue.
+    await registry.setEnabled("schedules", true);
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(registry.isServing("schedules")).toBe(true);
+  });
+
+  it("serializes overlapping changes so two administrators cannot interleave them", async () => {
+    const registry = new ModuleRegistry(await storage());
+    const order: string[] = [];
+    let releaseStop: (() => void) | undefined;
+    registry.registerRuntime("schedules", {
+      start() {
+        order.push("start");
+      },
+      async stop() {
+        order.push("stop:begin");
+        await new Promise<void>((resolve) => { releaseStop = resolve; });
+        order.push("stop:end");
+      }
+    });
+    await registry.startEnabled();
+
+    const disabling = registry.setEnabled("schedules", false);
+    const reEnabling = registry.setEnabled("schedules", true);
+    await vi.waitFor(() => expect(releaseStop).toBeDefined());
+    releaseStop?.();
+    await disabling;
+    await reEnabling;
+
+    expect(order).toEqual(["start", "stop:begin", "stop:end", "start"]);
+    expect(registry.isServing("schedules")).toBe(true);
+  });
+
   it("reports a runtime that cannot start instead of leaving it recorded as running", async () => {
     const registry = new ModuleRegistry(await storage(), {
       onRuntimeError: (error, id, phase) => { failures.push({ message: (error as Error).message, id, phase }); }
@@ -165,9 +243,13 @@ describe("optional module registry", () => {
 
     await registry.startEnabled();
     expect(failures).toEqual([{ message: "scheduler unavailable", id: "schedules", phase: "start" }]);
+    // A runtime that threw partway through may already hold half of what it built, so the failed
+    // start is unwound immediately rather than left for shutdown to find.
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(registry.isServing("schedules")).toBe(false);
 
-    // The failed start left nothing running, so shutting down must not call `stop` on it.
+    // And it is not unwound twice: shutdown has nothing left to stop.
     await registry.stopAll();
-    expect(stop).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 });

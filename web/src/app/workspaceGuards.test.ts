@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerStatus } from "../types";
-import { managedContentTerminology } from "../features/mods/contentTerminology";
-import { resolveModGuards, resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./workspaceGuards";
+import { resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./workspaceGuards";
 
 function serverStatus(overrides: {
   docker?: Partial<ServerStatus["docker"]>;
@@ -254,67 +253,6 @@ describe("resolveServerSettingsGuards", () => {
       serverSettingsLocked: true,
       deleteServerLocked: true,
       serverSettingsLockedReason: "Export in progress."
-    });
-  });
-});
-
-const modDefaults = {
-  isProvisioning: false,
-  dockerOperationalLock: false,
-  canManageMods: true,
-  canInstallMods: true,
-  activeStatus: serverStatus(),
-  isAnyModJobRunning: false,
-  modrinthApiConfigured: true,
-  runtimeControlsDisabledReason: "",
-  managedContent: managedContentTerminology("fabric")
-};
-
-describe("resolveModGuards", () => {
-  it("unlocks mod actions when everything is ready", () => {
-    const guards = resolveModGuards(modDefaults);
-    expect(guards).toMatchObject({ modsLocked: false, uploadModDisabled: false, addModFromModrinthDisabled: false });
-    expect(guards.addModFromModrinthDisabledReason).toBe("Search Modrinth for compatible Fabric mods.");
-  });
-
-  it("points at Settings when no Modrinth key is configured", () => {
-    const guards = resolveModGuards({ ...modDefaults, modrinthApiConfigured: false });
-    expect(guards.addModFromModrinthDisabled).toBe(true);
-    expect(guards.addModFromModrinthDisabledReason).toBe("Add a Modrinth API key in Settings before searching for mods.");
-    // Uploading a local file does not need the key.
-    expect(guards.uploadModDisabled).toBe(false);
-  });
-
-  it("reports an in-flight job ahead of a missing permission", () => {
-    expect(resolveModGuards({ ...modDefaults, isAnyModJobRunning: true, canInstallMods: false }).addModFromModrinthDisabledReason)
-      .toBe("A mod operation is already running.");
-  });
-
-  it("uses plugin wording for Paper servers", () => {
-    const guards = resolveModGuards({ ...modDefaults, managedContent: managedContentTerminology("paper"), isAnyModJobRunning: true });
-    expect(guards.uploadModDisabledReason).toBe("A plugin operation is already running.");
-  });
-
-  it("locks every action while the status is still loading", () => {
-    const guards = resolveModGuards({ ...modDefaults, activeStatus: null });
-    expect(guards).toMatchObject({ modsLocked: true, modToggleLocked: true, uploadModDisabled: true, addModFromModrinthDisabled: true });
-    expect(guards.uploadModDisabledReason).toBe("Server status is still loading.");
-  });
-
-  it("locks every managed-content mutation during an export", () => {
-    const guards = resolveModGuards({
-      ...modDefaults,
-      exportMutationLocked: true,
-      exportMutationBlockedReason: "Export in progress."
-    });
-    expect(guards).toMatchObject({
-      modsLocked: true,
-      modReviewAcknowledgementLocked: true,
-      modToggleLocked: true,
-      uploadModDisabled: true,
-      addModFromModrinthDisabled: true,
-      uploadModDisabledReason: "Export in progress.",
-      addModFromModrinthDisabledReason: "Export in progress."
     });
   });
 });

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { demoServer } from "../demo";
 import { fabricContentTerminology } from "../features/mods/contentTerminology";
 import type { ActivePage } from "../types";
+import { webModules } from "../app/moduleRegistry";
 import { AppSidebar } from "./AppSidebar";
 
 function renderSidebar(activePage: "nodes" | "overview", withServer = true, availablePages?: (page: ActivePage) => boolean) {
@@ -49,17 +50,25 @@ describe("AppSidebar navigation semantics", () => {
     expect(html).toContain('title="Open nodes"');
   });
 
-  it("leaves out a destination whose optional module this visitor cannot reach", () => {
+  // Driven by the registry rather than a list of names, so a module added without its availability
+  // check in the sidebar fails here instead of quietly offering a destination nobody can open.
+  it("offers a module destination only while that module is reachable", () => {
     const everything = renderSidebar("overview");
-    expect(everything).toContain("Schedules");
-    expect(everything).toContain("Mods");
+    for (const module of webModules) {
+      expect(everything, module.id).toContain(`data-nav-page="${module.page}"`);
+    }
 
-    expect(renderSidebar("overview", true, (page) => page !== "schedule")).not.toContain("Schedules");
-
-    // Managed content also needs a runtime that has content to manage, and the two conditions are
-    // independent: switching the module off must not take the other module's entry with it.
-    const withoutMods = renderSidebar("overview", true, (page) => page !== "mods");
-    expect(withoutMods).not.toContain("Mods");
-    expect(withoutMods).toContain("Schedules");
+    for (const module of webModules) {
+      const html = renderSidebar("overview", true, (page) => page !== module.page);
+      expect(html, module.id).not.toContain(`data-nav-page="${module.page}"`);
+      // Only that module's entry goes: one module's state says nothing about another's.
+      for (const other of webModules.filter((candidate) => candidate.page !== module.page)) {
+        expect(html, `${module.id} -> ${other.id}`).toContain(`data-nav-page="${other.page}"`);
+      }
+      // Core destinations are never touched by a module being unavailable.
+      for (const page of ["overview", "console", "files", "properties", "nodes", "settings"]) {
+        expect(html, `${module.id} -> ${page}`).toContain(`data-nav-page="${page}"`);
+      }
+    }
   });
 });

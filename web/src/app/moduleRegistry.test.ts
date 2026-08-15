@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { MODULE_IDS } from "@serversentinel/contracts";
 import type { ModuleAccessState } from "../types";
-import { isPageAvailable, moduleForPage, webModules } from "./moduleRegistry";
+import { pageTitle } from "./appConfig";
+import { readStoredActivePage, writeStoredActivePage } from "./navigationStorage";
+import { pagePrefetchOrder } from "./pagePrefetch";
+import { isPageAvailable, moduleAccessSignature, moduleForPage, resolveAvailablePage, webModules } from "./moduleRegistry";
 
 const enabledForEveryone: ModuleAccessState[] = [
   { id: "schedules", enabled: true, accessible: true },
@@ -58,6 +62,60 @@ describe("web module registry", () => {
     for (const module of webModules) {
       expect(module.page).toBeTruthy();
       expect(typeof module.preload).toBe("function");
+    }
+  });
+
+  it("gives the same signature to catalogs that mean the same thing, and different ones otherwise", () => {
+    expect(moduleAccessSignature(enabledForEveryone)).toBe(moduleAccessSignature([...enabledForEveryone]));
+    expect(moduleAccessSignature(enabledForEveryone)).not.toBe(moduleAccessSignature(enabledWithoutPermission));
+    expect(moduleAccessSignature(enabledWithoutPermission)).not.toBe(moduleAccessSignature(switchedOff));
+    expect(moduleAccessSignature(undefined)).toBe(moduleAccessSignature([]));
+  });
+
+  it("sends an unreachable module page to the overview, however it was reached", () => {
+    expect(resolveAvailablePage("mods", switchedOff)).toBe("overview");
+    expect(resolveAvailablePage("schedule", enabledWithoutPermission)).toBe("overview");
+    // Not yet known is treated the same, so a restored page cannot flash a module in before the
+    // panel has said whether this account may have it.
+    expect(resolveAvailablePage("mods", undefined)).toBe("overview");
+
+    expect(resolveAvailablePage("mods", enabledForEveryone)).toBe("mods");
+    for (const page of ["overview", "console", "files", "properties", "nodes", "settings"] as const) {
+      expect(resolveAvailablePage(page, switchedOff)).toBe(page);
+    }
+  });
+});
+
+/**
+ * A module has to be wired into a handful of core lists that cannot be derived from the registry —
+ * the page union, the stored-navigation allowlist, the prefetch queue, the workspace title. These
+ * fail loudly when a module is added without one of them, which is cheaper than machinery that
+ * makes each list module-aware and easier to trust than a checklist in a document.
+ */
+describe("core wiring every module page depends on", () => {
+  it("declares each module id in the shared catalog", () => {
+    for (const module of webModules) expect(MODULE_IDS).toContain(module.id);
+  });
+
+  it("accepts each module page as a restorable navigation target", () => {
+    for (const module of webModules) {
+      const storage = new Map<string, string>();
+      const fakeStorage = {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => { storage.set(key, value); }
+      } as unknown as Storage;
+      writeStoredActivePage(module.page, fakeStorage, 0);
+      expect(readStoredActivePage(fakeStorage, 0), module.id).toBe(module.page);
+    }
+  });
+
+  it("queues each module page for idle prefetching", () => {
+    for (const module of webModules) expect(pagePrefetchOrder, module.id).toContain(module.page);
+  });
+
+  it("gives each module page a workspace title", () => {
+    for (const module of webModules) {
+      expect(pageTitle(module.page, "Mods", true), module.id).not.toBe("Welcome");
     }
   });
 });

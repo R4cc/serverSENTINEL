@@ -4,18 +4,20 @@ import type { ModuleAccessState } from "@serversentinel/contracts";
 import type { Permission, StoredUser } from "../types.js";
 import { registerModuleRoutes } from "./moduleRoutes.js";
 
-function testApp(options: { permissions?: Permission[] } = {}) {
+function testApp(options: { permissions?: Permission[]; changeFails?: boolean } = {}) {
   const app = Fastify();
   const permissions = options.permissions ?? ["settings.view", "integrations.manage"];
   const user = { id: "user-1", permissions } as StoredUser;
   let enabled = true;
   let destructiveRateLimitCalls = 0;
   const setEnabled = vi.fn(async (_id: string, next: boolean) => {
+    if (options.changeFails) throw new Error("update checker could not start");
     enabled = next;
     return states();
   });
   const states = (): ModuleAccessState[] => [{ id: "schedules", enabled, accessible: enabled && permissions.includes("schedules.view") }];
   const logInfo = vi.fn();
+  const logWarn = vi.fn();
 
   registerModuleRoutes(app, {
     destructiveRateLimit: {
@@ -33,10 +35,11 @@ function testApp(options: { permissions?: Permission[] } = {}) {
     },
     states: () => states(),
     setEnabled,
-    logInfo
+    logInfo,
+    logWarn
   });
 
-  return { app, setEnabled, logInfo, isEnabled: () => enabled, destructiveRateLimitCalls: () => destructiveRateLimitCalls };
+  return { app, setEnabled, logInfo, logWarn, isEnabled: () => enabled, destructiveRateLimitCalls: () => destructiveRateLimitCalls };
 }
 
 describe("module routes", () => {
@@ -74,6 +77,17 @@ describe("module routes", () => {
     expect(response.json().modules).toEqual([{ id: "schedules", enabled: false, accessible: false }]);
     expect(destructiveRateLimitCalls()).toBe(1);
     expect(logInfo).toHaveBeenCalledWith(expect.objectContaining({ action: "configure_module", moduleId: "schedules", enabled: false }), expect.any(String));
+    await app.close();
+  });
+
+  it("reports a module that could not be started, leaving its state unchanged", async () => {
+    const { app, isEnabled, logWarn } = testApp({ changeFails: true });
+    const response = await app.inject({ method: "PUT", url: "/api/modules/schedules", payload: { enabled: false } });
+
+    expect(response.statusCode, response.body).toBe(503);
+    expect(response.json().message).toContain("could not be stopped");
+    expect(isEnabled()).toBe(true);
+    expect(logWarn).toHaveBeenCalledWith(expect.objectContaining({ action: "configure_module", status: "failed" }), expect.any(String));
     await app.close();
   });
 

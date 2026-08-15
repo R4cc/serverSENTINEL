@@ -23,14 +23,14 @@ import { acknowledgeInstalledModReview, buildModUpdatePlan, classifyModrinthInst
 import type { ModrinthProject, ReleaseChannel } from "../types.js";
 
 /**
- * The cached update plan is published by the managed-content module's runtime. These routes only
- * answer while that module is enabled, so its absence means the runtime has not finished starting
- * rather than a configuration the caller can fix.
+ * The cached update plan is published by the managed-content module's runtime. The module guard in
+ * front of these routes already refuses while that runtime is not running, so this is the assertion
+ * behind that guarantee rather than a case a caller is expected to hit.
  */
 function updatePlanCoordinator() {
   const coordinator = services.modUpdatePlanCoordinator;
   if (!coordinator) {
-    throwHttp(503, "The managed content module is still starting. Try again in a moment.", { code: "MODULE_STARTING" });
+    throwHttp(503, "The managed content module is not running. Check the panel log, then switch it off and on again.", { code: "MODULE_UNAVAILABLE" });
   }
   return coordinator;
 }
