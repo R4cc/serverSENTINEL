@@ -202,11 +202,11 @@ export function OverviewSummary({
         label="World Size"
         icon={<Globe />}
         iconPlacement="leading"
-        value={loading || (storageLoading && worldSizeBytes === null)
-          ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
-          : worldSizeBytes === null
-            ? "Unavailable"
-            : <span className="summaryByteValue" title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
+        value={worldSizeBytes === null
+          ? loading || storageLoading
+            ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
+            : "Unavailable"
+          : <span className="summaryByteValue" title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
       />
       <MetricTile
         className="summaryTile storageRemainingTile"
@@ -214,11 +214,11 @@ export function OverviewSummary({
         icon={<HardDrive />}
         iconPlacement="leading"
         tone={storageLow ? "warning" : "neutral"}
-        value={loading || (storageLoading && storageAvailableBytes === null)
-          ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
-          : storageAvailableBytes === null
-            ? "Unavailable"
-            : (
+        value={storageAvailableBytes === null
+          ? loading || storageLoading
+            ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
+            : "Unavailable"
+          : (
               <span
                 className={`summaryByteValue summaryStorageValue${storageLow ? " summaryStorageValue--warning" : ""}`}
                 title={storageTitle}

@@ -24,6 +24,10 @@
 - Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
 - Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
 
+## 26.8.22 - 2026-08-15
+
+- The overview now remembers the last World Size and Free Space it measured, so a reload shows those figures straight away and replaces them once the new measurement arrives instead of holding both tiles on a placeholder.
+
 ## 26.8.21 - 2026-08-15
 
 - Fixed the user and reset-password dialogs drawing a grey browser border around their contents and leaving empty strips above and below it.
