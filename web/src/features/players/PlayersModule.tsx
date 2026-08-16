@@ -17,6 +17,8 @@ export type PlayersModuleProps = {
   demoRunning: boolean;
   canManage: boolean;
   playerHeadsEnabled: boolean;
+  /** Phone layout, passed straight through to the chart geometry. */
+  compactLayout: boolean;
   notify: Notify;
   handleStaleSession(error: unknown): boolean;
   formatDate(value: string | number | Date): string;
@@ -50,6 +52,7 @@ export function PlayersModule(props: PlayersModuleProps) {
       onRefreshGeoDatabase={() => void workspace.refreshGeoDatabase()}
       canManage={props.canManage}
       playerHeadsEnabled={props.playerHeadsEnabled}
+      compactLayout={props.compactLayout}
       formatDate={props.formatDate}
     />
   );

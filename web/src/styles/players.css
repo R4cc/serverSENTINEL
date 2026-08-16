@@ -16,7 +16,7 @@
 
 .playerSummaryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -210,20 +210,36 @@
 }
 
 .playerNumericColumn {
-  text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+/* Qualified by the table, because the cell rule above it is too: a bare .playerNumericColumn
+   loses to `.playerRegionTable td` on specificity, which left every numeric column aligned left
+   while looking, in the stylesheet, as though it were not. */
+.playerRegionTable th.playerNumericColumn,
+.playerRegionTable td.playerNumericColumn,
+.playerRosterTable th.playerNumericColumn,
+.playerRosterTable td.playerNumericColumn {
+  text-align: right;
+}
+
+.playerRegionShareCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .playerRegionBar {
-  display: inline-block;
-  width: min(120px, 30vw);
+  display: block;
+  flex: 1 1 auto;
+  min-width: 24px;
+  max-width: 120px;
   height: 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
-  vertical-align: middle;
-  margin-right: var(--space-2);
 }
 
 .playerRegionBarFill {
@@ -235,6 +251,7 @@
 }
 
 .playerRegionShare {
+  flex: 0 0 auto;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -330,9 +347,10 @@
   vector-effect: non-scaling-stroke;
 }
 
+/* Sized by the component, not here: the label has to be measured in the same units as the gutter
+   that has to hold it, and only the component knows which viewBox it picked. */
 .playerChartAxisLabel {
   fill: var(--text-muted);
-  font-size: 10px;
 }
 
 .playerChartLine {
@@ -408,16 +426,22 @@
   background: var(--accent);
 }
 
-/* An hour with no samples is not a quiet hour, and must not look like one. */
-.playerActivityBar--unobserved .playerActivityBarFill {
+/* An hour with no samples is not a quiet hour, and must not look like one — but a full-height
+   hatched bar reads as a busy one, which is the opposite mistake. Ghost the column the bar would
+   have stood in and draw no bar at all. */
+.playerActivityBar--unobserved {
   background: repeating-linear-gradient(
     45deg,
-    color-mix(in srgb, var(--text) 12%, transparent),
-    color-mix(in srgb, var(--text) 12%, transparent) 2px,
+    color-mix(in srgb, var(--text) 9%, transparent),
+    color-mix(in srgb, var(--text) 9%, transparent) 2px,
     transparent 2px,
     transparent 4px
   );
-  height: 100%;
+  border-radius: var(--radius-xs);
+}
+
+.playerActivityBar--unobserved .playerActivityBarFill {
+  display: none;
 }
 
 .playerActivityScale {
@@ -448,11 +472,24 @@
   .playerAnalysisRow {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* Two by two rather than three and a lonely fourth. */
+  .playerSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .playerSummaryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 720px) {
-  .playerChartAxisLabel {
-    font-size: 20px;
+  /* The bar is decoration and the percentage is the fact. A phone cannot afford both beside four
+     other columns, and letting them wrap instead is what made the rows ragged to begin with. */
+  .playerRegionBar {
+    display: none;
   }
 
   .playerLatencyCard .uiPanelHeader {

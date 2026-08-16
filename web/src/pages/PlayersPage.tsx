@@ -32,7 +32,23 @@ import {
 
 const rosterPageSize = 8;
 
-function LatencyChart({ points, timeZone }: { points: readonly PlayerLatencyPoint[]; timeZone: string }) {
+/**
+ * The chart's geometry, in the units its viewBox is drawn in.
+ *
+ * A phone renders this SVG about half as wide as a desktop does, so one viewBox for both means the
+ * axis labels are either unreadable on the phone or oversized on the desktop. Scaling the font
+ * inside a fixed viewBox is what broke it: the gutters are measured in the same units, so a bigger
+ * font ran "150 ms" off the left edge and dropped "0 ms" on top of the date beneath it. Choosing a
+ * viewBox close to the size it will actually be drawn at keeps one set of proportions honest at
+ * both widths, and the padding below is sized for the labels that have to fit inside it.
+ */
+function latencyChartGeometry(compact: boolean) {
+  return compact
+    ? { width: 360, height: 190, fontSize: 11, padding: { top: 10, right: 8, bottom: 28, left: 50 } }
+    : { width: 720, height: 180, fontSize: 10, padding: { top: 12, right: 8, bottom: 22, left: 64 } };
+}
+
+function LatencyChart({ points, timeZone, compact }: { points: readonly PlayerLatencyPoint[]; timeZone: string; compact: boolean }) {
   const measured = points.filter((point) => point.medianEstimatedLatencyMs !== undefined);
   if (measured.length < 2) {
     return (
@@ -44,9 +60,7 @@ function LatencyChart({ points, timeZone }: { points: readonly PlayerLatencyPoin
     );
   }
 
-  const width = 720;
-  const height = 180;
-  const padding = { top: 12, right: 8, bottom: 22, left: 64 };
+  const { width, height, fontSize, padding } = latencyChartGeometry(compact);
   const from = points[0].at;
   const to = points.at(-1)!.at;
   const maximum = Math.max(...measured.map((point) => point.p95EstimatedLatencyMs ?? point.medianEstimatedLatencyMs!));
@@ -79,13 +93,13 @@ function LatencyChart({ points, timeZone }: { points: readonly PlayerLatencyPoin
         {gridValues.map((value) => (
           <g key={value}>
             <line className="playerChartGrid" x1={padding.left} y1={y(value)} x2={width - padding.right} y2={y(value)} />
-            <text className="playerChartAxisLabel" x={padding.left - 6} y={y(value) + 4} textAnchor="end">{value} ms</text>
+            <text className="playerChartAxisLabel" fontSize={fontSize} x={padding.left - 6} y={y(value) + fontSize * 0.36} textAnchor="end">{value} ms</text>
           </g>
         ))}
         <path className="playerChartLine playerChartLine--p95" d={line((point) => point.p95EstimatedLatencyMs)} />
         <path className="playerChartLine playerChartLine--median" d={line((point) => point.medianEstimatedLatencyMs)} />
-        <text className="playerChartAxisLabel" x={padding.left} y={height - 6} textAnchor="start">{timeLabel(from)}</text>
-        <text className="playerChartAxisLabel" x={width - padding.right} y={height - 6} textAnchor="end">{timeLabel(to)}</text>
+        <text className="playerChartAxisLabel" fontSize={fontSize} x={padding.left} y={height - 4} textAnchor="start">{timeLabel(from)}</text>
+        <text className="playerChartAxisLabel" fontSize={fontSize} x={width - padding.right} y={height - 4} textAnchor="end">{timeLabel(to)}</text>
       </svg>
       <ul className="playerChartLegend">
         <li><span className="playerChartSwatch playerChartSwatch--median" aria-hidden="true" />Median estimate</li>
@@ -150,10 +164,12 @@ function RegionTable({ regions }: { regions: readonly PlayerRegionSummary[] }) {
           <tr key={region.continentCode}>
             <th scope="row">{region.continent}</th>
             <td>
-              <span className="playerRegionBar" aria-hidden="true">
-                <span className="playerRegionBarFill" style={{ "--player-region-share": `${Math.round(region.share * 100)}%` } as Record<string, string>} />
+              <span className="playerRegionShareCell">
+                <span className="playerRegionBar" aria-hidden="true">
+                  <span className="playerRegionBarFill" style={{ "--player-region-share": `${Math.round(region.share * 100)}%` } as Record<string, string>} />
+                </span>
+                <span className="playerRegionShare">{Math.round(region.share * 100)}%</span>
               </span>
-              <span className="playerRegionShare">{Math.round(region.share * 100)}%</span>
             </td>
             <td className="playerNumericColumn">{region.players}</td>
             <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(region.averageEstimatedLatencyMs)}`}>
@@ -178,7 +194,11 @@ function PlayerRoster({
   formatDate: (value: string | number | Date) => string;
 }) {
   const [page, setPage] = useState(0);
-  useEffect(() => setPage(0), [serverId, players.length]);
+  // Only a different server starts the reader over. The roster refreshes every thirty seconds and
+  // its length moves whenever anyone joins or leaves, so resetting on that threw whoever was
+  // reading page three back to page one for no reason they could see. A page that no longer exists
+  // is clamped below instead.
+  useEffect(() => setPage(0), [serverId]);
   if (players.length === 0) {
     return <EmptyState compact title="No players recorded yet" message="Players appear here once they join, whether or not their location can be resolved." />;
   }
@@ -303,6 +323,7 @@ export function PlayersPage({
   onRefreshGeoDatabase,
   canManage,
   playerHeadsEnabled,
+  compactLayout,
   formatDate
 }: {
   active: boolean;
@@ -318,6 +339,8 @@ export function PlayersPage({
   onRefreshGeoDatabase: () => void;
   canManage: boolean;
   playerHeadsEnabled: boolean;
+  /** Phone layout. The chart needs it because its geometry is drawn in viewBox units, not pixels. */
+  compactLayout: boolean;
   formatDate: (value: string | number | Date) => string;
 }) {
   if (!active) return null;
@@ -404,7 +427,11 @@ export function PlayersPage({
             title="Player geography"
             description={serverLocation?.location
               ? `Approximate player locations, measured from ${serverLocation.location.label}.`
-              : "Approximate player locations. Set the server address to measure distance and estimate latency."}
+              : serverLocation?.address
+                // An address is configured but could not be placed. Saying "set the server address"
+                // here would be telling the operator to do what they have already done.
+                ? `Approximate player locations. ${serverLocation.address} could not be placed, so distances are unavailable.`
+                : "Approximate player locations. Set the server address to measure distance and estimate latency."}
           />
           <PlayerGeographyMap
             players={insights?.players ?? []}
@@ -453,7 +480,7 @@ export function PlayersPage({
               </div>
             )}
           />
-          <LatencyChart points={insights?.latency ?? []} timeZone={insights?.timeZone ?? "UTC"} />
+          <LatencyChart points={insights?.latency ?? []} timeZone={insights?.timeZone ?? "UTC"} compact={compactLayout} />
         </Surface>
 
         <Surface className="playerCard playerActivityCard">

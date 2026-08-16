@@ -38,6 +38,7 @@ function render(overrides: Partial<Parameters<typeof PlayersPage>[0]> = {}) {
       onRefreshGeoDatabase={vi.fn()}
       canManage
       playerHeadsEnabled={false}
+      compactLayout={false}
       formatDate={(value) => new Date(value).toISOString()}
       {...overrides}
     />
@@ -125,6 +126,32 @@ describe("the Players workspace with partial knowledge", () => {
   it("does not draw empty avatar boxes when player heads are disabled", () => {
     expect(render({ insights: partial })).not.toContain("playerHead");
     expect(render({ insights: partial, playerHeadsEnabled: true })).toContain("playerHead");
+  });
+
+  it("says an address could not be placed rather than telling the operator to set one", () => {
+    const html = render({
+      insights: insights({
+        serverLocations: [{ serverId: "server-1", address: "play.example.net", error: "GeoLite2 has no location for play.example.net." }]
+      })
+    });
+    expect(html).toContain("play.example.net could not be placed");
+    expect(html).not.toContain("Set the server address to measure distance");
+  });
+
+  it("gives the chart room for its own labels at each size it is drawn", () => {
+    const latency = [
+      { at: Date.parse("2026-08-16T11:00:00.000Z"), medianEstimatedLatencyMs: 40, p95EstimatedLatencyMs: 150, players: 2 },
+      { at: Date.parse("2026-08-16T12:00:00.000Z"), medianEstimatedLatencyMs: 45, p95EstimatedLatencyMs: 150, players: 3 }
+    ];
+    // The gutter and the label are measured in the same units, so a viewBox that does not change
+    // with the font leaves "150 ms" hanging off the left edge. Both sizes have to agree.
+    for (const compactLayout of [false, true]) {
+      const html = render({ insights: insights({ latency }), compactLayout });
+      const fontSize = Number(html.match(/class="playerChartAxisLabel" font-size="(\d+)"/)![1]);
+      const gutter = Number(html.match(/x="(\d+)" y="[\d.]+" text-anchor="end"/)![1]);
+      // Six characters of "150 ms" at roughly 0.6em each, and the label ends before the axis.
+      expect(gutter, `compact: ${compactLayout}`).toBeGreaterThan(fontSize * 0.6 * 6);
+    }
   });
 
   it("distinguishes chart endpoints that fall on different dates", () => {

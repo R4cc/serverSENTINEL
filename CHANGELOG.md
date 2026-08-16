@@ -1,5 +1,14 @@
 # Changelog
 
+## 26.8.26 - 2026-08-16
+
+- Fixed the Players roster jumping back to its first page every time somebody joined or left. Only switching server starts it over now.
+- Fixed the connection-quality chart on phones, where the enlarged axis labels ran "150 ms" off the left edge and dropped "0 ms" on top of the date beneath it. The chart now picks proportions to suit the width it is drawn at.
+- Fixed the distance, ping, players, and share columns never actually aligning right, and the region share bar wrapping under its percentage on wide screens, which left the region rows at uneven heights.
+- Fixed the four summary tiles arranging themselves three-and-one on medium screens; they now fall to two rows of two.
+- Hours the panel has not observed yet are drawn as a ghosted column rather than a full-height bar, so a day of partial history no longer reads as a day of peak activity.
+- The geography card no longer tells you to set a server address you have already set; it says the address could not be placed instead.
+
 ## 26.8.25 - 2026-08-16
 
 - Polished the Players workspace so its region table stays within its card on desktop and its connection-quality range controls no longer crowd the heading on phones.

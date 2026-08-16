@@ -2377,6 +2377,7 @@ export default function App() {
                   demoRunning={demoRunning}
                   canManage={canManagePlayerInsights}
                   playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                  compactLayout={phoneLayout}
                   notify={notify}
                   handleStaleSession={handleStaleSession}
                   formatDate={formatDisplayDate}
