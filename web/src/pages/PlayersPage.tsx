@@ -46,7 +46,7 @@ function LatencyChart({ points, timeZone }: { points: readonly PlayerLatencyPoin
 
   const width = 720;
   const height = 180;
-  const padding = { top: 12, right: 8, bottom: 22, left: 40 };
+  const padding = { top: 12, right: 8, bottom: 22, left: 64 };
   const from = points[0].at;
   const to = points.at(-1)!.at;
   const maximum = Math.max(...measured.map((point) => point.p95EstimatedLatencyMs ?? point.medianEstimatedLatencyMs!));
@@ -68,7 +68,10 @@ function LatencyChart({ points, timeZone }: { points: readonly PlayerLatencyPoin
     return segments.join("");
   };
   const gridValues = [0, ceiling / 2, ceiling];
-  const timeLabel = (at: number) => new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(at));
+  const showsMultipleDates = to - from >= 20 * 60 * 60 * 1000;
+  const timeLabel = (at: number) => new Intl.DateTimeFormat("en-GB", showsMultipleDates
+    ? { timeZone, day: "numeric", month: "short" }
+    : { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(at));
 
   return (
     <div className="playerLatencyChart">
@@ -201,7 +204,9 @@ function PlayerRoster({
             <tr key={`${entry.serverId}:${entry.player}`} className={entry.online ? "playerRosterRow--online" : undefined}>
               <th scope="row">
                 <span className="playerIdentity">
-                  <PlayerHead serverId={entry.serverId} playerName={entry.player} version={headVersion} enabled={playerHeadsEnabled} />
+                  {playerHeadsEnabled && (
+                    <PlayerHead serverId={entry.serverId} playerName={entry.player} version={headVersion} enabled />
+                  )}
                   <span className="playerIdentityCopy">
                     <strong>{entry.player}</strong>
                     {entry.online && <small className="playerOnlineFlag">Online</small>}

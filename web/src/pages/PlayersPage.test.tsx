@@ -121,4 +121,22 @@ describe("the Players workspace with partial knowledge", () => {
     expect(readOnly).not.toContain("player-insights-server-address");
     expect(readOnly).toContain("player insights management permission");
   });
+
+  it("does not draw empty avatar boxes when player heads are disabled", () => {
+    expect(render({ insights: partial })).not.toContain("playerHead");
+    expect(render({ insights: partial, playerHeadsEnabled: true })).toContain("playerHead");
+  });
+
+  it("distinguishes chart endpoints that fall on different dates", () => {
+    const html = render({
+      insights: insights({
+        latency: [
+          { at: Date.parse("2026-08-15T12:00:00.000Z"), medianEstimatedLatencyMs: 40, p95EstimatedLatencyMs: 70, players: 2 },
+          { at: Date.parse("2026-08-16T12:00:00.000Z"), medianEstimatedLatencyMs: 45, p95EstimatedLatencyMs: 75, players: 3 }
+        ]
+      })
+    });
+    expect(html).toContain("15 Aug");
+    expect(html).toContain("16 Aug");
+  });
 });

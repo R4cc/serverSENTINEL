@@ -327,6 +327,7 @@
 .playerChartGrid {
   stroke: var(--border-row);
   stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .playerChartAxisLabel {
@@ -339,6 +340,7 @@
   stroke-width: 1.75;
   stroke-linejoin: round;
   stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .playerChartLine--median { stroke: var(--sentinel-success); }
@@ -449,6 +451,10 @@
 }
 
 @media (max-width: 720px) {
+  .playerChartAxisLabel {
+    font-size: 20px;
+  }
+
   .playerLatencyCard .uiPanelHeader {
     flex-direction: column;
     align-items: stretch;
