@@ -217,7 +217,7 @@
 
 .playerRegionBar {
   display: inline-block;
-  width: min(180px, 40vw);
+  width: min(120px, 30vw);
   height: 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text) 10%, transparent);
@@ -434,14 +434,30 @@
   margin: 0;
 }
 
+/* The shared shell still has a full sidebar below 1440px. Keep these cards stacked there so the
+   narrower region table never forces the workspace wider than the viewport. */
+@media (max-width: 1439px) {
+  .playerGeographyRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 1100px) {
-  .playerGeographyRow,
   .playerAnalysisRow {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 720px) {
+  .playerLatencyCard .uiPanelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playerLatencyCard .uiPanelHeaderActions {
+    justify-content: flex-start;
+  }
+
   .playerRosterTable thead {
     display: none;
   }

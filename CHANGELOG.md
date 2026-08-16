@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.8.25 - 2026-08-16
+
+- Polished the Players workspace so its region table stays within its card on desktop and its connection-quality range controls no longer crowd the heading on phones.
+
 ## 26.8.24 - 2026-08-16
 
 - Player Insights now estimates past latency from where each player was at the time. Geography is kept as a short history rather than a single latest place, so a player moving between continents no longer rewrites every hour of the connection-quality chart that had already been drawn. Sessions from before the panel first placed a player are counted but not estimated, rather than being attributed to wherever that player is now.
