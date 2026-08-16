@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 22;
+export const currentSchemaVersion = 23;
 export const currentSchemaName = "current-schema-baseline";
 
 const applicationTableNames = [
@@ -263,6 +263,12 @@ function createCurrentSchema(database: Database.Database) {
     -- address a Minecraft server logs at login is resolved in memory and dropped, and only the
     -- derived place survives. player_key is the lowercased player name, which is what the Query
     -- observation and the console log both identify a player by.
+    --
+    -- One row per run of joins from the same place, not one per player: first_seen_at is part of
+    -- the key so a player who moves gains a row instead of overwriting where they used to be.
+    -- Latency shown for last Tuesday is estimated from where they were last Tuesday, and a row is
+    -- only added when the derived place actually changes, so this stays a handful of rows per
+    -- player rather than a sample per login.
     CREATE TABLE player_geo_locations (
       server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
       player_key TEXT NOT NULL,
@@ -271,7 +277,7 @@ function createCurrentSchema(database: Database.Database) {
       first_seen_at INTEGER NOT NULL,
       last_seen_at INTEGER NOT NULL,
       observations INTEGER NOT NULL DEFAULT 1,
-      PRIMARY KEY (server_id, player_key)
+      PRIMARY KEY (server_id, player_key, first_seen_at)
     );
     CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
   `);
@@ -396,6 +402,40 @@ function migrateSchema21(database: Database.Database) {
   }).immediate();
 }
 
+/**
+ * Player geography becomes a history rather than a single latest place.
+ *
+ * The columns are unchanged; the primary key gains `first_seen_at` so a player who moves gains a
+ * row instead of overwriting where they used to be. Existing rows carry over as the one run they
+ * describe, which is exactly what was recorded: the place the player was seen at, from the first
+ * time they were seen there. Nothing before that first observation is invented — history older
+ * than the earliest row simply has no location, which is the honest reading of a table that never
+ * stored one.
+ */
+function migrateSchema22(database: Database.Database) {
+  database.transaction(() => {
+    database.exec(`
+      CREATE TABLE player_geo_locations_next (
+        server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        player_key TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        location_json TEXT NOT NULL,
+        first_seen_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        observations INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (server_id, player_key, first_seen_at)
+      );
+      INSERT INTO player_geo_locations_next
+        SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations
+        FROM player_geo_locations;
+      DROP TABLE player_geo_locations;
+      ALTER TABLE player_geo_locations_next RENAME TO player_geo_locations;
+      CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
+    `);
+    recordCurrentSchema(database);
+  }).immediate();
+}
+
 function initializeSchema(database: Database.Database) {
   if (!tableExists(database, "schema_migrations")) {
     if (applicationTables(database).length !== 0) {
@@ -428,9 +468,10 @@ function initializeSchema(database: Database.Database) {
   // Each supported predecessor is upgraded step by step, so a data root that skipped a release
   // still passes through every migration between it and the current baseline.
   const baseline = history.length === 1 && history[0].name === currentSchemaName ? history[0].version : undefined;
-  if (baseline === 20 || baseline === 21) {
-    if (baseline === 20) migrateSchema20(database);
-    migrateSchema21(database);
+  if (baseline !== undefined && baseline >= oldestSupportedSchemaVersion && baseline < currentSchemaVersion) {
+    if (baseline <= 20) migrateSchema20(database);
+    if (baseline <= 21) migrateSchema21(database);
+    if (baseline <= 22) migrateSchema22(database);
     assertCurrentSchemaLayout(database);
     return;
   }

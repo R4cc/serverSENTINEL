@@ -253,7 +253,7 @@ export function SettingsPage(props: SettingsPageProps) {
           {isModuleEnabled(props.modules, "playerInsights") && (
             <PreferenceRow
               title="MaxMind GeoLite2"
-              description={<>Let the panel download the <a href="https://dev.maxmind.com/geoip/geolite2-free-geolocation-data" target="_blank" rel="noreferrer">GeoLite2 City</a> database it reads locally for Player insights. Player addresses are never sent to MaxMind or anywhere else.</>}
+              description={<>Let the panel download the <a href="https://dev.maxmind.com/geoip/geolite2-free-geolocation-data" target="_blank" rel="noreferrer">GeoLite2 City</a> database it reads locally for Player insights. Player addresses are looked up against that local copy and are never sent to MaxMind or any other geolocation service.</>}
               className="settingsHubIntegrationRow"
             >
               <MaxmindCredentialsForm onSubmit={props.onSubmitMaxmindCredentials} configured={props.geoIpConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />

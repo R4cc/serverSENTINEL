@@ -2,10 +2,18 @@
  * The Player Insights contract.
  *
  * Everything here describes information the panel can actually obtain: player names come from the
- * Minecraft Query observation the panel already collects, and their geography is resolved locally
- * from a MaxMind GeoLite2 City database against the address the Minecraft server logged when the
- * player joined. That address is never stored — only the derived location below survives the
- * lookup — so the history this module keeps cannot be turned back into who connected from where.
+ * Minecraft Query observation the panel already collects, and their geography is resolved from a
+ * MaxMind GeoLite2 City database the panel holds itself, against the address the Minecraft server
+ * logged when the player joined.
+ *
+ * The guarantee this module makes about that address is precise, and worth stating precisely.
+ * Player Insights does not store it: the lookup happens in memory and only the derived location
+ * below survives, so nothing this module keeps can be turned back into who connected from where.
+ * The lookup itself is a local database read, so no address is sent to MaxMind or to any other
+ * geolocation service. What it is *not* is a claim that the address never leaves the machine the
+ * Minecraft server runs on — a server on a remote node reaches the panel over the node protocol,
+ * and its console output travels with it, addresses and all, exactly as it did before this module
+ * existed.
  *
  * No Minecraft protocol the panel can speak reports a player's own round-trip time, so latency is
  * never claimed as measured. It is estimated from the distance between the player's approximate
@@ -42,8 +50,12 @@ export type PlayerLocationPrecision = "city" | "region" | "country";
  * A city answer is only presented as a city while its accuracy radius stays inside this many
  * kilometres. Beyond it the same record is described by its subdivision or country instead: the
  * coordinates are still the best estimate available, but the city name would overstate them.
+ *
+ * Fifty kilometres is roughly the scale at which a city name still means the city. GeoLite2 reports
+ * radii of several hundred kilometres for a great many allocations — mobile carriers and small
+ * countries especially — and naming a city for those said something the data does not support.
  */
-export const playerCityAccuracyRadiusLimitKm = 200;
+export const playerCityAccuracyRadiusLimitKm = 50;
 
 /**
  * The derived geography of one player, as stored and as served. There is deliberately no address

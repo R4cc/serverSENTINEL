@@ -50,7 +50,7 @@ const demoPlaces: Array<{ location: PlayerLocation; distanceKm: number; estimate
     estimatedLatencyMs: 24
   },
   {
-    location: { label: "New York", city: "New York", subdivision: "New York", country: "United States", countryCode: "US", continent: "North America", continentCode: "NA", latitude: 40.71, longitude: -74.01, accuracyRadiusKm: 100, precision: "city" },
+    location: { label: "New York", city: "New York", subdivision: "New York", country: "United States", countryCode: "US", continent: "North America", continentCode: "NA", latitude: 40.71, longitude: -74.01, accuracyRadiusKm: 20, precision: "city" },
     distanceKm: 6_190,
     estimatedLatencyMs: 103
   },

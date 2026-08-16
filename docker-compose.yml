@@ -17,7 +17,8 @@ services:
       SERVERSENTINEL_SETUP_TOKEN: ${SERVERSENTINEL_SETUP_TOKEN:-}
       MODRINTH_API_KEY: ${MODRINTH_API_KEY:-}
       # Authorizes the GeoLite2 City download for the Player insights module. The database is
-      # downloaded into the data volume and read locally; no player address is sent to MaxMind.
+      # downloaded into the data volume and read there; no player address is sent to MaxMind or to
+      # any other geolocation service.
       MAXMIND_ACCOUNT_ID: ${MAXMIND_ACCOUNT_ID:-}
       MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:-}
       MCJARS_BASE_URL: ${MCJARS_BASE_URL:-https://mcjars.app}

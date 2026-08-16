@@ -50,7 +50,7 @@ describe("the Players workspace before it knows anything", () => {
     expect(html).toContain("Player geography is not configured");
     expect(html).toContain("Settings → Integrations");
     // The privacy claim is on the page itself, not only in the documentation.
-    expect(html).toContain("no player address is ever sent anywhere");
+    expect(html).toContain("no player address is sent to MaxMind or any other geolocation service");
   });
 
   it("shows an em dash for every figure it could not derive, never a zero standing in for unknown", () => {

@@ -36,6 +36,16 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
+/**
+ * How many readers the timeline collector is handing its console output to.
+ *
+ * Reaches past the public surface on purpose: the point being asserted is that Player Insights adds
+ * a subscriber rather than a second poll, and the count is the only observable difference.
+ */
+function observedLogSubscribers(collector: unknown) {
+  return (collector as { logObservers?: Set<unknown> } | undefined)?.logObservers?.size ?? 0;
+}
+
 describe("Fastify application factory", () => {
   it("builds without listening and closes against an isolated data directory", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-app-factory-"));
@@ -1285,6 +1295,9 @@ describe("Fastify application factory", () => {
       // they exist only while the module does.
       expect(services.playerGeoDatabase).toBeDefined();
       expect(services.playerGeoCollector).toBeDefined();
+      // The collector reads the console output the timeline collector already fetched rather than
+      // asking a node for it again, so switching the module on adds exactly one subscriber.
+      expect(observedLogSubscribers(services.timelineEventCollector)).toBe(1);
 
       const insights = await app.inject({ method: "GET", url: insightsUrl, headers: { ...csrf, cookie } });
       expect(insights.statusCode, insights.body).toBe(200);
@@ -1329,6 +1342,9 @@ describe("Fastify application factory", () => {
       expect(disabled.statusCode, disabled.body).toBe(200);
       expect(services.playerGeoDatabase).toBeUndefined();
       expect(services.playerGeoCollector).toBeUndefined();
+      // The subscription goes with it, so the panel keeps reading logs for the timeline and nothing
+      // looks at a login line.
+      expect(observedLogSubscribers(services.timelineEventCollector)).toBe(0);
 
       for (const request of [
         { method: "GET" as const, url: insightsUrl },

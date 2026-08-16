@@ -6,7 +6,8 @@ import { Button, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives
  *
  * Shaped like the Modrinth key form because it is the same kind of setting, with one difference
  * worth spelling out on screen: this credential is used to fetch a database, never to look anything
- * up. Every player lookup runs against the local file, so no address leaves the host.
+ * up. Every player lookup runs against the local file, so no player address is sent to MaxMind
+ * or to any other geolocation service.
  */
 export function MaxmindCredentialsForm({
   onSubmit,

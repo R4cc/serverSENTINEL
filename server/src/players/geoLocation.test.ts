@@ -36,6 +36,22 @@ describe("GeoLite2 city answers", () => {
     expect(describeLocation(location)).toBe("Capital Region, Denmark");
   });
 
+  it("draws the city line at fifty kilometres", () => {
+    const at = (accuracyRadius: number) =>
+      playerLocationFromCityResponse(cityResponse({ location: { latitude: 55.6, longitude: 12.5, accuracyRadius } }))?.precision;
+    expect(at(1)).toBe("city");
+    expect(at(50)).toBe("city");
+    // A hundred kilometres covers several cities, so naming one of them overstates the answer —
+    // and GeoLite2 returns radii like this for a great many ordinary allocations.
+    expect(at(51)).toBe("region");
+    expect(at(100)).toBe("region");
+  });
+
+  it("keeps the accuracy radius on a downgraded answer, because the map still draws it", () => {
+    const location = playerLocationFromCityResponse(cityResponse({ location: { latitude: 55.6, longitude: 12.5, accuracyRadius: 500 } }));
+    expect(location).toMatchObject({ precision: "region", accuracyRadiusKm: 500, latitude: 55.6, longitude: 12.5 });
+  });
+
   it("falls back to the country when a wide answer has no subdivision either", () => {
     const location = playerLocationFromCityResponse(cityResponse({ subdivisions: [], location: { latitude: 56, longitude: 10, accuracyRadius: 1000 } }));
     expect(location?.precision).toBe("country");

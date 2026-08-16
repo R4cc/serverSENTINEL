@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -46,6 +46,21 @@ function geoArchive(databaseBytes: Buffer) {
   ]));
 }
 
+const cityDatabase = { city: () => ({}) };
+
+/** Stands in for a readable GeoLite2 City database, so the verify-then-install path can be driven. */
+function opensAs(kind: "city" | "country" | "unreadable") {
+  return async () => kind === "unreadable"
+    ? undefined
+    : {
+      reader: cityDatabase,
+      metadata: {
+        databaseType: kind === "city" ? "GeoLite2-City" : "GeoLite2-Country",
+        buildEpoch: new Date("2026-08-10T00:00:00.000Z")
+      }
+    };
+}
+
 function archiveResponse(body: Buffer) {
   return new Response(Readable.toWeb(Readable.from([body])) as ReadableStream<Uint8Array>, { status: 200 });
 }
@@ -62,16 +77,17 @@ describe("the local GeoLite2 database", () => {
     expect(database.cityReader).toBeUndefined();
   });
 
-  it("downloads with basic auth and puts the database member where lookups will find it", async () => {
+  it("downloads with basic auth and installs the verified database where lookups will find it", async () => {
     const directory = await temporaryDirectory();
-    const fetchImpl = vi.fn(async () => archiveResponse(geoArchive(Buffer.from("not a real mmdb, but the right member"))));
+    const fetchImpl = vi.fn(async () => archiveResponse(geoArchive(Buffer.from("the database member"))));
     const database = new GeoDatabase({
       directory,
       credentials: () => ({ accountId: "123456", licenseKey: "secret-key" }),
-      fetch: fetchImpl as unknown as typeof fetch
+      fetch: fetchImpl as unknown as typeof fetch,
+      openDatabase: opensAs("city")
     });
 
-    await database.refresh();
+    expect(await database.refresh()).toBe(true);
 
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain("download.maxmind.com");
@@ -79,11 +95,25 @@ describe("the local GeoLite2 database", () => {
     const authorization = (init.headers as Record<string, string>).authorization;
     expect(Buffer.from(authorization.replace("Basic ", ""), "base64").toString()).toBe("123456:secret-key");
 
-    expect(await readFile(join(directory, geoDatabaseFilename), "utf8")).toBe("not a real mmdb, but the right member");
-    // The bytes are not a database, so no reader opens — reported rather than pretended away.
-    expect(database.state()).toMatchObject({ available: false, configured: true });
-    // Nothing half-written is left behind either way.
-    expect(existsSync(join(directory, `${geoDatabaseFilename}.download`))).toBe(false);
+    expect(await readFile(join(directory, geoDatabaseFilename), "utf8")).toBe("the database member");
+    expect(database.state()).toMatchObject({ available: true, configured: true, buildDate: "2026-08-10T00:00:00.000Z" });
+    expect(database.cityReader).toBeDefined();
+    expect((await readdir(directory)).filter((name) => name.endsWith(".download"))).toEqual([]);
+  });
+
+  it("refuses a download that opens as the wrong edition", async () => {
+    const directory = await temporaryDirectory();
+    await writeFile(join(directory, geoDatabaseFilename), "the good database");
+    const database = new GeoDatabase({
+      directory,
+      credentials: () => ({ accountId: "1", licenseKey: "k" }),
+      fetch: (async () => archiveResponse(geoArchive(Buffer.from("a country database")))) as unknown as typeof fetch,
+      openDatabase: opensAs("country")
+    });
+
+    expect(await database.refresh({ force: true })).toBe(false);
+    expect(database.state().error).toContain("not GeoLite2-City");
+    expect(await readFile(join(directory, geoDatabaseFilename), "utf8")).toBe("the good database");
   });
 
   it("names the credentials when MaxMind rejects them, and leaves the previous database in place", async () => {
@@ -130,7 +160,8 @@ describe("the local GeoLite2 database", () => {
     const database = new GeoDatabase({
       directory,
       credentials: () => ({ accountId: "1", licenseKey: "k" }),
-      fetch: fetchImpl as unknown as typeof fetch
+      fetch: fetchImpl as unknown as typeof fetch,
+      openDatabase: opensAs("city")
     });
 
     expect(await database.refresh()).toBe(true);
@@ -152,7 +183,155 @@ describe("the local GeoLite2 database", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(existsSync(join(directory, geoDatabaseFilename))).toBe(false);
   });
+});
 
+describe("a download that outlives the switch that started it", () => {
+  /** A fetch that hands back its response only when the test says so. */
+  function heldFetch(body: Buffer) {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const started = { value: false };
+    let aborted = false;
+    const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
+      started.value = true;
+      init.signal?.addEventListener("abort", () => { aborted = true; });
+      await held;
+      if (init.signal?.aborted) throw Object.assign(new Error("aborted"), { name: "AbortError" });
+      return archiveResponse(body);
+    });
+    return { fetchImpl: fetchImpl as unknown as typeof fetch, release, started, get aborted() { return aborted; } };
+  }
+
+  it("aborts the transfer and installs nothing when the module is disabled mid-download", async () => {
+    const directory = await temporaryDirectory();
+    const held = heldFetch(geoArchive(Buffer.from("a database that arrived too late")));
+    const database = new GeoDatabase({
+      directory,
+      credentials: () => ({ accountId: "1", licenseKey: "k" }),
+      fetch: held.fetchImpl
+    });
+
+    const refresh = database.refresh({ force: true });
+    await vi.waitFor(() => expect(held.started.value).toBe(true));
+
+    database.stop();
+    expect(held.aborted).toBe(true);
+    held.release();
+    expect(await refresh).toBe(false);
+
+    // Nothing installed, nothing loaded, and no temporary file left lying about.
+    expect(existsSync(join(directory, geoDatabaseFilename))).toBe(false);
+    expect(database.cityReader).toBeUndefined();
+    expect(await readdir(directory)).toEqual([]);
+  });
+
+  it("leaves the database a restarted module loaded alone when the orphan finally lands", async () => {
+    const directory = await temporaryDirectory();
+    const held = heldFetch(geoArchive(Buffer.from("the orphan's payload")));
+    const database = new GeoDatabase({
+      directory,
+      credentials: () => ({ accountId: "1", licenseKey: "k" }),
+      fetch: held.fetchImpl
+    });
+
+    const orphan = database.refresh({ force: true });
+    await vi.waitFor(() => expect(held.started.value).toBe(true));
+    database.stop();
+
+    // The module comes back while the previous download is still unwinding.
+    await writeFile(join(directory, geoDatabaseFilename), "installed by the new lifecycle");
+    await database.start();
+
+    held.release();
+    expect(await orphan).toBe(false);
+    expect(await readFile(join(directory, geoDatabaseFilename), "utf8")).toBe("installed by the new lifecycle");
+    database.stop();
+  });
+
+  it("does not hand a new lifecycle the refresh promise of the one it replaced", async () => {
+    const directory = await temporaryDirectory();
+    const held = heldFetch(geoArchive(Buffer.from("payload")));
+    const database = new GeoDatabase({
+      directory,
+      credentials: () => ({ accountId: "1", licenseKey: "k" }),
+      fetch: held.fetchImpl
+    });
+
+    const orphan = database.refresh({ force: true });
+    await vi.waitFor(() => expect(held.started.value).toBe(true));
+    database.stop();
+    database.start();
+
+    const fresh = database.refresh({ force: true });
+    expect(fresh).not.toBe(orphan);
+    held.release();
+    await Promise.allSettled([orphan, fresh]);
+    database.stop();
+  });
+
+  it("survives being switched on and off repeatedly", async () => {
+    const directory = await temporaryDirectory();
+    const fetchImpl = vi.fn(async () => archiveResponse(geoArchive(Buffer.from("payload"))));
+    const database = new GeoDatabase({
+      directory,
+      credentials: () => ({ accountId: "1", licenseKey: "k" }),
+      fetch: fetchImpl as unknown as typeof fetch
+    });
+
+    for (let cycle = 0; cycle < 5; cycle += 1) {
+      await database.start();
+      database.stop();
+    }
+
+    expect(database.cityReader).toBeUndefined();
+    expect(database.state()).toMatchObject({ available: false });
+    // Every attempt cleans up after itself, however many were cut short — including the one still
+    // unwinding from the last stop.
+    await vi.waitFor(async () => expect((await readdir(directory)).filter((name) => name.endsWith(".download"))).toEqual([]));
+  });
+});
+
+describe("replacing a database that is already working", () => {
+  it("keeps the database in use when the replacement cannot be opened", async () => {
+    const directory = await temporaryDirectory();
+    await writeFile(join(directory, geoDatabaseFilename), "the good database");
+    const database = new GeoDatabase({
+      directory,
+      credentials: () => ({ accountId: "1", licenseKey: "k" }),
+      fetch: (async () => archiveResponse(geoArchive(Buffer.from("truncated rubbish")))) as unknown as typeof fetch
+    });
+    // Stand in for a loaded database, which a real MMDB would have given us.
+    const loaded = { city: () => ({}) };
+    Object.assign(database as unknown as { reader: unknown }, { reader: loaded });
+
+    expect(await database.refresh({ force: true })).toBe(false);
+
+    // The file on disk and the reader in memory are both the ones that were working.
+    expect(await readFile(join(directory, geoDatabaseFilename), "utf8")).toBe("the good database");
+    expect(database.cityReader).toBe(loaded);
+    expect(database.state()).toMatchObject({ available: true });
+    expect(database.state().error).toContain("could not be opened as a database");
+    expect((await readdir(directory)).filter((name) => name.endsWith(".download"))).toEqual([]);
+  });
+
+  it("keeps the database in use when the transfer fails part way through", async () => {
+    const directory = await temporaryDirectory();
+    await writeFile(join(directory, geoDatabaseFilename), "the good database");
+    const truncated = geoArchive(Buffer.from("x".repeat(4_000))).subarray(0, 200);
+    const database = new GeoDatabase({
+      directory,
+      credentials: () => ({ accountId: "1", licenseKey: "k" }),
+      fetch: (async () => archiveResponse(truncated)) as unknown as typeof fetch
+    });
+
+    expect(await database.refresh({ force: true })).toBe(false);
+    expect(await readFile(join(directory, geoDatabaseFilename), "utf8")).toBe("the good database");
+    expect(database.state().error).toBeTruthy();
+    expect((await readdir(directory)).filter((name) => name.endsWith(".download"))).toEqual([]);
+  });
+});
+
+describe("concurrency", () => {
   it("serializes overlapping refreshes so the daily timer and an operator cannot download twice", async () => {
     const directory = await temporaryDirectory();
     let inFlight = 0;

@@ -1,9 +1,17 @@
 # Changelog
 
+## 26.8.24 - 2026-08-16
+
+- Player Insights now estimates past latency from where each player was at the time. Geography is kept as a short history rather than a single latest place, so a player moving between continents no longer rewrites every hour of the connection-quality chart that had already been drawn. Sessions from before the panel first placed a player are counted but not estimated, rather than being attributed to wherever that player is now.
+- A GeoLite2 download must open as a City database before it is allowed to replace the one in use. A truncated, corrupt, or wrong-edition refresh is reported and discarded, and the working database keeps answering instead of being overwritten by it.
+- Switching Player Insights off now cancels a GeoLite2 download already running, and a download that outlives the switch can no longer install a database or reload the module afterwards. Repeatedly switching the module on and off leaves no temporary files behind.
+- A city is named only where GeoLite2's accuracy radius supports it, around 50 km rather than 200; broader answers are shown as their region or country, with the accuracy radius still drawn on the map.
+- Player Insights no longer polls each server's console output on its own. It reads the output the panel already collects for the timeline, halving the log requests a node receives, and unsubscribes when the module is switched off so no login line is examined while it is.
+
 ## 26.8.23 - 2026-08-16
 
 - Added Players, an optional module that shows where a server's players connect from: a world map of approximate locations, the spread and estimated latency by region, connection quality over time, the quietest hours for maintenance, and a roster with each player's city or region.
-- Geography is resolved entirely on the host from a MaxMind GeoLite2 City database the panel downloads and keeps current itself. No player address is ever sent to MaxMind or anywhere else, and none is stored: the address a Minecraft server logs at login is resolved in memory and dropped, leaving only the derived place behind.
+- Geography is resolved against a MaxMind GeoLite2 City database the panel downloads and keeps current itself. No player address is sent to MaxMind or to any other geolocation service, and Player Insights stores none: the address a Minecraft server logs at login is resolved in memory and dropped, leaving only the derived place behind. (A server on a remote node still streams its console output, addresses included, to the panel over the node protocol, exactly as it did before.)
 - Latency is estimated from distance and labelled as an estimate everywhere it appears — no Minecraft protocol the panel speaks reports a player's own round-trip time — and is withheld entirely until the server's own public address is configured.
 - Add a MaxMind account ID and license key under Settings → Integrations, or through `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY`, to switch geography on. Without them the workspace still reports who plays and when, and says why locations are missing.
 - Switching the module off stops the download, the lookup, the API, and the workspace, and never loads its code in the browser. The geography already derived is kept and the module resumes from it.

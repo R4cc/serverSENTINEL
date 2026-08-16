@@ -73,9 +73,16 @@ A feature is a good module candidate when it owns a distinct workspace page, has
 
 ## When switching off is a promise, not a preference
 
-`playerInsights` is the first module whose switch means something stronger than "hide this feature". It is the only part of serverSENTINEL that ever reads a player's IP address: the Minecraft server logs one at login, the module resolves it against a local GeoLite2 database, and it is dropped — nothing writes it, hashes it, or sends it anywhere. The stored table holds a city, a country, a continent, an approximate latitude and longitude, and the accuracy radius that goes with them.
+`playerInsights` is the first module whose switch means something stronger than "hide this feature". It is the only part of serverSENTINEL that ever *reads* a player's IP address: the Minecraft server logs one at login, the module resolves it against a GeoLite2 database the panel holds, and it is dropped — nothing writes it, hashes it, or sends it to a geolocation service. The stored table holds a city, a country, a continent, an approximate latitude and longitude, and the accuracy radius that goes with them.
 
-So the module's `stop` has to be believable. It drops the collector *and* the database reader, which is what makes "no lookup runs" true rather than approximately true: with the module off, no MMDB is held in memory, no log is read for addresses, and no request reaches MaxMind. `server/src/appServices.ts` therefore types both as optional and the routes reach them through the registry, so there is no way to read a player address from a switched-off module.
+Be precise about the scope of that promise. Player Insights does not store an address, and no address is sent to MaxMind or any other third party — MaxMind is asked for a database file, never about a player. It is *not* a claim that the address never leaves the machine the Minecraft server runs on: a server on a remote node streams its console output to the panel over the node protocol, addresses and all, and did so before this module existed. Copy that says otherwise is wrong, so the wording in the UI, the changelog, and the contract all state the guarantee the code actually makes.
+
+So the module's `stop` has to be believable. It drops the collector *and* the database reader, and it bumps a generation counter that orphans any download already in flight: a refresh that outlives the switch cannot install a database, adopt a reader, or write state, and its fetch is aborted rather than left running. With the module off, no MMDB is held in memory, no login line is parsed, and no request reaches MaxMind. `server/src/appServices.ts` types both as optional and the routes reach them through the registry, so there is no way to read a player address from a switched-off module.
+
+Two further properties are worth knowing before changing this code:
+
+- **A working database keeps working.** A download is opened and checked to be a City database *before* it replaces the file in use. A truncated or corrupt refresh costs an installation an error message, never the geography it already had, and the temporary file is cleaned up on every path out.
+- **The collector fetches nothing.** It subscribes to the console output `TimelineEventCollector` already reads for the timeline, so the module adds no node request of its own. Unsubscribing is the whole of the gate: with the module off the panel still reads those logs, for the timeline, and nothing looks at a login line.
 
 Two things follow from that:
 
@@ -83,3 +90,5 @@ Two things follow from that:
 - **Nothing is bundled.** The image ships no GeoLite2 copy. A database baked into a container image is stale the week after it is built, and GeoLite2's licence expects installations to keep theirs current. An installation with no credentials has no geography, and the workspace says so instead of guessing.
 
 The one figure the module cannot observe is latency: no protocol the panel speaks reports a player's own round-trip time. It is estimated from the distance between two approximate positions, using the model written down in `shared/src/playerInsights.ts`, and every field it feeds is named `estimated`. Where either position is unknown the field is absent rather than filled in — which is why the workspace has as many empty states as it does.
+
+Because that estimate is also drawn for the past, geography is stored as a short history rather than a latest place: one row per run of joins from the same location, added only when the derived place changes. A session that happened last Tuesday is estimated from where the player was last Tuesday. With a single row per player, one person moving between continents silently rewrote every hour of the connection-quality chart. Sessions older than the first location the panel recorded contribute to the player count and to nothing else, because nobody recorded where that player was then.

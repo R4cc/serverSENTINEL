@@ -64,8 +64,35 @@ describe("SQLite storage", () => {
       .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
   });
 
+  /**
+   * Undoes what schema 23 changed: the geography table goes back to one row per player, which is
+   * what release 22 wrote before latency history had to be reconstructed from past locations.
+   */
+  function revertToSchema22(path: string) {
+    const old = new Database(path);
+    old.exec(`
+      CREATE TABLE player_geo_locations_22 (
+        server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        player_key TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        location_json TEXT NOT NULL,
+        first_seen_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        observations INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (server_id, player_key)
+      );
+      INSERT INTO player_geo_locations_22 SELECT * FROM player_geo_locations;
+      DROP TABLE player_geo_locations;
+      ALTER TABLE player_geo_locations_22 RENAME TO player_geo_locations;
+      CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
+      UPDATE schema_migrations SET version = 22;
+    `);
+    old.close();
+  }
+
   /** Undoes everything schema 22 added, so the file on disk is what release 21 actually wrote. */
   function revertToSchema21(path: string) {
+    revertToSchema22(path);
     const old = new Database(path);
     old.exec(`
       ALTER TABLE app_settings DROP COLUMN maxmind_account_id;
@@ -75,6 +102,45 @@ describe("SQLite storage", () => {
     `);
     old.close();
   }
+
+  function seedServer(path: string) {
+    const database = new Database(path);
+    database.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES ('local', 'Internal', 'local', 'online', 1, '2026-01-01', '2026-01-01')").run();
+    database.prepare(`
+      INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at)
+      VALUES ('server-1', 'local', 'Survival', '/servers/survival', '{}', '2026-01-01', '2026-01-01')
+    `).run();
+    database.close();
+  }
+
+  it("migrates schema 22 to a geography history, carrying existing rows across", async () => {
+    const path = await temporaryDatabasePath();
+    openStorageDatabase(path).close();
+    seedServer(path);
+    revertToSchema22(path);
+
+    const legacy = new Database(path);
+    legacy.prepare(`
+      INSERT INTO player_geo_locations (server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations)
+      VALUES ('server-1', 'sullythesnak', 'SullyTheSnak', '{"label":"Copenhagen","precision":"city"}', 1000, 9000, 4)
+    `).run();
+    legacy.close();
+
+    const migrated = openStorageDatabase(path);
+    openDatabases.push(migrated);
+    expect(migrated.connection.prepare("SELECT version FROM schema_migrations").get())
+      .toEqual({ version: currentSchemaVersion });
+    // The row survives exactly as recorded: the one run it describes, and nothing invented before it.
+    expect(migrated.connection.prepare("SELECT player_name, first_seen_at, last_seen_at, observations FROM player_geo_locations").all())
+      .toEqual([{ player_name: "SullyTheSnak", first_seen_at: 1000, last_seen_at: 9000, observations: 4 }]);
+
+    // The new key admits a second run for the same player, which the old one silently replaced.
+    migrated.connection.prepare(`
+      INSERT INTO player_geo_locations (server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations)
+      VALUES ('server-1', 'sullythesnak', 'SullyTheSnak', '{"label":"Sydney","precision":"city"}', 12000, 12000, 1)
+    `).run();
+    expect(migrated.connection.prepare<[], { total: number }>("SELECT COUNT(*) AS total FROM player_geo_locations").get()?.total).toBe(2);
+  });
 
   it("migrates schema 21 for Player Insights geography", async () => {
     const path = await temporaryDatabasePath();

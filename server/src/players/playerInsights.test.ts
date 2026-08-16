@@ -10,7 +10,7 @@ import {
 import type { ResourceStatsSample } from "../resourceStatsCollector.js";
 import type { StoredPlayerGeo } from "../storage/playerGeoRepository.js";
 import type { ManagedServer, PlayerSnapshot, ServerTimelineEvent } from "../types.js";
-import { buildPlayerInsights, playerActivityHours, playerInsightsEntries, playerRegionSummaries } from "./playerInsights.js";
+import { buildPlayerInsights, playerActivityHours, playerInsightsEntries, playerRegionSummaries, stintAt } from "./playerInsights.js";
 
 const now = Date.parse("2026-08-16T12:00:00.000Z");
 const historyWindowMs = 7 * 24 * 60 * 60 * 1000;
@@ -27,14 +27,36 @@ function location(overrides: Partial<PlayerLocation> = {}): PlayerLocation {
 }
 
 function stored(player: string, serverId: string, overrides: Partial<PlayerLocation> = {}, lastSeenAt = now - 60_000): StoredPlayerGeo {
+  const firstSeenAt = now - 86_400_000;
   return {
     serverId,
     player,
     playerKey: player.toLowerCase(),
+    stints: [{ location: location(overrides), firstSeenAt, lastSeenAt, observations: 3 }],
     location: location(overrides),
-    firstSeenAt: now - 86_400_000,
+    firstSeenAt,
     lastSeenAt,
     observations: 3
+  };
+}
+
+/** A player the panel placed in two different countries, oldest run first. */
+function moved(player: string, serverId: string, runs: Array<{ location: Partial<PlayerLocation>; from: number; to: number }>): StoredPlayerGeo {
+  const stints = runs.map((run) => ({
+    location: location(run.location),
+    firstSeenAt: run.from,
+    lastSeenAt: run.to,
+    observations: 1
+  }));
+  return {
+    serverId,
+    player,
+    playerKey: player.toLowerCase(),
+    stints,
+    location: stints.at(-1)!.location,
+    firstSeenAt: stints[0].firstSeenAt,
+    lastSeenAt: stints.at(-1)!.lastSeenAt,
+    observations: stints.length
   };
 }
 
@@ -270,5 +292,103 @@ describe("the assembled response", () => {
     const response = insights({ snapshots: {} });
     expect(response.summary.onlinePlayers).toBe(0);
     expect(response.summary.medianEstimatedLatencyMs).toBeGreaterThan(10);
+  });
+});
+
+/**
+ * The property that made a geography history necessary. With one location per player, a player
+ * moving rewrote every hour of the chart that had already been drawn.
+ */
+describe("history that stays put when a player moves", () => {
+  const movedAt = now - 2 * 60 * 60 * 1000;
+  const sydney = { label: "Sydney", city: "Sydney", country: "Australia", countryCode: "AU", continent: "Oceania", continentCode: "OC" as const, latitude: -33.87, longitude: 151.21 };
+
+  function joinEvent(id: string, player: string, occurredAt: number): ServerTimelineEvent {
+    return {
+      id,
+      eventType: "player_joined",
+      type: "success",
+      severity: "success",
+      text: `${player} joined`,
+      message: `${player} joined`,
+      signature: `player_joined:${player.toLowerCase()}`,
+      source: "docker",
+      subject: player,
+      occurredAt
+    };
+  }
+
+  function leaveEvent(id: string, player: string, occurredAt: number): ServerTimelineEvent {
+    return { ...joinEvent(id, player, occurredAt), eventType: "player_left", type: "info", severity: "info", signature: `player_left:${player.toLowerCase()}` };
+  }
+
+  const wanderer = moved("Wanderer", "server-1", [
+    { location: {}, from: now - 6 * 60 * 60 * 1000, to: now - 5 * 60 * 60 * 1000 },
+    { location: sydney, from: movedAt, to: now - 60_000 }
+  ]);
+
+  function series(geo = [wanderer]) {
+    return buildPlayerInsights({
+      servers: [servers[0]],
+      snapshots: {},
+      geo,
+      serverLocations: [{ serverId: "server-1", address: "play.example.net", location: location({ label: "Frankfurt", city: "Frankfurt", latitude: 50.11, longitude: 8.68 }) }],
+      timelineEvents: {
+        "server-1": [
+          joinEvent("join-old", "Wanderer", now - 6 * 60 * 60 * 1000),
+          leaveEvent("leave-old", "Wanderer", now - 5 * 60 * 60 * 1000),
+          joinEvent("join-new", "Wanderer", movedAt),
+          leaveEvent("leave-new", "Wanderer", now - 60_000)
+        ]
+      },
+      resourceSamples: {},
+      geoDatabase,
+      timeZone: "UTC",
+      historyWindowMs: 8 * 60 * 60 * 1000,
+      latencyPoints: 97,
+      now
+    }).latency;
+  }
+
+  it("estimates each session from where the player was then, not where they are now", () => {
+    const latency = series();
+    const older = latency.filter((point) => point.at < movedAt && point.medianEstimatedLatencyMs !== undefined);
+    const newer = latency.filter((point) => point.at > movedAt && point.medianEstimatedLatencyMs !== undefined);
+
+    expect(older.length).toBeGreaterThan(0);
+    expect(newer.length).toBeGreaterThan(0);
+    // Copenhagen to Frankfurt is a few hundred kilometres; Sydney is most of a planet away.
+    expect(older.every((point) => point.medianEstimatedLatencyMs! < 60)).toBe(true);
+    expect(newer.every((point) => point.medianEstimatedLatencyMs! > 200)).toBe(true);
+  });
+
+  it("counts a session it cannot place, and estimates nothing for it", () => {
+    // The player's earliest recorded location starts after their first session, which is what an
+    // upgraded installation looks like: the sessions before it have no location to be measured from.
+    const latePlacement = moved("Wanderer", "server-1", [{ location: sydney, from: movedAt, to: now - 60_000 }]);
+    const latency = series([latePlacement]);
+    const early = latency.find((point) => point.at > now - 6 * 60 * 60 * 1000 && point.at < now - 5 * 60 * 60 * 1000);
+
+    expect(early?.players).toBe(1);
+    expect(early?.medianEstimatedLatencyMs).toBeUndefined();
+  });
+});
+
+describe("where a player was at a given moment", () => {
+  const stints = [
+    { location: location(), firstSeenAt: 1_000, lastSeenAt: 2_000, observations: 1 },
+    { location: location({ label: "Sydney", city: "Sydney" }), firstSeenAt: 5_000, lastSeenAt: 6_000, observations: 1 }
+  ];
+
+  it("uses the run that had already begun, including in the gap between two runs", () => {
+    expect(stintAt(stints, 1_500)?.location.city).toBe("Copenhagen");
+    expect(stintAt(stints, 3_000)?.location.city).toBe("Copenhagen");
+    expect(stintAt(stints, 5_500)?.location.city).toBe("Sydney");
+    expect(stintAt(stints, 9_000)?.location.city).toBe("Sydney");
+  });
+
+  it("has no answer before the first observation, rather than guessing forward", () => {
+    expect(stintAt(stints, 500)).toBeUndefined();
+    expect(stintAt([], 1_000)).toBeUndefined();
   });
 });

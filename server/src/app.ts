@@ -679,37 +679,7 @@ services.moduleRegistry.registerRuntime("managedContent", createManagedContentMo
   }),
   publish: (coordinator) => { services.modUpdatePlanCoordinator = coordinator; }
 }));
-services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsModuleRuntime({
-  create: () => {
-    const geoDatabase = new GeoDatabase({
-      directory: join(config.dataDir, "geoip"),
-      credentials: maxmindCredentials,
-      userAgent: appUserAgentFor("geolite2"),
-      onInfo: logInfo,
-      onWarn: logWarn
-    });
-    return {
-      geoDatabase,
-      collector: new PlayerGeoCollector({
-        readServers: listManagedServers,
-        readLogs: (server) => runtimeForServer(server).serverLogs(server),
-        repository: services.playerGeoRepository,
-        cityReader: () => geoDatabase.cityReader,
-        retainServers: (serverIds) => services.playerInsightsServerLocations.retain(serverIds),
-        onError: (error, server) => {
-          logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "player_insights" }, "Player geography collection deferred");
-        }
-      })
-    };
-  },
-  publish: (runtime) => {
-    services.playerGeoDatabase = runtime?.geoDatabase;
-    services.playerGeoCollector = runtime?.collector;
-  },
-  onError: (error) => {
-    logWarn({ ...errorLogFields(error), category: "player_insights" }, "GeoLite2 database could not be prepared; player geography is unavailable until it is");
-  }
-}));
+
 services.resourceStatsRepository = new ResourceStatsRepository(services.storageDatabase);
 services.timelineEventsRepository = new TimelineEventsRepository(services.storageDatabase);
 services.resourceStatsCollector = new ResourceStatsCollector({
@@ -739,6 +709,47 @@ services.timelineEventCollector = new TimelineEventCollector({
   }
 });
 services.timelineEventCollector.start();
+
+services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsModuleRuntime({
+  create: () => {
+    const geoDatabase = new GeoDatabase({
+      directory: join(config.dataDir, "geoip"),
+      credentials: maxmindCredentials,
+      userAgent: appUserAgentFor("geolite2"),
+      onInfo: logInfo,
+      onWarn: logWarn
+    });
+    return {
+      geoDatabase,
+      collector: new PlayerGeoCollector({
+        // Registered after the timeline collector above precisely because it reads that collector's
+        // output: Player Insights adds no node request of its own, it reads the console text the
+        // panel already fetched. A missing collector is a wiring mistake, and failing the module's
+        // start is how the registry reports one — quietly collecting nothing would not.
+        observeLogs: (observer) => {
+          const collector = services.timelineEventCollector;
+          if (!collector) throw new Error("Player Insights needs the timeline event collector to read console output");
+          return collector.observeLogs(({ server, text }) => observer({ server, text }));
+        },
+        readServers: listManagedServers,
+        repository: services.playerGeoRepository,
+        cityReader: () => geoDatabase.cityReader,
+        retainServers: (serverIds) => services.playerInsightsServerLocations.retain(serverIds),
+        onError: (error, server) => {
+          logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "player_insights" }, "Player geography collection deferred");
+        }
+      })
+    };
+  },
+  publish: (runtime) => {
+    services.playerGeoDatabase = runtime?.geoDatabase;
+    services.playerGeoCollector = runtime?.collector;
+  },
+  onError: (error) => {
+    logWarn({ ...errorLogFields(error), category: "player_insights" }, "GeoLite2 database could not be prepared; player geography is unavailable until it is");
+  }
+}));
+
 app.addHook("onClose", async () => {
   services.remoteObservationCoordinator?.stop();
   services.runtimeStateCoordinator?.stop();

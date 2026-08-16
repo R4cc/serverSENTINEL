@@ -18,7 +18,7 @@ import {
 } from "@serversentinel/contracts";
 import type { ResourceStatsSample } from "../resourceStatsCollector.js";
 import { timelinePlayerActivity } from "../serverTimeline.js";
-import { playerGeoKey, type StoredPlayerGeo } from "../storage/playerGeoRepository.js";
+import { playerGeoKey, type StoredPlayerGeo, type StoredPlayerGeoStint } from "../storage/playerGeoRepository.js";
 import type { ManagedServer, PlayerSnapshot, ServerTimelineEvent } from "../types.js";
 
 /**
@@ -70,6 +70,22 @@ function locationDistanceKm(location: PlayerLocation | undefined, reference: Pla
     { latitude: location.latitude, longitude: location.longitude },
     { latitude: reference.latitude, longitude: reference.longitude }
   ));
+}
+
+/**
+ * Where a player was at a given moment, as far as the panel recorded.
+ *
+ * The run that had already begun by then, which is the last observation before that moment. Before
+ * the first run there is no answer and none is invented: guessing forward from a later observation
+ * is exactly the mistake that let one player moving rewrite a week of history.
+ */
+export function stintAt(stints: readonly StoredPlayerGeoStint[], at: number): StoredPlayerGeoStint | undefined {
+  let current: StoredPlayerGeoStint | undefined;
+  for (const stint of stints) {
+    if (stint.firstSeenAt > at) break;
+    current = stint;
+  }
+  return current;
 }
 
 export function playerInsightsEntries(input: Pick<PlayerInsightsInput, "servers" | "snapshots" | "geo" | "serverLocations">) {
@@ -155,22 +171,31 @@ export function playerRegionSummaries(entries: readonly PlayerInsightsEntry[]): 
  * Estimated latency over time, reconstructed rather than recorded.
  *
  * The panel never sampled a latency series, but it did record when every player joined and left,
- * and it knows roughly where each of them is. Replaying those sessions across the window gives the
- * population at each instant, and the population gives the estimate — which is the same figure the
- * headline shows, just at an earlier moment.
+ * and roughly where each of them was at the time. Replaying those sessions across the window gives
+ * the population at each instant, and the population gives the estimate.
+ *
+ * "At the time" is the part that has to be got right. Each session is measured against the place
+ * the player was in when it started, not the place they are in now: with only a latest location to
+ * hand, one player moving between continents retroactively rewrote every hour of this chart. A
+ * session that began before the panel ever placed that player contributes to the player count and
+ * to nothing else, because the honest answer to "how far away were they in April" is that nobody
+ * recorded it.
  */
 export function playerLatencyHistory(input: {
   servers: ManagedServer[];
   snapshots: Record<string, PlayerSnapshot | undefined>;
   timelineEvents: Record<string, ServerTimelineEvent[]>;
-  latencyByPlayer: Map<string, number>;
+  /** Per player, the runs of joins the panel recorded, oldest first. */
+  historyByPlayer: Map<string, readonly StoredPlayerGeoStint[]>;
+  /** Where each server is measured from; absent for a server with no configured address. */
+  referenceByServer: Map<string, PlayerLocation | undefined>;
   from: number;
   to: number;
   points: number;
   now?: number;
 }): PlayerLatencyPoint[] {
   const now = input.now ?? Date.now();
-  const sessions: Array<{ key: string; startedAt: number; endedAt: number }> = [];
+  const sessions: Array<{ key: string; serverId: string; startedAt: number; endedAt: number }> = [];
   for (const server of input.servers) {
     const activity = timelinePlayerActivity({
       events: input.timelineEvents[server.id] ?? [],
@@ -183,12 +208,22 @@ export function playerLatencyHistory(input: {
     for (const session of activity.sessions) {
       sessions.push({
         key: `${server.id}:${playerGeoKey(session.player)}`,
+        serverId: server.id,
         startedAt: session.startedAt,
         endedAt: session.endedAt ?? Math.min(now, input.to)
       });
     }
   }
   if (input.points < 2 || input.to <= input.from) return [];
+
+  // A session's latency cannot change while it is open, so it is resolved once here rather than
+  // once per plotted point.
+  const sessionLatency = new Map<(typeof sessions)[number], number | undefined>();
+  for (const session of sessions) {
+    const stint = stintAt(input.historyByPlayer.get(session.key) ?? [], session.startedAt);
+    const distanceKm = locationDistanceKm(stint?.location, input.referenceByServer.get(session.serverId));
+    sessionLatency.set(session, distanceKm === undefined ? undefined : estimatedLatencyMsForDistanceKm(distanceKm));
+  }
 
   const step = (input.to - input.from) / (input.points - 1);
   const series: PlayerLatencyPoint[] = [];
@@ -199,7 +234,7 @@ export function playerLatencyHistory(input: {
     for (const session of sessions) {
       if (session.startedAt > at || session.endedAt < at) continue;
       players += 1;
-      const latency = input.latencyByPlayer.get(session.key);
+      const latency = sessionLatency.get(session);
       if (latency !== undefined) latencies.push(latency);
     }
     series.push({
@@ -271,10 +306,12 @@ export function buildPlayerInsights(input: PlayerInsightsInput): PlayerInsightsR
     ? onlineLatencies
     : entries.map((entry) => entry.estimatedLatencyMs).filter((value): value is number => value !== undefined);
 
-  const latencyByPlayer = new Map<string, number>();
-  for (const entry of entries) {
-    if (entry.estimatedLatencyMs !== undefined) latencyByPlayer.set(`${entry.serverId}:${playerGeoKey(entry.player)}`, entry.estimatedLatencyMs);
-  }
+  const historyByPlayer = new Map<string, readonly StoredPlayerGeoStint[]>(
+    input.geo.map((stored) => [`${stored.serverId}:${stored.playerKey}`, stored.stints])
+  );
+  const referenceByServer = new Map<string, PlayerLocation | undefined>(
+    input.serverLocations.map((entry) => [entry.serverId, entry.location])
+  );
 
   const activityHours = playerActivityHours({
     resourceSamples: input.resourceSamples,
@@ -303,7 +340,8 @@ export function buildPlayerInsights(input: PlayerInsightsInput): PlayerInsightsR
       servers: input.servers,
       snapshots: input.snapshots,
       timelineEvents: input.timelineEvents,
-      latencyByPlayer,
+      historyByPlayer,
+      referenceByServer,
       from,
       to: now,
       points: input.latencyPoints ?? 96,

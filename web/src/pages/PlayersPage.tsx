@@ -350,7 +350,7 @@ export function PlayersPage({
           message={geoDatabase.error
             ?? (geoDatabase.configured
               ? "The panel is downloading the GeoLite2 City database. Player names and activity are shown meanwhile."
-              : "Add a MaxMind account ID and license key in Settings → Integrations. The panel downloads the GeoLite2 City database itself and every lookup stays on this host — no player address is ever sent anywhere.")}
+              : "Add a MaxMind account ID and license key in Settings → Integrations. The panel downloads the GeoLite2 City database and looks addresses up against its own copy, so no player address is sent to MaxMind or any other geolocation service, and none is stored.")}
           action={canManage && geoDatabase.configured
             ? <Button variant="secondary" compact disabled={busy} onClick={onRefreshGeoDatabase}>Check now</Button>
             : undefined}
@@ -472,7 +472,7 @@ export function PlayersPage({
 
       <footer className="playerAttribution">
         <p>{insights?.attribution}</p>
-        {geoDatabase?.buildDate && <p>Database built {formatDate(geoDatabase.buildDate)}. Lookups run locally; no player address leaves this host or is stored.</p>}
+        {geoDatabase?.buildDate && <p>Database built {formatDate(geoDatabase.buildDate)}. Addresses are looked up against this local database and are not stored; none is sent to MaxMind or any other geolocation service.</p>}
       </footer>
     </section>
   );
