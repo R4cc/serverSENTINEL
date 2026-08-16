@@ -1070,7 +1070,8 @@ describe("Fastify application factory", () => {
       expect(initial.statusCode, initial.body).toBe(200);
       expect(initial.json().modules).toEqual([
         { id: "schedules", enabled: true, accessible: true },
-        { id: "managedContent", enabled: true, accessible: true }
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
       ]);
 
       // An account without schedules.view sees the module as present but out of reach, which is
@@ -1092,7 +1093,8 @@ describe("Fastify application factory", () => {
       const viewerApp = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: viewerCookie } });
       expect(viewerApp.json().modules).toEqual([
         { id: "schedules", enabled: true, accessible: false },
-        { id: "managedContent", enabled: true, accessible: false }
+        { id: "managedContent", enabled: true, accessible: false },
+        { id: "playerInsights", enabled: true, accessible: false }
       ]);
 
       // Reading the catalog is a settings-level right; changing it is not.
@@ -1114,7 +1116,8 @@ describe("Fastify application factory", () => {
       expect(disabled.statusCode, disabled.body).toBe(200);
       expect(disabled.json().modules).toEqual([
         { id: "schedules", enabled: false, accessible: false },
-        { id: "managedContent", enabled: true, accessible: true }
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
       ]);
 
       const refused = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
@@ -1128,7 +1131,8 @@ describe("Fastify application factory", () => {
       const afterDisable = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: adminCookie } });
       expect(afterDisable.json().modules).toEqual([
         { id: "schedules", enabled: false, accessible: false },
-        { id: "managedContent", enabled: true, accessible: true }
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
       ]);
       await app.close();
 
@@ -1241,6 +1245,118 @@ describe("Fastify application factory", () => {
 
       // Switching the module off is not an uninstall: what a server has on disk is left alone.
       expect(await readFile(installedJar, "utf8")).toBe("installed content");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("stops every part of Player Insights when the module is switched off, and keeps the geography it derived", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-player-insights-module-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18097",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    let app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const insightsUrl = "/api/players/insights";
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const cookie = sessionCookieFrom(registered);
+
+      // The database and the collector are the module's whole exposure to a player's address, and
+      // they exist only while the module does.
+      expect(services.playerGeoDatabase).toBeDefined();
+      expect(services.playerGeoCollector).toBeDefined();
+
+      const insights = await app.inject({ method: "GET", url: insightsUrl, headers: { ...csrf, cookie } });
+      expect(insights.statusCode, insights.body).toBe(200);
+      expect(insights.json().attribution).toContain("MaxMind");
+      // Nothing was configured, so the panel says it has no database rather than pretending to.
+      expect(insights.json().geoDatabase).toMatchObject({ available: false, configured: false });
+      expect(insights.json().summary).toMatchObject({ countries: 0, knownPlayers: 0 });
+
+      // Something the module derived earlier, which must survive being switched off.
+      services.storageDatabase.connection.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES ('node-1', 'Node', 'remote', 'online', 0, '2026-01-01', '2026-01-01')").run();
+      services.storageDatabase.connection.prepare(`
+        INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at)
+        VALUES ('11111111-1111-4111-8111-111111111111', 'node-1', 'Survival', '/servers/survival', '{}', '2026-01-01', '2026-01-01')
+      `).run();
+      services.playerGeoRepository.record({
+        serverId: "11111111-1111-4111-8111-111111111111",
+        player: "SullyTheSnak",
+        location: { label: "Copenhagen", countryCode: "DK", continentCode: "EU", latitude: 55.68, longitude: 12.57, precision: "city" },
+        at: Date.now()
+      });
+      expect(services.playerGeoRepository.stats().entries).toBe(1);
+
+      const withoutPermission = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { ...csrf, cookie },
+        payload: { username: "console-only", password: "password123", permissions: ["servers.view", "settings.view"] }
+      });
+      expect(withoutPermission.statusCode, withoutPermission.body).toBe(200);
+      const viewerLogin = await app.inject({ method: "POST", url: "/api/auth/login", headers: csrf, payload: { username: "console-only", password: "password123" } });
+      const viewerCookie = sessionCookieFrom(viewerLogin);
+      // Backend authorization stays the authority: the browser's gating is a saving, not the fence.
+      const refusedForViewer = await app.inject({ method: "GET", url: insightsUrl, headers: { ...csrf, cookie: viewerCookie } });
+      expect(refusedForViewer.statusCode, refusedForViewer.body).toBe(403);
+
+      const disabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/playerInsights",
+        headers: { ...csrf, cookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect(services.playerGeoDatabase).toBeUndefined();
+      expect(services.playerGeoCollector).toBeUndefined();
+
+      for (const request of [
+        { method: "GET" as const, url: insightsUrl },
+        { method: "PUT" as const, url: "/api/players/servers/11111111-1111-4111-8111-111111111111/location", payload: { address: "play.example.net" } },
+        { method: "POST" as const, url: "/api/players/geo-database/refresh" }
+      ]) {
+        const response = await app.inject({ ...request, headers: { ...csrf, cookie } });
+        expect(response.statusCode, `${request.url} -> ${response.body}`).toBe(403);
+        expect(response.json().error.code).toBe("MODULE_DISABLED");
+      }
+
+      await app.close();
+      app = await buildApp();
+      const { services: restarted } = await import("./appServices.js");
+      expect(restarted.playerGeoCollector).toBeUndefined();
+      const stillRefused = await app.inject({ method: "GET", url: insightsUrl, headers: { ...csrf, cookie } });
+      expect(stillRefused.json().error.code).toBe("MODULE_DISABLED");
+
+      const reEnabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/playerInsights",
+        headers: { ...csrf, cookie },
+        payload: { enabled: true }
+      });
+      expect(reEnabled.statusCode, reEnabled.body).toBe(200);
+      expect(restarted.playerGeoCollector).toBeDefined();
+      // Disabling was not deleting: the module resumes from what it already knew.
+      expect(restarted.playerGeoRepository.stats().entries).toBe(1);
     } finally {
       await app.close();
     }

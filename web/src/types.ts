@@ -28,6 +28,17 @@ export type {
   NodeInstallInstructions,
   OperationRecord,
   Permission as PermissionKey,
+  PlayerActivityHour,
+  PlayerContinentCode,
+  PlayerGeoDatabaseState,
+  PlayerInsightsEntry,
+  PlayerInsightsResponse,
+  PlayerInsightsServerLocation,
+  PlayerInsightsSummary,
+  PlayerLatencyPoint,
+  PlayerLocation,
+  PlayerMaintenanceWindow,
+  PlayerRegionSummary,
   PlayerSnapshot,
   PublicUser,
   ReleaseChannel,
@@ -141,6 +152,8 @@ export type AppState = {
   runtimeMode?: "all-in-one" | "panel" | "node";
   timeZone?: string;
   modrinthApiConfigured: boolean;
+  /** Whether MaxMind credentials exist, so the panel may download the GeoLite2 database it reads locally. */
+  geoIpConfigured: boolean;
   playerHeads: PlayerHeadsState;
   /**
    * Optional features, as this installation has them configured and this account may use them.
@@ -367,7 +380,7 @@ export type GeneralJob = {
   dismissible: boolean;
 };
 
-export type ActivePage = "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
+export type ActivePage = "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "players" | "properties";
 
 export type ScheduleNavigationTarget =
   | { kind: "schedule"; scheduleId: string }

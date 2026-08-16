@@ -50,6 +50,9 @@ export type AppSettings = {
   modrinthApiKey?: string;
   playerHeadsEnabled: boolean;
   playerHeadsOnboardingCompleted: boolean;
+  /** MaxMind account credentials, used only to download the GeoLite2 database this panel reads locally. */
+  maxmindAccountId?: string;
+  maxmindLicenseKey?: string;
 };
 
 export type StoredUser = {

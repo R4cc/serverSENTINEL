@@ -6,9 +6,10 @@ import { setValidationNotice } from "../../utils/appHelpers";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 
 /**
- * The panel-level integration settings: the Modrinth API key and the player
- * heads integration. Both write straight to the settings API; player-head
- * responses carry the refreshed state back so no full app refresh is needed.
+ * The panel-level integration settings: the Modrinth API key, the MaxMind credentials that
+ * authorize the GeoLite2 download, and the player heads integration. All three write straight to
+ * the settings API; player-head responses carry the refreshed state back so no full app refresh is
+ * needed. No credential is ever read back — the API only reports whether one is stored.
  */
 export function useIntegrationSettings(inputs: {
   canManageIntegrations: boolean;
@@ -21,6 +22,7 @@ export function useIntegrationSettings(inputs: {
   const { canManageIntegrations, playerHeads, setAppState, notify, refreshApp, requestConfirmation } = inputs;
   const [playerHeadsBusy, setPlayerHeadsBusy] = useState(false);
   const [modrinthBusy, setModrinthBusy] = useState(false);
+  const [maxmindBusy, setMaxmindBusy] = useState(false);
   const [playerHeadsOnboardingError, setPlayerHeadsOnboardingError] = useState("");
 
   async function updateModrinthKey(event: FormEvent<HTMLFormElement>) {
@@ -43,6 +45,39 @@ export function useIntegrationSettings(inputs: {
       notify("error", (error as Error).message);
     } finally {
       setModrinthBusy(false);
+    }
+  }
+
+  /**
+   * The MaxMind account that authorizes the GeoLite2 download. Both halves are submitted together
+   * because MaxMind authenticates with the pair, and neither is ever read back: the API reports
+   * only whether a pair is stored.
+   */
+  async function updateMaxmindCredentials(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageIntegrations || maxmindBusy) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const accountId = trimFormValue(form, "maxmindAccountId");
+    const licenseKey = trimFormValue(form, "maxmindLicenseKey");
+    const problems = [
+      ...(accountId ? [] : [{ field: "maxmindAccountId", message: "MaxMind account ID is required." }]),
+      ...(licenseKey ? [] : [{ field: "maxmindLicenseKey", message: "MaxMind license key is required." }])
+    ];
+    if (setValidationNotice(formElement, problems, (message) => notify("error", message))) return;
+    setMaxmindBusy(true);
+    try {
+      await api("/api/settings/maxmind", {
+        method: "PUT",
+        body: JSON.stringify({ accountId, licenseKey })
+      });
+      formElement.reset();
+      notify("success", "MaxMind credentials saved");
+      await refreshApp();
+    } catch (error) {
+      notify("error", (error as Error).message);
+    } finally {
+      setMaxmindBusy(false);
     }
   }
 
@@ -100,9 +135,10 @@ export function useIntegrationSettings(inputs: {
 
   return {
     playerHeadsBusy,
-    integrationBusy: playerHeadsBusy || modrinthBusy,
+    integrationBusy: playerHeadsBusy || modrinthBusy || maxmindBusy,
     playerHeadsOnboardingError,
     updateModrinthKey,
+    updateMaxmindCredentials,
     updatePlayerHeads,
     clearPlayerHeadCache
   };

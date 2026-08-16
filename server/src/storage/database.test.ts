@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
-import { currentSchemaName, currentSchemaVersion, openStorageDatabase, type StorageDatabase } from "./database.js";
+import { currentSchemaName, currentSchemaVersion, oldestSupportedSchemaVersion, openStorageDatabase, type StorageDatabase } from "./database.js";
 
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
@@ -47,8 +47,11 @@ describe("SQLite storage", () => {
       .toEqual({ version: currentSchemaVersion, name: currentSchemaName });
     expect(columnNames(storage.connection, "servers")).toContain("start_on_node_start");
     expect(columnNames(storage.connection, "schedules")).toContain("steps_json");
-    expect(columnNames(storage.connection, "app_settings")).toEqual(["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed"]);
+    expect(columnNames(storage.connection, "app_settings")).toEqual(["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed", "maxmind_account_id", "maxmind_license_key"]);
     expect(columnNames(storage.connection, "player_head_cache")).toEqual(["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"]);
+    // Player Insights stores where a player connected from and never what they connected from.
+    expect(columnNames(storage.connection, "player_geo_locations")).toEqual(["server_id", "player_key", "player_name", "location_json", "first_seen_at", "last_seen_at", "observations"]);
+    expect(columnNames(storage.connection, "player_geo_locations").join(" ")).not.toMatch(/address|ip_/);
   });
 
   it("opens the current schema idempotently", async () => {
@@ -61,9 +64,35 @@ describe("SQLite storage", () => {
       .toEqual([{ version: currentSchemaVersion, name: currentSchemaName }]);
   });
 
+  /** Undoes everything schema 22 added, so the file on disk is what release 21 actually wrote. */
+  function revertToSchema21(path: string) {
+    const old = new Database(path);
+    old.exec(`
+      ALTER TABLE app_settings DROP COLUMN maxmind_account_id;
+      ALTER TABLE app_settings DROP COLUMN maxmind_license_key;
+      DROP TABLE player_geo_locations;
+      UPDATE schema_migrations SET version = 21;
+    `);
+    old.close();
+  }
+
+  it("migrates schema 21 for Player Insights geography", async () => {
+    const path = await temporaryDatabasePath();
+    openStorageDatabase(path).close();
+    revertToSchema21(path);
+
+    const migrated = openStorageDatabase(path);
+    openDatabases.push(migrated);
+    expect(columnNames(migrated.connection, "app_settings")).toContain("maxmind_license_key");
+    expect(columnNames(migrated.connection, "player_geo_locations")).toContain("location_json");
+    expect(migrated.connection.prepare("SELECT version FROM schema_migrations").get())
+      .toEqual({ version: currentSchemaVersion });
+  });
+
   it("migrates schema 20 for quarantined import port conflicts", async () => {
     const path = await temporaryDatabasePath();
     openStorageDatabase(path).close();
+    revertToSchema21(path);
     const old = new Database(path);
     old.exec(`
       ALTER TABLE servers DROP COLUMN port_conflict_unresolved;
@@ -73,9 +102,12 @@ describe("SQLite storage", () => {
     `);
     old.close();
 
+    // A data root that skipped a release has to pass through every migration between it and the
+    // current baseline, so this one arrives with both the port fix and the Player Insights tables.
     const migrated = openStorageDatabase(path);
     openDatabases.push(migrated);
     expect(columnNames(migrated.connection, "servers")).toContain("port_conflict_unresolved");
+    expect(columnNames(migrated.connection, "player_geo_locations")).toContain("location_json");
     expect(migrated.connection.prepare("SELECT version FROM schema_migrations").get())
       .toEqual({ version: currentSchemaVersion });
     expect(migrated.connection.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'managed_ports_node_port_unique'").get())
@@ -84,12 +116,12 @@ describe("SQLite storage", () => {
 
   it("rejects schemas older than the 1.6.2 floor without changing history", async () => {
     const path = await temporaryDatabasePath();
-    seedSchemaHistory(path, currentSchemaVersion - 2);
+    seedSchemaHistory(path, oldestSupportedSchemaVersion - 1);
 
     expect(() => openStorageDatabase(path)).toThrow(/1\.6\.2 first/);
     const unchanged = new Database(path, { readonly: true });
     expect(unchanged.prepare("SELECT version, name FROM schema_migrations").get())
-      .toEqual({ version: currentSchemaVersion - 2, name: currentSchemaName });
+      .toEqual({ version: oldestSupportedSchemaVersion - 1, name: currentSchemaName });
     unchanged.close();
   });
 

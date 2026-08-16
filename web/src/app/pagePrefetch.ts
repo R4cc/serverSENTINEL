@@ -16,6 +16,7 @@ export const pagePrefetchOrder: ActivePage[] = [
   "nodes",
   "mods",
   "schedule",
+  "players",
   "properties",
   "settings"
 ];

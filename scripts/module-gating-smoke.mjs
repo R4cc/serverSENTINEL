@@ -38,6 +38,14 @@ const modules = [
     switchLabel: "Enable the Managed content module",
     chunk: /ModsModule-.*\.js$/,
     endpoint: "/api/servers/11111111-1111-4111-8111-111111111111/mods"
+  },
+  {
+    id: "playerInsights",
+    label: "Player insights",
+    navigationTitle: "Open players",
+    switchLabel: "Enable the Player insights module",
+    chunk: /PlayersModule-.*\.js$/,
+    endpoint: "/api/players/insights"
   }
 ];
 

@@ -178,6 +178,12 @@ export function AppSidebar({
                 <span className="navLabel">Schedules</span>
               </button>
             )}
+            {isPageAvailable("players") && (
+              <button {...serverNavItem("players", "Open players")}>
+                <SidebarIcon name="players" />
+                <span className="navLabel">Players</span>
+              </button>
+            )}
             <button {...serverNavItem("properties", "Open properties")}>
               <SidebarIcon name="properties" />
               <span className="navLabel">Properties</span>

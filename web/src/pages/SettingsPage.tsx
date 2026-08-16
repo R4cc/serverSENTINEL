@@ -6,7 +6,7 @@ import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/se
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
 import { themeOptions } from "../features/settings/themePreferences";
-import { ModrinthKeyForm } from "../components/SettingsPanels";
+import { MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
 import { Button, StatusBadge } from "../components/UiPrimitives";
@@ -55,8 +55,10 @@ export type SettingsPageProps = {
   onConsoleScrollbackChange(value: ConsoleScrollback): void;
   onClearConsoleHistory(): void;
   modrinthConfigured: boolean;
+  geoIpConfigured: boolean;
   canManageIntegrations: boolean;
   onSubmitModrinthKey(event: FormEvent<HTMLFormElement>): void;
+  onSubmitMaxmindCredentials(event: FormEvent<HTMLFormElement>): void;
   playerHeads: PlayerHeadsState;
   playerHeadsBusy: boolean;
   onPlayerHeadsEnabledChange(value: boolean): void;
@@ -245,6 +247,16 @@ export function SettingsPage(props: SettingsPageProps) {
           {isModuleEnabled(props.modules, "managedContent") && (
             <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow">
               <ModrinthKeyForm onSubmit={props.onSubmitModrinthKey} configured={props.modrinthConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
+            </PreferenceRow>
+          )}
+          {/* GeoLite2 exists to serve Player insights; with that module off there is nothing to configure. */}
+          {isModuleEnabled(props.modules, "playerInsights") && (
+            <PreferenceRow
+              title="MaxMind GeoLite2"
+              description={<>Let the panel download the <a href="https://dev.maxmind.com/geoip/geolite2-free-geolocation-data" target="_blank" rel="noreferrer">GeoLite2 City</a> database it reads locally for Player insights. Player addresses are never sent to MaxMind or anywhere else.</>}
+              className="settingsHubIntegrationRow"
+            >
+              <MaxmindCredentialsForm onSubmit={props.onSubmitMaxmindCredentials} configured={props.geoIpConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
             </PreferenceRow>
           )}
           <PreferenceRow

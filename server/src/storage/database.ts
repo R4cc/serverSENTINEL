@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 21;
+export const currentSchemaVersion = 22;
 export const currentSchemaName = "current-schema-baseline";
 
 const applicationTableNames = [
@@ -26,7 +26,8 @@ const applicationTableNames = [
   "timeline_events",
   "mod_preferences",
   "operations",
-  "player_head_cache"
+  "player_head_cache",
+  "player_geo_locations"
 ] as const;
 
 const currentNodeColumns = ["id", "name", "type", "status", "is_internal", "created_at", "updated_at", "last_seen_at", "connected_at", "agent_version", "protocol_version", "capabilities_json", "docker_status", "data_path_status", "total_memory", "secret_hash", "join_token_hash", "join_token_expires_at", "build_id"];
@@ -42,11 +43,15 @@ const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   resource_stats: ["server_id", "sampled_at", "sample_json"],
   timeline_events: ["server_id", "event_key", "occurred_at", "event_json"],
   mod_preferences: ["server_id", "filename", "channel", "metadata_json"],
+  player_geo_locations: ["server_id", "player_key", "player_name", "location_json", "first_seen_at", "last_seen_at", "observations"],
   operations: ["id", "type", "status", "server_id", "node_id", "created_by", "progress", "task", "created_at", "started_at", "finished_at", "error_message", "result_json", "log_summary"]
 };
-const currentAppSettingsColumns = ["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed"];
+const currentAppSettingsColumns = ["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed", "maxmind_account_id", "maxmind_license_key"];
 const playerHeadCacheColumns = ["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"];
-const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "timeline_events_occurred_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx"];
+const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "timeline_events_occurred_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx", "player_geo_locations_last_seen_idx"];
+
+/** The oldest baseline this release can still upgrade; anything before it has to pass through 1.6.2. */
+export const oldestSupportedSchemaVersion = 20;
 
 function createCurrentSchema(database: Database.Database) {
   database.exec(`
@@ -102,7 +107,11 @@ function createCurrentSchema(database: Database.Database) {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       modrinth_api_key TEXT,
       player_heads_enabled INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_enabled IN (0, 1)),
-      player_heads_onboarding_completed INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_onboarding_completed IN (0, 1))
+      player_heads_onboarding_completed INTEGER NOT NULL DEFAULT 0 CHECK (player_heads_onboarding_completed IN (0, 1)),
+      -- Used only to download the GeoLite2 database the panel then reads locally. No player data
+      -- is ever sent to MaxMind, and these are write-only over the API.
+      maxmind_account_id TEXT,
+      maxmind_license_key TEXT
     );
 
     CREATE TABLE player_head_cache (
@@ -249,6 +258,22 @@ function createCurrentSchema(database: Database.Database) {
     CREATE INDEX operations_created_at_idx ON operations(created_at DESC);
     CREATE INDEX operations_server_id_idx ON operations(server_id, created_at DESC);
     CREATE INDEX operations_status_idx ON operations(status, created_at DESC);
+
+    -- Player Insights geography. There is deliberately no address column, hashed or otherwise: the
+    -- address a Minecraft server logs at login is resolved in memory and dropped, and only the
+    -- derived place survives. player_key is the lowercased player name, which is what the Query
+    -- observation and the console log both identify a player by.
+    CREATE TABLE player_geo_locations (
+      server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+      player_key TEXT NOT NULL,
+      player_name TEXT NOT NULL,
+      location_json TEXT NOT NULL,
+      first_seen_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      observations INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (server_id, player_key)
+    );
+    CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
   `);
 }
 
@@ -349,6 +374,28 @@ function migrateSchema20(database: Database.Database) {
   }).immediate();
 }
 
+function migrateSchema21(database: Database.Database) {
+  database.transaction(() => {
+    database.exec(`
+      ALTER TABLE app_settings ADD COLUMN maxmind_account_id TEXT;
+      ALTER TABLE app_settings ADD COLUMN maxmind_license_key TEXT;
+
+      CREATE TABLE player_geo_locations (
+        server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        player_key TEXT NOT NULL,
+        player_name TEXT NOT NULL,
+        location_json TEXT NOT NULL,
+        first_seen_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        observations INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (server_id, player_key)
+      );
+      CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
+    `);
+    recordCurrentSchema(database);
+  }).immediate();
+}
+
 function initializeSchema(database: Database.Database) {
   if (!tableExists(database, "schema_migrations")) {
     if (applicationTables(database).length !== 0) {
@@ -378,8 +425,12 @@ function initializeSchema(database: Database.Database) {
     return;
   }
 
-  if (history.length === 1 && history[0].version === 20 && history[0].name === currentSchemaName) {
-    migrateSchema20(database);
+  // Each supported predecessor is upgraded step by step, so a data root that skipped a release
+  // still passes through every migration between it and the current baseline.
+  const baseline = history.length === 1 && history[0].name === currentSchemaName ? history[0].version : undefined;
+  if (baseline === 20 || baseline === 21) {
+    if (baseline === 20) migrateSchema20(database);
+    migrateSchema21(database);
     assertCurrentSchemaLayout(database);
     return;
   }

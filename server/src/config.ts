@@ -176,7 +176,15 @@ export const config = {
   exportMinFreeBytes: parseByteLimitEnv("SERVERSENTINEL_EXPORT_MIN_FREE_BYTES", 1024 * 1024 * 1024),
   modrinthIconCacheMaxEntries: parseCountLimitEnv("SERVERSENTINEL_MODRINTH_ICON_CACHE_MAX_ENTRIES", 2_000),
   mcjarsBaseUrl: process.env.MCJARS_BASE_URL?.trim() || "https://mcjars.app",
-  mcjarsApiKey: process.env.MCJARS_API_KEY?.trim()
+  mcjarsApiKey: process.env.MCJARS_API_KEY?.trim(),
+  /**
+   * MaxMind credentials for the GeoLite2 City download, for deployments that configure the panel
+   * through the environment rather than through Settings. They authorize the database download and
+   * nothing else: no player address is ever sent to MaxMind. Settings takes precedence, so an
+   * operator can override a compose file without editing it.
+   */
+  maxmindAccountId: process.env.MAXMIND_ACCOUNT_ID?.trim(),
+  maxmindLicenseKey: process.env.MAXMIND_LICENSE_KEY?.trim()
 };
 
 export const minServerPort = 1000;

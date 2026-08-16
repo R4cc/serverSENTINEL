@@ -1,5 +1,6 @@
 export * from "./cron.js";
 export * from "./modules.js";
+export * from "./playerInsights.js";
 
 export function compareVersionStrings(left?: string, right?: string) {
   if (!left || !right) return null;
@@ -41,6 +42,8 @@ export type Permission =
   | "mods.update"
   | "schedules.view"
   | "schedules.manage"
+  | "players.view"
+  | "players.manage"
   | "settings.view"
   | "integrations.manage"
   | "users.view"
@@ -73,6 +76,8 @@ export const ALL_PERMISSIONS = [
   "mods.update",
   "schedules.view",
   "schedules.manage",
+  "players.view",
+  "players.manage",
   "settings.view",
   "integrations.manage",
   "users.view",
@@ -85,6 +90,7 @@ const VIEWER_PERMISSIONS = [
   "files.view",
   "mods.view",
   "schedules.view",
+  "players.view",
   "settings.view"
 ] as const satisfies readonly Permission[];
 
@@ -113,7 +119,8 @@ const MANAGER_PERMISSIONS = [
   "servers.delete",
   "servers.editSettings",
   "servers.export",
-  "files.delete"
+  "files.delete",
+  "players.manage"
 ] as const satisfies readonly Permission[];
 
 export const ROLE_PRESETS: Readonly<Record<Exclude<RolePreset, "custom">, readonly Permission[]>> = {
@@ -147,6 +154,8 @@ export const PERMISSION_DEPENDENCIES: Readonly<Record<Permission, readonly Permi
   "mods.update": ["mods.view"],
   "schedules.view": [],
   "schedules.manage": ["schedules.view"],
+  "players.view": [],
+  "players.manage": ["players.view"],
   "settings.view": [],
   "integrations.manage": ["settings.view"],
   "users.view": [],

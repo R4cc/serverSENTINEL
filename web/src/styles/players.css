@@ -1,0 +1,494 @@
+/* Player Insights: the summary tiles, the world map, the region and roster tables, and the two
+   small charts. The workspace deliberately reuses `uiMetricTile`, `uiSurface`, and `uiPanelHeader`
+   rather than growing lookalikes; what is left here is the geography and the two chart shapes,
+   which nothing else in the panel has. */
+
+.playersPage.layoutWide {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.playersPage > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.playerSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.playerSummarySkeleton {
+  height: 96px;
+  border-radius: var(--radius-md);
+}
+
+.playerMapSkeleton {
+  height: 320px;
+  border-radius: var(--radius-md);
+}
+
+.playerGeographyRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.playerAnalysisRow {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.playerCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.playerCardNote {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+}
+
+/* World map. The ocean is the card's own surface rather than a colour of its own, so the map reads
+   as part of the panel instead of as an embedded image. */
+.playerMap {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.playerMapCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-muted);
+}
+
+.playerMapOcean {
+  fill: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.playerMapLand {
+  fill: color-mix(in srgb, var(--text) 12%, transparent);
+  stroke: none;
+}
+
+.playerMapLink {
+  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
+  stroke-width: 0.75;
+  stroke-dasharray: 3 4;
+  fill: none;
+}
+
+/* The accuracy ring is the honest part of the drawing: it is what stops a dot from reading as an
+   address, so it stays visible rather than decorative. */
+.playerMapAccuracy {
+  fill: color-mix(in srgb, var(--accent) 10%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 24%, transparent);
+  stroke-width: 0.75;
+}
+
+.playerMapDot {
+  fill: var(--text-muted);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+
+.playerMapMark--online .playerMapDot {
+  fill: var(--sentinel-success);
+}
+
+.playerMapMark--online .playerMapAccuracy {
+  fill: color-mix(in srgb, var(--sentinel-success) 12%, transparent);
+  stroke: color-mix(in srgb, var(--sentinel-success) 28%, transparent);
+}
+
+.playerMapServerHalo {
+  fill: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.playerMapServerMark {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+
+.playerMapLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerMapLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.playerMapLegendMark {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.playerMapLegendMark--server {
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+}
+
+.playerMapLegendMark--online {
+  background: var(--sentinel-success);
+}
+
+.playerMapLegendMark--accuracy {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.playerLocationForm {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border-muted);
+  padding-top: var(--space-3);
+}
+
+.playerLocationForm .uiFormField {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+/* Tables. Both share the panel's row rhythm; only the numeric alignment and the latency tone are
+   particular to this workspace. */
+.playerRegionTable,
+.playerRosterTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-body-size);
+}
+
+.playerRegionTable th,
+.playerRegionTable td,
+.playerRosterTable th,
+.playerRosterTable td {
+  text-align: left;
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--border-row);
+  vertical-align: middle;
+}
+
+.playerRegionTable thead th,
+.playerRosterTable thead th {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.playerRegionTable tbody tr:last-child th,
+.playerRegionTable tbody tr:last-child td,
+.playerRosterTable tbody tr:last-child th,
+.playerRosterTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.playerNumericColumn {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.playerRegionBar {
+  display: inline-block;
+  width: min(180px, 40vw);
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+  vertical-align: middle;
+  margin-right: var(--space-2);
+}
+
+.playerRegionBarFill {
+  display: block;
+  height: 100%;
+  width: var(--player-region-share);
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.playerRegionShare {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.playerLatency--success { color: var(--sentinel-success); }
+.playerLatency--info { color: var(--sentinel-info); }
+.playerLatency--warning { color: var(--sentinel-warning); }
+.playerLatency--danger { color: var(--sentinel-danger); }
+.playerLatency--neutral { color: var(--text-muted); }
+
+.playerIdentity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.playerIdentityCopy {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playerIdentityCopy strong {
+  font-weight: var(--weight-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerOnlineFlag {
+  color: var(--sentinel-success);
+  font-size: var(--type-meta-size);
+}
+
+.playerHead {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.playerHead img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.playerHead--placeholder {
+  border: 1px solid var(--border-muted);
+}
+
+.playerLocation {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playerLocation small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerRosterFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerRosterPager {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Charts. Drawn as plain SVG rather than through the timeline's chart stack: these are two lines
+   and twenty-four bars, and the module's chunk should not carry a charting library for that. */
+.playerLatencyChart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.playerChartGrid {
+  stroke: var(--border-row);
+  stroke-width: 1;
+}
+
+.playerChartAxisLabel {
+  fill: var(--text-muted);
+  font-size: 10px;
+}
+
+.playerChartLine {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.playerChartLine--median { stroke: var(--sentinel-success); }
+.playerChartLine--p95 { stroke: var(--accent); }
+
+.playerChartLegend {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerChartLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.playerChartSwatch {
+  width: 12px;
+  height: 2px;
+  border-radius: 999px;
+}
+
+.playerChartSwatch--median { background: var(--sentinel-success); }
+.playerChartSwatch--p95 { background: var(--accent); }
+
+.playerRangeSwitch {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.playerActivityHours {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.playerActivityBars {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+  height: 120px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.playerActivityBar {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.playerActivityBarFill {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  height: var(--player-activity-height);
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+}
+
+/* An hour with no samples is not a quiet hour, and must not look like one. */
+.playerActivityBar--unobserved .playerActivityBarFill {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--text) 12%, transparent),
+    color-mix(in srgb, var(--text) 12%, transparent) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  height: 100%;
+}
+
+.playerActivityScale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerAttribution {
+  color: var(--text-soft);
+  font-size: var(--type-meta-size);
+}
+
+.playerAttribution p {
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .playerGeographyRow,
+  .playerAnalysisRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .playerRosterTable thead {
+    display: none;
+  }
+
+  .playerRosterTable tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-row);
+  }
+
+  .playerRosterTable tbody th,
+  .playerRosterTable tbody td {
+    border-bottom: none;
+    padding: 0;
+  }
+
+  .playerRosterTable tbody th {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(1) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(2) {
+    display: none;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(3) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(4) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .playerRegionBar {
+    width: min(90px, 25vw);
+  }
+
+  .playerActivityBars {
+    height: 96px;
+  }
+}

@@ -1,5 +1,14 @@
 # Changelog
 
+## 26.8.23 - 2026-08-16
+
+- Added Players, an optional module that shows where a server's players connect from: a world map of approximate locations, the spread and estimated latency by region, connection quality over time, the quietest hours for maintenance, and a roster with each player's city or region.
+- Geography is resolved entirely on the host from a MaxMind GeoLite2 City database the panel downloads and keeps current itself. No player address is ever sent to MaxMind or anywhere else, and none is stored: the address a Minecraft server logs at login is resolved in memory and dropped, leaving only the derived place behind.
+- Latency is estimated from distance and labelled as an estimate everywhere it appears — no Minecraft protocol the panel speaks reports a player's own round-trip time — and is withheld entirely until the server's own public address is configured.
+- Add a MaxMind account ID and license key under Settings → Integrations, or through `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY`, to switch geography on. Without them the workspace still reports who plays and when, and says why locations are missing.
+- Switching the module off stops the download, the lookup, the API, and the workspace, and never loads its code in the browser. The geography already derived is kept and the module resumes from it.
+- Existing accounts do not receive the new `players.view` grant automatically; add it to the roles that should see the workspace.
+
 ## Unreleased
 
 - Fixed mobile Node Details opening below its header, standardized compact tap targets, reduced Mods toolbar height, and expanded the mobile smoke coverage for those interactions.

@@ -61,7 +61,21 @@ function conciseEventDetails(value: string) {
   return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
 }
 
-export function parseLogEvent(line: string, source: ServerEvent["source"], index: number, referenceDate = new Date()): ServerEvent | null {
+/**
+ * One console line split into the parts every reader of the log stream needs: when it was written,
+ * how severe the server called it, and the message with the prefix removed.
+ *
+ * Separate from event recognition below because Player Insights reads the same lines for a
+ * different reason, and the timestamp rule — Minecraft's time-only stamps mean the most recent
+ * occurrence in the runtime zone — is subtle enough that a second copy of it would drift.
+ */
+export type ParsedLogLine = {
+  timestamp?: string;
+  level: string;
+  message: string;
+};
+
+export function parseLogLine(line: string, referenceDate = new Date()): ParsedLogLine | null {
   const ansiStripped = line.replace(/\u001b\[[0-9;]*m/g, "").trim();
   if (!ansiStripped) return null;
 
@@ -116,6 +130,14 @@ export function parseLogEvent(line: string, source: ServerEvent["source"], index
       }
     }
   }
+
+  return { timestamp, level, message };
+}
+
+export function parseLogEvent(line: string, source: ServerEvent["source"], index: number, referenceDate = new Date()): ServerEvent | null {
+  const parsed = parseLogLine(line, referenceDate);
+  if (!parsed) return null;
+  const { timestamp, level, message } = parsed;
 
   const playerJoin = message.match(/^(.+?) joined the game$/i);
   if (playerJoin) {

@@ -35,11 +35,12 @@ import {
   SquareTerminal,
   Trash2,
   Type,
+  Users,
   X,
   type LucideIcon
 } from 'lucide-react';
 
-type SidebarIconName = "overview" | "console" | "files" | "mods" | "schedule" | "properties" | "settings" | "nodes";
+type SidebarIconName = "overview" | "console" | "files" | "mods" | "schedule" | "players" | "properties" | "settings" | "nodes";
 
 const sidebarIcons: Record<SidebarIconName, LucideIcon> = {
   nodes: Network,
@@ -48,6 +49,7 @@ const sidebarIcons: Record<SidebarIconName, LucideIcon> = {
   files: Folder,
   mods: Puzzle,
   schedule: CalendarDays,
+  players: Users,
   properties: FileSliders,
   settings: Settings
 };

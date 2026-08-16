@@ -6,12 +6,13 @@ serverSENTINEL's core is the part no installation can do without: nodes, servers
 
 A module is not a plugin. There is no package format, no download, no independent version: module code ships inside serverSENTINEL and is written like the rest of it. What a module adds is a boundary — one place that decides whether the feature exists for an installation, and enough structure that switching it off actually stops the work rather than only hiding a button.
 
-Two modules ship today:
+Three modules ship today:
 
 | Module | Owns | Governed by |
 | --- | --- | --- |
 | `schedules` | The Schedules workspace, the schedule API, and the poll that decides what is due | `schedules.view` |
 | `managedContent` | The Mods/Plugins workspace, the mod and Modrinth API, and the hourly update check | `mods.view` |
+| `playerInsights` | The Players workspace, the insights API, the GeoLite2 database, and the lookup that turns a login into a location | `players.view` |
 
 ## The two gates
 
@@ -69,3 +70,16 @@ Decisions written in a module's vocabulary belong to the module. The shell passe
 Core features stay core, even where a module is their main consumer. The node-runtime mod adapters, `supportsManagedMods`, restart-required tracking, the `/mods` file-manager permission mapping, and the export/import content category all remain core: import/export and the node protocol need them whether or not managed content is switched on.
 
 A feature is a good module candidate when it owns a distinct workspace page, has its own permissions, and its background work is separable from the server lifecycle. A feature the rest of the panel calls into during ordinary operation is not: the coupling would have to be paid for at every call site, in exchange for a switch few operators would use.
+
+## When switching off is a promise, not a preference
+
+`playerInsights` is the first module whose switch means something stronger than "hide this feature". It is the only part of serverSENTINEL that ever reads a player's IP address: the Minecraft server logs one at login, the module resolves it against a local GeoLite2 database, and it is dropped — nothing writes it, hashes it, or sends it anywhere. The stored table holds a city, a country, a continent, an approximate latitude and longitude, and the accuracy radius that goes with them.
+
+So the module's `stop` has to be believable. It drops the collector *and* the database reader, which is what makes "no lookup runs" true rather than approximately true: with the module off, no MMDB is held in memory, no log is read for addresses, and no request reaches MaxMind. `server/src/appServices.ts` therefore types both as optional and the routes reach them through the registry, so there is no way to read a player address from a switched-off module.
+
+Two things follow from that:
+
+- **The credential is core, the use is not.** MaxMind's account ID and license key live in `app_settings` beside the Modrinth key, and the Modules settings hides the row when the module is off — exactly as it does for Modrinth. The credential authorizes a *download*; it is never used for a lookup.
+- **Nothing is bundled.** The image ships no GeoLite2 copy. A database baked into a container image is stale the week after it is built, and GeoLite2's licence expects installations to keep theirs current. An installation with no credentials has no geography, and the workspace says so instead of guessing.
+
+The one figure the module cannot observe is latency: no protocol the panel speaks reports a player's own round-trip time. It is estimated from the distance between two approximate positions, using the model written down in `shared/src/playerInsights.ts`, and every field it feeds is named `estimated`. Where either position is unknown the field is absent rather than filled in — which is why the workspace has as many empty states as it does.

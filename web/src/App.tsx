@@ -17,7 +17,7 @@ import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, 
 import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
-import { isPageAvailable, moduleAccessSignature, moduleForPage, ModsModule, resolveAvailablePage, SchedulesModule } from "./app/moduleRegistry";
+import { isPageAvailable, moduleAccessSignature, moduleForPage, ModsModule, PlayersModule, resolveAvailablePage, SchedulesModule } from "./app/moduleRegistry";
 import { useServerContext } from "./app/serverContext";
 import { copyToClipboard } from "./utils/clipboard";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
@@ -367,6 +367,8 @@ export default function App() {
   const canInstallMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.install"));
   const canViewMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.view"));
   const canManageMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update"));
+  const playerInsightsAvailable = isPageAvailable(activeModules, "players");
+  const canManagePlayerInsights = playerInsightsAvailable && !demoMode && hasPermission(permissionUser, "players.manage");
   const canViewSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.view"));
   const canManageSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.manage"));
   const canCreateServers = !demoMode && hasPermission(permissionUser, "servers.create");
@@ -506,6 +508,7 @@ export default function App() {
     integrationBusy,
     playerHeadsOnboardingError,
     updateModrinthKey,
+    updateMaxmindCredentials,
     updatePlayerHeads,
     clearPlayerHeadCache
   } = useIntegrationSettings({
@@ -2156,8 +2159,10 @@ export default function App() {
             onConsoleScrollbackChange={setConsoleScrollback}
             onClearConsoleHistory={() => void clearConsoleHistory()}
             modrinthConfigured={effectiveAppState.modrinthApiConfigured}
+            geoIpConfigured={effectiveAppState.geoIpConfigured}
             canManageIntegrations={canManageIntegrations}
             onSubmitModrinthKey={updateModrinthKey}
+            onSubmitMaxmindCredentials={updateMaxmindCredentials}
             playerHeads={effectiveAppState.playerHeads}
             playerHeadsBusy={playerHeadsBusy}
             onPlayerHeadsEnabledChange={(enabled) => void updatePlayerHeads(enabled)}
@@ -2359,6 +2364,21 @@ export default function App() {
                   displayTimeZone={displayTimeZone}
                   navigationTarget={scheduleNavigationTarget}
                   onNavigationTargetHandled={handleScheduleNavigationTargetHandled}
+                  formatDate={formatDisplayDate}
+                />
+              </Suspense>
+            )}
+
+            {activePage === "players" && playerInsightsAvailable && (
+              <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading players" page="players" />}>
+                <PlayersModule
+                  activeServer={activeServer}
+                  activeServerIsDemo={activeServerIsDemo}
+                  demoRunning={demoRunning}
+                  canManage={canManagePlayerInsights}
+                  playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                  notify={notify}
+                  handleStaleSession={handleStaleSession}
                   formatDate={formatDisplayDate}
                 />
               </Suspense>

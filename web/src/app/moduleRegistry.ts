@@ -16,9 +16,11 @@ import { lazyPage } from "./lazyPage";
  */
 const schedulesChunk = lazyPage(() => import("../features/schedules/SchedulesModule"), (module) => module.SchedulesModule);
 const managedContentChunk = lazyPage(() => import("../features/mods/ModsModule"), (module) => module.ModsModule);
+const playerInsightsChunk = lazyPage(() => import("../features/players/PlayersModule"), (module) => module.PlayersModule);
 
 export const SchedulesModule = schedulesChunk.Component;
 export const ModsModule = managedContentChunk.Component;
+export const PlayersModule = playerInsightsChunk.Component;
 
 export type WebModuleDefinition = {
   id: ModuleId;
@@ -29,7 +31,8 @@ export type WebModuleDefinition = {
 
 export const webModules: readonly WebModuleDefinition[] = [
   { id: "schedules", page: "schedule", preload: schedulesChunk.preload },
-  { id: "managedContent", page: "mods", preload: managedContentChunk.preload }
+  { id: "managedContent", page: "mods", preload: managedContentChunk.preload },
+  { id: "playerInsights", page: "players", preload: playerInsightsChunk.preload }
 ];
 
 export function moduleForPage(page: ActivePage) {
