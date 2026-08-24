@@ -146,6 +146,13 @@ describe("stylesheet ownership", () => {
     for (const summary of [modsSummary, nodesPage]) expect(summary).toContain('variant="summary"');
   });
 
+  it("keeps summary marker decoration off leading icon wells", () => {
+    expect(primitiveStyles).toContain(".uiMetricTile--summary:not(.uiMetricTile--leadingIcon) .uiMetricTileMarker");
+    for (const tone of ["neutral", "info", "accent", "success", "warning", "danger"]) {
+      expect(primitiveStyles).toContain(`.uiMetricTile--summary:not(.uiMetricTile--leadingIcon).uiMetricTile--${tone} .uiMetricTileMarker`);
+    }
+  });
+
   it("hands the timeline charts color tokens rather than border-width tokens", () => {
     const widthTokens = [...tokenStyles.matchAll(/(--[\w-]+):\s*\d+(?:\.\d+)?px;/g)].map((match) => match[1]);
     expect(widthTokens).toContain("--border-subtle");
