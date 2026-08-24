@@ -103,7 +103,7 @@ describe("the Players workspace with partial knowledge", () => {
   it("lists a player it cannot place, and says so instead of leaving the row blank", () => {
     const html = render({ insights: partial });
     expect(html).toContain("LanPlayer");
-    expect(html).toContain("No location could be resolved");
+    expect(html).toContain("No location resolved");
   });
 
   it("never claims a latency when the server has no address to measure from", () => {
@@ -112,8 +112,14 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).not.toContain(" ms<");
   });
 
-  it("says how approximate every location is, right beside the location", () => {
-    expect(render({ insights: partial })).toContain("within about 20 km");
+  it("keeps location compact while exposing its flag and accuracy explanation on the badge", () => {
+    const html = render({ insights: partial });
+    expect(html).toContain("🇩🇰");
+    expect(html).toContain("Copenhagen, Denmark");
+    expect(html).toContain(">Precise</span>");
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain("IP-based location estimate. Expected accuracy is roughly within 20 km.");
+    expect(html).not.toContain("Approximate, within about 20 km");
   });
 
   it("offers the address field only to an account that may change it", () => {

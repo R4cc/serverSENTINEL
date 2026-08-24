@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.8.29 - 2026-08-24
+
+- Simplified Players locations into one-line flag, place, and accuracy displays. Subtle Precise, Approx, and Broad badges now explain the underlying IP-based estimate on hover or keyboard focus without crowding the roster.
+
 ## 26.8.28 - 2026-08-24
 
 - Demo mode now shows the same bundled Steve head for every player without contacting MCHeads or any other external service. Real installations keep their existing opt-in player-head behavior.

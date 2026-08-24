@@ -1,18 +1,19 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { Activity, Globe, MapPin, Wrench } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerLatencyPoint, PlayerRegionSummary } from "../types";
 import { InlineState } from "../components/InlineState";
 import { PlayerHead } from "../components/PlayerHead";
-import { Banner, Button, EmptyState, FormField, MetricTile, PanelHeader, SkeletonBlock, Surface } from "../components/UiPrimitives";
+import { Banner, Button, EmptyState, FormField, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from "../components/UiPrimitives";
 import { playerHeadVersion } from "../utils/playerHeads";
 import { PlayerGeographyMap } from "../features/players/PlayerGeographyMap";
 import {
-  describeLocationPrecision,
+  countryFlag,
   formatDistance,
   formatEstimatedLatency,
   formatLocation,
   formatMaintenanceWindow,
   latencyTone,
+  locationAccuracyPresentation,
   observedActivityHours,
   peakActivity,
   playerInsightsRanges,
@@ -31,6 +32,38 @@ import {
  */
 
 const rosterPageSize = 8;
+
+function LocationAccuracyBadge({ location }: { location: NonNullable<PlayerInsightsEntry["location"]> }) {
+  const tooltipId = useId();
+  const accuracy = locationAccuracyPresentation(location)!;
+  return (
+    <span className="playerLocationAccuracy">
+      <StatusBadge
+        className={`playerAccuracyBadge playerAccuracyBadge--${accuracy.tone}`}
+        tabIndex={0}
+        aria-describedby={tooltipId}
+      >
+        {accuracy.label}
+      </StatusBadge>
+      <span className="playerAccuracyTooltip" id={tooltipId} role="tooltip">{accuracy.description}</span>
+    </span>
+  );
+}
+
+function PlayerLocationDisplay({ location }: { location: PlayerInsightsEntry["location"] }) {
+  if (!location) return <span className="playerLocation"><span className="playerLocationText">No location resolved</span></span>;
+  const flag = countryFlag(location.countryCode);
+  const label = formatLocation(location);
+  return (
+    <span className="playerLocation">
+      <span className="playerLocationLabel" title={label}>
+        {flag && <span className="playerCountryFlag" aria-hidden="true">{flag}</span>}
+        <span className="playerLocationText">{label}</span>
+      </span>
+      <LocationAccuracyBadge location={location} />
+    </span>
+  );
+}
 
 /**
  * The chart's geometry, in the units its viewBox is drawn in.
@@ -234,10 +267,7 @@ function PlayerRoster({
                 </span>
               </th>
               <td>
-                <span className="playerLocation">
-                  <span>{formatLocation(entry.location)}</span>
-                  <small>{entry.location ? describeLocationPrecision(entry.location) : "No location could be resolved"}</small>
-                </span>
+                <PlayerLocationDisplay location={entry.location} />
               </td>
               <td className="playerNumericColumn">{formatDistance(entry.distanceKm)}</td>
               <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.estimatedLatencyMs)}`}>

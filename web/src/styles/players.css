@@ -302,14 +302,100 @@
 }
 
 .playerLocation {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
   min-width: 0;
+  gap: var(--space-2);
+  white-space: nowrap;
 }
 
-.playerLocation small {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
+.playerLocationLabel {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.playerCountryFlag {
+  flex: 0 0 auto;
+  font-family: "Twemoji Country Flags", "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.playerLocationText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playerLocationAccuracy {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.playerAccuracyBadge.uiStatusBadge {
+  min-height: 20px;
+  padding: 2px 7px;
+  cursor: help;
+  outline-offset: 2px;
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.playerAccuracyBadge--precise.uiStatusBadge {
+  border-color: color-mix(in srgb, var(--sentinel-success) 24%, transparent);
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-success) 72%, var(--text));
+}
+
+.playerAccuracyBadge--approx.uiStatusBadge {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 24%, transparent);
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-warning) 68%, var(--text));
+}
+
+.playerAccuracyBadge--broad.uiStatusBadge {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 18%, transparent);
+  background: color-mix(in srgb, var(--sentinel-danger) 5%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-danger) 52%, var(--sentinel-warning));
+}
+
+.playerAccuracyBadge:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.playerAccuracyTooltip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 48px));
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: var(--weight-strong);
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-base) var(--motion-ease-spring);
+  white-space: normal;
+}
+
+.playerLocationAccuracy:hover .playerAccuracyTooltip,
+.playerLocationAccuracy:focus-within .playerAccuracyTooltip {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .playerRosterFooter {
@@ -552,5 +638,11 @@
 
   .playerActivityBars {
     height: 96px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playerAccuracyTooltip {
+    transition: none;
   }
 }

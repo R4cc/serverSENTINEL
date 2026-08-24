@@ -112,17 +112,48 @@ export function formatLocation(location: PlayerLocation | undefined) {
   return described.length ? described.join(", ") : location.label;
 }
 
-/**
- * How precise this location is, said plainly. Shown beside every place name because a GeoLite2
- * city is the centre of an area, not where anybody is, and the interface should not let that be
- * forgotten.
- */
-export function describeLocationPrecision(location: PlayerLocation | undefined) {
-  if (!location) return "";
+/** Turn an ISO 3166-1 alpha-2 code into its two regional-indicator characters. */
+export function countryFlag(countryCode: string | undefined) {
+  const normalized = countryCode?.trim().toUpperCase() ?? "";
+  if (!/^[A-Z]{2}$/.test(normalized)) return "";
+  return [...normalized]
+    .map((character) => String.fromCodePoint(127_397 + character.charCodeAt(0)))
+    .join("");
+}
+
+export type LocationAccuracyPresentation = {
+  label: "Precise" | "Approx" | "Broad";
+  tone: "precise" | "approx" | "broad";
+  description: string;
+};
+
+/** A compact, honest description of the IP-derived location's useful precision. */
+export function locationAccuracyPresentation(location: PlayerLocation | undefined): LocationAccuracyPresentation | undefined {
+  if (!location) return undefined;
   const radius = location.accuracyRadiusKm;
-  if (location.precision === "country") return "Country-level estimate";
-  if (location.precision === "region") return radius ? `Region-level estimate, within about ${radius} km` : "Region-level estimate";
-  return radius ? `Approximate, within about ${radius} km` : "Approximate";
+  if (location.precision === "country") {
+    return {
+      label: "Broad",
+      tone: "broad",
+      description: "IP-based location estimate. Only the player's country could be determined reliably."
+    };
+  }
+  if (location.precision === "region") {
+    return {
+      label: "Approx",
+      tone: "approx",
+      description: radius
+        ? `IP-based location estimate. Only the broader area can be determined reliably; expected accuracy is roughly within ${radius} km.`
+        : "IP-based location estimate. Only the broader area can be determined reliably."
+    };
+  }
+  return {
+    label: "Precise",
+    tone: "precise",
+    description: radius
+      ? `IP-based location estimate. Expected accuracy is roughly within ${radius} km.`
+      : "IP-based location estimate. The city or nearby area can usually be determined."
+  };
 }
 
 function padHour(hour: number) {

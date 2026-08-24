@@ -1,6 +1,10 @@
 import type { ManagedServer, Notify } from "../../types";
+import { polyfillCountryFlagEmojis } from "country-flag-emoji-polyfill";
+import countryFlagFontUrl from "../../../../node_modules/country-flag-emoji-polyfill/dist/TwemojiCountryFlags.woff2?url";
 import { PlayersPage } from "../../pages/PlayersPage";
 import { usePlayersWorkspace } from "./usePlayersWorkspace";
+
+polyfillCountryFlagEmojis("Twemoji Country Flags", countryFlagFontUrl);
 
 /**
  * The Player Insights module's entire browser surface: its workspace state and its page, behind one

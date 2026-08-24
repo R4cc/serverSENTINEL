@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { PlayerActivityHour, PlayerInsightsEntry, PlayerLocation } from "../../types";
 import {
   accuracyRadiusToMapUnits,
-  describeLocationPrecision,
+  countryFlag,
   formatDistance,
   formatEstimatedLatency,
   formatLocation,
   formatMaintenanceWindow,
   latencyTone,
+  locationAccuracyPresentation,
   observedActivityHours,
   peakActivity,
   playerMapMarks,
@@ -95,10 +96,30 @@ describe("how figures are written", () => {
     expect(formatLocation(location({ precision: "country" }))).toBe("Denmark");
   });
 
-  it("always says how approximate a location is", () => {
-    expect(describeLocationPrecision(location())).toContain("within about 20 km");
-    expect(describeLocationPrecision(location({ precision: "country" }))).toBe("Country-level estimate");
-    expect(describeLocationPrecision(location({ precision: "region", accuracyRadiusKm: undefined }))).toBe("Region-level estimate");
+  it("turns country codes into flags without inventing one for invalid data", () => {
+    expect(countryFlag("dk")).toBe("🇩🇰");
+    expect(countryFlag("GB")).toBe("🇬🇧");
+    expect(countryFlag(undefined)).toBe("");
+    expect(countryFlag("DEN")).toBe("");
+  });
+
+  it("maps stored precision to compact accuracy labels and honest explanations", () => {
+    expect(locationAccuracyPresentation(location())).toEqual({
+      label: "Precise",
+      tone: "precise",
+      description: "IP-based location estimate. Expected accuracy is roughly within 20 km."
+    });
+    expect(locationAccuracyPresentation(location({ precision: "region", accuracyRadiusKm: 500 }))).toMatchObject({
+      label: "Approx",
+      tone: "approx",
+      description: expect.stringContaining("broader area")
+    });
+    expect(locationAccuracyPresentation(location({ precision: "country" }))).toEqual({
+      label: "Broad",
+      tone: "broad",
+      description: "IP-based location estimate. Only the player's country could be determined reliably."
+    });
+    expect(locationAccuracyPresentation(undefined)).toBeUndefined();
   });
 
   it("switches to thousands of kilometres where metres stopped mattering", () => {
