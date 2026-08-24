@@ -101,6 +101,24 @@ async function assertFloatingSurfaces(page, label) {
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
 }
 
+async function assertPlayerClusterPopupDismisses(page, label) {
+  await openPage(page, "players");
+  const cluster = page.locator(".playerMapClusterMarker").first();
+  await cluster.waitFor();
+  await cluster.click();
+
+  const popup = page.locator(".playerMapClusterPopup");
+  await popup.waitFor();
+  assert(await cluster.getAttribute("aria-expanded") === "true", `${label}: player cluster did not expand`);
+
+  // Blank map space is outside the floating panel even though it remains inside the map viewport.
+  // This catches the old map-level boundary that left the popup pinned until navigation changed.
+  await page.locator(".playerMapViewport").click({ position: { x: 2, y: 2 } });
+  await popup.waitFor({ state: "detached" });
+  assert(await cluster.getAttribute("aria-expanded") === "false", `${label}: player cluster stayed expanded after an outside click`);
+  assert(await cluster.getAttribute("aria-controls") === null, `${label}: dismissed player cluster kept a popup reference`);
+}
+
 async function assertScheduleActionMenuVisible(page, label) {
   const trigger = page.locator(".scheduleActionMenuTrigger").first();
   assert(await trigger.count(), `${label}: demo schedule action trigger is missing`);
@@ -583,6 +601,7 @@ async function runProfile(engine, profile, label) {
     await assertNavigationOverlay(page, label);
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .refreshStatusButton"], label);
     await assertFloatingSurfaces(page, label);
+    await assertPlayerClusterPopupDismisses(page, `${label} players`);
 
     for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings"]) {
       await assertPageDocumentScroll(page, title, `${label} ${title}`);

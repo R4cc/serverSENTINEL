@@ -148,14 +148,15 @@ export function PlayerGeographyMap({
 
   useEffect(() => {
     if (!pinnedClusterId) return;
-    const closeOutsideMap = (event: PointerEvent) => {
-      if (event.target instanceof Node && !viewportRef.current?.contains(event.target)) {
+    const closeOutsidePopup = (event: PointerEvent) => {
+      const popup = viewportRef.current?.querySelector(".playerMapClusterPopup");
+      if (event.target instanceof Node && !popup?.contains(event.target)) {
         setHoveredClusterId(undefined);
         setPinnedClusterId(undefined);
       }
     };
-    document.addEventListener("pointerdown", closeOutsideMap, true);
-    return () => document.removeEventListener("pointerdown", closeOutsideMap, true);
+    document.addEventListener("pointerdown", closeOutsidePopup, true);
+    return () => document.removeEventListener("pointerdown", closeOutsidePopup, true);
   }, [pinnedClusterId]);
 
   const activeClusterId = pinnedClusterId ?? hoveredClusterId;
