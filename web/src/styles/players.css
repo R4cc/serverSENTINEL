@@ -464,8 +464,6 @@ button.playerMapMarker {
 .playerMapPlayerTooltip {
   position: absolute;
   z-index: 8;
-  display: grid;
-  gap: var(--space-1);
   border: var(--border-subtle) solid var(--border-panel);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
@@ -475,42 +473,41 @@ button.playerMapMarker {
   text-align: left;
 }
 
-.playerMapPlayerTooltipHeader {
+.playerMapPlayerTooltipRow {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) max-content;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  border-bottom: 1px solid var(--border-row);
-  padding-bottom: var(--space-2);
+  min-height: 28px;
+  font-size: var(--type-meta-size);
 }
 
-.playerMapPlayerTooltipHeader > strong,
-.playerMapPlayerTooltipHeader > span,
-.playerMapPlayerTooltipLocation,
-.playerMapPlayerTooltipMeta > span {
+.playerMapPlayerTooltipIdentity,
+.playerMapPlayerTooltipMetrics {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.playerMapPlayerTooltipIdentity > strong,
+.playerMapPlayerTooltipIdentity > span,
+.playerMapPlayerTooltipMetrics > span,
+.playerMapPlayerTooltipMetrics > b {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.playerMapPlayerTooltipHeader > span,
-.playerMapPlayerTooltipLocation,
-.playerMapPlayerTooltipMeta {
+.playerMapPlayerTooltipIdentity > span,
+.playerMapPlayerTooltipMetrics > span {
   color: var(--text-muted);
-  font-size: var(--type-meta-size);
 }
 
-.playerMapPlayerTooltipLocation {
-  padding-top: var(--space-1);
-}
-
-.playerMapPlayerTooltipMeta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+.playerMapPlayerTooltipMetrics {
+  justify-items: end;
+  text-align: right;
 }
 
 .playerMapPlayerTooltip .playerMapPlayerStatus--online { color: var(--sentinel-success); }

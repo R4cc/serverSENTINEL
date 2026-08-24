@@ -32,7 +32,7 @@ const markerCollisionPx = 34;
 const serverMergeDistancePx = 42;
 const clusterMarkerSizePx = 44;
 const clusterPopupHeightPx = 240;
-const playerTooltipHeightPx = 88;
+const playerTooltipHeightPx = 64;
 const clusterHoverCloseDelayMs = 160;
 
 type MapPoint = { x: number; y: number };
@@ -429,15 +429,16 @@ export function PlayerGeographyMap({
                     onMouseEnter={cancelScheduledClose}
                     onMouseLeave={() => scheduleMarkClose(mark.id)}
                   >
-                    <span className="playerMapPlayerTooltipHeader">
+                    <span className="playerMapPlayerTooltipRow">
                       <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} compact />
-                      <strong>{mark.entries[0].player}</strong>
-                      <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
-                    </span>
-                    <span className="playerMapPlayerTooltipLocation">{formatLocation(mark.entries[0].location)}</span>
-                    <span className="playerMapPlayerTooltipMeta">
-                      <span>{mark.entries[0].location?.accuracyRadiusKm ? `Approx. ${mark.entries[0].location.accuracyRadiusKm} km radius` : "Approximate location"}</span>
-                      <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.entries[0].estimatedLatencyMs)}</b>
+                      <span className="playerMapPlayerTooltipIdentity">
+                        <strong>{mark.entries[0].player}</strong>
+                        <span>{formatLocation(mark.entries[0].location)}</span>
+                      </span>
+                      <span className="playerMapPlayerTooltipMetrics">
+                        <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
+                        <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.entries[0].estimatedLatencyMs)}</b>
+                      </span>
                     </span>
                   </span>
                 )}
