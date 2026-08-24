@@ -71,23 +71,29 @@ export function playerMapMarks(
     if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
   };
   const scale = renderedWidth > 0 ? renderedWidth / width : 1;
+  const collisionDistanceSquared = (collisionDistancePx / scale) ** 2;
   for (let left = 0; left < placed.length; left += 1) {
     for (let right = left + 1; right < placed.length; right += 1) {
-      const distancePx = Math.hypot(
-        placed[left].point.x - placed[right].point.x,
-        placed[left].point.y - placed[right].point.y
-      ) * scale;
-      if (distancePx <= collisionDistancePx) join(left, right);
+      if (find(left) === find(right)) continue;
+      const deltaX = placed[left].point.x - placed[right].point.x;
+      const deltaY = placed[left].point.y - placed[right].point.y;
+      if (deltaX * deltaX + deltaY * deltaY <= collisionDistanceSquared) join(left, right);
     }
   }
 
   const groups = new Map<number, typeof placed>();
   placed.forEach((candidate, index) => {
     const root = find(index);
-    groups.set(root, [...(groups.get(root) ?? []), candidate]);
+    const group = groups.get(root);
+    if (group) group.push(candidate);
+    else groups.set(root, [candidate]);
   });
 
   const marks = [...groups.values()].map((group): PlayerMapMark => {
+    const centre = group.reduce(
+      (total, candidate) => ({ longitude: total.longitude + candidate.longitude, latitude: total.latitude + candidate.latitude }),
+      { longitude: 0, latitude: 0 }
+    );
     const members = group
       .map(({ entry }) => entry)
       .sort((left, right) => Number(right.online) - Number(left.online) || left.player.localeCompare(right.player));
@@ -97,8 +103,8 @@ export function playerMapMarks(
     const id = members.map((entry) => `${entry.serverId}:${entry.player.toLowerCase()}`).sort().join("|");
     return {
       id,
-      longitude: group.reduce((total, candidate) => total + candidate.longitude, 0) / group.length,
-      latitude: group.reduce((total, candidate) => total + candidate.latitude, 0) / group.length,
+      longitude: centre.longitude / group.length,
+      latitude: centre.latitude / group.length,
       players: members.map((entry) => entry.player),
       entries: members,
       online: members.filter((entry) => entry.online).length,

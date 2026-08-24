@@ -195,6 +195,19 @@ export function SettingsPage(props: SettingsPageProps) {
     window.requestAnimationFrame(() => document.getElementById(`settings-tab-${next}`)?.focus());
   }
 
+  // Why the module cards cannot be operated, if they cannot. None of this varies by module, so the
+  // card loop reads it rather than re-deriving the same answer for each descriptor.
+  const modulesUnavailable = !props.canManageModules || props.modulesBusy || props.loading;
+  const moduleBlockedReason = props.systemInfo.demoMode
+    ? "Module configuration is read-only in demo mode"
+    : !props.canManageModules
+      ? "Manage integrations permission is required"
+      : props.modulesBusy
+        ? "Another module change is in progress"
+        : props.loading
+          ? "Modules are loading"
+          : undefined;
+
   const categoryContent: Record<SettingsCategory, ReactNode> = {
     appearance: (
       <>
@@ -314,17 +327,8 @@ export function SettingsPage(props: SettingsPageProps) {
         <div className="settingsModuleGrid">
           {MODULE_DESCRIPTORS.map((descriptor) => {
             const enabled = isModuleEnabled(props.modules, descriptor.id);
-            const unavailable = !props.canManageModules || props.modulesBusy || props.loading;
             const descriptionId = `settings-module-${descriptor.id}-description`;
-            const title = props.systemInfo.demoMode
-              ? "Module configuration is read-only in demo mode"
-              : !props.canManageModules
-                ? "Manage integrations permission is required"
-                : props.modulesBusy
-                  ? "Another module change is in progress"
-                  : props.loading
-                    ? "Modules are loading"
-                    : `${enabled ? "Disable" : "Enable"} ${descriptor.label}`;
+            const title = moduleBlockedReason ?? `${enabled ? "Disable" : "Enable"} ${descriptor.label}`;
             return (
               <button
                 key={descriptor.id}
@@ -335,7 +339,7 @@ export function SettingsPage(props: SettingsPageProps) {
                 aria-describedby={descriptionId}
                 aria-busy={props.modulesBusy || undefined}
                 className={`settingsModuleCard ${enabled ? "is-enabled" : "is-disabled"}`}
-                disabled={unavailable}
+                disabled={modulesUnavailable}
                 title={title}
                 onClick={() => props.onModuleEnabledChange(descriptor.id, !enabled)}
               >

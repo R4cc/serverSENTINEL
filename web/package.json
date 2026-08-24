@@ -1,6 +1,6 @@
 {
   "name": "@serversentinel/web",
-  "version": "26.8.18",
+  "version": "26.8.33",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,7 +24,7 @@
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.8",
     "@lezer/highlight": "^1.2.3",
-    "@serversentinel/contracts": "26.8.18",
+    "@serversentinel/contracts": "26.8.33",
     "@tanstack/react-table": "^8.21.3",
     "@uiw/react-codemirror": "^4.25.11",
     "@xterm/addon-fit": "^0.11.0",

@@ -368,6 +368,8 @@ export default function App() {
   const canViewMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.view"));
   const canManageMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.install") || hasPermission(permissionUser, "mods.upload") || hasPermission(permissionUser, "mods.enableDisable") || hasPermission(permissionUser, "mods.remove") || hasPermission(permissionUser, "mods.update"));
   const playerInsightsAvailable = isPageAvailable(activeModules, "players");
+  // The demo fleet ships its own heads, so it shows them whether or not the installation opted in.
+  const playerHeadsEnabled = activeServerIsDemo || effectiveAppState.playerHeads.enabled;
   const canManagePlayerInsights = playerInsightsAvailable && !demoMode && hasPermission(permissionUser, "players.manage");
   const canViewSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.view"));
   const canManageSchedules = schedulesAvailable && (activeServerIsDemo || hasPermission(permissionUser, "schedules.manage"));
@@ -2282,7 +2284,7 @@ export default function App() {
                 loadTimeline={loadActiveTimeline}
                 loadStorageSummary={loadActiveStorageSummary}
                 playerSnapshot={playerSnapshots[activeServer.id]}
-                playerHeadsEnabled={activeServerIsDemo || effectiveAppState.playerHeads.enabled}
+                playerHeadsEnabled={playerHeadsEnabled}
                 modUpdatePlan={modsBridge?.updatePlan ?? null}
                 modUpdatePlanLoading={modsBridge?.updatePlanLoading ?? false}
                 canViewMods={canViewMods && supportsManagedMods}
@@ -2377,7 +2379,7 @@ export default function App() {
                   demoRunning={demoRunning}
                   serverRunning={Boolean(activeStatus?.docker.running)}
                   canManage={canManagePlayerInsights}
-                  playerHeadsEnabled={activeServerIsDemo || effectiveAppState.playerHeads.enabled}
+                  playerHeadsEnabled={playerHeadsEnabled}
                   compactLayout={phoneLayout}
                   notify={notify}
                   handleStaleSession={handleStaleSession}

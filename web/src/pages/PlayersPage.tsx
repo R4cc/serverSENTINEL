@@ -137,9 +137,10 @@ function LatencyChart({ points, timeZone, compact }: { points: readonly PlayerLa
   };
   const gridValues = [0, ceiling / 2, ceiling];
   const showsMultipleDates = to - from >= 20 * 60 * 60 * 1000;
-  const timeLabel = (at: number) => new Intl.DateTimeFormat("en-GB", showsMultipleDates
+  const axisFormatter = new Intl.DateTimeFormat("en-GB", showsMultipleDates
     ? { timeZone, day: "numeric", month: "short" }
-    : { timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(at));
+    : { timeZone, hour: "2-digit", minute: "2-digit" });
+  const timeLabel = (at: number) => axisFormatter.format(new Date(at));
 
   return (
     <div className="playerLatencyChart">
@@ -172,18 +173,21 @@ function ActivityHours({ hours, timeZone }: { hours: readonly PlayerActivityHour
   return (
     <div className="playerActivityHours">
       <ol className="playerActivityBars" aria-label={`Average players by hour of the day, ${timeZone}`}>
-        {hours.map((hour) => (
-          <li
-            key={hour.hour}
-            className={`playerActivityBar ${hour.samples === 0 ? "playerActivityBar--unobserved" : ""}`.trim()}
-            style={{ "--player-activity-height": `${peak ? Math.round((hour.averagePlayers / peak) * 100) : 0}%` } as Record<string, string>}
-            title={hour.samples === 0
-              ? `${String(hour.hour).padStart(2, "0")}:00 — not observed yet`
-              : `${String(hour.hour).padStart(2, "0")}:00 — ${hour.averagePlayers.toFixed(1)} players on average, peak ${hour.peakPlayers}`}
-          >
-            <span className="playerActivityBarFill" />
-          </li>
-        ))}
+        {hours.map((hour) => {
+          const clock = `${String(hour.hour).padStart(2, "0")}:00`;
+          return (
+            <li
+              key={hour.hour}
+              className={`playerActivityBar ${hour.samples === 0 ? "playerActivityBar--unobserved" : ""}`.trim()}
+              style={{ "--player-activity-height": `${peak ? Math.round((hour.averagePlayers / peak) * 100) : 0}%` } as Record<string, string>}
+              title={hour.samples === 0
+                ? `${clock} — not observed yet`
+                : `${clock} — ${hour.averagePlayers.toFixed(1)} players on average, peak ${hour.peakPlayers}`}
+            >
+              <span className="playerActivityBarFill" />
+            </li>
+          );
+        })}
       </ol>
       <div className="playerActivityScale">
         <span>00:00</span>

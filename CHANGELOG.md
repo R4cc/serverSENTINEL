@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.8.33 - 2026-08-24
+
+- The player geography map now does less work on every hover and redraw: the coastline and each marker's position are computed once instead of repeatedly, and clustering no longer rebuilds its groups member by member. The map behaves exactly as before.
+- Fixed the panel reporting version 26.8.18 while running 26.8.32.
+
 ## 26.8.32 - 2026-08-24
 
 - Demo Player geography now distributes its roster across dozens of cities and countries on all six populated continents instead of repeating one location per region.

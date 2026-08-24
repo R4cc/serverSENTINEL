@@ -122,9 +122,11 @@ function demoRegions(entries: readonly PlayerInsightsEntry[]): PlayerRegionSumma
   for (const entry of entries) {
     const code = entry.location?.continentCode;
     if (!code) continue;
-    byContinent.set(code, [...(byContinent.get(code) ?? []), entry]);
+    const members = byContinent.get(code);
+    if (members) members.push(entry);
+    else byContinent.set(code, [entry]);
   }
-  const located = entries.filter((entry) => entry.location?.continentCode).length || 1;
+  const located = [...byContinent.values()].reduce((total, members) => total + members.length, 0) || 1;
   return [...byContinent.entries()]
     .map(([continentCode, members]) => ({
       continentCode: continentCode as PlayerRegionSummary["continentCode"],
@@ -146,6 +148,7 @@ export function demoPlayerInsights(serverId: string, running: boolean, range: Pl
   // Everyone the demo fleet has ever seen: the online roster plus a few names that have played
   // before, so the history and the roster are not the same list.
   const knownNames = [...new Set([...onlineNames, "EnderBobo", "NoobMiner", "Pixel_Panda", "AlexIsHodde"])];
+  const onlineNow = new Set(onlineNames);
 
   const players: PlayerInsightsEntry[] = knownNames.map((player, index) => {
     const place = demoPlaces[index % demoPlaces.length];
@@ -153,7 +156,7 @@ export function demoPlayerInsights(serverId: string, running: boolean, range: Pl
       player,
       serverId,
       serverName: "Survival",
-      online: onlineNames.includes(player),
+      online: onlineNow.has(player),
       location: place.location,
       distanceKm: place.distanceKm,
       estimatedLatencyMs: place.estimatedLatencyMs,

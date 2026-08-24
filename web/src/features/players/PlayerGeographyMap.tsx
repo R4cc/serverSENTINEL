@@ -37,7 +37,7 @@ const clusterHoverCloseDelayMs = 160;
 
 type MapPoint = { x: number; y: number };
 
-function landPath() {
+function buildLandPath() {
   return worldLandRings.map((ring) => {
     const points = ring.split(",").map((pair) => {
       const [longitude, latitude] = pair.split(" ").map(Number);
@@ -47,6 +47,9 @@ function landPath() {
     return `M${points.join("L")}Z`;
   }).join(" ");
 }
+
+/** The coastline never moves, so it is projected once for the module rather than once per map. */
+const landPath = buildLandPath();
 
 function markTitle(mark: PlayerMapMark) {
   const players = mark.players.length === 1 ? mark.players[0] : `${mark.players.length} players`;
@@ -100,7 +103,6 @@ export function PlayerGeographyMap({
   serverRunning: boolean;
   playerHeadsEnabled: boolean;
 }) {
-  const land = useMemo(landPath, []);
   const viewportRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | undefined>(undefined);
   const [renderedWidth, setRenderedWidth] = useState(mapWidth);
@@ -151,8 +153,8 @@ export function PlayerGeographyMap({
   );
   useEffect(() => {
     const validIds = new Set(marks.map((mark) => mark.id));
-    if (hoveredMarkId && !validIds.has(hoveredMarkId)) setHoveredMarkId(undefined);
-  }, [hoveredMarkId, marks]);
+    setHoveredMarkId((current) => current !== undefined && !validIds.has(current) ? undefined : current);
+  }, [marks]);
 
   useEffect(() => {
     if (!hoveredMarkId) return;
@@ -168,27 +170,25 @@ export function PlayerGeographyMap({
     return () => document.removeEventListener("pointerdown", closeOutsidePopup, true);
   }, [hoveredMarkId]);
 
-  const activeMarkId = hoveredMarkId;
-
   const scale = renderedWidth > 0 ? renderedWidth / mapWidth : 1;
   const renderedHeight = renderedWidth * (mapHeight / mapWidth);
   const server = serverLocation?.latitude !== undefined && serverLocation.longitude !== undefined
     ? projectToMap(serverLocation.longitude, serverLocation.latitude, mapWidth, mapHeight)
     : undefined;
-  const serverMarkId = server
-    ? marks
-      .map((mark) => ({
-        id: mark.id,
-        distancePx: Math.hypot(
-          projectToMap(mark.longitude, mark.latitude, mapWidth, mapHeight).x - server.x,
-          projectToMap(mark.longitude, mark.latitude, mapWidth, mapHeight).y - server.y
-        ) * scale
-      }))
-      .filter(({ distancePx }) => distancePx <= serverMergeDistancePx)
-      .sort((left, right) => left.distancePx - right.distancePx)[0]?.id
-    : undefined;
-  const plottedMarks = marks.map((mark) => {
-    const actualPoint = projectToMap(mark.longitude, mark.latitude, mapWidth, mapHeight);
+  // Projected once and shared: the server-merge search and the marker placement below both want
+  // the same point, and every hover re-runs all of this.
+  const markPoints = marks.map((mark) => projectToMap(mark.longitude, mark.latitude, mapWidth, mapHeight));
+  let nearestServerMark: { id: string; distancePx: number } | undefined;
+  if (server) {
+    marks.forEach((mark, index) => {
+      const distancePx = Math.hypot(markPoints[index].x - server.x, markPoints[index].y - server.y) * scale;
+      if (distancePx > serverMergeDistancePx) return;
+      if (!nearestServerMark || distancePx < nearestServerMark.distancePx) nearestServerMark = { id: mark.id, distancePx };
+    });
+  }
+  const serverMarkId = nearestServerMark?.id;
+  const plottedMarks = marks.map((mark, index) => {
+    const actualPoint = markPoints[index];
     const sharesServer = mark.id === serverMarkId;
     const originPoint = sharesServer && server ? server : actualPoint;
     const clustered = mark.entries.length > 1;
@@ -207,22 +207,20 @@ export function PlayerGeographyMap({
       accuracy: clusterAccuracyRadius(mark, point)
     };
   });
+  const horizontalLabelInset = 28 / Math.max(scale, 0.01);
   const routes = server
-    ? plottedMarks.filter(({ sharesServer }) => !sharesServer).map((plotted) => ({
-        ...plotted,
-        arc: playerMapArc(server, plotted.point),
-        tone: latencyTone(plotted.mark.estimatedLatencyMs)
-      })).map((route) => ({
-        ...route,
-        label: (() => {
-          const label = playerMapLabelPoint(route.point, scale, route.mark.entries.length > 1 ? 34 : 27);
-          const horizontalInset = 28 / Math.max(scale, 0.01);
-          return {
-            x: Math.min(mapWidth - horizontalInset, Math.max(horizontalInset, label.x)),
+    ? plottedMarks.filter(({ sharesServer }) => !sharesServer).map((plotted) => {
+        const label = playerMapLabelPoint(plotted.point, scale, plotted.mark.entries.length > 1 ? 34 : 27);
+        return {
+          ...plotted,
+          arc: playerMapArc(server, plotted.point),
+          tone: latencyTone(plotted.mark.estimatedLatencyMs),
+          label: {
+            x: Math.min(mapWidth - horizontalLabelInset, Math.max(horizontalLabelInset, label.x)),
             y: label.y
-          };
-        })()
-      }))
+          }
+        };
+      })
     : [];
   const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 4 : renderedWidth < 900 ? 10 : 14;
   const routeLabels = routes
@@ -239,7 +237,8 @@ export function PlayerGeographyMap({
         Math.abs(candidate.label.x - route.label.x) * scale < 56
         && Math.abs(candidate.label.y - route.label.y) * scale < 18
       ));
-      return overlapsMarker || collides ? accepted : [...accepted, route];
+      if (!overlapsMarker && !collides) accepted.push(route);
+      return accepted;
     }, []);
 
   return (
@@ -254,11 +253,11 @@ export function PlayerGeographyMap({
             : "World map with no located players yet"}
         >
           <rect className="playerMapOcean" x="0" y="0" width={mapWidth} height={mapHeight} />
-          <path className="playerMapLand" d={land} />
+          <path className="playerMapLand" d={landPath} />
           {plottedMarks.map(({ mark, point, accuracy }) => accuracy >= 2 && (
             <circle
               key={`accuracy-${mark.id}`}
-              className={`playerMapAccuracy ${activeMarkId === mark.id ? "playerMapAccuracy--active" : ""}`.trim()}
+              className={`playerMapAccuracy ${hoveredMarkId === mark.id ? "playerMapAccuracy--active" : ""}`.trim()}
               cx={point.x}
               cy={point.y}
               r={Math.min(60, accuracy)}
@@ -267,7 +266,7 @@ export function PlayerGeographyMap({
           {routes.map(({ mark, arc, tone }) => (
             <path
               key={`route-${mark.id}`}
-              className={`playerMapRoute playerMapRoute--${tone} ${activeMarkId === mark.id ? "playerMapRoute--active" : ""}`.trim()}
+              className={`playerMapRoute playerMapRoute--${tone} ${hoveredMarkId === mark.id ? "playerMapRoute--active" : ""}`.trim()}
               d={arc.path}
               data-player-count={mark.entries.length}
               data-estimated-ping={mark.estimatedLatencyMs}
@@ -303,10 +302,10 @@ export function PlayerGeographyMap({
             </span>
           ))}
 
-          {plottedMarks.map(({ mark, point, sharesServer, markerExtents }) => {
+          {plottedMarks.map(({ mark, point, sharesServer, markerExtents }, index) => {
             const clustered = mark.entries.length > 1;
-            const active = activeMarkId === mark.id;
-            const popupId = `${popupPrefix}-player-map-${clustered ? "cluster" : "player"}-${marks.indexOf(mark)}`;
+            const active = hoveredMarkId === mark.id;
+            const popupId = `${popupPrefix}-player-map-${clustered ? "cluster" : "player"}-${index}`;
             const panelWidth = clustered
               ? Math.min(310, Math.max(180, renderedWidth - 16))
               : Math.min(220, Math.max(170, renderedWidth - 16));
@@ -323,6 +322,11 @@ export function PlayerGeographyMap({
               markerBottomExtent: markerExtents.bottom - 4,
               panelMaxHeight: clustered ? clusterPopupHeightPx : playerTooltipHeightPx
             });
+            const popupStyle = {
+              width: panelWidth,
+              left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
+              top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
+            };
             const markerLabel = clustered
               ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average estimated ping ${formatEstimatedLatency(mark.estimatedLatencyMs)}.`
               : `${markTitle(mark)}. ${mark.entries[0].online ? "Online now" : "Played before"}.`;
@@ -381,11 +385,7 @@ export function PlayerGeographyMap({
                   <span
                     id={popupId}
                     className={`playerMapClusterPopup playerMapFloatingPanel--${panelPlacement.placement}`}
-                    style={{
-                      width: panelWidth,
-                      left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
-                      top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
-                    }}
+                    style={popupStyle}
                     role="dialog"
                     aria-label={`Players near ${mark.label}`}
                     tabIndex={0}
@@ -420,11 +420,7 @@ export function PlayerGeographyMap({
                   <span
                     id={popupId}
                     className={`playerMapClusterPopup playerMapPlayerPopup playerMapFloatingPanel--${panelPlacement.placement}`}
-                    style={{
-                      width: panelWidth,
-                      left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
-                      top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
-                    }}
+                    style={popupStyle}
                     role="tooltip"
                     onMouseEnter={cancelScheduledClose}
                     onMouseLeave={() => scheduleMarkClose(mark.id)}
