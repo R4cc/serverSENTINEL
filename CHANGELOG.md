@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.8.31 - 2026-08-24
+
+- Demo players now receive stable, varied heads from a bundled library of Minecraft developers and creators instead of all sharing the same Steve head. Demo pages never contact an avatar provider at runtime.
+
 ## 26.8.30 - 2026-08-24
 
 - Player distances now use the selected regional number format with grouped whole kilometres instead of compact phrases such as "6.2 thousand km."

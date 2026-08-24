@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { demoPlayerHeadSource, playerHeadSource, playerHeadVersion } from "./playerHeads";
+import { demoPlayerHeadNames, demoPlayerHeadSource, playerHeadSource, playerHeadVersion } from "./playerHeads";
 
 describe("player head sources", () => {
-  it("uses one bundled Steve head for every demo player and demo server", () => {
-    expect(playerHeadSource("demo-survival", "StormBolt", 1)).toBe(demoPlayerHeadSource);
-    expect(playerHeadSource("demo-fleet-2-3", "Pixel_Panda", 999)).toBe(demoPlayerHeadSource);
+  it("assigns bundled heads consistently while varying them between demo players", () => {
+    const stormBolt = demoPlayerHeadSource("StormBolt");
+    expect(playerHeadSource("demo-survival", "StormBolt", 1)).toBe(stormBolt);
+    expect(playerHeadSource("demo-fleet-2-3", "StormBolt", 999)).toBe(stormBolt);
+    expect(new Set(["StormBolt", "Pixel_Panda", "AlexIsHodde", "EnderBobo"].map(demoPlayerHeadSource)).size).toBe(4);
+    expect(stormBolt).toMatch(/^\/demo-player-heads\/[a-z0-9_]+\.png$/);
+  });
+
+  it("includes every curated demo head", () => {
+    expect(demoPlayerHeadNames).toHaveLength(65);
+    expect(demoPlayerHeadNames).toContain("jeb_");
+    expect(demoPlayerHeadNames).toContain("Technoblade");
+    expect(demoPlayerHeadNames).toContain("Grian");
+    expect(demoPlayerHeadNames).toContain("PrestonPlayz");
   });
 
   it("keeps real players on the panel-cached endpoint", () => {
