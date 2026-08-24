@@ -134,6 +134,22 @@ describe("the Players workspace with partial knowledge", () => {
     expect(render({ insights: partial, playerHeadsEnabled: true })).toContain("playerHead");
   });
 
+  it("marks the server origin with a generic server rack instead of the app cube", () => {
+    const html = render({
+      insights: insights({
+        serverLocations: [{
+          serverId: "server-1",
+          address: "play.example.net",
+          location: { label: "Frankfurt", city: "Frankfurt", country: "Germany", countryCode: "DE", continentCode: "EU", continent: "Europe", latitude: 50.11, longitude: 8.68, accuracyRadiusKm: 20, precision: "city" }
+        }]
+      })
+    });
+    expect(html).toContain("playerMapServerIcon");
+    expect(html).toContain("lucide-server");
+    expect(html).not.toContain("server-icon-cube");
+    expect(html).not.toContain("lucide-box");
+  });
+
   it("says an address could not be placed rather than telling the operator to set one", () => {
     const html = render({
       insights: insights({

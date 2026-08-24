@@ -110,10 +110,21 @@
   fill: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.playerMapServerMark {
-  fill: var(--accent);
-  stroke: var(--surface);
+.playerMapServerBadge {
+  fill: var(--surface);
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--surface));
   stroke-width: 1;
+}
+
+.playerMapServerIcon {
+  color: var(--accent);
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.playerMapServerIcon * {
+  vector-effect: non-scaling-stroke;
 }
 
 .playerMapLegend {

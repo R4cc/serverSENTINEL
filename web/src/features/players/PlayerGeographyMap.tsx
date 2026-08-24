@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Server as ServerIcon } from "lucide-react";
 import type { PlayerLocation } from "../../types";
 import { accuracyRadiusToMapUnits, playerMapMarks, projectToMap, type PlayerMapMark } from "./playerInsightsView";
 import { worldLandRings } from "./worldOutline";
@@ -89,8 +90,17 @@ export function PlayerGeographyMap({
         {server && (
           <g className="playerMapServer">
             <title>{`${serverName} · ${serverLocation?.label ?? "server location"}`}</title>
-            <circle className="playerMapServerHalo" cx={server.x} cy={server.y} r={9} />
-            <rect className="playerMapServerMark" x={server.x - 4} y={server.y - 4} width={8} height={8} rx={2} />
+            <circle className="playerMapServerHalo" cx={server.x} cy={server.y} r={14} />
+            <circle className="playerMapServerBadge" cx={server.x} cy={server.y} r={10} />
+            <ServerIcon
+              className="playerMapServerIcon"
+              x={server.x - 7}
+              y={server.y - 7}
+              width={14}
+              height={14}
+              strokeWidth={2}
+              aria-hidden="true"
+            />
           </g>
         )}
       </svg>
