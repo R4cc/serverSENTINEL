@@ -453,20 +453,7 @@
 
 .settingsHubIntegrationRow {
   align-items: start;
-}
-
-/* The player-heads row explains a third-party service at length but carries only
-   a toggle and a small action, so its copy takes the wider column instead of
-   wrapping into a narrow one beside an under-filled control column. */
-.settingsHubIntegrationRow:has(.playerHeadsSettingsControl) {
-  grid-template-columns: minmax(260px, 1.25fr) minmax(240px, 0.75fr);
-}
-
-/* The key row is the other way round: its copy is one line, while the stored key,
-   its badge, and the action need 382px to share one. Tilting the split keeps them
-   on that line down to the widths where the shell itself runs out of room. */
-.settingsHubIntegrationRow:has(.keyForm) {
-  grid-template-columns: minmax(200px, 0.78fr) minmax(300px, 1.22fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(360px, 620px);
 }
 
 .settingsHubIntegrationRow .settingsHubRowCopy {
@@ -477,19 +464,32 @@
   color: var(--accent);
 }
 
-/* The stack is a grid, so its rows stretch by default: without this the action
-   spans the full control width and reads as a banner rather than a button. It
-   ends flush with the toggle above it instead. */
+.settingsHubIntegrationRow .settingsHubControl {
+  width: 100%;
+}
+
 .playerHeadsSettingsControl {
-  justify-items: end;
+  width: 100%;
+  max-width: 620px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-3);
+  justify-items: stretch;
+}
+
+.playerHeadsSettingsControl .settingsHubToggle {
+  justify-content: flex-start;
 }
 
 .playerHeadsSettingsControl .settingsHubPreferenceExample {
-  text-align: right;
+  grid-column: 1 / -1;
+  text-align: left;
 }
 
 .playerHeadsSettingsControl > .uiButton {
-  margin-top: var(--space-1);
+  grid-column: 2;
+  grid-row: 1;
+  width: 168px;
 }
 
 .playerHeadsOnboardingBackdrop {
@@ -524,7 +524,8 @@
 }
 
 .settingsHubControl .keyForm {
-  width: min(100%, 620px);
+  width: 100%;
+  max-width: 620px;
 }
 
 .settingsHubControl .keyForm fieldset,
@@ -532,11 +533,12 @@
   width: 100%;
 }
 
-/* The shared responsive layer stretches this action bar below 1100px. Inside a
-   settings row that forces the wrap even where the row could seat the action
-   beside the stored key, so the wrap stays a question of available width. */
 .settingsHubControl .keyFormActions {
   width: auto;
+}
+
+.settingsHubIntegrationRow .keyFormActions > .uiButton {
+  width: 168px;
 }
 
 .settingsHubUsers {
@@ -852,10 +854,7 @@
     padding: var(--space-4);
   }
 
-  /* The integration rows tilt their two-column split by class, which outranks the
-     rule above, so they have to give it up here by name. */
-  .settingsHubIntegrationRow:has(.playerHeadsSettingsControl),
-  .settingsHubIntegrationRow:has(.keyForm) {
+  .settingsHubIntegrationRow {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -878,9 +877,15 @@
     text-align: left;
   }
 
-  /* Phones give every control the full row, so the stack stretches again. */
   .playerHeadsSettingsControl {
+    grid-template-columns: minmax(0, 1fr);
     justify-items: stretch;
+  }
+
+  .playerHeadsSettingsControl > .uiButton {
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
   }
 
   .settingsHubToggle {
@@ -941,6 +946,10 @@
   align-items: end;
   gap: var(--space-3);
   width: 100%;
+}
+
+.keyForm--credentials fieldset {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
 }
 
 /* Both classes land on the same element, so the configured variant has to carry

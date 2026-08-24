@@ -57,7 +57,7 @@ export function MaxmindCredentialsForm({
   }
 
   return (
-    <form onSubmit={submitCredentials} className="keyForm">
+    <form onSubmit={submitCredentials} className="keyForm keyForm--credentials">
       <fieldset disabled={disabled} title={disabled ? "Manage integrations permission is required" : undefined}>
         <label>
           MaxMind account ID
