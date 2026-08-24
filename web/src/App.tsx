@@ -2282,7 +2282,7 @@ export default function App() {
                 loadTimeline={loadActiveTimeline}
                 loadStorageSummary={loadActiveStorageSummary}
                 playerSnapshot={playerSnapshots[activeServer.id]}
-                playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                playerHeadsEnabled={activeServerIsDemo || effectiveAppState.playerHeads.enabled}
                 modUpdatePlan={modsBridge?.updatePlan ?? null}
                 modUpdatePlanLoading={modsBridge?.updatePlanLoading ?? false}
                 canViewMods={canViewMods && supportsManagedMods}
@@ -2376,7 +2376,7 @@ export default function App() {
                   activeServerIsDemo={activeServerIsDemo}
                   demoRunning={demoRunning}
                   canManage={canManagePlayerInsights}
-                  playerHeadsEnabled={effectiveAppState.playerHeads.enabled}
+                  playerHeadsEnabled={activeServerIsDemo || effectiveAppState.playerHeads.enabled}
                   compactLayout={phoneLayout}
                   notify={notify}
                   handleStaleSession={handleStaleSession}

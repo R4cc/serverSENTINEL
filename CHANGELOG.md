@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.8.28 - 2026-08-24
+
+- Demo mode now shows the same bundled Steve head for every player without contacting MCHeads or any other external service. Real installations keep their existing opt-in player-head behavior.
+
 ## 26.8.27 - 2026-08-24
 
 - Fixed the Players dashboard cards using mismatched column widths and leaving gaps below shorter panels. Geography and analysis cards now share aligned columns, fill each row evenly, and let the hourly activity chart use the available height.

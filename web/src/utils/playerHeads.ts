@@ -1,6 +1,10 @@
+import { isDemoServerId } from "../demoRuntime";
+
 const playerHeadCacheWindowMs = 60 * 60 * 1000;
+export const demoPlayerHeadSource = "/demo-player-head.svg";
 
 export function playerHeadSource(serverId: string, playerName: string, version: number) {
+  if (isDemoServerId(serverId)) return demoPlayerHeadSource;
   return `/api/servers/${encodeURIComponent(serverId)}/player-head/${encodeURIComponent(playerName)}?v=${version}`;
 }
 
