@@ -32,7 +32,7 @@ const markerCollisionPx = 34;
 const serverMergeDistancePx = 42;
 const clusterMarkerSizePx = 44;
 const clusterPopupHeightPx = 240;
-const playerTooltipHeightPx = 64;
+const playerTooltipHeightPx = 96;
 const clusterHoverCloseDelayMs = 160;
 
 type MapPoint = { x: number; y: number };
@@ -419,7 +419,7 @@ export function PlayerGeographyMap({
                 {active && !clustered && (
                   <span
                     id={popupId}
-                    className={`playerMapPlayerTooltip playerMapFloatingPanel--${panelPlacement.placement}`}
+                    className={`playerMapClusterPopup playerMapPlayerPopup playerMapFloatingPanel--${panelPlacement.placement}`}
                     style={{
                       width: panelWidth,
                       left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
@@ -429,14 +429,14 @@ export function PlayerGeographyMap({
                     onMouseEnter={cancelScheduledClose}
                     onMouseLeave={() => scheduleMarkClose(mark.id)}
                   >
-                    <span className="playerMapPlayerTooltipRow">
-                      <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} compact />
-                      <span className="playerMapPlayerTooltipIdentity">
-                        <strong>{mark.entries[0].player}</strong>
+                    <span className="playerMapClusterPopupHeader">
+                      <strong>{mark.entries[0].player}</strong>
+                      <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
+                    </span>
+                    <span className="playerMapClusterList playerMapSinglePlayerList">
+                      <span className="playerMapClusterRow playerMapSinglePlayerRow">
+                        <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} compact />
                         <span>{formatLocation(mark.entries[0].location)}</span>
-                      </span>
-                      <span className="playerMapPlayerTooltipMetrics">
-                        <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
                         <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.entries[0].estimatedLatencyMs)}</b>
                       </span>
                     </span>
