@@ -14,6 +14,7 @@ import {
   playerMapArc,
   playerMapLabelPoint,
   playerMapMarks,
+  playerMapPopupPlacement,
   projectToMap,
   rangeWindowMs,
   unknownValue
@@ -95,13 +96,29 @@ describe("map marks", () => {
     expect(marks.at(-1)?.players).toHaveLength(2);
   });
 
-  it("draws a curved route and keeps its label a stable distance from the player marker", () => {
+  it("draws a curved route and keeps its label a stable distance above the player marker", () => {
     const arc = playerMapArc({ x: 360, y: 80 }, { x: 160, y: 160 });
     expect(arc.path).toMatch(/^M .* C .*$/);
     expect(arc.controls).toHaveLength(2);
     expect(Math.min(...arc.controls.map((control) => control.y))).toBeLessThan(120);
-    const label = playerMapLabelPoint(arc, { x: 160, y: 160 }, 2);
-    expect(Math.hypot(label.x - 160, label.y - 160)).toBeCloseTo(23);
+    expect(playerMapLabelPoint({ x: 160, y: 160 }, 2)).toEqual({ x: 160, y: 146.5 });
+  });
+
+  it("anchors lower-marker panels directly above the marker regardless of panel height", () => {
+    expect(playerMapPopupPlacement({
+      pointY: 300,
+      renderedHeight: 360,
+      markerTopExtent: 22,
+      markerBottomExtent: 22,
+      panelMaxHeight: 240
+    })).toEqual({ placement: "above", anchorY: 268 });
+    expect(playerMapPopupPlacement({
+      pointY: 80,
+      renderedHeight: 360,
+      markerTopExtent: 22,
+      markerBottomExtent: 22,
+      panelMaxHeight: 240
+    })).toEqual({ placement: "below", anchorY: 112 });
   });
 });
 

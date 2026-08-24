@@ -122,6 +122,9 @@ async function assertPlayerClusterPopupDismisses(page, label) {
     const haloRect = halo.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const pings = Array.from(popup.querySelectorAll(".playerMapClusterRow .playerMapPingValue"));
+    const onlineAvatar = document.querySelector(".playerMapAvatar--online");
+    const knownAvatar = document.querySelector(".playerMapAvatar--known");
+    const onlineAvatarRect = onlineAvatar?.getBoundingClientRect();
     return {
       missing: false,
       centreDelta: Math.hypot(
@@ -134,7 +137,11 @@ async function assertPlayerClusterPopupDismisses(page, label) {
       serverBadgeAbovePlayers: serverBadgeRect.bottom <= markerRect.top + 3,
       popupOverflow: popup.scrollWidth - popup.clientWidth,
       overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length,
-      pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right))
+      pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right)),
+      avatarIsSquare: onlineAvatarRect ? Math.abs(onlineAvatarRect.width - onlineAvatarRect.height) <= 1 : false,
+      avatarRadius: onlineAvatar instanceof HTMLElement ? Number.parseFloat(getComputedStyle(onlineAvatar).borderRadius) : Number.POSITIVE_INFINITY,
+      onlineBorder: onlineAvatar instanceof HTMLElement ? getComputedStyle(onlineAvatar).borderColor : "",
+      knownBorder: knownAvatar instanceof HTMLElement ? getComputedStyle(knownAvatar).borderColor : ""
     };
   });
   assert(!geometry.missing, `${label}: combined server/player marker surfaces are missing`);
@@ -143,6 +150,8 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(geometry.runningServerBadges === 1 && geometry.serverBadgeAbovePlayers, `${label}: running server badge is not distinct above the player cluster`);
   assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
   assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
+  assert(geometry.avatarIsSquare && geometry.avatarRadius <= 4, `${label}: player head border does not fit the square avatar`);
+  assert(geometry.onlineBorder && geometry.onlineBorder !== geometry.knownBorder, `${label}: online player head has no distinct status border`);
 
   // Blank map space is outside the floating panel even though it remains inside the map viewport.
   // This catches the old map-level boundary that left the popup pinned until navigation changed.
@@ -150,6 +159,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   await popup.waitFor({ state: "detached" });
   assert(await cluster.getAttribute("aria-expanded") === "false", `${label}: player cluster stayed expanded after an outside click`);
   assert(await cluster.getAttribute("aria-controls") === null, `${label}: dismissed player cluster kept a popup reference`);
+
 }
 
 async function assertScheduleActionMenuVisible(page, label) {

@@ -159,7 +159,7 @@
   min-width: 30px;
   height: 30px;
   border: 1px solid color-mix(in srgb, var(--text-muted) 34%, var(--surface));
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   padding: 2px;
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   box-shadow: var(--shadow-xs);
@@ -177,7 +177,7 @@ button.playerMapMarker {
   border-color: color-mix(in srgb, var(--sentinel-success) 36%, var(--surface));
 }
 
-.playerMapMarker--known .playerMapAvatar {
+.playerMapAvatar--known {
   filter: saturate(0.58);
   opacity: 0.78;
 }
@@ -186,6 +186,12 @@ button.playerMapMarker {
 .playerMapMarker:hover {
   border-color: color-mix(in srgb, var(--accent) 66%, var(--surface));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-xs);
+}
+
+.playerMapMarkerWrap--active .playerMapMarker--online,
+.playerMapMarker--online:hover {
+  border-color: var(--sentinel-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-success) 14%, transparent), var(--shadow-xs);
 }
 
 .playerMapMarker:focus-visible {
@@ -201,12 +207,18 @@ button.playerMapMarker {
   height: 24px;
   flex: 0 0 24px;
   overflow: hidden;
-  border-radius: var(--radius-xs);
+  box-sizing: border-box;
+  border: 1px solid var(--border-muted);
+  border-radius: calc(var(--radius-xs) / 2);
   background: color-mix(in srgb, var(--text-muted) 16%, var(--surface));
   color: var(--text);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
   line-height: 1;
+}
+
+.playerMapAvatar--online {
+  border-color: var(--sentinel-success);
 }
 
 .playerMapAvatar--compact {
@@ -216,6 +228,7 @@ button.playerMapMarker {
 }
 
 .playerMapAvatar img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -223,7 +236,7 @@ button.playerMapMarker {
 }
 
 .playerMapAvatar--fallback {
-  border: 1px solid var(--border-muted);
+  background: color-mix(in srgb, var(--text-muted) 22%, var(--surface));
 }
 
 .playerMapClusterMarker {
@@ -296,8 +309,7 @@ button.playerMapMarker {
   width: 28px;
   height: 28px;
   flex-basis: 28px;
-  border: 1px solid var(--surface);
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 0 0 1px var(--surface), var(--shadow-xs);
 }
 
 .playerMapClusterHeads .playerMapAvatar:nth-child(2) {
@@ -358,6 +370,10 @@ button.playerMapMarker {
   backdrop-filter: none;
   color: var(--text);
   text-align: left;
+}
+
+.playerMapFloatingPanel--above {
+  transform: translateY(-100%);
 }
 
 .playerMapClusterPopup:focus-visible {
@@ -430,6 +446,43 @@ button.playerMapMarker {
   justify-self: end;
   white-space: nowrap;
 }
+
+.playerMapPlayerTooltip {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  gap: var(--space-1);
+  border: var(--border-subtle) solid var(--border-panel);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-elevated);
+  color: var(--text);
+  text-align: left;
+}
+
+.playerMapPlayerTooltip > strong,
+.playerMapPlayerTooltip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerMapPlayerTooltip > span {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerMapPlayerTooltipMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.playerMapPlayerTooltipMeta .playerMapPlayerStatus--online { color: var(--sentinel-success); }
+.playerMapPlayerTooltipMeta .playerMapPlayerStatus--known { color: var(--text-muted); }
 
 /* The accuracy ring is the honest part of the drawing: it stops a head marker from reading as an
    address, so it stays visible rather than decorative. */

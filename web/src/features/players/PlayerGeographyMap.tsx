@@ -11,6 +11,7 @@ import {
   playerMapArc,
   playerMapLabelPoint,
   playerMapMarks,
+  playerMapPopupPlacement,
   projectToMap,
   type PlayerMapMark
 } from "./playerInsightsView";
@@ -30,6 +31,7 @@ const markerCollisionPx = 34;
 const serverMergeDistancePx = 42;
 const clusterMarkerSizePx = 44;
 const clusterPopupHeightPx = 240;
+const playerTooltipHeightPx = 88;
 const clusterHoverCloseDelayMs = 160;
 
 type MapPoint = { x: number; y: number };
@@ -74,7 +76,7 @@ function MapPlayerAvatar({
   compact?: boolean;
 }) {
   const { source, showHead, onHeadError } = usePlayerHead(entry.serverId, entry.player, version, enabled);
-  const classes = `playerMapAvatar ${compact ? "playerMapAvatar--compact" : ""}`.trim();
+  const classes = `playerMapAvatar ${compact ? "playerMapAvatar--compact" : ""} ${entry.online ? "playerMapAvatar--online" : "playerMapAvatar--known"}`.trim();
   return (
     <span className={`${classes} ${showHead ? "" : "playerMapAvatar--fallback"}`.trim()} aria-hidden="true">
       {showHead
@@ -101,7 +103,7 @@ export function PlayerGeographyMap({
   const viewportRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | undefined>(undefined);
   const [renderedWidth, setRenderedWidth] = useState(mapWidth);
-  const [hoveredClusterId, setHoveredClusterId] = useState<string>();
+  const [hoveredMarkId, setHoveredMarkId] = useState<string>();
   const popupPrefix = useId().replace(/:/g, "");
   const headVersion = useMemo(() => playerHeadVersion(), []);
   const cancelScheduledClose = () => {
@@ -109,15 +111,15 @@ export function PlayerGeographyMap({
     window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = undefined;
   };
-  const openCluster = (id: string) => {
+  const openMark = (id: string) => {
     cancelScheduledClose();
-    setHoveredClusterId(id);
+    setHoveredMarkId(id);
   };
-  const scheduleClusterClose = (id: string) => {
+  const scheduleMarkClose = (id: string) => {
     cancelScheduledClose();
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = undefined;
-      setHoveredClusterId((current) => current === id ? undefined : current);
+      setHoveredMarkId((current) => current === id ? undefined : current);
     }, clusterHoverCloseDelayMs);
   };
 
@@ -147,25 +149,25 @@ export function PlayerGeographyMap({
     [players, renderedWidth]
   );
   useEffect(() => {
-    const validIds = new Set(marks.filter((mark) => mark.entries.length > 1).map((mark) => mark.id));
-    if (hoveredClusterId && !validIds.has(hoveredClusterId)) setHoveredClusterId(undefined);
-  }, [hoveredClusterId, marks]);
+    const validIds = new Set(marks.map((mark) => mark.id));
+    if (hoveredMarkId && !validIds.has(hoveredMarkId)) setHoveredMarkId(undefined);
+  }, [hoveredMarkId, marks]);
 
   useEffect(() => {
-    if (!hoveredClusterId) return;
+    if (!hoveredMarkId) return;
     const closeOutsidePopup = (event: PointerEvent) => {
       const activeMarker = viewportRef.current?.querySelector(".playerMapMarkerWrap--active");
       if (event.target instanceof Node && !activeMarker?.contains(event.target)) {
         if (closeTimerRef.current !== undefined) window.clearTimeout(closeTimerRef.current);
         closeTimerRef.current = undefined;
-        setHoveredClusterId(undefined);
+        setHoveredMarkId(undefined);
       }
     };
     document.addEventListener("pointerdown", closeOutsidePopup, true);
     return () => document.removeEventListener("pointerdown", closeOutsidePopup, true);
-  }, [hoveredClusterId]);
+  }, [hoveredMarkId]);
 
-  const activeClusterId = hoveredClusterId;
+  const activeMarkId = hoveredMarkId;
 
   const scale = renderedWidth > 0 ? renderedWidth / mapWidth : 1;
   const renderedHeight = renderedWidth * (mapHeight / mapWidth);
@@ -202,20 +204,25 @@ export function PlayerGeographyMap({
         tone: latencyTone(plotted.mark.estimatedLatencyMs)
       })).map((route) => ({
         ...route,
-        label: playerMapLabelPoint(route.arc, route.point, scale)
+        label: playerMapLabelPoint(route.point, scale, route.mark.entries.length > 1 ? 34 : 27)
       }))
     : [];
-  const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 3 : 6;
+  const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 4 : renderedWidth < 900 ? 10 : 14;
   const routeLabels = routes
-    .filter((route) => route.mark.estimatedLatencyMs !== undefined && route.arc.distance * scale >= 74)
+    .filter((route) => route.mark.estimatedLatencyMs !== undefined && route.arc.distance * scale >= 56)
     .sort((left, right) => right.arc.distance - left.arc.distance)
     .reduce<typeof routes>((accepted, route) => {
       if (accepted.length >= labelLimit) return accepted;
-      const collides = accepted.some((candidate) => (
-        Math.abs(candidate.label.x - route.label.x) * scale < 62
-        && Math.abs(candidate.label.y - route.label.y) * scale < 20
+      const overlapsMarker = plottedMarks.some((candidate) => (
+        candidate.mark.id !== route.mark.id
+        && Math.abs(candidate.point.x - route.label.x) * scale < 34
+        && Math.abs(candidate.point.y - route.label.y) * scale < 22
       ));
-      return collides ? accepted : [...accepted, route];
+      const collides = accepted.some((candidate) => (
+        Math.abs(candidate.label.x - route.label.x) * scale < 56
+        && Math.abs(candidate.label.y - route.label.y) * scale < 18
+      ));
+      return overlapsMarker || collides ? accepted : [...accepted, route];
     }, []);
 
   return (
@@ -234,7 +241,7 @@ export function PlayerGeographyMap({
           {plottedMarks.map(({ mark, point, accuracy }) => accuracy >= 2 && (
             <circle
               key={`accuracy-${mark.id}`}
-              className={`playerMapAccuracy ${activeClusterId === mark.id ? "playerMapAccuracy--active" : ""}`.trim()}
+              className={`playerMapAccuracy ${activeMarkId === mark.id ? "playerMapAccuracy--active" : ""}`.trim()}
               cx={point.x}
               cy={point.y}
               r={Math.min(60, accuracy)}
@@ -243,7 +250,7 @@ export function PlayerGeographyMap({
           {routes.map(({ mark, arc, tone }) => (
             <path
               key={`route-${mark.id}`}
-              className={`playerMapRoute playerMapRoute--${tone} ${activeClusterId === mark.id ? "playerMapRoute--active" : ""}`.trim()}
+              className={`playerMapRoute playerMapRoute--${tone} ${activeMarkId === mark.id ? "playerMapRoute--active" : ""}`.trim()}
               d={arc.path}
               data-player-count={mark.entries.length}
               data-estimated-ping={mark.estimatedLatencyMs}
@@ -281,25 +288,25 @@ export function PlayerGeographyMap({
 
           {plottedMarks.map(({ mark, point, sharesServer }) => {
             const clustered = mark.entries.length > 1;
-            const active = clustered && activeClusterId === mark.id;
-            const popupId = `${popupPrefix}-player-map-cluster-${marks.indexOf(mark)}`;
-            const popupWidth = Math.min(310, Math.max(180, renderedWidth - 16));
+            const active = activeMarkId === mark.id;
+            const popupId = `${popupPrefix}-player-map-${clustered ? "cluster" : "player"}-${marks.indexOf(mark)}`;
+            const panelWidth = clustered
+              ? Math.min(310, Math.max(180, renderedWidth - 16))
+              : Math.min(220, Math.max(170, renderedWidth - 16));
             const pointX = point.x * scale;
             const pointY = point.y * scale;
             const popupScreenLeft = Math.min(
-              Math.max(8, renderedWidth - popupWidth - 8),
-              Math.max(8, pointX - popupWidth / 2)
+              Math.max(8, renderedWidth - panelWidth - 8),
+              Math.max(8, pointX - panelWidth / 2)
             );
             const markerTopExtent = sharesServer ? 48 : clusterMarkerSizePx / 2;
-            const spaceAbove = pointY - markerTopExtent - 10;
-            const spaceBelow = renderedHeight - pointY - clusterMarkerSizePx / 2 - 10;
-            const belowPopupTop = pointY + clusterMarkerSizePx / 2 + 10;
-            const abovePopupTop = pointY - markerTopExtent - 10 - clusterPopupHeightPx;
-            const popupScreenTop = renderedHeight < clusterPopupHeightPx + 16
-              ? 8
-              : spaceBelow >= clusterPopupHeightPx || spaceBelow >= spaceAbove
-                ? belowPopupTop
-                : abovePopupTop;
+            const panelPlacement = playerMapPopupPlacement({
+              pointY,
+              renderedHeight,
+              markerTopExtent,
+              markerBottomExtent: clusterMarkerSizePx / 2,
+              panelMaxHeight: clustered ? clusterPopupHeightPx : playerTooltipHeightPx
+            });
             const markerLabel = clustered
               ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average estimated ping ${formatEstimatedLatency(mark.estimatedLatencyMs)}.`
               : `${markTitle(mark)}. ${mark.entries[0].online ? "Online now" : "Played before"}.`;
@@ -308,14 +315,14 @@ export function PlayerGeographyMap({
                 key={mark.id}
                 className={`playerMapMarkerWrap ${active ? "playerMapMarkerWrap--active" : ""} ${sharesServer ? "playerMapMarkerWrap--server" : ""}`.trim()}
                 style={{ left: `${(point.x / mapWidth) * 100}%`, top: `${(point.y / mapHeight) * 100}%` }}
-                onMouseEnter={clustered ? () => openCluster(mark.id) : undefined}
-                onMouseLeave={clustered ? () => scheduleClusterClose(mark.id) : undefined}
-                onFocus={clustered ? () => openCluster(mark.id) : undefined}
-                onBlur={clustered ? (event) => {
+                onMouseEnter={() => openMark(mark.id)}
+                onMouseLeave={() => scheduleMarkClose(mark.id)}
+                onFocus={() => openMark(mark.id)}
+                onBlur={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget)) {
-                    scheduleClusterClose(mark.id);
+                    scheduleMarkClose(mark.id);
                   }
-                } : undefined}
+                }}
               >
                 {clustered ? (
                   <button
@@ -339,11 +346,11 @@ export function PlayerGeographyMap({
                     <span className="playerMapClusterCount" aria-hidden="true">{mark.entries.length > 99 ? "99+" : mark.entries.length}</span>
                   </button>
                 ) : (
-                  <span
+                  <button
+                    type="button"
                     className={`playerMapMarker playerMapPlayerMarker ${sharesServer ? "playerMapPlayerMarker--server" : ""} ${mark.online ? "playerMapMarker--online" : "playerMapMarker--known"}`.trim()}
-                    role="img"
                     aria-label={markerLabel}
-                    title={markerLabel}
+                    aria-describedby={active ? popupId : undefined}
                   >
                     <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} />
                     {sharesServer && (
@@ -351,34 +358,34 @@ export function PlayerGeographyMap({
                         <ServerIcon className="playerMapSharedServerIcon" />
                       </span>
                     )}
-                  </span>
+                  </button>
                 )}
 
-                {active && (
+                {active && clustered && (
                   <span
                     id={popupId}
-                    className="playerMapClusterPopup"
+                    className={`playerMapClusterPopup playerMapFloatingPanel--${panelPlacement.placement}`}
                     style={{
-                      width: popupWidth,
+                      width: panelWidth,
                       left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
-                      top: popupScreenTop - pointY + clusterMarkerSizePx / 2
+                      top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
                     }}
                     role="dialog"
                     aria-label={`Players near ${mark.label}`}
                     tabIndex={0}
                     onMouseEnter={cancelScheduledClose}
-                    onMouseLeave={() => scheduleClusterClose(mark.id)}
+                    onMouseLeave={() => scheduleMarkClose(mark.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Escape") {
                         cancelScheduledClose();
                         event.currentTarget.parentElement?.querySelector<HTMLButtonElement>("button")?.focus();
-                        setHoveredClusterId(undefined);
+                        setHoveredMarkId(undefined);
                       }
                     }}
                   >
                     <span className="playerMapClusterPopupHeader">
-                      <strong>{mark.label} cluster · {mark.entries.length} players</strong>
-                      <span>Avg. ping <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.estimatedLatencyMs)}</b></span>
+                      <strong>{mark.label}</strong>
+                      <span>{mark.entries.length} players · <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.estimatedLatencyMs)} avg.</b></span>
                     </span>
                     <span className="playerMapClusterList">
                       {mark.entries.map((entry) => (
@@ -389,6 +396,28 @@ export function PlayerGeographyMap({
                           <b className={`playerMapPingValue playerMapPingValue--${latencyTone(entry.estimatedLatencyMs)}`}>{formatEstimatedLatency(entry.estimatedLatencyMs)}</b>
                         </span>
                       ))}
+                    </span>
+                  </span>
+                )}
+
+                {active && !clustered && (
+                  <span
+                    id={popupId}
+                    className={`playerMapPlayerTooltip playerMapFloatingPanel--${panelPlacement.placement}`}
+                    style={{
+                      width: panelWidth,
+                      left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
+                      top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
+                    }}
+                    role="tooltip"
+                    onMouseEnter={cancelScheduledClose}
+                    onMouseLeave={() => scheduleMarkClose(mark.id)}
+                  >
+                    <strong>{mark.entries[0].player}</strong>
+                    <span>{formatLocation(mark.entries[0].location)}</span>
+                    <span className="playerMapPlayerTooltipMeta">
+                      <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
+                      <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.entries[0].estimatedLatencyMs)}</b>
                     </span>
                   </span>
                 )}

@@ -3,6 +3,7 @@
 ## 26.8.32 - 2026-08-24
 
 - Demo Player geography now distributes its roster across dozens of cities and countries on all six populated continents instead of repeating one location per region.
+- Player map heads now use square status borders, individual-player hover cards, and denser nearby ping labels. Cluster panels stay anchored beside lower map markers instead of floating toward the map centre.
 
 ## 26.8.31 - 2026-08-24
 

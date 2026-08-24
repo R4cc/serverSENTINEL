@@ -147,22 +147,45 @@ export function playerMapArc(
   };
 }
 
-/** Places a ping label a stable rendered distance before the player marker along its route. */
+/** Places a ping label a stable rendered distance above its player marker. */
 export function playerMapLabelPoint(
-  arc: PlayerMapArc,
   end: { x: number; y: number },
   renderedScale: number,
-  offsetPx = 46
+  offsetPx = 27
 ) {
-  const approach = arc.controls[1];
-  const delta = { x: approach.x - end.x, y: approach.y - end.y };
-  const distance = Math.hypot(delta.x, delta.y);
-  if (distance <= 0 || renderedScale <= 0) return end;
-  const offset = offsetPx / renderedScale;
+  if (renderedScale <= 0) return end;
   return {
-    x: end.x + (delta.x / distance) * offset,
-    y: end.y + (delta.y / distance) * offset
+    x: end.x,
+    y: end.y - offsetPx / renderedScale
   };
+}
+
+export function playerMapPopupPlacement({
+  pointY,
+  renderedHeight,
+  markerTopExtent,
+  markerBottomExtent,
+  panelMaxHeight,
+  gap = 10
+}: {
+  pointY: number;
+  renderedHeight: number;
+  markerTopExtent: number;
+  markerBottomExtent: number;
+  panelMaxHeight: number;
+  gap?: number;
+}) {
+  if (renderedHeight < panelMaxHeight + 16) {
+    return { placement: "contained" as const, anchorY: 8 };
+  }
+  const spaceAbove = pointY - markerTopExtent - gap;
+  const spaceBelow = renderedHeight - pointY - markerBottomExtent - gap;
+  if (spaceBelow >= panelMaxHeight || spaceBelow >= spaceAbove) {
+    return { placement: "below" as const, anchorY: pointY + markerBottomExtent + gap };
+  }
+  // The panel uses translateY(-100%) from this edge. Anchoring the edge rather than
+  // subtracting a maximum height keeps short cluster lists next to low map markers.
+  return { placement: "above" as const, anchorY: pointY - markerTopExtent - gap };
 }
 
 /** Bands chosen so the colour says something a player would recognise, not merely "higher". */

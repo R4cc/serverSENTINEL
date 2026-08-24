@@ -143,6 +143,14 @@ describe("the Players workspace with partial knowledge", () => {
     expect(render({ insights: partial, playerHeadsEnabled: true })).toContain("playerHead");
   });
 
+  it("marks online map heads directly and makes individual markers hoverable controls", () => {
+    const html = render({ insights: partial, playerHeadsEnabled: true });
+    expect(html).toContain("playerMapAvatar--online");
+    expect(html).toContain("playerMapPlayerMarker");
+    expect(html).toContain("playerMapMarker--online");
+    expect(html).toContain("<button");
+  });
+
   it("marks the server origin with a generic server rack instead of the app cube", () => {
     const html = render({
       insights: insights({
