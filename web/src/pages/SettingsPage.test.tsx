@@ -144,14 +144,18 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="https://www.mc-heads.net/"');
   });
 
-  it("lists optional modules with the permission that scopes them, and locks the switch without permission", () => {
+  it("renders optional modules as stateful cards and locks them without permission", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "modules" })} />);
     expect(html).toContain('id="settings-tab-modules"');
     expect(html).toContain("Schedules");
     expect(html).toContain("schedules.view");
     expect(html).toContain("Whole installation");
-    expect(html).toContain('aria-label="Enable the Schedules module"');
+    expect(html).toContain('class="settingsModuleGrid"');
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('aria-label="Schedules module"');
     expect(html).toContain("Manage integrations permission is required");
+    expect(html).not.toContain("settingsHubToggleTrack");
   });
 
   it("explains what stops happening while a module is switched off", () => {

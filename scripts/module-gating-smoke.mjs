@@ -27,7 +27,7 @@ const modules = [
     id: "schedules",
     label: "Schedules",
     navigationTitle: "Open schedules",
-    switchLabel: "Enable the Schedules module",
+    switchLabel: "Schedules module",
     chunk: /SchedulesModule-.*\.js$/,
     endpoint: "/api/servers/11111111-1111-4111-8111-111111111111/schedules"
   },
@@ -35,7 +35,7 @@ const modules = [
     id: "managedContent",
     label: "Managed content",
     navigationTitle: "Open mods",
-    switchLabel: "Enable the Managed content module",
+    switchLabel: "Managed content module",
     chunk: /ModsModule-.*\.js$/,
     endpoint: "/api/servers/11111111-1111-4111-8111-111111111111/mods"
   },
@@ -43,7 +43,7 @@ const modules = [
     id: "playerInsights",
     label: "Player insights",
     navigationTitle: "Open players",
-    switchLabel: "Enable the Player insights module",
+    switchLabel: "Player insights module",
     chunk: /PlayersModule-.*\.js$/,
     endpoint: "/api/players/insights"
   }
@@ -112,9 +112,9 @@ try {
 
     await openSettingsCategory(page, "modules");
     for (const module of modules) {
-      const toggle = page.getByLabel(module.switchLabel);
-      assert(await toggle.isVisible(), `${module.label}: the Modules settings category does not offer its switch`);
-      assert(await toggle.isChecked(), `${module.label}: the switch does not reflect the installation state`);
+      const card = page.getByRole("switch", { name: module.switchLabel, exact: true });
+      assert(await card.isVisible(), `${module.label}: the Modules settings category does not offer its card`);
+      assert(await card.isChecked(), `${module.label}: the card does not reflect the installation state`);
     }
 
     for (const module of modules) {
@@ -157,13 +157,13 @@ try {
 
     await openSettingsCategory(page, "modules");
     for (const module of modules) {
-      const toggle = page.getByLabel(module.switchLabel);
-      assert(await toggle.isVisible(), `${module.label}: a disabled module disappeared from settings, leaving no way to switch it back on`);
-      assert(!await toggle.isChecked(), `${module.label}: the switch does not reflect the disabled installation state`);
+      const card = page.getByRole("switch", { name: module.switchLabel, exact: true });
+      assert(await card.isVisible(), `${module.label}: a disabled module disappeared from settings, leaving no way to switch it back on`);
+      assert(!await card.isChecked(), `${module.label}: the card does not reflect the disabled installation state`);
     }
   });
 
-  console.log(`Module gating smoke passed for ${modules.length} modules: navigation, chunk loading, panel authorization, and the settings switch all follow the installation state.`);
+  console.log(`Module gating smoke passed for ${modules.length} modules: navigation, chunk loading, panel authorization, and the settings cards all follow the installation state.`);
 } finally {
   await rm(dataDirectory, { recursive: true, force: true });
 }

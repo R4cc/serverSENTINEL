@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import { Blocks, Copy, Palette, PlugZap, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
+import { Blocks, CalendarDays, Check, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
 import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";
 import type { DisplayTimeZonePreference, ModuleAccessState, ModuleId, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
@@ -109,6 +109,17 @@ function SettingsGlyph({ name }: { name: SettingsCategory | "refresh" | "copy" }
     copy: Copy
   };
   const Icon = icons[name];
+  return <Icon strokeWidth={1.8} aria-hidden="true" />;
+}
+
+const moduleIcons: Record<ModuleId, LucideIcon> = {
+  schedules: CalendarDays,
+  managedContent: Puzzle,
+  playerInsights: Users
+};
+
+function ModuleGlyph({ id }: { id: ModuleId }) {
+  const Icon = moduleIcons[id];
   return <Icon strokeWidth={1.8} aria-hidden="true" />;
 }
 
@@ -292,32 +303,44 @@ export function SettingsPage(props: SettingsPageProps) {
     modules: (
       <>
         <CategoryHeader category="modules" actions={<StatusBadge tone="neutral">Whole installation</StatusBadge>} />
-        <div className="settingsHubRows">
+        <div className="settingsModuleGrid">
           {MODULE_DESCRIPTORS.map((descriptor) => {
             const enabled = isModuleEnabled(props.modules, descriptor.id);
+            const unavailable = !props.canManageModules || props.modulesBusy || props.loading;
+            const descriptionId = `settings-module-${descriptor.id}-description`;
+            const title = !props.canManageModules
+              ? "Manage integrations permission is required"
+              : props.modulesBusy
+                ? "Another module change is in progress"
+                : props.loading
+                  ? "Modules are loading"
+                  : `${enabled ? "Disable" : "Enable"} ${descriptor.label}`;
             return (
-              <PreferenceRow
+              <button
                 key={descriptor.id}
-                title={descriptor.label}
-                description={(
-                  <>
-                    {descriptor.summary}
-                    <br />
-                    {enabled
-                      ? <>Visible to accounts with the <strong>{descriptor.accessPermission}</strong> permission.</>
-                      : descriptor.disabledEffect}
-                  </>
-                )}
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                aria-label={`${descriptor.label} module`}
+                aria-describedby={descriptionId}
+                aria-busy={props.modulesBusy || undefined}
+                className={`settingsModuleCard ${enabled ? "is-enabled" : "is-disabled"}`}
+                disabled={unavailable}
+                title={title}
+                onClick={() => props.onModuleEnabledChange(descriptor.id, !enabled)}
               >
-                <Toggle
-                  checked={enabled}
-                  onChange={(value) => props.onModuleEnabledChange(descriptor.id, value)}
-                  label={`Enable the ${descriptor.label} module`}
-                  stateLabel={enabled ? "Enabled" : "Disabled"}
-                  disabled={!props.canManageModules || props.modulesBusy || props.loading}
-                  title={!props.canManageModules ? "Manage integrations permission is required" : undefined}
-                />
-              </PreferenceRow>
+                <span className="settingsModuleCardIcon"><ModuleGlyph id={descriptor.id} /></span>
+                {enabled && <span className="settingsModuleCardCheck" aria-hidden="true"><Check /></span>}
+                <span className="settingsModuleCardCopy">
+                  <strong>{descriptor.label}</strong>
+                  <span>{descriptor.summary}</span>
+                </span>
+                <span id={descriptionId} className="srOnly">
+                  {enabled
+                    ? `Enabled. Visible to accounts with the ${descriptor.accessPermission} permission.`
+                    : `Disabled. ${descriptor.disabledEffect}`}
+                </span>
+              </button>
             );
           })}
         </div>
