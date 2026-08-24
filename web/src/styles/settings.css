@@ -215,7 +215,6 @@
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-row));
   background: color-mix(in srgb, var(--accent) 5%, var(--surface-raised));
   color: var(--text);
-  box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
 }
 
