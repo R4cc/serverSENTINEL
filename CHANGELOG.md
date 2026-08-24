@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.8.27 - 2026-08-24
+
+- Fixed the Players dashboard cards using mismatched column widths and leaving gaps below shorter panels. Geography and analysis cards now share aligned columns, fill each row evenly, and let the hourly activity chart use the available height.
+
 ## 26.8.26 - 2026-08-16
 
 - Fixed the Players roster jumping back to its first page every time somebody joined or left. Only switching server starts it over now.
