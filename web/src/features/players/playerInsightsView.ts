@@ -115,31 +115,47 @@ export function playerMapMarks(
 
 export type PlayerMapArc = {
   path: string;
-  control: { x: number; y: number };
+  controls: [{ x: number; y: number }, { x: number; y: number }];
   label: { x: number; y: number };
   distance: number;
 };
 
-/** A restrained northward quadratic arc, with its label beyond the crowded server end. */
+/** A restrained northward cubic arc, with its label beyond the crowded server end. */
 export function playerMapArc(
   start: { x: number; y: number },
   end: { x: number; y: number }
 ): PlayerMapArc {
-  const distance = Math.hypot(end.x - start.x, end.y - start.y);
-  const lift = Math.min(88, Math.max(12, distance * 0.22));
-  const control = {
-    x: (start.x + end.x) / 2,
-    y: Math.max(8, (start.y + end.y) / 2 - lift)
-  };
-  const labelT = 0.58;
+  const delta = { x: end.x - start.x, y: end.y - start.y };
+  const distance = Math.hypot(delta.x, delta.y);
+  const lift = Math.min(72, Math.max(10, distance * 0.18));
+  const direction = distance > 0 ? { x: delta.x / distance, y: delta.y / distance } : { x: 1, y: 0 };
+  let normal = { x: -direction.y, y: direction.x };
+  if (normal.y > 0) normal = { x: -normal.x, y: -normal.y };
+  const controls: PlayerMapArc["controls"] = [
+    {
+      x: start.x + delta.x * 0.32 + normal.x * lift,
+      y: Math.max(8, start.y + delta.y * 0.32 + normal.y * lift)
+    },
+    {
+      x: start.x + delta.x * 0.68 + normal.x * lift,
+      y: Math.max(8, start.y + delta.y * 0.68 + normal.y * lift)
+    }
+  ];
+  const labelT = 0.6;
   const inverseT = 1 - labelT;
   const label = {
-    x: inverseT * inverseT * start.x + 2 * inverseT * labelT * control.x + labelT * labelT * end.x,
-    y: inverseT * inverseT * start.y + 2 * inverseT * labelT * control.y + labelT * labelT * end.y
+    x: inverseT ** 3 * start.x
+      + 3 * inverseT ** 2 * labelT * controls[0].x
+      + 3 * inverseT * labelT ** 2 * controls[1].x
+      + labelT ** 3 * end.x,
+    y: inverseT ** 3 * start.y
+      + 3 * inverseT ** 2 * labelT * controls[0].y
+      + 3 * inverseT * labelT ** 2 * controls[1].y
+      + labelT ** 3 * end.y
   };
   return {
-    path: `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${control.x.toFixed(1)} ${control.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
-    control,
+    path: `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${controls[0].x.toFixed(1)} ${controls[0].y.toFixed(1)} ${controls[1].x.toFixed(1)} ${controls[1].y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
+    controls,
     label,
     distance
   };

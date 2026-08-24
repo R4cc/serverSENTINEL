@@ -96,8 +96,9 @@ describe("map marks", () => {
 
   it("draws a curved route and places its label beyond the crowded server end", () => {
     const arc = playerMapArc({ x: 360, y: 80 }, { x: 160, y: 160 });
-    expect(arc.path).toMatch(/^M .* Q .*$/);
-    expect(arc.control.y).toBeLessThan(120);
+    expect(arc.path).toMatch(/^M .* C .*$/);
+    expect(arc.controls).toHaveLength(2);
+    expect(Math.min(...arc.controls.map((control) => control.y))).toBeLessThan(120);
     expect(Math.abs(arc.label.x - 360)).toBeGreaterThan(100);
   });
 });

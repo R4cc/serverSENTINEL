@@ -65,6 +65,27 @@ function PlayerLocationDisplay({ location }: { location: PlayerInsightsEntry["lo
   );
 }
 
+function PlayerMapLegendHead({
+  entry,
+  version,
+  enabled
+}: {
+  entry: PlayerInsightsEntry | undefined;
+  version: number;
+  enabled: boolean;
+}) {
+  if (!entry) return <span className="playerMapLegendHead playerMapLegendHead--placeholder" aria-hidden="true" />;
+  return (
+    <PlayerHead
+      serverId={entry.serverId}
+      playerName={entry.player}
+      version={version}
+      enabled={enabled}
+      className="playerMapLegendHead"
+    />
+  );
+}
+
 /**
  * The chart's geometry, in the units its viewBox is drawn in.
  *
@@ -392,6 +413,13 @@ export function PlayersPage({
   const serverLocation = insights?.serverLocations.find((entry) => entry.serverId === server.id);
   const geoDatabase = insights?.geoDatabase;
   const summary = insights?.summary;
+  const locatedPlayers = insights?.players.filter((entry) => (
+    entry.location?.latitude !== undefined && entry.location.longitude !== undefined
+  )) ?? [];
+  const legendOnlinePlayer = locatedPlayers.find((entry) => entry.online) ?? locatedPlayers[0];
+  const legendKnownPlayer = locatedPlayers.find((entry) => !entry.online) ?? locatedPlayers.at(-1);
+  const legendClusterPlayers = locatedPlayers.slice(0, 3);
+  const legendHeadVersion = playerHeadVersion();
 
   return (
     <section className="tabPage playersPage layoutWide">
@@ -475,9 +503,32 @@ export function PlayersPage({
           />
           <ul className="playerMapLegend">
             <li><span className="playerMapLegendMark playerMapLegendMark--server" aria-hidden="true" />This server</li>
-            <li><span className="playerMapLegendMark playerMapLegendMark--player playerMapLegendMark--online" aria-hidden="true" />Online player</li>
-            <li><span className="playerMapLegendMark playerMapLegendMark--player playerMapLegendMark--known" aria-hidden="true" />Played before</li>
-            <li><span className="playerMapLegendCluster" aria-hidden="true"><i /><i /><b>3</b></span>Player cluster</li>
+            <li>
+              <span className="playerMapLegendPlayer playerMapLegendPlayer--online" aria-hidden="true">
+                <PlayerMapLegendHead entry={legendOnlinePlayer} version={legendHeadVersion} enabled={playerHeadsEnabled} />
+              </span>
+              Online player
+            </li>
+            <li>
+              <span className="playerMapLegendPlayer playerMapLegendPlayer--known" aria-hidden="true">
+                <PlayerMapLegendHead entry={legendKnownPlayer} version={legendHeadVersion} enabled={playerHeadsEnabled} />
+              </span>
+              Played before
+            </li>
+            <li>
+              <span className="playerMapLegendCluster" aria-hidden="true">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <PlayerMapLegendHead
+                    key={legendClusterPlayers[index]?.player ?? `placeholder-${index}`}
+                    entry={legendClusterPlayers[index]}
+                    version={legendHeadVersion}
+                    enabled={playerHeadsEnabled}
+                  />
+                ))}
+                <b>3</b>
+              </span>
+              Player cluster
+            </li>
             <li><span className="playerMapLegendMark playerMapLegendMark--accuracy" aria-hidden="true" />GeoLite2 accuracy radius</li>
           </ul>
           <ServerLocationForm

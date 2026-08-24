@@ -27,6 +27,8 @@ const mapWidth = 720;
 const mapHeight = 360;
 const markerCollisionPx = 34;
 const serverClearancePx = 54;
+const clusterMarkerSizePx = 44;
+const clusterPopupHeightPx = 240;
 
 type MapPoint = { x: number; y: number };
 
@@ -209,7 +211,7 @@ export function PlayerGeographyMap({
           {plottedMarks.map(({ mark, actualPoint, accuracy }) => accuracy >= 2 && (
             <circle
               key={`accuracy-${mark.id}`}
-              className={`playerMapAccuracy ${mark.online ? "playerMapAccuracy--online" : ""}`.trim()}
+              className={`playerMapAccuracy ${activeClusterId === mark.id ? "playerMapAccuracy--active" : ""}`.trim()}
               cx={actualPoint.x}
               cy={actualPoint.y}
               r={Math.min(60, accuracy)}
@@ -218,7 +220,7 @@ export function PlayerGeographyMap({
           {routes.map(({ mark, arc, tone }) => (
             <path
               key={`route-${mark.id}`}
-              className={`playerMapRoute playerMapRoute--${tone}`}
+              className={`playerMapRoute playerMapRoute--${tone} ${activeClusterId === mark.id ? "playerMapRoute--active" : ""}`.trim()}
               d={arc.path}
               data-player-count={mark.entries.length}
               data-estimated-ping={mark.estimatedLatencyMs}
@@ -260,11 +262,20 @@ export function PlayerGeographyMap({
             const popupId = `${popupPrefix}-player-map-cluster-${marks.indexOf(mark)}`;
             const popupWidth = Math.min(310, Math.max(180, renderedWidth - 16));
             const pointX = point.x * scale;
-            const popupLeft = Math.min(
-              renderedWidth - 8 - popupWidth - pointX,
-              Math.max(8 - pointX, -popupWidth / 2)
+            const pointY = point.y * scale;
+            const popupScreenLeft = Math.min(
+              Math.max(8, renderedWidth - popupWidth - 8),
+              Math.max(8, pointX - popupWidth / 2)
             );
-            const popupBelow = point.y * scale < renderedHeight / 2;
+            const spaceAbove = pointY - clusterMarkerSizePx / 2 - 10;
+            const spaceBelow = renderedHeight - pointY - clusterMarkerSizePx / 2 - 10;
+            const belowPopupTop = pointY + clusterMarkerSizePx / 2 + 10;
+            const abovePopupTop = pointY - clusterMarkerSizePx / 2 - 10 - clusterPopupHeightPx;
+            const popupScreenTop = renderedHeight < clusterPopupHeightPx + 16
+              ? 8
+              : spaceBelow >= clusterPopupHeightPx || spaceBelow >= spaceAbove
+                ? belowPopupTop
+                : abovePopupTop;
             const markerLabel = clustered
               ? `${mark.entries.length} players near ${mark.label}. Average estimated ping ${formatEstimatedLatency(mark.estimatedLatencyMs)}.`
               : `${markTitle(mark)}. ${mark.entries[0].online ? "Online now" : "Played before"}.`;
@@ -316,8 +327,12 @@ export function PlayerGeographyMap({
                 {active && (
                   <span
                     id={popupId}
-                    className={`playerMapClusterPopup ${popupBelow ? "playerMapClusterPopup--below" : "playerMapClusterPopup--above"}`}
-                    style={{ width: popupWidth, left: popupLeft }}
+                    className="playerMapClusterPopup"
+                    style={{
+                      width: popupWidth,
+                      left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
+                      top: popupScreenTop - pointY + clusterMarkerSizePx / 2
+                    }}
                     role="dialog"
                     aria-label={`Players near ${mark.label}`}
                     tabIndex={0}

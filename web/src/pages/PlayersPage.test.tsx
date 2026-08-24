@@ -191,6 +191,8 @@ describe("the Players workspace with partial knowledge", () => {
       })
     });
     expect(html).toContain("playerMapClusterMarker");
+    expect(html).toContain("playerMapLegendHead");
+    expect(html).toContain("playerMapLegendCluster");
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('data-player-count="2"');
     expect(html).toContain('data-estimated-ping="100"');
@@ -198,6 +200,7 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).toContain("/api/servers/server-1/player-head/FastPlayer");
     expect(html).not.toContain("playerMapDot");
     expect(html).not.toContain("playerMapLink");
+    expect(html).not.toContain("playerMapLegendMark--player");
   });
 
   it("says an address could not be placed rather than telling the operator to set one", () => {

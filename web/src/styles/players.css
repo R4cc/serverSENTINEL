@@ -92,15 +92,22 @@
 .playerMapRoute {
   fill: none;
   stroke: color-mix(in srgb, var(--text-muted) 34%, transparent);
-  stroke-width: 1;
-  stroke-dasharray: 4 4;
+  stroke-width: 0.85;
+  stroke-linecap: round;
+  stroke-dasharray: 3 5;
+  opacity: 0.72;
   vector-effect: non-scaling-stroke;
 }
 
-.playerMapRoute--success { stroke: color-mix(in srgb, var(--sentinel-success) 52%, transparent); }
-.playerMapRoute--info { stroke: color-mix(in srgb, var(--sentinel-info) 48%, transparent); }
-.playerMapRoute--warning { stroke: color-mix(in srgb, var(--sentinel-warning) 52%, transparent); }
-.playerMapRoute--danger { stroke: color-mix(in srgb, var(--sentinel-danger) 52%, transparent); }
+.playerMapRoute--success { stroke: color-mix(in srgb, var(--sentinel-success) 46%, transparent); }
+.playerMapRoute--info { stroke: color-mix(in srgb, var(--sentinel-info) 44%, transparent); }
+.playerMapRoute--warning { stroke: color-mix(in srgb, var(--sentinel-warning) 46%, transparent); }
+.playerMapRoute--danger { stroke: color-mix(in srgb, var(--sentinel-danger) 48%, transparent); }
+
+.playerMapRoute--active {
+  stroke-width: 1.1;
+  opacity: 1;
+}
 
 .playerMapOverlay {
   position: absolute;
@@ -113,11 +120,10 @@
   position: absolute;
   display: inline-flex;
   transform: translate(-50%, -50%);
-  border: var(--border-subtle) solid color-mix(in srgb, currentColor 32%, var(--border-muted));
-  border-radius: 999px;
-  padding: 2px 5px;
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  box-shadow: var(--shadow-xs);
+  border-radius: var(--radius-xs);
+  padding: 1px 3px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  text-shadow: 0 1px 2px var(--surface), 0 0 4px var(--surface);
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
@@ -152,11 +158,11 @@
   justify-content: center;
   min-width: 30px;
   height: 30px;
-  border: 1px solid color-mix(in srgb, var(--text-muted) 54%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--text-muted) 34%, var(--surface));
   border-radius: var(--radius-sm);
   padding: 2px;
-  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface) 58%, transparent), var(--shadow-xs);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--shadow-xs);
 }
 
 button.playerMapMarker {
@@ -168,8 +174,18 @@ button.playerMapMarker {
 }
 
 .playerMapMarker--online {
-  border-color: color-mix(in srgb, var(--sentinel-success) 62%, var(--surface));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-success) 14%, transparent), var(--shadow-xs);
+  border-color: color-mix(in srgb, var(--sentinel-success) 36%, var(--surface));
+}
+
+.playerMapMarker--known .playerMapAvatar {
+  filter: saturate(0.58);
+  opacity: 0.78;
+}
+
+.playerMapMarkerWrap--active .playerMapMarker,
+.playerMapMarker:hover {
+  border-color: color-mix(in srgb, var(--accent) 66%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-xs);
 }
 
 .playerMapMarker:focus-visible {
@@ -212,36 +228,58 @@ button.playerMapMarker {
 
 .playerMapClusterMarker {
   position: relative;
-  min-width: 46px;
-  padding-right: 14px;
+  width: 44px;
+  min-width: 44px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--radius-md);
 }
 
 .playerMapClusterHeads {
-  display: inline-flex;
-}
-
-.playerMapClusterHeads .playerMapAvatar + .playerMapAvatar {
-  margin-left: -9px;
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 30px;
 }
 
 .playerMapClusterHeads .playerMapAvatar {
+  position: absolute;
+  top: 1px;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
   border: 1px solid var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.playerMapClusterHeads .playerMapAvatar:nth-child(2) {
+  top: 0;
+  left: 7px;
+  z-index: 1;
+}
+
+.playerMapClusterHeads .playerMapAvatar:nth-child(3) {
+  left: 14px;
+  z-index: 2;
 }
 
 .playerMapClusterCount {
   position: absolute;
-  right: -6px;
-  bottom: -7px;
+  z-index: 3;
+  right: -5px;
+  bottom: -4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 20px;
-  height: 20px;
-  border: 2px solid var(--surface);
+  height: 17px;
+  border: 1px solid var(--border-panel);
   border-radius: 999px;
   padding: 0 4px;
-  background: var(--text);
-  color: var(--surface);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+  color: var(--text);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
   line-height: 1;
@@ -262,9 +300,6 @@ button.playerMapMarker {
   color: var(--text);
   text-align: left;
 }
-
-.playerMapClusterPopup--below { top: calc(100% + 10px); }
-.playerMapClusterPopup--above { bottom: calc(100% + 10px); }
 
 .playerMapClusterPopup:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
@@ -335,19 +370,21 @@ button.playerMapMarker {
 /* The accuracy ring is the honest part of the drawing: it stops a head marker from reading as an
    address, so it stays visible rather than decorative. */
 .playerMapAccuracy {
-  fill: color-mix(in srgb, var(--accent) 10%, transparent);
-  stroke: color-mix(in srgb, var(--accent) 24%, transparent);
-  stroke-width: 0.75;
+  fill: color-mix(in srgb, var(--accent) 4%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke-width: 0.65;
+  opacity: 0.66;
   vector-effect: non-scaling-stroke;
 }
 
-.playerMapAccuracy--online {
-  fill: color-mix(in srgb, var(--sentinel-success) 12%, transparent);
-  stroke: color-mix(in srgb, var(--sentinel-success) 28%, transparent);
+.playerMapAccuracy--active {
+  fill: color-mix(in srgb, var(--accent) 9%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 28%, transparent);
+  opacity: 1;
 }
 
 .playerMapServerHalo {
-  fill: color-mix(in srgb, var(--accent) 18%, transparent);
+  fill: color-mix(in srgb, var(--accent) 11%, transparent);
 }
 
 .playerMapServerBadge {
@@ -412,34 +449,55 @@ button.playerMapMarker {
 .playerMapLegendMark--server::before { top: 2px; }
 .playerMapLegendMark--server::after { bottom: 2px; }
 
-.playerMapLegendMark--player {
-  border: 1px solid var(--border-muted);
+.playerMapLegendPlayer {
+  display: inline-flex;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 32%, var(--surface));
   border-radius: var(--radius-xs);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 68%, var(--surface)), color-mix(in srgb, var(--sentinel-warning) 44%, var(--surface)));
+  padding: 1px;
+  background: var(--surface-raised);
 }
 
-.playerMapLegendMark--online { border-color: var(--sentinel-success); }
-.playerMapLegendMark--known { filter: saturate(0.45); opacity: 0.76; }
+.playerMapLegendPlayer--online {
+  border-color: color-mix(in srgb, var(--sentinel-success) 38%, var(--surface));
+}
+
+.playerMapLegendPlayer--known {
+  filter: saturate(0.5);
+  opacity: 0.72;
+}
+
+.playerMapLegendHead {
+  display: block;
+  width: 12px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 62%, var(--surface)), color-mix(in srgb, var(--sentinel-warning) 38%, var(--surface)));
+}
+
+.playerMapLegendHead img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
 
 .playerMapLegendCluster {
   position: relative;
   display: inline-flex;
-  width: 24px;
-  height: 14px;
+  width: 25px;
+  height: 16px;
 }
 
-.playerMapLegendCluster i {
+.playerMapLegendCluster .playerMapLegendHead {
   position: absolute;
-  top: 2px;
-  width: 10px;
-  height: 10px;
+  top: 1px;
   border: 1px solid var(--surface);
-  border-radius: var(--radius-xs);
-  background: var(--text-muted);
 }
 
-.playerMapLegendCluster i:first-child { left: 0; }
-.playerMapLegendCluster i:nth-child(2) { left: 7px; background: var(--accent); }
+.playerMapLegendCluster .playerMapLegendHead:first-child { left: 0; }
+.playerMapLegendCluster .playerMapLegendHead:nth-child(2) { left: 5px; }
+.playerMapLegendCluster .playerMapLegendHead:nth-child(3) { left: 10px; }
 
 .playerMapLegendCluster b {
   position: absolute;
@@ -448,11 +506,12 @@ button.playerMapMarker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 11px;
-  height: 11px;
+  min-width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-panel);
   border-radius: 999px;
-  background: var(--text);
-  color: var(--surface);
+  background: var(--surface-raised);
+  color: var(--text);
   font-size: 7px;
   line-height: 1;
 }
