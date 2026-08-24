@@ -194,6 +194,8 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).toContain("playerMapLegendHead");
     expect(html).toContain("playerMapLegendCluster");
     expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toMatch(/playerMapClusterMarker[^>]+aria-controls=/);
     expect(html).toContain('data-player-count="2"');
     expect(html).toContain('data-estimated-ping="100"');
     expect(html).toContain("playerMapRoute--info");

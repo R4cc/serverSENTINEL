@@ -300,7 +300,7 @@ export function PlayerGeographyMap({
                     aria-label={markerLabel}
                     aria-haspopup="dialog"
                     aria-expanded={active}
-                    aria-controls={popupId}
+                    aria-controls={active ? popupId : undefined}
                     onClick={() => {
                       const next = pinnedClusterId === mark.id ? undefined : mark.id;
                       setPinnedClusterId(next);

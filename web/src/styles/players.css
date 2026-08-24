@@ -941,22 +941,9 @@ button.playerMapMarker {
   }
 }
 
-@media (max-width: 720px) {
-  /* The bar is decoration and the percentage is the fact. A phone cannot afford both beside four
-     other columns, and letting them wrap instead is what made the rows ragged to begin with. */
-  .playerRegionBar {
-    display: none;
-  }
-
-  .playerLatencyCard .uiPanelHeader {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .playerLatencyCard .uiPanelHeaderActions {
-    justify-content: flex-start;
-  }
-
+/* The desktop roster's intrinsic content width is wider than the usable workspace on small
+   tablets. Switch to the compact rows before that can create page-level horizontal scrolling. */
+@media (max-width: 800px) {
   .playerRosterTable thead {
     display: none;
   }
@@ -997,6 +984,23 @@ button.playerMapMarker {
   .playerRosterTable tbody td:nth-of-type(4) {
     grid-column: 2;
     grid-row: 2;
+  }
+}
+
+@media (max-width: 720px) {
+  /* The bar is decoration and the percentage is the fact. A phone cannot afford both beside four
+     other columns, and letting them wrap instead is what made the rows ragged to begin with. */
+  .playerRegionBar {
+    display: none;
+  }
+
+  .playerLatencyCard .uiPanelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playerLatencyCard .uiPanelHeaderActions {
+    justify-content: flex-start;
   }
 
   .playerRegionBar {
