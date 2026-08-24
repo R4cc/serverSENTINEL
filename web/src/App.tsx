@@ -2381,6 +2381,7 @@ export default function App() {
                   notify={notify}
                   handleStaleSession={handleStaleSession}
                   formatDate={formatDisplayDate}
+                  formatNumber={formatDisplayNumber}
                 />
               </Suspense>
             )}

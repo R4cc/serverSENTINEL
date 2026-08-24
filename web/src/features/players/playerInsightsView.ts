@@ -94,10 +94,9 @@ export function formatEstimatedLatency(estimatedLatencyMs: number | undefined) {
   return estimatedLatencyMs === undefined ? unknownValue : `${estimatedLatencyMs} ms`;
 }
 
-export function formatDistance(distanceKm: number | undefined) {
+export function formatDistance(distanceKm: number | undefined, formatNumber: (value: number) => string) {
   if (distanceKm === undefined) return unknownValue;
-  if (distanceKm < 1_000) return `${Math.round(distanceKm)} km`;
-  return `${(distanceKm / 1_000).toFixed(1)} thousand km`;
+  return `${formatNumber(Math.round(distanceKm))} km`;
 }
 
 /** The place on one line, at the precision the accuracy radius actually supports. */

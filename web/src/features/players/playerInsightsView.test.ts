@@ -77,7 +77,7 @@ describe("map marks", () => {
 describe("how figures are written", () => {
   it("says nothing rather than zero when a value could not be derived", () => {
     expect(formatEstimatedLatency(undefined)).toBe(unknownValue);
-    expect(formatDistance(undefined)).toBe(unknownValue);
+    expect(formatDistance(undefined, String)).toBe(unknownValue);
     expect(formatLocation(undefined)).toBe(unknownValue);
     expect(formatMaintenanceWindow(undefined, "UTC")).toBe(unknownValue);
     expect(latencyTone(undefined)).toBe("neutral");
@@ -122,9 +122,10 @@ describe("how figures are written", () => {
     expect(locationAccuracyPresentation(undefined)).toBeUndefined();
   });
 
-  it("switches to thousands of kilometres where metres stopped mattering", () => {
-    expect(formatDistance(671)).toBe("671 km");
-    expect(formatDistance(16_035)).toBe("16.0 thousand km");
+  it("formats whole kilometres with the selected locale", () => {
+    const formatGermanNumber = (value: number) => new Intl.NumberFormat("de-DE").format(value);
+    expect(formatDistance(671, formatGermanNumber)).toBe("671 km");
+    expect(formatDistance(16_035, formatGermanNumber)).toBe("16.035 km");
   });
 
   it("names the maintenance window in the panel's own zone", () => {

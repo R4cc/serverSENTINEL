@@ -40,6 +40,7 @@ function render(overrides: Partial<Parameters<typeof PlayersPage>[0]> = {}) {
       playerHeadsEnabled={false}
       compactLayout={false}
       formatDate={(value) => new Date(value).toISOString()}
+      formatNumber={(value) => new Intl.NumberFormat("de-DE").format(value)}
       {...overrides}
     />
   );
@@ -86,6 +87,7 @@ describe("the Players workspace with partial knowledge", () => {
         serverId: "server-1",
         serverName: "Survival",
         online: true,
+        distanceKm: 16_035,
         location: { label: "Copenhagen", city: "Copenhagen", country: "Denmark", countryCode: "DK", continentCode: "EU", continent: "Europe", latitude: 55.68, longitude: 12.57, accuracyRadiusKm: 20, precision: "city" },
         lastSeenAt: "2026-08-16T11:30:00.000Z",
         observations: 4
@@ -120,6 +122,12 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).toContain('role="tooltip"');
     expect(html).toContain("IP-based location estimate. Expected accuracy is roughly within 20 km.");
     expect(html).not.toContain("Approximate, within about 20 km");
+  });
+
+  it("groups distance digits with the selected regional format", () => {
+    const html = render({ insights: partial });
+    expect(html).toContain("16.035 km");
+    expect(html).not.toContain("thousand km");
   });
 
   it("offers the address field only to an account that may change it", () => {

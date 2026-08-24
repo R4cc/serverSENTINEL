@@ -26,6 +26,7 @@ export type PlayersModuleProps = {
   notify: Notify;
   handleStaleSession(error: unknown): boolean;
   formatDate(value: string | number | Date): string;
+  formatNumber(value: number): string;
 };
 
 export function PlayersModule(props: PlayersModuleProps) {
@@ -58,6 +59,7 @@ export function PlayersModule(props: PlayersModuleProps) {
       playerHeadsEnabled={props.playerHeadsEnabled}
       compactLayout={props.compactLayout}
       formatDate={props.formatDate}
+      formatNumber={props.formatNumber}
     />
   );
 }

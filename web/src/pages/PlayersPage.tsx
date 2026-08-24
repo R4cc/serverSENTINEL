@@ -219,12 +219,14 @@ function PlayerRoster({
   players,
   serverId,
   playerHeadsEnabled,
-  formatDate
+  formatDate,
+  formatNumber
 }: {
   players: readonly PlayerInsightsEntry[];
   serverId: string;
   playerHeadsEnabled: boolean;
   formatDate: (value: string | number | Date) => string;
+  formatNumber: (value: number) => string;
 }) {
   const [page, setPage] = useState(0);
   // Only a different server starts the reader over. The roster refreshes every thirty seconds and
@@ -269,7 +271,7 @@ function PlayerRoster({
               <td>
                 <PlayerLocationDisplay location={entry.location} />
               </td>
-              <td className="playerNumericColumn">{formatDistance(entry.distanceKm)}</td>
+              <td className="playerNumericColumn">{formatDistance(entry.distanceKm, formatNumber)}</td>
               <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.estimatedLatencyMs)}`}>
                 {formatEstimatedLatency(entry.estimatedLatencyMs)}
               </td>
@@ -354,7 +356,8 @@ export function PlayersPage({
   canManage,
   playerHeadsEnabled,
   compactLayout,
-  formatDate
+  formatDate,
+  formatNumber
 }: {
   active: boolean;
   server: ManagedServer;
@@ -372,6 +375,7 @@ export function PlayersPage({
   /** Phone layout. The chart needs it because its geometry is drawn in viewBox units, not pixels. */
   compactLayout: boolean;
   formatDate: (value: string | number | Date) => string;
+  formatNumber: (value: number) => string;
 }) {
   if (!active) return null;
   if (loading) {
@@ -529,6 +533,7 @@ export function PlayersPage({
           serverId={server.id}
           playerHeadsEnabled={playerHeadsEnabled}
           formatDate={formatDate}
+          formatNumber={formatNumber}
         />
       </Surface>
 

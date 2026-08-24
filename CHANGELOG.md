@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.8.30 - 2026-08-24
+
+- Player distances now use the selected regional number format with grouped whole kilometres instead of compact phrases such as "6.2 thousand km."
+
 ## 26.8.29 - 2026-08-24
 
 - Simplified Players locations into one-line flag, place, and accuracy displays. Subtle Precise, Approx, and Broad badges now explain the underlying IP-based estimate on hover or keyboard focus without crowding the roster.
