@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.8.32 - 2026-08-24
+
+- Demo Player geography now distributes its roster across dozens of cities and countries on all six populated continents instead of repeating one location per region.
+
 ## 26.8.31 - 2026-08-24
 
 - Demo players now receive stable, varied heads from a bundled library of Minecraft developers and creators instead of all sharing the same Steve head. Demo pages never contact an avatar provider at runtime.
