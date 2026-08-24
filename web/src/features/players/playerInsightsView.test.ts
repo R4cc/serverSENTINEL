@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PlayerActivityHour, PlayerInsightsEntry, PlayerLocation } from "../../types";
 import {
   accuracyRadiusToMapUnits,
+  clampPlayerMapPoint,
   countryFlag,
   formatDistance,
   formatEstimatedLatency,
@@ -119,6 +120,19 @@ describe("map marks", () => {
       markerBottomExtent: 22,
       panelMaxHeight: 240
     })).toEqual({ placement: "below", anchorY: 112 });
+  });
+
+  it("keeps rendered marker extents inside every map edge", () => {
+    expect(clampPlayerMapPoint(
+      { x: 718, y: 358 },
+      2,
+      { left: 20, right: 24, top: 48, bottom: 20 }
+    )).toEqual({ x: 708, y: 350 });
+    expect(clampPlayerMapPoint(
+      { x: 2, y: 3 },
+      1,
+      { left: 20, right: 24, top: 48, bottom: 20 }
+    )).toEqual({ x: 20, y: 48 });
   });
 });
 

@@ -184,6 +184,10 @@
   padding: var(--space-4) var(--space-5) var(--space-5);
 }
 
+.settingsModuleDemoCallout {
+  margin: var(--space-4) var(--space-5) 0;
+}
+
 .settingsModuleCard {
   position: relative;
   min-width: 0;
@@ -840,6 +844,10 @@
   .settingsModuleGrid {
     grid-template-columns: minmax(0, 1fr);
     padding: var(--space-3);
+  }
+
+  .settingsModuleDemoCallout {
+    margin: var(--space-3) var(--space-3) 0;
   }
 
   .settingsModuleCard {

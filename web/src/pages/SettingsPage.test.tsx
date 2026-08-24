@@ -158,6 +158,18 @@ describe("SettingsPage", () => {
     expect(html).not.toContain("settingsHubToggleTrack");
   });
 
+  it("explains that installation modules are read-only for the demo account", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "modules",
+      systemInfo: { ...props().systemInfo, demoMode: true }
+    })} />);
+
+    expect(html).toContain("Read-only in demo mode");
+    expect(html).toContain("Sign in with a non-demo administrator account");
+    expect(html).toContain("Module configuration is read-only in demo mode");
+    expect(html).not.toContain("Manage integrations permission is required");
+  });
+
   it("explains what stops happening while a module is switched off", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props({
       initialCategory: "modules",

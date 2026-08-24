@@ -173,10 +173,6 @@ button.playerMapMarker {
   cursor: pointer;
 }
 
-.playerMapMarker--online {
-  border-color: color-mix(in srgb, var(--sentinel-success) 36%, var(--surface));
-}
-
 .playerMapAvatar--known {
   filter: saturate(0.58);
   opacity: 0.78;
@@ -186,12 +182,6 @@ button.playerMapMarker {
 .playerMapMarker:hover {
   border-color: color-mix(in srgb, var(--accent) 66%, var(--surface));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-xs);
-}
-
-.playerMapMarkerWrap--active .playerMapMarker--online,
-.playerMapMarker--online:hover {
-  border-color: var(--sentinel-success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-success) 14%, transparent), var(--shadow-xs);
 }
 
 .playerMapMarker:focus-visible {
@@ -321,6 +311,30 @@ button.playerMapMarker {
 .playerMapClusterHeads .playerMapAvatar:nth-child(3) {
   left: 14px;
   z-index: 2;
+}
+
+.playerMapPlayerMarker {
+  box-sizing: border-box;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.playerMapMarkerWrap--active .playerMapPlayerMarker,
+.playerMapPlayerMarker:hover {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.playerMapPlayerMarker .playerMapAvatar {
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+  box-shadow: var(--shadow-xs);
 }
 
 .playerMapPlayerMarker--server {
@@ -461,17 +475,35 @@ button.playerMapMarker {
   text-align: left;
 }
 
-.playerMapPlayerTooltip > strong,
-.playerMapPlayerTooltip > span {
+.playerMapPlayerTooltipHeader {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  border-bottom: 1px solid var(--border-row);
+  padding-bottom: var(--space-2);
+}
+
+.playerMapPlayerTooltipHeader > strong,
+.playerMapPlayerTooltipHeader > span,
+.playerMapPlayerTooltipLocation,
+.playerMapPlayerTooltipMeta > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.playerMapPlayerTooltip > span {
+.playerMapPlayerTooltipHeader > span,
+.playerMapPlayerTooltipLocation,
+.playerMapPlayerTooltipMeta {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
+}
+
+.playerMapPlayerTooltipLocation {
+  padding-top: var(--space-1);
 }
 
 .playerMapPlayerTooltipMeta {
@@ -481,8 +513,8 @@ button.playerMapMarker {
   gap: var(--space-3);
 }
 
-.playerMapPlayerTooltipMeta .playerMapPlayerStatus--online { color: var(--sentinel-success); }
-.playerMapPlayerTooltipMeta .playerMapPlayerStatus--known { color: var(--text-muted); }
+.playerMapPlayerTooltip .playerMapPlayerStatus--online { color: var(--sentinel-success); }
+.playerMapPlayerTooltip .playerMapPlayerStatus--known { color: var(--text-muted); }
 
 /* The accuracy ring is the honest part of the drawing: it stops a head marker from reading as an
    address, so it stays visible rather than decorative. */

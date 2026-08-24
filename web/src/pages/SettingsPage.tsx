@@ -303,18 +303,28 @@ export function SettingsPage(props: SettingsPageProps) {
     modules: (
       <>
         <CategoryHeader category="modules" actions={<StatusBadge tone="neutral">Whole installation</StatusBadge>} />
+        {props.systemInfo.demoMode && (
+          <div className="settingsHubDemoCallout settingsModuleDemoCallout" role="status">
+            <div>
+              <strong>Read-only in demo mode</strong>
+              <span>Sign in with a non-demo administrator account to enable or disable installation modules.</span>
+            </div>
+          </div>
+        )}
         <div className="settingsModuleGrid">
           {MODULE_DESCRIPTORS.map((descriptor) => {
             const enabled = isModuleEnabled(props.modules, descriptor.id);
             const unavailable = !props.canManageModules || props.modulesBusy || props.loading;
             const descriptionId = `settings-module-${descriptor.id}-description`;
-            const title = !props.canManageModules
-              ? "Manage integrations permission is required"
-              : props.modulesBusy
-                ? "Another module change is in progress"
-                : props.loading
-                  ? "Modules are loading"
-                  : `${enabled ? "Disable" : "Enable"} ${descriptor.label}`;
+            const title = props.systemInfo.demoMode
+              ? "Module configuration is read-only in demo mode"
+              : !props.canManageModules
+                ? "Manage integrations permission is required"
+                : props.modulesBusy
+                  ? "Another module change is in progress"
+                  : props.loading
+                    ? "Modules are loading"
+                    : `${enabled ? "Disable" : "Enable"} ${descriptor.label}`;
             return (
               <button
                 key={descriptor.id}

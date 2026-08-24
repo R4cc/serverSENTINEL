@@ -160,6 +160,24 @@ export function playerMapLabelPoint(
   };
 }
 
+export function clampPlayerMapPoint(
+  point: { x: number; y: number },
+  renderedScale: number,
+  extentsPx: { left: number; right: number; top: number; bottom: number },
+  width = 720,
+  height = 360
+) {
+  if (renderedScale <= 0) return point;
+  const left = extentsPx.left / renderedScale;
+  const right = extentsPx.right / renderedScale;
+  const top = extentsPx.top / renderedScale;
+  const bottom = extentsPx.bottom / renderedScale;
+  return {
+    x: Math.min(width - right, Math.max(left, point.x)),
+    y: Math.min(height - bottom, Math.max(top, point.y))
+  };
+}
+
 export function playerMapPopupPlacement({
   pointY,
   renderedHeight,

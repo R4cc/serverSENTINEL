@@ -5,6 +5,7 @@ import type { PlayerInsightsEntry, PlayerLocation } from "../../types";
 import { playerHeadVersion } from "../../utils/playerHeads";
 import {
   accuracyRadiusToMapUnits,
+  clampPlayerMapPoint,
   formatEstimatedLatency,
   formatLocation,
   latencyTone,
@@ -189,11 +190,20 @@ export function PlayerGeographyMap({
   const plottedMarks = marks.map((mark) => {
     const actualPoint = projectToMap(mark.longitude, mark.latitude, mapWidth, mapHeight);
     const sharesServer = mark.id === serverMarkId;
-    const point = sharesServer && server ? server : actualPoint;
+    const originPoint = sharesServer && server ? server : actualPoint;
+    const clustered = mark.entries.length > 1;
+    const markerExtents = {
+      left: clustered ? clusterMarkerSizePx / 2 + 7 : 19,
+      right: clustered ? clusterMarkerSizePx / 2 + 7 : 19,
+      top: (sharesServer ? 48 : clustered ? 20 : 15) + 4,
+      bottom: (clustered ? 20 : 15) + 4
+    };
+    const point = clampPlayerMapPoint(originPoint, scale, markerExtents, mapWidth, mapHeight);
     return {
       mark,
       point,
       sharesServer,
+      markerExtents,
       accuracy: clusterAccuracyRadius(mark, point)
     };
   });
@@ -204,7 +214,14 @@ export function PlayerGeographyMap({
         tone: latencyTone(plotted.mark.estimatedLatencyMs)
       })).map((route) => ({
         ...route,
-        label: playerMapLabelPoint(route.point, scale, route.mark.entries.length > 1 ? 34 : 27)
+        label: (() => {
+          const label = playerMapLabelPoint(route.point, scale, route.mark.entries.length > 1 ? 34 : 27);
+          const horizontalInset = 28 / Math.max(scale, 0.01);
+          return {
+            x: Math.min(mapWidth - horizontalInset, Math.max(horizontalInset, label.x)),
+            y: label.y
+          };
+        })()
       }))
     : [];
   const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 4 : renderedWidth < 900 ? 10 : 14;
@@ -286,7 +303,7 @@ export function PlayerGeographyMap({
             </span>
           ))}
 
-          {plottedMarks.map(({ mark, point, sharesServer }) => {
+          {plottedMarks.map(({ mark, point, sharesServer, markerExtents }) => {
             const clustered = mark.entries.length > 1;
             const active = activeMarkId === mark.id;
             const popupId = `${popupPrefix}-player-map-${clustered ? "cluster" : "player"}-${marks.indexOf(mark)}`;
@@ -299,12 +316,11 @@ export function PlayerGeographyMap({
               Math.max(8, renderedWidth - panelWidth - 8),
               Math.max(8, pointX - panelWidth / 2)
             );
-            const markerTopExtent = sharesServer ? 48 : clusterMarkerSizePx / 2;
             const panelPlacement = playerMapPopupPlacement({
               pointY,
               renderedHeight,
-              markerTopExtent,
-              markerBottomExtent: clusterMarkerSizePx / 2,
+              markerTopExtent: markerExtents.top - 4,
+              markerBottomExtent: markerExtents.bottom - 4,
               panelMaxHeight: clustered ? clusterPopupHeightPx : playerTooltipHeightPx
             });
             const markerLabel = clustered
@@ -413,10 +429,14 @@ export function PlayerGeographyMap({
                     onMouseEnter={cancelScheduledClose}
                     onMouseLeave={() => scheduleMarkClose(mark.id)}
                   >
-                    <strong>{mark.entries[0].player}</strong>
-                    <span>{formatLocation(mark.entries[0].location)}</span>
-                    <span className="playerMapPlayerTooltipMeta">
+                    <span className="playerMapPlayerTooltipHeader">
+                      <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} compact />
+                      <strong>{mark.entries[0].player}</strong>
                       <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
+                    </span>
+                    <span className="playerMapPlayerTooltipLocation">{formatLocation(mark.entries[0].location)}</span>
+                    <span className="playerMapPlayerTooltipMeta">
+                      <span>{mark.entries[0].location?.accuracyRadiusKm ? `Approx. ${mark.entries[0].location.accuracyRadiusKm} km radius` : "Approximate location"}</span>
                       <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.entries[0].estimatedLatencyMs)}</b>
                     </span>
                   </span>
