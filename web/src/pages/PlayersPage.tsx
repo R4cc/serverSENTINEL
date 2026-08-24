@@ -365,6 +365,7 @@ function ServerLocationForm({
 export function PlayersPage({
   active,
   server,
+  serverRunning,
   insights,
   loading,
   error,
@@ -382,6 +383,7 @@ export function PlayersPage({
 }: {
   active: boolean;
   server: ManagedServer;
+  serverRunning: boolean;
   insights: PlayerInsightsResponse | null;
   loading: boolean;
   error: string;
@@ -499,6 +501,7 @@ export function PlayersPage({
             players={insights?.players ?? []}
             serverLocation={serverLocation?.location}
             serverName={server.displayName}
+            serverRunning={serverRunning}
             playerHeadsEnabled={playerHeadsEnabled}
           />
           <ul className="playerMapLegend">

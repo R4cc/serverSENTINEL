@@ -19,6 +19,7 @@ export type PlayersModuleProps = {
   activeServer: ManagedServer | null;
   activeServerIsDemo: boolean;
   demoRunning: boolean;
+  serverRunning: boolean;
   canManage: boolean;
   playerHeadsEnabled: boolean;
   /** Phone layout, passed straight through to the chart geometry. */
@@ -46,6 +47,7 @@ export function PlayersModule(props: PlayersModuleProps) {
     <PlayersPage
       active
       server={props.activeServer}
+      serverRunning={props.serverRunning}
       insights={workspace.insights}
       loading={workspace.loading}
       error={workspace.error}

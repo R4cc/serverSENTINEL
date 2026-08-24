@@ -2375,6 +2375,7 @@ export default function App() {
                   activeServer={activeServer}
                   activeServerIsDemo={activeServerIsDemo}
                   demoRunning={demoRunning}
+                  serverRunning={Boolean(activeStatus?.docker.running)}
                   canManage={canManagePlayerInsights}
                   playerHeadsEnabled={activeServerIsDemo || effectiveAppState.playerHeads.enabled}
                   compactLayout={phoneLayout}

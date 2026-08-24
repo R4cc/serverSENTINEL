@@ -112,11 +112,16 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(await cluster.getAttribute("aria-expanded") === "true", `${label}: player cluster did not expand`);
   const geometry = await page.evaluate(() => {
     const marker = document.querySelector(".playerMapClusterMarker--server");
+    const serverBadge = document.querySelector(".playerMapSharedServer");
     const halo = document.querySelector(".playerMapAccuracy--active");
     const popup = document.querySelector(".playerMapClusterPopup");
-    if (!(marker instanceof HTMLElement) || !(halo instanceof SVGGraphicsElement) || !(popup instanceof HTMLElement)) return { missing: true };
+    const list = popup?.querySelector(".playerMapClusterList");
+    if (!(marker instanceof HTMLElement) || !(serverBadge instanceof HTMLElement) || !(halo instanceof SVGGraphicsElement) || !(popup instanceof HTMLElement) || !(list instanceof HTMLElement)) return { missing: true };
     const markerRect = marker.getBoundingClientRect();
+    const serverBadgeRect = serverBadge.getBoundingClientRect();
     const haloRect = halo.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const pings = Array.from(popup.querySelectorAll(".playerMapClusterRow .playerMapPingValue"));
     return {
       missing: false,
       centreDelta: Math.hypot(
@@ -125,14 +130,19 @@ async function assertPlayerClusterPopupDismisses(page, label) {
       ),
       standaloneServerMarkers: document.querySelectorAll(".playerMapServer").length,
       sharedServerIcons: document.querySelectorAll(".playerMapSharedServerIcon").length,
+      runningServerBadges: document.querySelectorAll(".playerMapSharedServer--running").length,
+      serverBadgeAbovePlayers: serverBadgeRect.bottom <= markerRect.top + 3,
       popupOverflow: popup.scrollWidth - popup.clientWidth,
-      overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length
+      overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length,
+      pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right))
     };
   });
   assert(!geometry.missing, `${label}: combined server/player marker surfaces are missing`);
   assert(geometry.centreDelta <= 1.5, `${label}: active accuracy halo is offset from the combined marker by ${geometry.centreDelta}px`);
   assert(geometry.standaloneServerMarkers === 0 && geometry.sharedServerIcons === 1, `${label}: server and nearby players are not represented by one combined marker`);
+  assert(geometry.runningServerBadges === 1 && geometry.serverBadgeAbovePlayers, `${label}: running server badge is not distinct above the player cluster`);
   assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
+  assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
 
   // Blank map space is outside the floating panel even though it remains inside the map viewport.
   // This catches the old map-level boundary that left the popup pinned until navigation changed.

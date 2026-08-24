@@ -236,8 +236,8 @@ button.playerMapMarker {
 }
 
 .playerMapClusterMarker--server {
-  width: 52px;
-  min-width: 52px;
+  width: 44px;
+  min-width: 44px;
 }
 
 .playerMapClusterHeads {
@@ -248,7 +248,7 @@ button.playerMapMarker {
 }
 
 .playerMapClusterHeads--server {
-  width: 46px;
+  width: 38px;
 }
 
 .playerMapSharedServer {
@@ -258,11 +258,19 @@ button.playerMapMarker {
   width: 24px;
   height: 24px;
   flex: 0 0 24px;
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--surface));
+  border: 1px solid currentColor;
   border-radius: var(--radius-xs);
   background: var(--surface);
-  color: var(--accent);
   box-shadow: var(--shadow-xs);
+}
+
+.playerMapSharedServer--running {
+  color: var(--sentinel-success);
+  animation: playerMapSharedServerPulse 1.8s ease-out infinite;
+}
+
+.playerMapSharedServer--stopped {
+  color: var(--sentinel-danger);
 }
 
 .playerMapSharedServerIcon {
@@ -275,8 +283,10 @@ button.playerMapMarker {
 
 .playerMapClusterHeads--server .playerMapSharedServer {
   position: absolute;
-  top: 3px;
-  left: 0;
+  z-index: 4;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .playerMapClusterHeads .playerMapAvatar {
@@ -301,31 +311,16 @@ button.playerMapMarker {
   z-index: 2;
 }
 
-.playerMapClusterHeads--server .playerMapAvatar:nth-child(2) {
-  left: 10px;
-}
-
-.playerMapClusterHeads--server .playerMapAvatar:nth-child(3) {
-  left: 20px;
-}
-
 .playerMapPlayerMarker--server {
   position: relative;
-  width: 44px;
-  min-width: 44px;
 }
 
 .playerMapPlayerMarker--server .playerMapSharedServer {
   position: absolute;
-  top: 2px;
-  left: 2px;
-}
-
-.playerMapPlayerMarker--server .playerMapAvatar {
-  position: absolute;
-  z-index: 1;
-  top: 2px;
-  right: 2px;
+  z-index: 2;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .playerMapClusterCount {
@@ -399,6 +394,7 @@ button.playerMapMarker {
 .playerMapClusterList {
   display: grid;
   max-height: 176px;
+  padding-inline-end: var(--space-3);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -455,10 +451,27 @@ button.playerMapMarker {
   fill: color-mix(in srgb, var(--accent) 11%, transparent);
 }
 
+.playerMapServer--running .playerMapServerHalo {
+  fill: color-mix(in srgb, var(--sentinel-success) 20%, transparent);
+  animation: playerMapServerHaloPulse 1.8s ease-in-out infinite;
+}
+
+.playerMapServer--stopped .playerMapServerHalo {
+  fill: color-mix(in srgb, var(--sentinel-danger) 18%, transparent);
+}
+
 .playerMapServerBadge {
   fill: var(--surface);
   stroke: color-mix(in srgb, var(--accent) 55%, var(--surface));
   stroke-width: 1;
+}
+
+.playerMapServer--running .playerMapServerBadge {
+  stroke: var(--sentinel-success);
+}
+
+.playerMapServer--stopped .playerMapServerBadge {
+  stroke: var(--sentinel-danger);
 }
 
 .playerMapServerIcon {
@@ -466,6 +479,19 @@ button.playerMapMarker {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.playerMapServer--running .playerMapServerIcon { color: var(--sentinel-success); }
+.playerMapServer--stopped .playerMapServerIcon { color: var(--sentinel-danger); }
+
+@keyframes playerMapSharedServerPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sentinel-success) 32%, transparent), var(--shadow-xs); }
+  50% { box-shadow: 0 0 0 5px transparent, var(--shadow-xs); }
+}
+
+@keyframes playerMapServerHaloPulse {
+  0%, 100% { opacity: 0.48; }
+  50% { opacity: 1; }
 }
 
 .playerMapServerIcon * {
@@ -1083,5 +1109,10 @@ button.playerMapMarker {
 @media (prefers-reduced-motion: reduce) {
   .playerAccuracyTooltip {
     transition: none;
+  }
+
+  .playerMapSharedServer--running,
+  .playerMapServer--running .playerMapServerHalo {
+    animation: none;
   }
 }

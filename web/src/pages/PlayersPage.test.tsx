@@ -27,6 +27,7 @@ function render(overrides: Partial<Parameters<typeof PlayersPage>[0]> = {}) {
     <PlayersPage
       active
       server={server}
+      serverRunning
       insights={insights()}
       loading={false}
       error=""
@@ -153,9 +154,20 @@ describe("the Players workspace with partial knowledge", () => {
       })
     });
     expect(html).toContain("playerMapServerIcon");
+    expect(html).toContain("playerMapServer--running");
     expect(html).toContain("lucide-server");
     expect(html).not.toContain("server-icon-cube");
     expect(html).not.toContain("lucide-box");
+    expect(render({
+      serverRunning: false,
+      insights: insights({
+        serverLocations: [{
+          serverId: "server-1",
+          address: "play.example.net",
+          location: { label: "Frankfurt", city: "Frankfurt", country: "Germany", countryCode: "DE", continentCode: "EU", continent: "Europe", latitude: 50.11, longitude: 8.68, accuracyRadiusKm: 20, precision: "city" }
+        }]
+      })
+    })).toContain("playerMapServer--stopped");
   });
 
   it("combines a nearby player cluster with the server marker instead of displacing it", () => {
@@ -172,6 +184,7 @@ describe("the Players workspace with partial knowledge", () => {
     });
     expect(html).toContain("playerMapClusterMarker--server");
     expect(html).toContain("playerMapSharedServerIcon");
+    expect(html).toContain("playerMapSharedServer--running");
     expect(html).not.toContain('<g class="playerMapServer">');
   });
 

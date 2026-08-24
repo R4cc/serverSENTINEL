@@ -30,6 +30,7 @@ const markerCollisionPx = 34;
 const serverMergeDistancePx = 42;
 const clusterMarkerSizePx = 44;
 const clusterPopupHeightPx = 240;
+const clusterHoverCloseDelayMs = 160;
 
 type MapPoint = { x: number; y: number };
 
@@ -87,19 +88,42 @@ export function PlayerGeographyMap({
   players,
   serverLocation,
   serverName,
+  serverRunning,
   playerHeadsEnabled
 }: {
   players: readonly PlayerInsightsEntry[];
   serverLocation: PlayerLocation | undefined;
   serverName: string;
+  serverRunning: boolean;
   playerHeadsEnabled: boolean;
 }) {
   const land = useMemo(landPath, []);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | undefined>(undefined);
   const [renderedWidth, setRenderedWidth] = useState(mapWidth);
   const [hoveredClusterId, setHoveredClusterId] = useState<string>();
   const popupPrefix = useId().replace(/:/g, "");
   const headVersion = useMemo(() => playerHeadVersion(), []);
+  const cancelScheduledClose = () => {
+    if (closeTimerRef.current === undefined) return;
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = undefined;
+  };
+  const openCluster = (id: string) => {
+    cancelScheduledClose();
+    setHoveredClusterId(id);
+  };
+  const scheduleClusterClose = (id: string) => {
+    cancelScheduledClose();
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = undefined;
+      setHoveredClusterId((current) => current === id ? undefined : current);
+    }, clusterHoverCloseDelayMs);
+  };
+
+  useEffect(() => () => {
+    if (closeTimerRef.current !== undefined) window.clearTimeout(closeTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -132,6 +156,8 @@ export function PlayerGeographyMap({
     const closeOutsidePopup = (event: PointerEvent) => {
       const activeMarker = viewportRef.current?.querySelector(".playerMapMarkerWrap--active");
       if (event.target instanceof Node && !activeMarker?.contains(event.target)) {
+        if (closeTimerRef.current !== undefined) window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = undefined;
         setHoveredClusterId(undefined);
       }
     };
@@ -224,7 +250,7 @@ export function PlayerGeographyMap({
             />
           ))}
           {server && !serverMarkId && (
-            <g className="playerMapServer">
+            <g className={`playerMapServer playerMapServer--${serverRunning ? "running" : "stopped"}`}>
               <title>{`${serverName} · ${serverLocation?.label ?? "server location"}`}</title>
               <circle className="playerMapServerHalo" cx={server.x} cy={server.y} r={14} />
               <circle className="playerMapServerBadge" cx={server.x} cy={server.y} r={10} />
@@ -264,10 +290,11 @@ export function PlayerGeographyMap({
               Math.max(8, renderedWidth - popupWidth - 8),
               Math.max(8, pointX - popupWidth / 2)
             );
-            const spaceAbove = pointY - clusterMarkerSizePx / 2 - 10;
+            const markerTopExtent = sharesServer ? 48 : clusterMarkerSizePx / 2;
+            const spaceAbove = pointY - markerTopExtent - 10;
             const spaceBelow = renderedHeight - pointY - clusterMarkerSizePx / 2 - 10;
             const belowPopupTop = pointY + clusterMarkerSizePx / 2 + 10;
-            const abovePopupTop = pointY - clusterMarkerSizePx / 2 - 10 - clusterPopupHeightPx;
+            const abovePopupTop = pointY - markerTopExtent - 10 - clusterPopupHeightPx;
             const popupScreenTop = renderedHeight < clusterPopupHeightPx + 16
               ? 8
               : spaceBelow >= clusterPopupHeightPx || spaceBelow >= spaceAbove
@@ -281,12 +308,12 @@ export function PlayerGeographyMap({
                 key={mark.id}
                 className={`playerMapMarkerWrap ${active ? "playerMapMarkerWrap--active" : ""} ${sharesServer ? "playerMapMarkerWrap--server" : ""}`.trim()}
                 style={{ left: `${(point.x / mapWidth) * 100}%`, top: `${(point.y / mapHeight) * 100}%` }}
-                onMouseEnter={clustered ? () => setHoveredClusterId(mark.id) : undefined}
-                onMouseLeave={clustered ? () => setHoveredClusterId((current) => current === mark.id ? undefined : current) : undefined}
-                onFocus={clustered ? () => setHoveredClusterId(mark.id) : undefined}
+                onMouseEnter={clustered ? () => openCluster(mark.id) : undefined}
+                onMouseLeave={clustered ? () => scheduleClusterClose(mark.id) : undefined}
+                onFocus={clustered ? () => openCluster(mark.id) : undefined}
                 onBlur={clustered ? (event) => {
                   if (!event.currentTarget.contains(event.relatedTarget)) {
-                    setHoveredClusterId(undefined);
+                    scheduleClusterClose(mark.id);
                   }
                 } : undefined}
               >
@@ -300,14 +327,14 @@ export function PlayerGeographyMap({
                     aria-controls={active ? popupId : undefined}
                   >
                     <span className={`playerMapClusterHeads ${sharesServer ? "playerMapClusterHeads--server" : ""}`.trim()} aria-hidden="true">
+                      {mark.entries.slice(0, 3).map((entry) => (
+                        <MapPlayerAvatar key={`${entry.serverId}:${entry.player}`} entry={entry} version={headVersion} enabled={playerHeadsEnabled} compact />
+                      ))}
                       {sharesServer && (
-                        <span className="playerMapSharedServer">
+                        <span className={`playerMapSharedServer playerMapSharedServer--${serverRunning ? "running" : "stopped"}`}>
                           <ServerIcon className="playerMapSharedServerIcon" aria-hidden="true" />
                         </span>
                       )}
-                      {mark.entries.slice(0, sharesServer ? 2 : 3).map((entry) => (
-                        <MapPlayerAvatar key={`${entry.serverId}:${entry.player}`} entry={entry} version={headVersion} enabled={playerHeadsEnabled} compact />
-                      ))}
                     </span>
                     <span className="playerMapClusterCount" aria-hidden="true">{mark.entries.length > 99 ? "99+" : mark.entries.length}</span>
                   </button>
@@ -318,12 +345,12 @@ export function PlayerGeographyMap({
                     aria-label={markerLabel}
                     title={markerLabel}
                   >
+                    <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} />
                     {sharesServer && (
-                      <span className="playerMapSharedServer" aria-hidden="true">
+                      <span className={`playerMapSharedServer playerMapSharedServer--${serverRunning ? "running" : "stopped"}`} aria-hidden="true">
                         <ServerIcon className="playerMapSharedServerIcon" />
                       </span>
                     )}
-                    <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} />
                   </span>
                 )}
 
@@ -339,8 +366,11 @@ export function PlayerGeographyMap({
                     role="dialog"
                     aria-label={`Players near ${mark.label}`}
                     tabIndex={0}
+                    onMouseEnter={cancelScheduledClose}
+                    onMouseLeave={() => scheduleClusterClose(mark.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Escape") {
+                        cancelScheduledClose();
                         event.currentTarget.parentElement?.querySelector<HTMLButtonElement>("button")?.focus();
                         setHoveredClusterId(undefined);
                       }
