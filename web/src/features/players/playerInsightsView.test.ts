@@ -11,6 +11,7 @@ import {
   locationAccuracyPresentation,
   observedActivityHours,
   peakActivity,
+  playerMapArc,
   playerMapMarks,
   projectToMap,
   rangeWindowMs,
@@ -60,6 +61,26 @@ describe("map marks", () => {
     expect(marks[0].accuracyRadiusKm).toBe(200);
   });
 
+  it("clusters by rendered collision distance and recomputes when the map narrows", () => {
+    const nearby = [
+      entry("A", { location: location({ latitude: 0, longitude: 0 }) }),
+      entry("B", { location: location({ latitude: 0, longitude: 20 }) })
+    ];
+    expect(playerMapMarks(nearby, 720, 360, 720, 34)).toHaveLength(2);
+    expect(playerMapMarks(nearby, 720, 360, 360, 34)).toHaveLength(1);
+  });
+
+  it("retains every member and averages only the cluster pings it knows", () => {
+    const marks = playerMapMarks([
+      entry("Slow", { estimatedLatencyMs: 180 }),
+      entry("Unknown", { estimatedLatencyMs: undefined }),
+      entry("Fast", { online: true, estimatedLatencyMs: 20 })
+    ]);
+    expect(marks[0].entries.map((member) => member.player)).toEqual(["Fast", "Slow", "Unknown"]);
+    expect(marks[0].estimatedLatencyMs).toBe(100);
+    expect(marks[0].online).toBe(1);
+  });
+
   it("leaves out players who could not be placed", () => {
     expect(playerMapMarks([entry("A", { location: undefined }), entry("B", { location: { label: "Nowhere", precision: "country" } })])).toEqual([]);
   });
@@ -71,6 +92,13 @@ describe("map marks", () => {
       entry("C")
     ]);
     expect(marks.at(-1)?.players).toHaveLength(2);
+  });
+
+  it("draws a curved route and places its label beyond the crowded server end", () => {
+    const arc = playerMapArc({ x: 360, y: 80 }, { x: 160, y: 160 });
+    expect(arc.path).toMatch(/^M .* Q .*$/);
+    expect(arc.control.y).toBeLessThan(120);
+    expect(Math.abs(arc.label.x - 360)).toBeGreaterThan(100);
   });
 });
 

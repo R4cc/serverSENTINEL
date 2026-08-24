@@ -54,9 +54,22 @@
 /* World map. The ocean is the card's own surface rather than a colour of its own, so the map reads
    as part of the panel instead of as an embedded image. */
 .playerMap {
+  position: relative;
   margin: 0;
   width: 100%;
   min-width: 0;
+}
+
+.playerGeographyCard > .playerMap {
+  z-index: 2;
+}
+
+.playerMapViewport {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-width: 0;
+  isolation: isolate;
 }
 
 .playerMapCanvas {
@@ -76,32 +89,259 @@
   stroke: none;
 }
 
-.playerMapLink {
-  stroke: color-mix(in srgb, var(--accent) 30%, transparent);
-  stroke-width: 0.75;
-  stroke-dasharray: 3 4;
+.playerMapRoute {
   fill: none;
+  stroke: color-mix(in srgb, var(--text-muted) 34%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
 }
 
-/* The accuracy ring is the honest part of the drawing: it is what stops a dot from reading as an
+.playerMapRoute--success { stroke: color-mix(in srgb, var(--sentinel-success) 52%, transparent); }
+.playerMapRoute--info { stroke: color-mix(in srgb, var(--sentinel-info) 48%, transparent); }
+.playerMapRoute--warning { stroke: color-mix(in srgb, var(--sentinel-warning) 52%, transparent); }
+.playerMapRoute--danger { stroke: color-mix(in srgb, var(--sentinel-danger) 52%, transparent); }
+
+.playerMapOverlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+
+.playerMapPingLabel {
+  position: absolute;
+  display: inline-flex;
+  transform: translate(-50%, -50%);
+  border: var(--border-subtle) solid color-mix(in srgb, currentColor 32%, var(--border-muted));
+  border-radius: 999px;
+  padding: 2px 5px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: var(--shadow-xs);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.playerMapPingLabel--success,
+.playerMapPingValue--success { color: var(--sentinel-success); }
+.playerMapPingLabel--info,
+.playerMapPingValue--info { color: var(--sentinel-info); }
+.playerMapPingLabel--warning,
+.playerMapPingValue--warning { color: var(--status-warning-foreground); }
+.playerMapPingLabel--danger,
+.playerMapPingValue--danger { color: var(--status-danger-foreground); }
+
+.playerMapMarkerWrap {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.playerMapMarkerWrap--active {
+  z-index: 5;
+}
+
+.playerMapMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 54%, var(--surface));
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface) 58%, transparent), var(--shadow-xs);
+}
+
+button.playerMapMarker {
+  appearance: none;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.playerMapMarker--online {
+  border-color: color-mix(in srgb, var(--sentinel-success) 62%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sentinel-success) 14%, transparent), var(--shadow-xs);
+}
+
+.playerMapMarker:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.playerMapAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--text-muted) 16%, var(--surface));
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+.playerMapAvatar--compact {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+}
+
+.playerMapAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.playerMapAvatar--fallback {
+  border: 1px solid var(--border-muted);
+}
+
+.playerMapClusterMarker {
+  position: relative;
+  min-width: 46px;
+  padding-right: 14px;
+}
+
+.playerMapClusterHeads {
+  display: inline-flex;
+}
+
+.playerMapClusterHeads .playerMapAvatar + .playerMapAvatar {
+  margin-left: -9px;
+}
+
+.playerMapClusterHeads .playerMapAvatar {
+  border: 1px solid var(--surface);
+}
+
+.playerMapClusterCount {
+  position: absolute;
+  right: -6px;
+  bottom: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  padding: 0 4px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+.playerMapClusterPopup {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  gap: var(--space-2);
+  border: var(--border-subtle) solid var(--border-panel);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-elevated);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.playerMapClusterPopup--below { top: calc(100% + 10px); }
+.playerMapClusterPopup--above { bottom: calc(100% + 10px); }
+
+.playerMapClusterPopup:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.playerMapClusterPopupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-row);
+  padding-bottom: var(--space-2);
+}
+
+.playerMapClusterPopupHeader strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--type-body-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerMapClusterPopupHeader > span {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  white-space: nowrap;
+}
+
+.playerMapClusterList {
+  display: grid;
+  max-height: 176px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.playerMapClusterRow {
+  display: grid;
+  grid-template-columns: 22px minmax(72px, 0.8fr) minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  border-bottom: 1px solid var(--border-row);
+  font-size: var(--type-meta-size);
+}
+
+.playerMapClusterRow:last-child {
+  border-bottom: none;
+}
+
+.playerMapClusterRow > strong,
+.playerMapClusterRow > span:not(.playerMapAvatar) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerMapClusterRow > span:not(.playerMapAvatar) {
+  color: var(--text-muted);
+}
+
+.playerMapPingValue {
+  font-weight: var(--weight-strong);
+  white-space: nowrap;
+}
+
+/* The accuracy ring is the honest part of the drawing: it stops a head marker from reading as an
    address, so it stays visible rather than decorative. */
 .playerMapAccuracy {
   fill: color-mix(in srgb, var(--accent) 10%, transparent);
   stroke: color-mix(in srgb, var(--accent) 24%, transparent);
   stroke-width: 0.75;
+  vector-effect: non-scaling-stroke;
 }
 
-.playerMapDot {
-  fill: var(--text-muted);
-  stroke: var(--surface);
-  stroke-width: 1;
-}
-
-.playerMapMark--online .playerMapDot {
-  fill: var(--sentinel-success);
-}
-
-.playerMapMark--online .playerMapAccuracy {
+.playerMapAccuracy--online {
   fill: color-mix(in srgb, var(--sentinel-success) 12%, transparent);
   stroke: color-mix(in srgb, var(--sentinel-success) 28%, transparent);
 }
@@ -152,12 +392,69 @@
 }
 
 .playerMapLegendMark--server {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--surface));
   border-radius: var(--radius-xs);
+  background: var(--surface);
+}
+
+.playerMapLegendMark--server::before,
+.playerMapLegendMark--server::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  left: 2px;
+  height: 2px;
+  border-radius: 1px;
   background: var(--accent);
 }
 
-.playerMapLegendMark--online {
-  background: var(--sentinel-success);
+.playerMapLegendMark--server::before { top: 2px; }
+.playerMapLegendMark--server::after { bottom: 2px; }
+
+.playerMapLegendMark--player {
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-xs);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 68%, var(--surface)), color-mix(in srgb, var(--sentinel-warning) 44%, var(--surface)));
+}
+
+.playerMapLegendMark--online { border-color: var(--sentinel-success); }
+.playerMapLegendMark--known { filter: saturate(0.45); opacity: 0.76; }
+
+.playerMapLegendCluster {
+  position: relative;
+  display: inline-flex;
+  width: 24px;
+  height: 14px;
+}
+
+.playerMapLegendCluster i {
+  position: absolute;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--surface);
+  border-radius: var(--radius-xs);
+  background: var(--text-muted);
+}
+
+.playerMapLegendCluster i:first-child { left: 0; }
+.playerMapLegendCluster i:nth-child(2) { left: 7px; background: var(--accent); }
+
+.playerMapLegendCluster b {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 7px;
+  line-height: 1;
 }
 
 .playerMapLegendMark--accuracy {

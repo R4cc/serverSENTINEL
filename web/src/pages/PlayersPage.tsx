@@ -471,11 +471,13 @@ export function PlayersPage({
             players={insights?.players ?? []}
             serverLocation={serverLocation?.location}
             serverName={server.displayName}
+            playerHeadsEnabled={playerHeadsEnabled}
           />
           <ul className="playerMapLegend">
             <li><span className="playerMapLegendMark playerMapLegendMark--server" aria-hidden="true" />This server</li>
-            <li><span className="playerMapLegendMark playerMapLegendMark--online" aria-hidden="true" />Online now</li>
-            <li><span className="playerMapLegendMark playerMapLegendMark--known" aria-hidden="true" />Played before</li>
+            <li><span className="playerMapLegendMark playerMapLegendMark--player playerMapLegendMark--online" aria-hidden="true" />Online player</li>
+            <li><span className="playerMapLegendMark playerMapLegendMark--player playerMapLegendMark--known" aria-hidden="true" />Played before</li>
+            <li><span className="playerMapLegendCluster" aria-hidden="true"><i /><i /><b>3</b></span>Player cluster</li>
             <li><span className="playerMapLegendMark playerMapLegendMark--accuracy" aria-hidden="true" />GeoLite2 accuracy radius</li>
           </ul>
           <ServerLocationForm

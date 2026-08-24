@@ -158,6 +158,48 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).not.toContain("lucide-box");
   });
 
+  it("renders nearby players as one head cluster with one averaged curved route", () => {
+    const clusteredPlayers: PlayerInsightsResponse["players"] = [
+      {
+        player: "FastPlayer",
+        serverId: "server-1",
+        serverName: "Survival",
+        online: true,
+        location: { label: "New York", city: "New York", country: "United States", countryCode: "US", continentCode: "NA", continent: "North America", latitude: 40.71, longitude: -74.01, accuracyRadiusKm: 20, precision: "city" },
+        estimatedLatencyMs: 80,
+        observations: 3
+      },
+      {
+        player: "SlowPlayer",
+        serverId: "server-1",
+        serverName: "Survival",
+        online: false,
+        location: { label: "Newark", city: "Newark", country: "United States", countryCode: "US", continentCode: "NA", continent: "North America", latitude: 40.74, longitude: -74.17, accuracyRadiusKm: 30, precision: "city" },
+        estimatedLatencyMs: 120,
+        observations: 2
+      }
+    ];
+    const html = render({
+      playerHeadsEnabled: true,
+      insights: insights({
+        players: clusteredPlayers,
+        serverLocations: [{
+          serverId: "server-1",
+          address: "play.example.net",
+          location: { label: "Frankfurt", city: "Frankfurt", country: "Germany", countryCode: "DE", continentCode: "EU", continent: "Europe", latitude: 50.11, longitude: 8.68, accuracyRadiusKm: 20, precision: "city" }
+        }]
+      })
+    });
+    expect(html).toContain("playerMapClusterMarker");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('data-player-count="2"');
+    expect(html).toContain('data-estimated-ping="100"');
+    expect(html).toContain("playerMapRoute--info");
+    expect(html).toContain("/api/servers/server-1/player-head/FastPlayer");
+    expect(html).not.toContain("playerMapDot");
+    expect(html).not.toContain("playerMapLink");
+  });
+
   it("says an address could not be placed rather than telling the operator to set one", () => {
     const html = render({
       insights: insights({

@@ -36,6 +36,7 @@ export type PlayerMapMark = {
   longitude: number;
   latitude: number;
   players: string[];
+  entries: PlayerInsightsEntry[];
   online: number;
   accuracyRadiusKm?: number;
   label: string;
@@ -43,42 +44,105 @@ export type PlayerMapMark = {
 };
 
 /**
- * Players collapsed into the places they connect from.
+ * Players collapsed into markers that would not collide at the current rendered map width.
  *
- * Coordinates are rounded before grouping, so a city's worth of players is one mark rather than a
- * pile of overlapping dots — and so the map never suggests it can tell two players in the same city
- * apart, which it cannot.
+ * GeoLite2 often returns the same city centroid, but nearby centroids can still overlap once the
+ * viewBox is scaled down. Measuring projected screen distance keeps those cases compact and lets
+ * clusters change naturally with the responsive map instead of requiring identical coordinates.
  */
-export function playerMapMarks(entries: readonly PlayerInsightsEntry[]): PlayerMapMark[] {
-  const marks = new Map<string, PlayerMapMark>();
-  for (const entry of entries) {
+export function playerMapMarks(
+  entries: readonly PlayerInsightsEntry[],
+  width = 720,
+  height = 360,
+  renderedWidth = width,
+  collisionDistancePx = 32
+): PlayerMapMark[] {
+  const placed = entries.flatMap((entry) => {
     const { latitude, longitude } = entry.location ?? {};
-    if (latitude === undefined || longitude === undefined) continue;
-    const roundedLatitude = Math.round(latitude * 2) / 2;
-    const roundedLongitude = Math.round(longitude * 2) / 2;
-    const id = `${roundedLongitude}:${roundedLatitude}`;
-    const existing = marks.get(id);
-    if (existing) {
-      existing.players.push(entry.player);
-      if (entry.online) existing.online += 1;
-      if (entry.location?.accuracyRadiusKm !== undefined) {
-        existing.accuracyRadiusKm = Math.max(existing.accuracyRadiusKm ?? 0, entry.location.accuracyRadiusKm);
-      }
-      continue;
+    return latitude === undefined || longitude === undefined
+      ? []
+      : [{ entry, latitude, longitude, point: projectToMap(longitude, latitude, width, height) }];
+  });
+  const parents = placed.map((_, index) => index);
+  const find = (index: number): number => parents[index] === index ? index : (parents[index] = find(parents[index]));
+  const join = (left: number, right: number) => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
+  };
+  const scale = renderedWidth > 0 ? renderedWidth / width : 1;
+  for (let left = 0; left < placed.length; left += 1) {
+    for (let right = left + 1; right < placed.length; right += 1) {
+      const distancePx = Math.hypot(
+        placed[left].point.x - placed[right].point.x,
+        placed[left].point.y - placed[right].point.y
+      ) * scale;
+      if (distancePx <= collisionDistancePx) join(left, right);
     }
-    marks.set(id, {
-      id,
-      longitude: roundedLongitude,
-      latitude: roundedLatitude,
-      players: [entry.player],
-      online: entry.online ? 1 : 0,
-      ...(entry.location?.accuracyRadiusKm !== undefined ? { accuracyRadiusKm: entry.location.accuracyRadiusKm } : {}),
-      label: entry.location?.label ?? "Unknown location",
-      ...(entry.estimatedLatencyMs !== undefined ? { estimatedLatencyMs: entry.estimatedLatencyMs } : {})
-    });
   }
-  // Busiest last, so a crowded place is drawn over a quiet one rather than behind it.
-  return [...marks.values()].sort((left, right) => left.players.length - right.players.length);
+
+  const groups = new Map<number, typeof placed>();
+  placed.forEach((candidate, index) => {
+    const root = find(index);
+    groups.set(root, [...(groups.get(root) ?? []), candidate]);
+  });
+
+  const marks = [...groups.values()].map((group): PlayerMapMark => {
+    const members = group
+      .map(({ entry }) => entry)
+      .sort((left, right) => Number(right.online) - Number(left.online) || left.player.localeCompare(right.player));
+    const latencies = members.flatMap((entry) => entry.estimatedLatencyMs === undefined ? [] : [entry.estimatedLatencyMs]);
+    const labels = [...new Set(members.map((entry) => entry.location?.label).filter((label): label is string => Boolean(label)))];
+    const accuracyRadii = members.flatMap((entry) => entry.location?.accuracyRadiusKm === undefined ? [] : [entry.location.accuracyRadiusKm]);
+    const id = members.map((entry) => `${entry.serverId}:${entry.player.toLowerCase()}`).sort().join("|");
+    return {
+      id,
+      longitude: group.reduce((total, candidate) => total + candidate.longitude, 0) / group.length,
+      latitude: group.reduce((total, candidate) => total + candidate.latitude, 0) / group.length,
+      players: members.map((entry) => entry.player),
+      entries: members,
+      online: members.filter((entry) => entry.online).length,
+      ...(accuracyRadii.length ? { accuracyRadiusKm: Math.max(...accuracyRadii) } : {}),
+      label: labels.length === 1 ? labels[0] : `${labels[0] ?? "Nearby locations"} area`,
+      ...(latencies.length
+        ? { estimatedLatencyMs: Math.round(latencies.reduce((total, latency) => total + latency, 0) / latencies.length) }
+        : {})
+    };
+  });
+
+  return marks.sort((left, right) => left.players.length - right.players.length);
+}
+
+export type PlayerMapArc = {
+  path: string;
+  control: { x: number; y: number };
+  label: { x: number; y: number };
+  distance: number;
+};
+
+/** A restrained northward quadratic arc, with its label beyond the crowded server end. */
+export function playerMapArc(
+  start: { x: number; y: number },
+  end: { x: number; y: number }
+): PlayerMapArc {
+  const distance = Math.hypot(end.x - start.x, end.y - start.y);
+  const lift = Math.min(88, Math.max(12, distance * 0.22));
+  const control = {
+    x: (start.x + end.x) / 2,
+    y: Math.max(8, (start.y + end.y) / 2 - lift)
+  };
+  const labelT = 0.58;
+  const inverseT = 1 - labelT;
+  const label = {
+    x: inverseT * inverseT * start.x + 2 * inverseT * labelT * control.x + labelT * labelT * end.x,
+    y: inverseT * inverseT * start.y + 2 * inverseT * labelT * control.y + labelT * labelT * end.y
+  };
+  return {
+    path: `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${control.x.toFixed(1)} ${control.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
+    control,
+    label,
+    distance
+  };
 }
 
 /** Bands chosen so the colour says something a player would recognise, not merely "higher". */
