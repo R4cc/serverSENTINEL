@@ -661,6 +661,9 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
   setRuntimeIntent: (serverId, state) => {
     services.serversRepository.setRuntimeIntent(serverId, state);
   },
+  clearRestartRequired: (serverId) => {
+    services.serversRepository.clearRestartRequired(serverId);
+  },
   onError: (error, server) => {
     logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "runtime_state" }, "Runtime state reconciliation deferred");
   }

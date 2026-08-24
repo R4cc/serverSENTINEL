@@ -31,6 +31,7 @@ type RuntimeStateCoordinatorOptions = {
   restoreServer: (server: ManagedServer) => Promise<unknown>;
   setRuntimeIntent: (serverId: string, state: "running" | "stopped") => void;
   setLifecycle?: (serverId: string, patch: Partial<ManagedServer>) => void;
+  clearRestartRequired?: (serverId: string) => void;
   restartServer?: (server: ManagedServer) => Promise<unknown>;
   stopServer?: (server: ManagedServer) => Promise<unknown>;
   onError?: (error: unknown, server?: ManagedServer) => void;
@@ -159,6 +160,16 @@ export class RuntimeStateCoordinator {
       observation.unavailable = true;
       observation.pendingExitAt = undefined;
       return;
+    }
+
+    // A pending restart only exists while a process runs with a stale set of loaded mods. Once the
+    // runtime is confirmed stopped — by console stop, by a crash, or from outside the panel — the
+    // next start reads the current files, so the requirement is already satisfied.
+    if (actual.stopped && server.restartRequiredSince) {
+      server.restartRequiredSince = undefined;
+      server.restartRequiredChanges = undefined;
+      server.restartRequiredModBaseline = undefined;
+      this.options.clearRestartRequired?.(server.id);
     }
 
     if (observation.unavailable || observation.epoch !== epoch) {
