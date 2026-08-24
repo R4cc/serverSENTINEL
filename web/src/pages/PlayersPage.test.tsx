@@ -158,6 +158,23 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).not.toContain("lucide-box");
   });
 
+  it("combines a nearby player cluster with the server marker instead of displacing it", () => {
+    const sharedLocation = { label: "Copenhagen", city: "Copenhagen", country: "Denmark", countryCode: "DK", continentCode: "EU", continent: "Europe", latitude: 55.68, longitude: 12.57, accuracyRadiusKm: 20, precision: "city" } as const;
+    const html = render({
+      playerHeadsEnabled: true,
+      insights: insights({
+        players: [
+          { player: "PlayerOne", serverId: "server-1", serverName: "Survival", online: true, location: sharedLocation, estimatedLatencyMs: 10, observations: 2 },
+          { player: "PlayerTwo", serverId: "server-1", serverName: "Survival", online: true, location: sharedLocation, estimatedLatencyMs: 12, observations: 2 }
+        ],
+        serverLocations: [{ serverId: "server-1", address: "play.example.net", location: sharedLocation }]
+      })
+    });
+    expect(html).toContain("playerMapClusterMarker--server");
+    expect(html).toContain("playerMapSharedServerIcon");
+    expect(html).not.toContain('<g class="playerMapServer">');
+  });
+
   it("renders nearby players as one head cluster with one averaged curved route", () => {
     const clusteredPlayers: PlayerInsightsResponse["players"] = [
       {

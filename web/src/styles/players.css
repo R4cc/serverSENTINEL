@@ -235,11 +235,48 @@ button.playerMapMarker {
   border-radius: var(--radius-md);
 }
 
+.playerMapClusterMarker--server {
+  width: 52px;
+  min-width: 52px;
+}
+
 .playerMapClusterHeads {
   position: relative;
   display: block;
   width: 38px;
   height: 30px;
+}
+
+.playerMapClusterHeads--server {
+  width: 46px;
+}
+
+.playerMapSharedServer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--surface));
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-xs);
+}
+
+.playerMapSharedServerIcon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.playerMapClusterHeads--server .playerMapSharedServer {
+  position: absolute;
+  top: 3px;
+  left: 0;
 }
 
 .playerMapClusterHeads .playerMapAvatar {
@@ -262,6 +299,33 @@ button.playerMapMarker {
 .playerMapClusterHeads .playerMapAvatar:nth-child(3) {
   left: 14px;
   z-index: 2;
+}
+
+.playerMapClusterHeads--server .playerMapAvatar:nth-child(2) {
+  left: 10px;
+}
+
+.playerMapClusterHeads--server .playerMapAvatar:nth-child(3) {
+  left: 20px;
+}
+
+.playerMapPlayerMarker--server {
+  position: relative;
+  width: 44px;
+  min-width: 44px;
+}
+
+.playerMapPlayerMarker--server .playerMapSharedServer {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+}
+
+.playerMapPlayerMarker--server .playerMapAvatar {
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  right: 2px;
 }
 
 .playerMapClusterCount {
@@ -307,10 +371,11 @@ button.playerMapMarker {
 }
 
 .playerMapClusterPopupHeader {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
+  min-width: 0;
   border-bottom: 1px solid var(--border-row);
   padding-bottom: var(--space-2);
 }
@@ -324,7 +389,8 @@ button.playerMapMarker {
 }
 
 .playerMapClusterPopupHeader > span {
-  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   white-space: nowrap;
@@ -339,7 +405,7 @@ button.playerMapMarker {
 
 .playerMapClusterRow {
   display: grid;
-  grid-template-columns: 22px minmax(72px, 0.8fr) minmax(90px, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 0.8fr) minmax(0, 1fr) max-content;
   align-items: center;
   gap: var(--space-2);
   min-height: 34px;
@@ -363,7 +429,9 @@ button.playerMapMarker {
 }
 
 .playerMapPingValue {
+  min-width: 0;
   font-weight: var(--weight-strong);
+  justify-self: end;
   white-space: nowrap;
 }
 

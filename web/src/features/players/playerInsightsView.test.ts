@@ -12,6 +12,7 @@ import {
   observedActivityHours,
   peakActivity,
   playerMapArc,
+  playerMapLabelPoint,
   playerMapMarks,
   projectToMap,
   rangeWindowMs,
@@ -94,12 +95,13 @@ describe("map marks", () => {
     expect(marks.at(-1)?.players).toHaveLength(2);
   });
 
-  it("draws a curved route and places its label beyond the crowded server end", () => {
+  it("draws a curved route and keeps its label a stable distance from the player marker", () => {
     const arc = playerMapArc({ x: 360, y: 80 }, { x: 160, y: 160 });
     expect(arc.path).toMatch(/^M .* C .*$/);
     expect(arc.controls).toHaveLength(2);
     expect(Math.min(...arc.controls.map((control) => control.y))).toBeLessThan(120);
-    expect(Math.abs(arc.label.x - 360)).toBeGreaterThan(100);
+    const label = playerMapLabelPoint(arc, { x: 160, y: 160 }, 2);
+    expect(Math.hypot(label.x - 160, label.y - 160)).toBeCloseTo(23);
   });
 });
 

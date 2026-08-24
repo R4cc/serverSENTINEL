@@ -116,11 +116,10 @@ export function playerMapMarks(
 export type PlayerMapArc = {
   path: string;
   controls: [{ x: number; y: number }, { x: number; y: number }];
-  label: { x: number; y: number };
   distance: number;
 };
 
-/** A restrained northward cubic arc, with its label beyond the crowded server end. */
+/** A restrained northward cubic arc between the server and a player marker. */
 export function playerMapArc(
   start: { x: number; y: number },
   end: { x: number; y: number }
@@ -141,23 +140,28 @@ export function playerMapArc(
       y: Math.max(8, start.y + delta.y * 0.68 + normal.y * lift)
     }
   ];
-  const labelT = 0.6;
-  const inverseT = 1 - labelT;
-  const label = {
-    x: inverseT ** 3 * start.x
-      + 3 * inverseT ** 2 * labelT * controls[0].x
-      + 3 * inverseT * labelT ** 2 * controls[1].x
-      + labelT ** 3 * end.x,
-    y: inverseT ** 3 * start.y
-      + 3 * inverseT ** 2 * labelT * controls[0].y
-      + 3 * inverseT * labelT ** 2 * controls[1].y
-      + labelT ** 3 * end.y
-  };
   return {
     path: `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${controls[0].x.toFixed(1)} ${controls[0].y.toFixed(1)} ${controls[1].x.toFixed(1)} ${controls[1].y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
     controls,
-    label,
     distance
+  };
+}
+
+/** Places a ping label a stable rendered distance before the player marker along its route. */
+export function playerMapLabelPoint(
+  arc: PlayerMapArc,
+  end: { x: number; y: number },
+  renderedScale: number,
+  offsetPx = 46
+) {
+  const approach = arc.controls[1];
+  const delta = { x: approach.x - end.x, y: approach.y - end.y };
+  const distance = Math.hypot(delta.x, delta.y);
+  if (distance <= 0 || renderedScale <= 0) return end;
+  const offset = offsetPx / renderedScale;
+  return {
+    x: end.x + (delta.x / distance) * offset,
+    y: end.y + (delta.y / distance) * offset
   };
 }
 
