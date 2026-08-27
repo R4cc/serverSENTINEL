@@ -28,9 +28,13 @@ describe("connection quality chart", () => {
   it("uses the shared time axis, preserves unknown gaps, and exposes both series", () => {
     const option = buildConnectionQualityChartOption({ points, timeZone: "UTC", compact: false, palette: defaultConnectionQualityPalette });
     const xAxis = option.xAxis as { type: string; min: number; max: number };
+    const yAxis = option.yAxis as { splitLine: { lineStyle: { type: string } } };
+    const tooltip = option.tooltip as { axisPointer: { lineStyle: { type: string } } };
     const series = option.series as Array<{ id: string; name: string; connectNulls: boolean; data: unknown[][] }>;
 
     expect(xAxis).toMatchObject({ type: "time", min: points[0].at, max: points.at(-1)!.at });
+    expect(yAxis.splitLine.lineStyle.type).toBe("solid");
+    expect(tooltip.axisPointer.lineStyle.type).toBe("solid");
     expect(series.map((entry) => entry.name)).toEqual(["Median estimate", "95th percentile"]);
     expect(series.every((entry) => entry.connectNulls === false)).toBe(true);
     expect(series[0].data[1]).toEqual([points[1].at, "-", 0]);

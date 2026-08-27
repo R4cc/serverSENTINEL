@@ -994,16 +994,20 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 .playerConnectionSnapshot {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-2);
+  overflow: hidden;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
   margin: 0;
+  background: color-mix(in srgb, var(--surface-muted) 34%, transparent);
 }
 
 .playerConnectionSnapshot > div {
   min-width: 0;
-  border: 1px solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  background: color-mix(in srgb, var(--surface-muted) 48%, transparent);
+  padding: 9px var(--space-3);
+}
+
+.playerConnectionSnapshot > div + div {
+  border-left: 1px solid var(--border-muted);
 }
 
 .playerConnectionSnapshot dt {
@@ -1039,10 +1043,11 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   touch-action: pan-y;
 }
 
-.playerConnectionCoverage {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
+.playerConnectionTooltip {
+  border-color: var(--border-panel) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow-elevated) !important;
 }
 
 .playerConnectionTooltipTime {
@@ -1405,6 +1410,8 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 
   .playerConnectionSnapshot > div:last-child {
     grid-column: 1 / -1;
+    border-top: 1px solid var(--border-muted);
+    border-left: 0;
   }
 
   .playerLatencyChart {

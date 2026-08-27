@@ -280,7 +280,7 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).toContain("Median</dt><dd>45 ms");
     expect(html).toContain("95th percentile</dt><dd>150 ms");
     expect(html).toContain("Active players</dt><dd>3");
-    expect(html).toContain("2 / 2 reconstructed samples");
+    expect(html).not.toContain("reconstructed samples had enough location data");
     expect(html).not.toContain("playerChartLine");
   });
 

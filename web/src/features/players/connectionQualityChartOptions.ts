@@ -127,7 +127,7 @@ export function buildConnectionQualityChartOption({
       borderWidth: 1,
       padding: [9, 11],
       textStyle: { color: palette.text, fontFamily: palette.fontFamily, fontSize: 12 },
-      axisPointer: { type: "line", lineStyle: { color: palette.textMuted, width: 1, type: "dashed", opacity: 0.7 } },
+      axisPointer: { type: "line", lineStyle: { color: palette.textMuted, width: 1, type: "solid", opacity: 0.45 } },
       formatter: (params: unknown) => connectionQualityTooltipHtml(params, (value) => formatters.tooltip(value))
     },
     xAxis: {
@@ -157,7 +157,7 @@ export function buildConnectionQualityChartOption({
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { color: palette.textMuted, margin: 10, fontSize: compact ? 11 : 10, formatter: (value: number) => `${Math.round(value)} ms` },
-      splitLine: { lineStyle: { color: palette.border, type: "dashed", opacity: 0.72 } }
+      splitLine: { lineStyle: { color: palette.border, type: "solid", opacity: 0.42 } }
     },
     dataZoom: [],
     series: series.map((definition) => ({

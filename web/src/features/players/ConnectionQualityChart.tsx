@@ -69,7 +69,6 @@ export function ConnectionQualityChart({
   }
 
   const latest = measured.at(-1)!;
-  const sampledPoints = `${measured.length} / ${points.length}`;
 
   return (
     <div className="playerConnectionQuality" ref={rootRef}>
@@ -97,7 +96,6 @@ export function ConnectionQualityChart({
           />
         )}
       </div>
-      <p className="playerConnectionCoverage">{sampledPoints} reconstructed samples had enough location data to estimate latency. Hover the chart for details.</p>
     </div>
   );
 }
