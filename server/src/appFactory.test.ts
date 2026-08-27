@@ -1310,7 +1310,15 @@ describe("Fastify application factory", () => {
       services.storageDatabase.connection.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES ('node-1', 'Node', 'remote', 'online', 0, '2026-01-01', '2026-01-01')").run();
       services.storageDatabase.connection.prepare(`
         INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at)
-        VALUES ('11111111-1111-4111-8111-111111111111', 'node-1', 'Survival', '/servers/survival', '{}', '2026-01-01', '2026-01-01')
+        VALUES (
+          '11111111-1111-4111-8111-111111111111',
+          'node-1',
+          'Survival',
+          '/servers/survival',
+          '{"minecraftVersion":"1.21.4","runtimeType":"fabric","runtimeVersion":"0.16.10","javaMajorVersion":21,"jarProvider":"mcjars","jarArtifact":{"filename":"fabric-server-launch.jar"},"compatibilityStatus":"compatible","resolvedAt":"2026-01-01T00:00:00.000Z"}',
+          '2026-01-01',
+          '2026-01-01'
+        )
       `).run();
       services.playerGeoRepository.record({
         serverId: "11111111-1111-4111-8111-111111111111",
@@ -1319,6 +1327,26 @@ describe("Fastify application factory", () => {
         at: Date.now()
       });
       expect(services.playerGeoRepository.stats().entries).toBe(1);
+
+      const scopedGeo = vi.spyOn(services.playerGeoRepository, "listForServer");
+      const allGeo = vi.spyOn(services.playerGeoRepository, "list");
+      const scopedInsights = await app.inject({
+        method: "GET",
+        url: `${insightsUrl}?serverId=11111111-1111-4111-8111-111111111111`,
+        headers: { ...csrf, cookie }
+      });
+      expect(scopedInsights.statusCode, scopedInsights.body).toBe(200);
+      expect(scopedInsights.json().players).toMatchObject([{ player: "SullyTheSnak" }]);
+      expect(scopedGeo).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
+      expect(allGeo).not.toHaveBeenCalled();
+
+      const missingServer = await app.inject({
+        method: "GET",
+        url: `${insightsUrl}?serverId=22222222-2222-4222-8222-222222222222`,
+        headers: { ...csrf, cookie }
+      });
+      expect(missingServer.statusCode, missingServer.body).toBe(404);
+      expect(missingServer.json().error.code).toBe("NOT_FOUND");
 
       const withoutPermission = await app.inject({
         method: "POST",

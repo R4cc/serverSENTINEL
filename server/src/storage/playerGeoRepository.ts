@@ -172,11 +172,14 @@ export class PlayerGeoRepository {
       const newestLocation = newest ? parseLocation(newest.location_json) : undefined;
 
       if (newest && newestLocation && sameLocation(newestLocation, entry.location)) {
+        // The timeline collector republishes the same recent log tail every pass. Once this exact
+        // observation has been recorded, do not turn that idempotent replay into a SQLite write.
+        if (entry.at <= newest.last_seen_at) return;
         database.prepare(`
           UPDATE player_geo_locations
-          SET player_name = ?, last_seen_at = MAX(last_seen_at, ?), observations = observations + ?
+          SET player_name = ?, last_seen_at = ?, observations = observations + 1
           WHERE server_id = ? AND player_key = ? AND first_seen_at = ?
-        `).run(name, entry.at, entry.at > newest.last_seen_at ? 1 : 0, entry.serverId, key, newest.first_seen_at);
+        `).run(name, entry.at, entry.serverId, key, newest.first_seen_at);
         return;
       }
       if (newest && entry.at <= newest.last_seen_at) return;

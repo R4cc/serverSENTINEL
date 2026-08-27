@@ -198,6 +198,22 @@ describe("activity by hour", () => {
     expect(hours[3]).toMatchObject({ averagePlayers: 10, peakPlayers: 10, samples: 1 });
   });
 
+  it("uses one observation per server when five-second samples share a ten-second slot", () => {
+    const baseline = samples([3], 3)[0];
+    const first = { ...baseline, sampledAt: baseline.sampledAt + 5_000 };
+    const second = { ...baseline, sampledAt: baseline.sampledAt + 10_000, playersOnline: 4 };
+    const hours = playerActivityHours({
+      resourceSamples: {
+        "server-1": [first, second],
+        "server-2": [{ ...second, playersOnline: 6 }]
+      },
+      timeZone: "UTC",
+      from: now - historyWindowMs
+    });
+
+    expect(hours[3]).toMatchObject({ averagePlayers: 10, peakPlayers: 10, samples: 1 });
+  });
+
   it("reads the hour in the panel's own time zone", () => {
     const hours = playerActivityHours({
       resourceSamples: { "server-1": samples([3], 4) },
@@ -271,6 +287,21 @@ describe("the assembled response", () => {
     // Before the join there was nobody online, so there is nothing to estimate.
     expect(response.latency[0]).toMatchObject({ players: 0 });
     expect(response.latency[0].medianEstimatedLatencyMs).toBeUndefined();
+  });
+
+  it("keeps a session that began before a shorter chart range when the snapshot is unavailable", () => {
+    const oneHour = 60 * 60 * 1000;
+    const response = insights({
+      historyWindowMs: oneHour,
+      activityWindowMs: historyWindowMs,
+      snapshots: {},
+      timelineEvents: {
+        "server-1": [{ ...timelineEvents["server-1"][0], occurredAt: now - 2 * oneHour }]
+      }
+    });
+
+    expect(response.latency.every((point) => point.players === 1)).toBe(true);
+    expect(response.latency.at(-1)?.medianEstimatedLatencyMs).toBeGreaterThan(10);
   });
 
   it("says nothing rather than something invented when there is no geography at all", () => {

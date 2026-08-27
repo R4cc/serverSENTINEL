@@ -610,6 +610,14 @@ describe("mutable server configuration guard", () => {
 });
 
 describe("parseLogEvent log parsing and timestamp extraction", () => {
+  it("keeps source order lexical for events sharing a timestamp", () => {
+    const line = "[12:34:56] [Server thread/INFO]: Antigravity joined the game";
+    const ninth = parseLogEvent(line, "docker", 9)!;
+    const tenth = parseLogEvent(line, "docker", 10)!;
+
+    expect(ninth.id.localeCompare(tenth.id)).toBeLessThan(0);
+  });
+
   it("parses modern Minecraft log format with time-of-day timestamp", () => {
     const line = "[12:34:56] [Server thread/INFO]: Antigravity joined the game";
     const reference = new Date(2026, 4, 29, 13, 0, 0);

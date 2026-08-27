@@ -14,7 +14,10 @@ type ParsedEventInput = {
 };
 
 function eventFromParsedLine(input: ParsedEventInput): ServerEvent {
-  const id = `${input.source}-${input.index}-${input.timestamp ?? ""}-${createHash("sha1").update(input.signature).digest("hex").slice(0, 8)}`;
+  // Timeline reconstruction uses the id to retain source order for events with identical second
+  // precision. Pad the index so line 10 cannot sort before line 9 lexically.
+  const sourceIndex = String(input.index).padStart(8, "0");
+  const id = `${input.source}-${sourceIndex}-${input.timestamp ?? ""}-${createHash("sha1").update(input.signature).digest("hex").slice(0, 8)}`;
   return {
     id,
     eventType: input.eventType,

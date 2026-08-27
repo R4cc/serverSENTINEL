@@ -1,8 +1,8 @@
 import type { FastifyInstance, RouteShorthandOptions } from "fastify";
 import type { PlayerGeoDatabaseState, PlayerInsightsResponse, PlayerInsightsServerLocation } from "@serversentinel/contracts";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
-import { throwHttp } from "../http/errors.js";
-import { validateServerId } from "../http/validation.js";
+import { badRequest, validateServerId } from "../http/validation.js";
+import { normalizeServerAddress } from "../players/serverLocations.js";
 import type { Permission } from "../types.js";
 
 const minHistoryWindowMs = 5 * 60 * 1000;
@@ -48,8 +48,8 @@ export function registerPlayerInsightsRoutes(app: FastifyInstance, context: Play
       await context.requireRequestPermission(request, "players.manage");
       const serverId = validateServerId(request.params.id);
       const address = request.body?.address;
-      if (address !== undefined && typeof address !== "string") throwHttp(400, "address must be a string");
-      const location = await context.setServerLocation(serverId, typeof address === "string" ? address : "");
+      if (typeof address !== "string") badRequest("address must be a string");
+      const location = await context.setServerLocation(serverId, normalizeServerAddress(address));
       context.logInfo(
         { action: "configure_player_insights_location", serverId, configured: Boolean(location.address), category: "player_insights" },
         location.address ? "Player Insights server location configured" : "Player Insights server location cleared"

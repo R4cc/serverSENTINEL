@@ -62,4 +62,13 @@ describe("node update visit notifications", () => {
     expect(nodeUpdateVisitNotificationMuted(storage, now + nodeUpdateNotificationMuteMs - 1)).toBe(true);
     expect(nodeUpdateVisitNotificationMuted(storage, now + nodeUpdateNotificationMuteMs)).toBe(false);
   });
+
+  it("suppresses update notifications in demo mode", () => {
+    expect(nodeUpdateVisitNotificationText(
+      [node("Demo agent")],
+      "1.12.0",
+      "new-build",
+      true
+    )).toBe("");
+  });
 });

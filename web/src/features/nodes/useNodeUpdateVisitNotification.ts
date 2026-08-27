@@ -9,7 +9,8 @@ export const nodeUpdateNotificationMuteStorageKey = "serversentinel.nodeUpdateNo
 type StorageReader = Pick<Storage, "getItem">;
 type StorageWriter = Pick<Storage, "setItem">;
 
-export function nodeUpdateVisitNotificationText(nodes: NodeView[], panelVersion: string, panelBuildId?: string) {
+export function nodeUpdateVisitNotificationText(nodes: NodeView[], panelVersion: string, panelBuildId?: string, demoMode = false) {
+  if (demoMode) return "";
   const updateNodes = nodes.filter((node) => node.updateNotificationsEnabled !== false
     && nodeUpdateAvailable(node, panelVersion, panelBuildId));
   if (updateNodes.length === 0) return "";
@@ -28,11 +29,13 @@ export function muteNodeUpdateVisitNotification(storage: StorageWriter, now = Da
 
 export function useNodeUpdateVisitNotification({
   ready,
+  demoMode,
   nodes,
   panelVersion,
   panelBuildId
 }: {
   ready: boolean;
+  demoMode: boolean;
   nodes: NodeView[];
   panelVersion: string;
   panelBuildId?: string;
@@ -40,9 +43,9 @@ export function useNodeUpdateVisitNotification({
   const checkedRef = useRef(false);
 
   useEffect(() => {
-    if (!ready || checkedRef.current) return;
+    if (!ready || demoMode || checkedRef.current) return;
     checkedRef.current = true;
-    const message = nodeUpdateVisitNotificationText(nodes, panelVersion, panelBuildId);
+    const message = nodeUpdateVisitNotificationText(nodes, panelVersion, panelBuildId, demoMode);
     if (!message) return;
     try {
       if (nodeUpdateVisitNotificationMuted(window.localStorage)) return;
@@ -64,5 +67,5 @@ export function useNodeUpdateVisitNotification({
         }
       }
     });
-  }, [nodes, panelBuildId, panelVersion, ready]);
+  }, [demoMode, nodes, panelBuildId, panelVersion, ready]);
 }

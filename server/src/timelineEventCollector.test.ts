@@ -41,6 +41,38 @@ describe("TimelineEventCollector", () => {
     expect([...stored.values()][0].occurredAt).toBeTypeOf("number");
   });
 
+  it("keeps repeated same-second events distinct while deduplicating the next poll", async () => {
+    const stored = new Map<string, ServerTimelineEvent>();
+    const timestamp = new Date().toISOString();
+    const lines = ["Alex joined", "Alex left", "Alex joined"];
+    const collector = new TimelineEventCollector({
+      intervalMs: 10_000,
+      retentionMs: 24 * 60 * 60 * 1000,
+      readServers: async () => [{ id: "server-1" } as ManagedServer],
+      readLogs: async () => ({ text: lines.join("\n"), source: "logs/latest.log" }),
+      parseLine: (line, source, index) => ({
+        ...event(timestamp),
+        id: `${source}-${String(index).padStart(8, "0")}`,
+        eventType: line.endsWith("left") ? "player_left" : "player_joined",
+        signature: line.endsWith("left") ? "player_left:alex" : "player_joined:alex",
+        message: line,
+        text: line
+      }),
+      repository: {
+        appendMany: (_serverId: string, events: Array<{ eventKey: string; event: ServerTimelineEvent }>) => {
+          for (const item of events) stored.set(item.eventKey, item.event);
+        },
+        prune: vi.fn()
+      } as never
+    });
+
+    await collector.collectAll();
+    await collector.collectAll();
+
+    expect(stored.size).toBe(3);
+    expect([...stored.values()].map((value) => value.eventType)).toEqual(["player_joined", "player_left", "player_joined"]);
+  });
+
   it("ignores events without a placeable timestamp and isolates read failures", async () => {
     const appendMany = vi.fn();
     const onError = vi.fn();

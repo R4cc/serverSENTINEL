@@ -553,6 +553,7 @@ export default function App() {
   });
   useNodeUpdateVisitNotification({
     ready: applicationReady && (demoMode || Boolean(authSession?.authenticated)),
+    demoMode,
     nodes: contextNodes,
     panelVersion,
     panelBuildId

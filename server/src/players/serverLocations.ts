@@ -2,6 +2,7 @@ import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
 import type { PlayerInsightsServerLocation, PlayerLocation } from "@serversentinel/contracts";
 import type { StorageDatabase } from "../storage/database.js";
+import { badRequest } from "../http/validation.js";
 import { isLocatableAddress, locateAddress, type GeoCityReader } from "./geoLocation.js";
 
 /**
@@ -35,12 +36,18 @@ type StoredServerLocations = Record<string, StoredServerLocation>;
  * Anything with a scheme, path, port, or credentials is rejected rather than silently trimmed.
  */
 export function normalizeServerAddress(value: string) {
-  const trimmed = value.trim().replace(/^\[|\]$/g, "");
+  let trimmed = value.trim();
+  if (trimmed.startsWith("[") || trimmed.endsWith("]")) {
+    if (!(trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      badRequest("Enter the public hostname or IP address players connect to, without a scheme or port.");
+    }
+    trimmed = trimmed.slice(1, -1);
+  }
   if (!trimmed) return "";
-  if (trimmed.length > maxAddressLength) throw new Error("The server address is too long.");
+  if (trimmed.length > maxAddressLength) badRequest("The server address is too long.");
   if (isIP(trimmed)) return trimmed;
   if (!/^(?=.{1,253}$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/.test(trimmed)) {
-    throw new Error("Enter the public hostname or IP address players connect to, without a scheme or port.");
+    badRequest("Enter the public hostname or IP address players connect to, without a scheme or port.");
   }
   return trimmed.toLowerCase();
 }
@@ -78,6 +85,19 @@ export class ServerLocationStore {
     const all = readAll(this.storage);
     if (!value.address) delete all[serverId];
     else all[serverId] = value;
+    writeAll(this.storage, all);
+    return this.get(serverId);
+  }
+
+  /**
+   * Replaces a resolved location only while it still belongs to the address that was resolved.
+   * DNS and MMDB work is asynchronous; an operator can edit or clear the address while it is in
+   * flight, and that newer choice must not be overwritten when the older lookup finishes.
+   */
+  setIfAddress(serverId: string, expectedAddress: string, value: StoredServerLocation) {
+    const all = readAll(this.storage);
+    if (all[serverId]?.address !== expectedAddress) return this.get(serverId);
+    all[serverId] = value;
     writeAll(this.storage, all);
     return this.get(serverId);
   }

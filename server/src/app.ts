@@ -54,7 +54,7 @@ import { createPlayerInsightsModuleRuntime } from "./modules/playerInsightsModul
 import { GeoDatabase } from "./players/geoDatabase.js";
 import { PlayerGeoCollector } from "./players/playerGeoCollector.js";
 import { buildPlayerInsights } from "./players/playerInsights.js";
-import { normalizeServerAddress, resolveServerLocation, ServerLocationStore } from "./players/serverLocations.js";
+import { resolveServerLocation, ServerLocationStore } from "./players/serverLocations.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
@@ -474,21 +474,24 @@ function maxmindCredentials() {
 }
 
 async function playerInsightsSnapshot(options: { serverId?: string; windowMs?: number } = {}) {
-  const allServers = await listManagedServers();
   // Scoped to one server when the workspace asks for it, which is how the page is reached: the
   // reference location, the roster, and the quiet hours all belong to the server being looked at.
-  const servers = options.serverId ? allServers.filter((server) => server.id === options.serverId) : allServers;
+  // Resolve the requested server through the shared lookup so a stale id gets the same 404 as the
+  // rest of the API instead of a plausible-looking empty workspace.
+  const servers = options.serverId ? [await getServer(options.serverId)] : await listManagedServers();
   const geoDatabase = services.playerGeoDatabase;
   const historyWindowMs = options.windowMs ?? playerInsightsHistoryWindow;
   const now = Date.now();
-  const from = now - historyWindowMs;
+  const activityFrom = now - playerInsightsHistoryWindow;
   return buildPlayerInsights({
     servers,
     snapshots: await services.playerSnapshotCoordinator?.snapshots(servers) ?? {},
-    geo: services.playerGeoRepository.list(),
+    geo: options.serverId
+      ? services.playerGeoRepository.listForServer(options.serverId)
+      : services.playerGeoRepository.list(),
     serverLocations: services.playerInsightsServerLocations.list(servers.map((server) => server.id)),
-    timelineEvents: Object.fromEntries(servers.map((server) => [server.id, services.timelineEventsRepository.list(server.id, from, now)])),
-    resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.list(server.id, now - playerInsightsHistoryWindow)])),
+    timelineEvents: Object.fromEntries(servers.map((server) => [server.id, services.timelineEventsRepository.list(server.id, activityFrom, now)])),
+    resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.list(server.id, activityFrom)])),
     geoDatabase: geoDatabase?.state() ?? {
       available: false,
       configured: Boolean(maxmindCredentials()),
@@ -506,11 +509,10 @@ await services.moduleRegistry.registerRoutes(app, "playerInsights", (scope) => r
   destructiveRateLimit,
   requireRequestPermission,
   insights: playerInsightsSnapshot,
-  setServerLocation: async (serverId, rawAddress) => {
+  setServerLocation: async (serverId, address) => {
     // Confirms the server exists before writing configuration for it, so a stale id cannot leave an
     // orphaned entry behind, and so the caller gets the same 404 the rest of the API gives.
     await getServer(serverId);
-    const address = normalizeServerAddress(rawAddress);
     if (!address) return services.playerInsightsServerLocations.set(serverId, {});
     const resolved = await resolveServerLocation(services.playerGeoDatabase?.cityReader, address);
     return services.playerInsightsServerLocations.set(serverId, {
@@ -530,7 +532,10 @@ await services.moduleRegistry.registerRoutes(app, "playerInsights", (scope) => r
     for (const entry of services.playerInsightsServerLocations.list(servers.map((server) => server.id))) {
       if (!entry.address) continue;
       const resolved = await resolveServerLocation(geoDatabase.cityReader, entry.address);
-      services.playerInsightsServerLocations.set(entry.serverId, {
+      // A location edit, clear, or module stop can land while DNS is in flight. Only publish this
+      // result if both the runtime and the address it was resolving are still current.
+      if (services.playerGeoDatabase !== geoDatabase) break;
+      services.playerInsightsServerLocations.setIfAddress(entry.serverId, entry.address, {
         address: entry.address,
         ...(resolved.location ? { location: resolved.location } : {}),
         ...(resolved.location ? { resolvedAt: new Date().toISOString() } : {}),

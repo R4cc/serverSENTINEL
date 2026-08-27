@@ -87,13 +87,16 @@ describe("player geography storage", () => {
   });
 
   it("does not count the same login again when the log window is polled a second time", async () => {
-    const { repository } = await createRepository();
+    const { storage, repository } = await createRepository();
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: copenhagen, at: 5_000 });
+    const changesBeforeReplay = storage.connection.prepare<[], { changes: number }>("SELECT total_changes() AS changes").get()!.changes;
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: copenhagen, at: 5_000 });
+    const changesAfterReplay = storage.connection.prepare<[], { changes: number }>("SELECT total_changes() AS changes").get()!.changes;
 
     const [entry] = repository.list();
     expect(entry.stints).toHaveLength(1);
     expect(entry.stints[0]).toMatchObject({ observations: 1, lastSeenAt: 5_000 });
+    expect(changesAfterReplay).toBe(changesBeforeReplay);
   });
 
   it("ignores an older observation rather than backdating a place into the history", async () => {

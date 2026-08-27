@@ -34,10 +34,18 @@ export type ServerLogObserver = (input: {
   referenceDate: Date;
 }) => void | Promise<void>;
 
-function eventKey(event: ServerEvent) {
+function eventIdentity(event: ServerEvent) {
   return createHash("sha1")
     .update([event.source, event.timestamp, event.signature, event.message, event.details ?? ""].join("\u0000"))
     .digest("hex");
+}
+
+function eventKey(identity: string, occurrence: number) {
+  // Preserve the historic key for the common first occurrence so deploying this fix does not
+  // duplicate every retained event. Only genuinely repeated lines at the same instant gain a
+  // suffix, allowing join/leave/join sequences to survive as three distinct state changes.
+  if (occurrence === 0) return identity;
+  return `${identity}:${occurrence}`;
 }
 
 export class TimelineEventCollector {
@@ -105,12 +113,16 @@ export class TimelineEventCollector {
       const referenceTime = referenceDate.getTime();
       const cutoff = referenceTime - this.options.retentionMs;
       const events: Array<{ eventKey: string; event: ServerEvent & { occurredAt: number } }> = [];
+      const occurrences = new Map<string, number>();
       text.split(/\r?\n/).forEach((line, index) => {
         const event = this.options.parseLine(line, source, index, referenceDate);
         if (!event?.timestamp) return;
         const occurredAt = new Date(event.timestamp).getTime();
         if (!Number.isFinite(occurredAt) || occurredAt < cutoff || occurredAt > referenceTime + futureEventToleranceMs) return;
-        events.push({ eventKey: eventKey(event), event: { ...event, occurredAt } });
+        const baseKey = eventIdentity(event);
+        const occurrence = occurrences.get(baseKey) ?? 0;
+        occurrences.set(baseKey, occurrence + 1);
+        events.push({ eventKey: eventKey(baseKey, occurrence), event: { ...event, occurredAt } });
       });
       if (events.length > 0) this.options.repository.appendMany(server.id, events);
     } catch (error) {

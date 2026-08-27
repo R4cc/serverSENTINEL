@@ -190,6 +190,7 @@ export function playerLatencyHistory(input: {
   /** Where each server is measured from; absent for a server with no configured address. */
   referenceByServer: Map<string, PlayerLocation | undefined>;
   from: number;
+  contextFrom?: number;
   to: number;
   points: number;
   now?: number;
@@ -200,7 +201,7 @@ export function playerLatencyHistory(input: {
     const activity = timelinePlayerActivity({
       events: input.timelineEvents[server.id] ?? [],
       snapshot: input.snapshots[server.id],
-      contextFrom: input.from,
+      contextFrom: input.contextFrom ?? input.from,
       from: input.from,
       to: input.to,
       now
@@ -262,19 +263,26 @@ export function playerActivityHours(input: {
 }): PlayerActivityHour[] {
   const hourFormatter = new Intl.DateTimeFormat("en-US", { timeZone: input.timeZone, hour12: false, hour: "2-digit" });
   const buckets = Array.from({ length: 24 }, () => ({ total: 0, peak: 0, samples: 0 }));
-  const totalsByInstant = new Map<number, number>();
+  const samplesByInstant = new Map<number, Map<string, { sampledAt: number; players: number }>>();
 
-  for (const samples of Object.values(input.resourceSamples)) {
+  for (const [serverId, samples] of Object.entries(input.resourceSamples)) {
     for (const sample of samples) {
       if (sample.sampledAt < input.from || typeof sample.playersOnline !== "number") continue;
       // Several servers sampled at nearly the same moment describe one population, so they are
-      // summed per ten-second slot before being averaged rather than averaged separately.
+      // summed per ten-second slot before being averaged rather than averaged separately. A server
+      // can be sampled twice inside one slot, so only its newest observation belongs in that total.
       const slot = Math.round(sample.sampledAt / 10_000) * 10_000;
-      totalsByInstant.set(slot, (totalsByInstant.get(slot) ?? 0) + sample.playersOnline);
+      const byServer = samplesByInstant.get(slot) ?? new Map<string, { sampledAt: number; players: number }>();
+      const previous = byServer.get(serverId);
+      if (!previous || sample.sampledAt >= previous.sampledAt) {
+        byServer.set(serverId, { sampledAt: sample.sampledAt, players: sample.playersOnline });
+      }
+      samplesByInstant.set(slot, byServer);
     }
   }
 
-  for (const [slot, players] of totalsByInstant) {
+  for (const [slot, byServer] of samplesByInstant) {
+    const players = [...byServer.values()].reduce((total, sample) => total + sample.players, 0);
     const hour = Number.parseInt(hourFormatter.format(new Date(slot)), 10);
     if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
     const bucket = buckets[hour];
@@ -320,13 +328,15 @@ export function buildPlayerInsights(input: PlayerInsightsInput): PlayerInsightsR
   });
   const maintenanceWindow = quietestWindow(activityHours);
   const countries = new Set(entries.map((entry) => entry.location?.countryCode).filter(Boolean));
+  const medianEstimatedLatencyMs = medianOf(latencies);
+  const p95EstimatedLatencyMs = percentileOf(latencies, 95);
 
   return {
     generatedAt: new Date(now).toISOString(),
     timeZone: input.timeZone,
     summary: {
-      ...(medianOf(latencies) !== undefined ? { medianEstimatedLatencyMs: medianOf(latencies) } : {}),
-      ...(percentileOf(latencies, 95) !== undefined ? { p95EstimatedLatencyMs: percentileOf(latencies, 95) } : {}),
+      ...(medianEstimatedLatencyMs !== undefined ? { medianEstimatedLatencyMs } : {}),
+      ...(p95EstimatedLatencyMs !== undefined ? { p95EstimatedLatencyMs } : {}),
       countries: countries.size,
       onlinePlayers: onlineEntries.length,
       locatedPlayers: entries.filter((entry) => entry.location).length,
@@ -343,6 +353,7 @@ export function buildPlayerInsights(input: PlayerInsightsInput): PlayerInsightsR
       historyByPlayer,
       referenceByServer,
       from,
+      contextFrom: now - (input.activityWindowMs ?? input.historyWindowMs),
       to: now,
       points: input.latencyPoints ?? 96,
       now
