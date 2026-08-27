@@ -140,6 +140,12 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html.match(/class="uiSortHeaderButton"/g)).toHaveLength(5);
   });
 
+  it("summarizes the roster and labels its compact last-seen row", () => {
+    const html = render({ insights: partial });
+    expect(html).toContain("1 online · 2 known");
+    expect(html).toContain('data-label="Last seen"');
+  });
+
   it("offers the address field only to an account that may change it", () => {
     expect(render({ insights: partial })).toContain("player-insights-server-address");
     const readOnly = render({ insights: partial, canManage: false });
@@ -301,7 +307,7 @@ describe("the Players workspace with partial knowledge", () => {
     const html = render({ insights: insights({ activityHours }) });
 
     expect(html).toContain('class="playerActivityBar" style="--player-activity-height:100%" tabindex="0" aria-label="07:00, 2.5 players on average, peak 4"');
-    expect(html).toContain('<span class="playerActivityHourLabel" aria-hidden="true">07:00</span>');
+    expect(html).toContain('<span class="playerActivityHourLabel" aria-hidden="true"><strong>07:00</strong><small>2.5 avg · 4 peak</small></span>');
     expect(html).not.toContain('title="07:00');
   });
 });

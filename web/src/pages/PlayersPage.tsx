@@ -196,7 +196,10 @@ function ActivityHours({ hours, timeZone }: { hours: readonly PlayerActivityHour
               aria-label={description}
             >
               <span className="playerActivityBarFill" />
-              <span className="playerActivityHourLabel" aria-hidden="true">{clock}</span>
+              <span className="playerActivityHourLabel" aria-hidden="true">
+                <strong>{clock}</strong>
+                <small>{hour.samples === 0 ? "Not observed" : `${hour.averagePlayers.toFixed(1)} avg · ${hour.peakPlayers} peak`}</small>
+              </span>
             </li>
           );
         })}
@@ -343,7 +346,7 @@ function PlayerRoster({
                 <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.estimatedLatencyMs)}`}>
                   {formatEstimatedLatency(entry.estimatedLatencyMs)}
                 </td>
-                <td className="playerNumericColumn">{entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}</td>
+                <td className="playerNumericColumn" data-label="Last seen">{entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}</td>
               </tr>
             );
           })}
@@ -351,7 +354,7 @@ function PlayerRoster({
       </table>
       {pages > 1 && (
         <div className="playerRosterFooter">
-          <span>Showing {visible.length} of {rows.length} players</span>
+          <span>Showing {current * rosterPageSize + 1}–{current * rosterPageSize + visible.length} of {rows.length} players</span>
           <span className="playerRosterPager">
             <Button variant="ghost" compact disabled={current === 0} onClick={() => setPage(current - 1)}>Previous</Button>
             <span>{current + 1} / {pages}</span>
@@ -631,6 +634,11 @@ export function PlayersPage({
         <PanelHeader
           title="Players"
           description="Everyone this server has seen, online first. Locations are approximate and latency is estimated from distance, never measured."
+          actions={summary && (
+            <StatusBadge tone={summary.onlinePlayers ? "success" : "neutral"}>
+              {summary.onlinePlayers} online · {summary.knownPlayers} known
+            </StatusBadge>
+          )}
         />
         <PlayerRoster
           players={insights?.players ?? []}

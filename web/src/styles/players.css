@@ -20,6 +20,10 @@
   gap: var(--space-3);
 }
 
+.playerSummaryGrid .uiMetricTileCopy strong {
+  font-size: var(--type-card-title-size);
+}
+
 .playerSummarySkeleton {
   height: 96px;
   border-radius: var(--radius-md);
@@ -721,6 +725,24 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   justify-content: flex-end;
 }
 
+.playerRosterTable th[aria-sort="ascending"] .uiSortHeaderButton,
+.playerRosterTable th[aria-sort="descending"] .uiSortHeaderButton {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--text);
+}
+
+.playerRegionTable tbody tr,
+.playerRosterTable tbody tr {
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+@media (hover: hover) {
+  .playerRegionTable tbody tr:hover,
+  .playerRosterTable tbody tr:hover {
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+}
+
 .playerRegionTable tbody tr:last-child th,
 .playerRegionTable tbody tr:last-child td,
 .playerRosterTable tbody tr:last-child th,
@@ -928,6 +950,8 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  border-top: 1px solid var(--border-row);
+  padding-top: var(--space-3);
   color: var(--text-muted);
   font-size: var(--type-meta-size);
 }
@@ -1049,15 +1073,25 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   padding: 3px 6px;
   background: var(--glass-tint-menu);
   box-shadow: var(--glass-highlight), var(--shadow-xs);
+  display: grid;
+  gap: 1px;
   color: var(--text);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-strong);
   line-height: 1.2;
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, 3px);
   transition: opacity var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-base) var(--motion-ease-spring);
   white-space: nowrap;
+}
+
+.playerActivityHourLabel strong {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+}
+
+.playerActivityHourLabel small {
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
 }
 
 .playerActivityBar:first-child .playerActivityHourLabel {
@@ -1206,6 +1240,45 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   .playerRosterTable tbody td:nth-of-type(4) {
     grid-column: 2;
     grid-row: 2;
+  }
+}
+
+@media (max-width: 560px) {
+  .playerRosterCard .uiPanelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playerRosterCard .uiPanelHeaderActions {
+    justify-content: flex-start;
+  }
+
+  /* Give the location the full row instead of truncating it beside a long localized timestamp.
+     The quieter third line keeps the time available without competing with identity and ping. */
+  .playerRosterTable tbody td:nth-of-type(1) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(4) {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding-top: 2px;
+    color: var(--text-muted);
+    font-size: var(--type-meta-size);
+  }
+
+  .playerRosterTable tbody td:nth-of-type(4)::before {
+    content: attr(data-label);
+    color: var(--text-soft);
+    font-size: var(--type-badge-size);
+    font-weight: var(--weight-meta);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
   }
 }
 
