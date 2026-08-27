@@ -157,6 +157,9 @@
   align-items: center;
   justify-content: center;
   min-width: 30px;
+  /* These are map glyphs, not full-size controls; the shared button minimum would leave a tall
+     rectangular hover surface around the marker. */
+  min-height: 0;
   height: 30px;
   border: 1px solid color-mix(in srgb, var(--text-muted) 34%, var(--surface));
   border-radius: var(--radius-xs);
@@ -179,9 +182,12 @@ button.playerMapMarker {
 }
 
 .playerMapMarkerWrap--active .playerMapMarker,
-.playerMapMarker:hover {
+button.playerMapMarker:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 66%, var(--surface));
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-xs);
+  color: inherit;
+  transform: none;
 }
 
 .playerMapMarker:focus-visible {
@@ -325,9 +331,12 @@ button.playerMapMarker {
 }
 
 .playerMapMarkerWrap--active .playerMapPlayerMarker,
-.playerMapPlayerMarker:hover {
+button.playerMapPlayerMarker:hover:not(:disabled) {
   border-color: transparent;
+  background: transparent;
   box-shadow: none;
+  color: inherit;
+  transform: none;
 }
 
 .playerMapPlayerMarker .playerMapAvatar {
@@ -701,6 +710,17 @@ button.playerMapMarker {
   text-transform: uppercase;
 }
 
+.playerRosterTable .uiSortHeaderButton {
+  width: 100%;
+  min-height: var(--control-height-compact);
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.playerRosterTable th.playerNumericColumn .uiSortHeaderButton {
+  justify-content: flex-end;
+}
+
 .playerRegionTable tbody tr:last-child th,
 .playerRegionTable tbody tr:last-child td,
 .playerRosterTable tbody tr:last-child th,
@@ -998,9 +1018,14 @@ button.playerMapMarker {
 }
 
 .playerActivityBar {
+  position: relative;
   display: flex;
   align-items: flex-end;
   height: 100%;
+  border-radius: var(--radius-xs);
+  cursor: default;
+  outline: none;
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .playerActivityBarFill {
@@ -1010,6 +1035,65 @@ button.playerMapMarker {
   height: var(--player-activity-height);
   border-radius: var(--radius-xs);
   background: var(--accent);
+  transform-origin: bottom;
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.playerActivityHourLabel {
+  position: absolute;
+  left: 50%;
+  bottom: min(calc(var(--player-activity-height) + 7px), calc(100% - 28px));
+  z-index: 1;
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--shadow-xs);
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 3px);
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-base) var(--motion-ease-spring);
+  white-space: nowrap;
+}
+
+.playerActivityBar:first-child .playerActivityHourLabel {
+  left: 0;
+  transform: translateY(3px);
+}
+
+.playerActivityBar:last-child .playerActivityHourLabel {
+  right: 0;
+  left: auto;
+  transform: translateY(3px);
+}
+
+.playerActivityBar:hover,
+.playerActivityBar:focus-visible {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.playerActivityBar:hover .playerActivityBarFill,
+.playerActivityBar:focus-visible .playerActivityBarFill {
+  background: color-mix(in srgb, var(--accent) 78%, var(--text));
+  transform: scaleY(1.035);
+}
+
+.playerActivityBar:hover .playerActivityHourLabel,
+.playerActivityBar:focus-visible .playerActivityHourLabel {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.playerActivityBar:first-child:hover .playerActivityHourLabel,
+.playerActivityBar:first-child:focus-visible .playerActivityHourLabel,
+.playerActivityBar:last-child:hover .playerActivityHourLabel,
+.playerActivityBar:last-child:focus-visible .playerActivityHourLabel {
+  transform: translateY(0);
 }
 
 /* An hour with no samples is not a quiet hour, and must not look like one — but a full-height
@@ -1151,7 +1235,10 @@ button.playerMapMarker {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .playerAccuracyTooltip {
+  .playerAccuracyTooltip,
+  .playerActivityBar,
+  .playerActivityBarFill,
+  .playerActivityHourLabel {
     transition: none;
   }
 

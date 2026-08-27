@@ -131,6 +131,15 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).not.toContain("thousand km");
   });
 
+  it("offers the shared table sorting control on every roster heading", () => {
+    const html = render({ insights: partial });
+    for (const heading of ["Player", "Location", "Distance", "Est. ping", "Last seen"]) {
+      expect(html).toContain(`title="Sort by ${heading}"`);
+    }
+    expect(html.match(/aria-sort="none"/g)).toHaveLength(5);
+    expect(html.match(/class="uiSortHeaderButton"/g)).toHaveLength(5);
+  });
+
   it("offers the address field only to an account that may change it", () => {
     expect(render({ insights: partial })).toContain("player-insights-server-address");
     const readOnly = render({ insights: partial, canManage: false });
@@ -280,5 +289,19 @@ describe("the Players workspace with partial knowledge", () => {
     });
     expect(html).toContain("15 Aug");
     expect(html).toContain("16 Aug");
+  });
+
+  it("makes every observed activity hour focusable and exposes its hour immediately", () => {
+    const activityHours = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      averagePlayers: hour === 7 ? 2.5 : 1,
+      peakPlayers: hour === 7 ? 4 : 2,
+      samples: 1
+    }));
+    const html = render({ insights: insights({ activityHours }) });
+
+    expect(html).toContain('class="playerActivityBar" style="--player-activity-height:100%" tabindex="0" aria-label="07:00, 2.5 players on average, peak 4"');
+    expect(html).toContain('<span class="playerActivityHourLabel" aria-hidden="true">07:00</span>');
+    expect(html).not.toContain('title="07:00');
   });
 });

@@ -1,8 +1,17 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState
+} from "@tanstack/react-table";
 import { Activity, Globe, MapPin, Wrench } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerLatencyPoint, PlayerRegionSummary } from "../types";
 import { InlineState } from "../components/InlineState";
 import { PlayerHead } from "../components/PlayerHead";
+import { SortHeaderButton, headerAriaSort } from "../components/TableControls";
 import { Banner, Button, EmptyState, FormField, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from "../components/UiPrimitives";
 import { playerHeadVersion } from "../utils/playerHeads";
 import { PlayerGeographyMap } from "../features/players/PlayerGeographyMap";
@@ -175,16 +184,19 @@ function ActivityHours({ hours, timeZone }: { hours: readonly PlayerActivityHour
       <ol className="playerActivityBars" aria-label={`Average players by hour of the day, ${timeZone}`}>
         {hours.map((hour) => {
           const clock = `${String(hour.hour).padStart(2, "0")}:00`;
+          const description = hour.samples === 0
+            ? `${clock}, not observed yet`
+            : `${clock}, ${hour.averagePlayers.toFixed(1)} players on average, peak ${hour.peakPlayers}`;
           return (
             <li
               key={hour.hour}
               className={`playerActivityBar ${hour.samples === 0 ? "playerActivityBar--unobserved" : ""}`.trim()}
               style={{ "--player-activity-height": `${peak ? Math.round((hour.averagePlayers / peak) * 100) : 0}%` } as Record<string, string>}
-              title={hour.samples === 0
-                ? `${clock} — not observed yet`
-                : `${clock} — ${hour.averagePlayers.toFixed(1)} players on average, peak ${hour.peakPlayers}`}
+              tabIndex={0}
+              aria-label={description}
             >
               <span className="playerActivityBarFill" />
+              <span className="playerActivityHourLabel" aria-hidden="true">{clock}</span>
             </li>
           );
         })}
@@ -254,17 +266,39 @@ function PlayerRoster({
   formatNumber: (value: number) => string;
 }) {
   const [page, setPage] = useState(0);
+  const [sorting, setSorting] = useState<SortingState>([]);
   // Only a different server starts the reader over. The roster refreshes every thirty seconds and
   // its length moves whenever anyone joins or leaves, so resetting on that threw whoever was
   // reading page three back to page one for no reason they could see. A page that no longer exists
   // is clamped below instead.
   useEffect(() => setPage(0), [serverId]);
+  const columns = useMemo<ColumnDef<PlayerInsightsEntry>[]>(() => [
+    { id: "player", accessorKey: "player", header: "Player" },
+    { id: "location", accessorFn: (entry) => formatLocation(entry.location), header: "Location" },
+    { id: "distanceKm", accessorKey: "distanceKm", header: "Distance" },
+    { id: "estimatedLatencyMs", accessorKey: "estimatedLatencyMs", header: "Est. ping" },
+    { id: "lastSeenAt", accessorKey: "lastSeenAt", header: "Last seen" }
+  ], []);
+  const tableData = useMemo(() => [...players], [players]);
+  const table = useReactTable({
+    data: tableData,
+    columns,
+    getRowId: (entry) => `${entry.serverId}:${entry.player}`,
+    state: { sorting },
+    onSortingChange: (updater) => {
+      setSorting(updater);
+      setPage(0);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel()
+  });
   if (players.length === 0) {
     return <EmptyState compact title="No players recorded yet" message="Players appear here once they join, whether or not their location can be resolved." />;
   }
-  const pages = Math.max(1, Math.ceil(players.length / rosterPageSize));
+  const rows = table.getRowModel().rows;
+  const pages = Math.max(1, Math.ceil(rows.length / rosterPageSize));
   const current = Math.min(page, pages - 1);
-  const visible = players.slice(current * rosterPageSize, current * rosterPageSize + rosterPageSize);
+  const visible = rows.slice(current * rosterPageSize, current * rosterPageSize + rosterPageSize);
   const headVersion = playerHeadVersion();
 
   return (
@@ -272,42 +306,52 @@ function PlayerRoster({
       <table className="playerRosterTable">
         <thead>
           <tr>
-            <th scope="col">Player</th>
-            <th scope="col">Location</th>
-            <th scope="col" className="playerNumericColumn">Distance</th>
-            <th scope="col" className="playerNumericColumn">Est. ping</th>
-            <th scope="col" className="playerNumericColumn">Last seen</th>
+            {table.getHeaderGroups()[0]?.headers.map((header) => (
+              <th
+                key={header.id}
+                scope="col"
+                className={header.id === "player" || header.id === "location" ? undefined : "playerNumericColumn"}
+                aria-sort={headerAriaSort(header)}
+              >
+                <SortHeaderButton header={header}>
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </SortHeaderButton>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {visible.map((entry) => (
-            <tr key={`${entry.serverId}:${entry.player}`} className={entry.online ? "playerRosterRow--online" : undefined}>
-              <th scope="row">
-                <span className="playerIdentity">
-                  {playerHeadsEnabled && (
-                    <PlayerHead serverId={entry.serverId} playerName={entry.player} version={headVersion} enabled />
-                  )}
-                  <span className="playerIdentityCopy">
-                    <strong>{entry.player}</strong>
-                    {entry.online && <small className="playerOnlineFlag">Online</small>}
+          {visible.map((row) => {
+            const entry = row.original;
+            return (
+              <tr key={`${entry.serverId}:${entry.player}`} className={entry.online ? "playerRosterRow--online" : undefined}>
+                <th scope="row">
+                  <span className="playerIdentity">
+                    {playerHeadsEnabled && (
+                      <PlayerHead serverId={entry.serverId} playerName={entry.player} version={headVersion} enabled />
+                    )}
+                    <span className="playerIdentityCopy">
+                      <strong>{entry.player}</strong>
+                      {entry.online && <small className="playerOnlineFlag">Online</small>}
+                    </span>
                   </span>
-                </span>
-              </th>
-              <td>
-                <PlayerLocationDisplay location={entry.location} />
-              </td>
-              <td className="playerNumericColumn">{formatDistance(entry.distanceKm, formatNumber)}</td>
-              <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.estimatedLatencyMs)}`}>
-                {formatEstimatedLatency(entry.estimatedLatencyMs)}
-              </td>
-              <td className="playerNumericColumn">{entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}</td>
-            </tr>
-          ))}
+                </th>
+                <td>
+                  <PlayerLocationDisplay location={entry.location} />
+                </td>
+                <td className="playerNumericColumn">{formatDistance(entry.distanceKm, formatNumber)}</td>
+                <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.estimatedLatencyMs)}`}>
+                  {formatEstimatedLatency(entry.estimatedLatencyMs)}
+                </td>
+                <td className="playerNumericColumn">{entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {pages > 1 && (
         <div className="playerRosterFooter">
-          <span>Showing {visible.length} of {players.length} players</span>
+          <span>Showing {visible.length} of {rows.length} players</span>
           <span className="playerRosterPager">
             <Button variant="ghost" compact disabled={current === 0} onClick={() => setPage(current - 1)}>Previous</Button>
             <span>{current + 1} / {pages}</span>
