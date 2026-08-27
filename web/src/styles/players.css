@@ -981,61 +981,120 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   gap: var(--space-2);
 }
 
-/* Charts. Drawn as plain SVG rather than through the timeline's chart stack: these are two lines
-   and twenty-four bars, and the module's chunk should not carry a charting library for that. */
-.playerLatencyChart svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.playerChartGrid {
-  stroke: var(--border-row);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-/* Sized by the component, not here: the label has to be measured in the same units as the gutter
-   that has to hold it, and only the component knows which viewBox it picked. */
-.playerChartAxisLabel {
-  fill: var(--text-muted);
-}
-
-.playerChartLine {
-  fill: none;
-  stroke-width: 1.75;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.playerChartLine--median { stroke: var(--sentinel-success); }
-.playerChartLine--p95 { stroke: var(--accent); }
-
-.playerChartLegend {
+/* Connection quality uses the same ECharts canvas and time-axis primitives as Server Timeline.
+   The card owns only its compact summary and fixed plot box. */
+.playerConnectionQuality {
   display: flex;
-  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.playerConnectionSnapshot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
   margin: 0;
-  padding: 0;
-  list-style: none;
+}
+
+.playerConnectionSnapshot > div {
+  min-width: 0;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--surface-muted) 48%, transparent);
+}
+
+.playerConnectionSnapshot dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerConnectionSnapshot dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text);
+  font-size: var(--type-card-title-size);
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.playerLatencyChart {
+  width: 100%;
+  min-width: 0;
+  height: 184px;
+}
+
+.playerConnectionEChart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  touch-action: pan-y;
+}
+
+.playerConnectionCoverage {
+  margin: 0;
   color: var(--text-muted);
   font-size: var(--type-meta-size);
 }
 
-.playerChartLegend li {
-  display: inline-flex;
+.playerConnectionTooltipTime {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.playerConnectionTooltipRow {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-1);
+  gap: 7px;
+  min-width: 180px;
+  margin-top: 3px;
+}
+
+.playerConnectionTooltipRow i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+
+.playerConnectionTooltipRow span,
+.playerConnectionTooltipPlayers {
+  color: var(--text-muted);
+}
+
+.playerConnectionTooltipRow strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.playerConnectionTooltipPlayers {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-muted);
+  padding-top: 6px;
+  font-size: var(--type-meta-size);
 }
 
 .playerChartSwatch {
+  display: inline-block;
+  flex: 0 0 auto;
   width: 12px;
   height: 2px;
   border-radius: 999px;
 }
 
 .playerChartSwatch--median { background: var(--sentinel-success); }
-.playerChartSwatch--p95 { background: var(--accent); }
+.playerChartSwatch--p95 {
+  background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 6px);
+}
 
 .playerRangeSwitch {
   display: inline-flex;
@@ -1338,6 +1397,18 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 
   .playerLatencyCard .uiPanelHeaderActions {
     justify-content: flex-start;
+  }
+
+  .playerConnectionSnapshot {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .playerConnectionSnapshot > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .playerLatencyChart {
+    height: 202px;
   }
 
   .playerRegionBar {

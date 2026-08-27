@@ -268,33 +268,20 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).not.toContain("Set the server address to measure distance");
   });
 
-  it("gives the chart room for its own labels at each size it is drawn", () => {
+  it("renders connection quality through the shared chart canvas with a readable latest snapshot", () => {
     const latency = [
       { at: Date.parse("2026-08-16T11:00:00.000Z"), medianEstimatedLatencyMs: 40, p95EstimatedLatencyMs: 150, players: 2 },
       { at: Date.parse("2026-08-16T12:00:00.000Z"), medianEstimatedLatencyMs: 45, p95EstimatedLatencyMs: 150, players: 3 }
     ];
-    // The gutter and the label are measured in the same units, so a viewBox that does not change
-    // with the font leaves "150 ms" hanging off the left edge. Both sizes have to agree.
-    for (const compactLayout of [false, true]) {
-      const html = render({ insights: insights({ latency }), compactLayout });
-      const fontSize = Number(html.match(/class="playerChartAxisLabel" font-size="(\d+)"/)![1]);
-      const gutter = Number(html.match(/x="(\d+)" y="[\d.]+" text-anchor="end"/)![1]);
-      // Six characters of "150 ms" at roughly 0.6em each, and the label ends before the axis.
-      expect(gutter, `compact: ${compactLayout}`).toBeGreaterThan(fontSize * 0.6 * 6);
-    }
-  });
+    const html = render({ insights: insights({ latency }) });
 
-  it("distinguishes chart endpoints that fall on different dates", () => {
-    const html = render({
-      insights: insights({
-        latency: [
-          { at: Date.parse("2026-08-15T12:00:00.000Z"), medianEstimatedLatencyMs: 40, p95EstimatedLatencyMs: 70, players: 2 },
-          { at: Date.parse("2026-08-16T12:00:00.000Z"), medianEstimatedLatencyMs: 45, p95EstimatedLatencyMs: 75, players: 3 }
-        ]
-      })
-    });
-    expect(html).toContain("15 Aug");
-    expect(html).toContain("16 Aug");
+    expect(html).toContain('class="playerConnectionEChart" role="img"');
+    expect(html).toContain("Latest connection quality estimate");
+    expect(html).toContain("Median</dt><dd>45 ms");
+    expect(html).toContain("95th percentile</dt><dd>150 ms");
+    expect(html).toContain("Active players</dt><dd>3");
+    expect(html).toContain("2 / 2 reconstructed samples");
+    expect(html).not.toContain("playerChartLine");
   });
 
   it("makes every observed activity hour focusable and exposes its hour immediately", () => {

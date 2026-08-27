@@ -8,13 +8,14 @@ import {
   type SortingState
 } from "@tanstack/react-table";
 import { Activity, Globe, MapPin, Wrench } from "lucide-react";
-import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerLatencyPoint, PlayerRegionSummary } from "../types";
+import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerRegionSummary } from "../types";
 import { InlineState } from "../components/InlineState";
 import { PlayerHead } from "../components/PlayerHead";
 import { SortHeaderButton, headerAriaSort } from "../components/TableControls";
 import { Banner, Button, EmptyState, FormField, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from "../components/UiPrimitives";
 import { playerHeadVersion } from "../utils/playerHeads";
 import { PlayerGeographyMap } from "../features/players/PlayerGeographyMap";
+import { ConnectionQualityChart } from "../features/players/ConnectionQualityChart";
 import {
   countryFlag,
   formatDistance,
@@ -92,84 +93,6 @@ function PlayerMapLegendHead({
       enabled={enabled}
       className="playerMapLegendHead"
     />
-  );
-}
-
-/**
- * The chart's geometry, in the units its viewBox is drawn in.
- *
- * A phone renders this SVG about half as wide as a desktop does, so one viewBox for both means the
- * axis labels are either unreadable on the phone or oversized on the desktop. Scaling the font
- * inside a fixed viewBox is what broke it: the gutters are measured in the same units, so a bigger
- * font ran "150 ms" off the left edge and dropped "0 ms" on top of the date beneath it. Choosing a
- * viewBox close to the size it will actually be drawn at keeps one set of proportions honest at
- * both widths, and the padding below is sized for the labels that have to fit inside it.
- */
-function latencyChartGeometry(compact: boolean) {
-  return compact
-    ? { width: 360, height: 190, fontSize: 11, padding: { top: 10, right: 8, bottom: 28, left: 50 } }
-    : { width: 720, height: 180, fontSize: 10, padding: { top: 12, right: 8, bottom: 22, left: 64 } };
-}
-
-function LatencyChart({ points, timeZone, compact }: { points: readonly PlayerLatencyPoint[]; timeZone: string; compact: boolean }) {
-  const measured = points.filter((point) => point.medianEstimatedLatencyMs !== undefined);
-  if (measured.length < 2) {
-    return (
-      <EmptyState
-        compact
-        title="Not enough history yet"
-        message="The estimate is drawn from the joins and leaves the panel has recorded. It fills in as players come and go."
-      />
-    );
-  }
-
-  const { width, height, fontSize, padding } = latencyChartGeometry(compact);
-  const from = points[0].at;
-  const to = points.at(-1)!.at;
-  const maximum = Math.max(...measured.map((point) => point.p95EstimatedLatencyMs ?? point.medianEstimatedLatencyMs!));
-  const ceiling = Math.max(50, Math.ceil(maximum / 50) * 50);
-  const x = (at: number) => padding.left + ((at - from) / Math.max(1, to - from)) * (width - padding.left - padding.right);
-  const y = (value: number) => padding.top + (1 - value / ceiling) * (height - padding.top - padding.bottom);
-  const line = (pick: (point: PlayerLatencyPoint) => number | undefined) => {
-    const segments: string[] = [];
-    let open = false;
-    for (const point of points) {
-      const value = pick(point);
-      if (value === undefined) {
-        open = false;
-        continue;
-      }
-      segments.push(`${open ? "L" : "M"}${x(point.at).toFixed(1)} ${y(value).toFixed(1)}`);
-      open = true;
-    }
-    return segments.join("");
-  };
-  const gridValues = [0, ceiling / 2, ceiling];
-  const showsMultipleDates = to - from >= 20 * 60 * 60 * 1000;
-  const axisFormatter = new Intl.DateTimeFormat("en-GB", showsMultipleDates
-    ? { timeZone, day: "numeric", month: "short" }
-    : { timeZone, hour: "2-digit", minute: "2-digit" });
-  const timeLabel = (at: number) => axisFormatter.format(new Date(at));
-
-  return (
-    <div className="playerLatencyChart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Estimated latency over time, peaking near ${ceiling} milliseconds`}>
-        {gridValues.map((value) => (
-          <g key={value}>
-            <line className="playerChartGrid" x1={padding.left} y1={y(value)} x2={width - padding.right} y2={y(value)} />
-            <text className="playerChartAxisLabel" fontSize={fontSize} x={padding.left - 6} y={y(value) + fontSize * 0.36} textAnchor="end">{value} ms</text>
-          </g>
-        ))}
-        <path className="playerChartLine playerChartLine--p95" d={line((point) => point.p95EstimatedLatencyMs)} />
-        <path className="playerChartLine playerChartLine--median" d={line((point) => point.medianEstimatedLatencyMs)} />
-        <text className="playerChartAxisLabel" fontSize={fontSize} x={padding.left} y={height - 4} textAnchor="start">{timeLabel(from)}</text>
-        <text className="playerChartAxisLabel" fontSize={fontSize} x={width - padding.right} y={height - 4} textAnchor="end">{timeLabel(to)}</text>
-      </svg>
-      <ul className="playerChartLegend">
-        <li><span className="playerChartSwatch playerChartSwatch--median" aria-hidden="true" />Median estimate</li>
-        <li><span className="playerChartSwatch playerChartSwatch--p95" aria-hidden="true" />95th percentile</li>
-      </ul>
-    </div>
   );
 }
 
@@ -604,7 +527,7 @@ export function PlayersPage({
         <Surface className="playerCard playerLatencyCard">
           <PanelHeader
             title="Connection quality"
-            description="Estimated latency of the players online, replayed from the panel's own join and leave history."
+            description="Distance-based latency estimates reconstructed from player sessions. Hover the chart to inspect a moment."
             actions={(
               <div className="playerRangeSwitch" role="group" aria-label="Latency history range">
                 {playerInsightsRanges.map((option) => (
@@ -621,7 +544,7 @@ export function PlayersPage({
               </div>
             )}
           />
-          <LatencyChart points={insights?.latency ?? []} timeZone={insights?.timeZone ?? "UTC"} compact={compactLayout} />
+          <ConnectionQualityChart points={insights?.latency ?? []} timeZone={insights?.timeZone ?? "UTC"} compact={compactLayout} />
         </Surface>
 
         <Surface className="playerCard playerActivityCard">
