@@ -19,13 +19,14 @@ import { type CreateServerInput } from "../servers/ports.js";
 import { lifecycleWithIntent, recordOperation, requireServerStoppedForMutableConfiguration, runtimeResultRunning, sendConsoleCommandWithIntent } from "../servers/lifecycle.js";
 import { measureWorldSize } from "../servers/exportSelection.js";
 import { startConsoleHeartbeat, timelineHistoryWindow as timelineHistoryWindowMs, type Client } from "../servers/overview.js";
+import { persistentServerEvents } from "../servers/serverEvents.js";
 import { createConsoleSender } from "../servers/consoleBackpressure.js";
 import { consoleHub, type ConsoleCursor } from "../servers/consoleService.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import { timelinePlayerActivity, timelinePlayerIsKnown, timelineResourcePoints, timelineScheduleMarkers } from "../serverTimeline.js";
 import { localNodeId } from "../nodes/nodeService.js";
 import { logDebug, logInfo, logWarn, errorLogFields } from "../logging.js";
-import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
+import type { ManagedServer, ServerActivity, ServerEvent, ServerRuntimeProfile } from "../types.js";
 
 /**
  * A viewer's resume point. Both halves have to be present and well formed to be trusted: without a
@@ -410,9 +411,28 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) => {
-  await requireRequestPermission(request, "servers.view");
+  const user = await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).serverOverview(server);
+  const overview = await runtimeForServer(server).serverOverview(server) as {
+    events?: ServerEvent[];
+    eventsStatus?: "ok" | "unavailable";
+    activity?: ServerActivity;
+  };
+  const now = Date.now();
+  const from = now - timelineHistoryWindowMs;
+  const events = persistentServerEvents({
+    timelineEvents: services.timelineEventsRepository.list(server.id, from, now),
+    transientEvents: overview.events,
+    operations: services.operationsRepository.listRecentRuntimeActions(server.id, new Date(from).toISOString()),
+    scheduledRuns: hasPermission(user, "schedules.view")
+      ? services.serversRepository.scheduledRunsInRange(server.id, from, now)
+      : []
+  });
+  return {
+    events,
+    eventsStatus: events.length > 0 ? "ok" : overview.eventsStatus,
+    activity: overview.activity ?? {}
+  };
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/storage", async (request) => {

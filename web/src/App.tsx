@@ -1848,6 +1848,7 @@ export default function App() {
         }
         setDemoRunning(nextRunning);
         setStatus(demoFixtures().demoStatus(activeServer, nextRunning));
+        if (reason && action !== "start") demoFixtures().recordDemoRuntimeEvent(activeServer.id, action, reason);
         setOverviewData(demoFixtures().demoOverviewData(nextRunning, activeServer.id));
         setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(nextRunning));
         // A demo restart replaces the console rather than adding to it, so the terminal is told to

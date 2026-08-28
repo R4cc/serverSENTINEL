@@ -35,6 +35,10 @@
 .overviewDashboardGrid > .playersPanel { grid-area: players; align-self: stretch; }
 .overviewDashboardGrid > .eventsPanel { grid-area: events; align-self: stretch; }
 
+.overviewDashboardGrid > .eventsPanel {
+  overflow: hidden;
+}
+
 .overviewDashboardGrid--chartless {
   grid-template-areas:
     "summary summary summary summary summary summary summary summary summary summary summary summary"
@@ -1800,6 +1804,293 @@ button.overviewCardRow:focus-visible {
     height: 44px;
     min-height: 44px;
     justify-self: end;
+  }
+}
+
+/* Server events is a real data table now. Its own viewport contains the minimum-width table so a
+   narrow phone can navigate columns without widening the overview workspace itself. */
+.overviewPage .eventsPanel .serverEventsBody {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: start;
+  gap: var(--space-3);
+}
+
+.serverEventFilters {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  contain: inline-size;
+}
+
+.serverEventFilters .uiButton {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.serverEventFilters .uiButton.active {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.serverEventFilterCount {
+  min-width: 19px;
+  border-radius: 999px;
+  padding-inline: 5px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: var(--type-badge-size);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.serverEventsSkeleton {
+  display: grid;
+  align-content: start;
+}
+
+.serverEventsSkeleton .eventSkeletonRow {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 80px;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+}
+
+.serverEventsTableViewport {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  contain: inline-size;
+}
+
+.serverEventsTable {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--type-body-size);
+}
+
+.serverEventsTable thead th:nth-child(1) { width: 30%; }
+.serverEventsTable thead th:nth-child(2) { width: 16%; }
+.serverEventsTable thead th:nth-child(3) { width: 32%; }
+.serverEventsTable thead th:nth-child(4) { width: 17%; }
+.serverEventsTable thead th:nth-child(5) { width: 5%; }
+
+.serverEventsTable th,
+.serverEventsTable td {
+  min-width: 0;
+  padding: var(--space-2);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+  vertical-align: middle;
+  text-align: left;
+}
+
+.serverEventsTable thead th {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.serverEventsTable thead .uiSortHeaderButton {
+  width: 100%;
+  min-height: var(--control-height-compact);
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.serverEventsTable th[aria-sort="ascending"] .uiSortHeaderButton,
+.serverEventsTable th[aria-sort="descending"] .uiSortHeaderButton {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--text);
+}
+
+.serverEventsTable tbody tr {
+  height: 58px;
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+@media (hover: hover) {
+  .serverEventsTable tbody tr:hover {
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+}
+
+.serverEventsTable tbody tr.error {
+  background: color-mix(in srgb, var(--sentinel-danger) 3.5%, transparent);
+}
+
+.serverEventsTable tbody tr:last-child th,
+.serverEventsTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.serverEventIdentity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.overviewPage .eventsPanel .serverEventIdentity .eventIcon {
+  width: 32px;
+  height: 32px;
+}
+
+.overviewPage .eventsPanel .serverEventIdentity .eventIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.serverEventIdentity .eventCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.serverEventIdentity .eventCopy strong,
+.serverEventIdentity .eventCopy small,
+.serverEventDetails > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverEventIdentity .eventCopy strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.serverEventIdentity .eventCopy small,
+.serverEventDetails,
+.serverEventTime {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.serverEventCategory {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverEventCategory.tone-player {
+  border-color: color-mix(in srgb, var(--sentinel-success) 30%, var(--border-muted));
+  color: var(--sentinel-success);
+}
+
+.serverEventCategory.tone-automation {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+}
+
+.serverEventDetails {
+  min-width: 0;
+}
+
+.serverEventDetails .eventCount {
+  display: inline-flex;
+  margin-top: 3px;
+}
+
+.serverEventTime {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.serverEventAction,
+.serverEventActionHeading {
+  text-align: right !important;
+}
+
+.serverEventsTable .eventHideButton.uiButton {
+  opacity: 0.55;
+}
+
+.serverEventsTable tr:hover .eventHideButton.uiButton,
+.serverEventsTable .eventHideButton.uiButton:focus-visible {
+  opacity: 1;
+}
+
+.serverEventsFooter {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  border-top: var(--border-subtle) solid var(--border-row);
+  padding-top: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.serverEventsPager {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* On tall, wide workstations the final dashboard row absorbs unused viewport height. The pager
+   stays at the bottom of the card while the table remains at the top, so the page ends cleanly. */
+@media (min-width: 1920px) and (min-height: 1200px) {
+  .overviewDashboardGrid {
+    min-height: calc(var(--visual-viewport-height, 100dvh) - 156px);
+    grid-template-rows: auto auto auto minmax(420px, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .serverEventFilters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .serverEventFilters .uiButton {
+    flex: 0 0 auto;
+  }
+
+  .serverEventsFooter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .serverEventsFooter > span:first-child {
+    text-align: center;
+  }
+
+  .serverEventsPager {
+    justify-content: space-between;
   }
 }
 

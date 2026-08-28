@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoSession, demoConsoleMessages, demoFleetNodes, demoFleetServers, demoPlayerSnapshot, demoPlayerSnapshots, demoStats, demoTimelineData, initialDemoSchedules } from "./demo";
+import { createDemoSession, demoConsoleMessages, demoFleetNodes, demoFleetServers, demoOverviewData, demoPlayerSnapshot, demoPlayerSnapshots, demoStats, demoTimelineData, initialDemoSchedules, recordDemoRuntimeEvent } from "./demo";
 
 function seededRandom(seed: number) {
   let state = seed >>> 0;
@@ -50,11 +50,20 @@ describe("demo session generation", () => {
     expect(first.cpuBasePercent).not.toBe(second.cpuBasePercent);
     expect(first.memoryBaseBytes).not.toBe(second.memoryBaseBytes);
     expect(first.events.map((event) => event.eventType)).not.toEqual(second.events.map((event) => event.eventType));
-    expect(first.events).toHaveLength(11);
+    expect(first.events).toHaveLength(12);
     expect(first.events.some((event) => event.eventType === "player_joined")).toBe(true);
     expect(first.events.some((event) => event.eventType === "player_left")).toBe(true);
+    expect(first.events.some((event) => event.eventType === "automation_run")).toBe(true);
     expect(first.events.every((event) => event.occurredAt <= first.startedAt)).toBe(true);
     expect([...first.onlinePlayerNames, ...first.offlinePlayerNames].every((name) => !name.toLowerCase().includes("alex"))).toBe(true);
+  });
+
+  it("keeps a demo restart purpose in the overview event history", () => {
+    recordDemoRuntimeEvent("demo-survival", "restart", "Apply performance tuning");
+    expect(demoOverviewData(true, "demo-survival").events).toContainEqual(expect.objectContaining({
+      eventType: "server_restarted",
+      details: "Purpose: Apply performance tuning"
+    }));
   });
 
   it("uses the randomized nicknames in timeline player activity and events", () => {

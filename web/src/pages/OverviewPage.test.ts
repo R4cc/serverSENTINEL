@@ -17,6 +17,7 @@ import {
   RecentEventsPanel,
   recentEventPresentation,
   SchedulePanel,
+  serverEventCategory,
   storageRemainingIsLow
 } from "./OverviewPage";
 
@@ -370,10 +371,14 @@ describe("recent event grouping", () => {
       requestConfirmation: async () => false
     }));
 
-    expect((html.match(/class="eventRow warning/g) ?? [])).toHaveLength(1);
+    expect((html.match(/class="serverEventRow warning/g) ?? [])).toHaveLength(1);
     expect(html).toContain('class="srOnly">9 occurrences');
     expect(html).toContain("×9");
-    expect(html).toContain("<h2>Recent Events</h2>");
+    expect(html).toContain("<h2>Server events</h2>");
+    expect(html).toContain('class="serverEventsTable"');
+    expect(html).toContain("Purpose / details");
+    expect(html).toContain("Player activity");
+    expect(html).toContain("Automation runs");
     expect(html).toContain(">View full log</button>");
   });
 
@@ -401,10 +406,16 @@ describe("recent event grouping", () => {
 
     expect(html).toContain('/api/servers/server%20one/player-head/Alex?v=');
     expect(html).toContain('/api/servers/server%20one/player-head/Steve?v=');
-    expect(html).toContain('eventRow info eventKind--player_left');
+    expect(html).toContain('serverEventRow info eventKind--player_left');
     expect((html.match(/eventIcon eventIcon--withPlayerHead/g) ?? [])).toHaveLength(2);
     expect((html.match(/class="eventPlayerIconBadge"/g) ?? [])).toHaveLength(2);
     expect((html.match(/class="eventPlayerHead"/g) ?? [])).toHaveLength(2);
+  });
+
+  it("categorizes player, server, and automation history for the event filters", () => {
+    expect(serverEventCategory(serverEvent("player_joined", now.toISOString()))).toBe("player");
+    expect(serverEventCategory(serverEvent("server_started", now.toISOString()))).toBe("server");
+    expect(serverEventCategory(serverEvent("automation_run", now.toISOString(), { source: "schedules" }))).toBe("automation");
   });
 
   it("keeps the existing event icons when player heads are disabled", () => {

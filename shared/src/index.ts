@@ -730,7 +730,7 @@ export type ResolvedServerVersions = {
   runtimeVersion: VersionResolution;
 };
 
-export type ConsoleSource = "logs/latest.log" | "docker";
+export type ConsoleSource = "logs/latest.log" | "docker" | "operations" | "schedules";
 
 /**
  * A console line as the panel numbered it. Sequence numbers are assigned once, where the workload's
@@ -773,8 +773,10 @@ export type ServerEvent = {
   eventType:
     | "server_started"
     | "server_stopped"
+    | "server_restarted"
     | "player_joined"
     | "player_left"
+    | "automation_run"
     | "mod_disabled"
     | "server_crashed"
     | "exception_caught"

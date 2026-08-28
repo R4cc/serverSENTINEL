@@ -146,6 +146,16 @@ export class OperationsRepository {
     `).all(serverId, safeLimit).map(operationFromRow);
   }
 
+  listRecentRuntimeActions(serverId: string, since: string, limit = 250) {
+    const safeLimit = Math.max(1, Math.min(limit, 1_000));
+    return this.storage.connection.prepare<[string, string, number], OperationRow>(`
+      SELECT * FROM operations
+      WHERE server_id = ? AND type IN ('server.stop', 'server.restart') AND created_at >= ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(serverId, since, safeLimit).map(operationFromRow);
+  }
+
   listActiveByType(type: OperationType) {
     return this.storage.connection.prepare<[string], OperationRow>(`
       SELECT * FROM operations
