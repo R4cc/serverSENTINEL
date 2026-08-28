@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { commandRateLimit, destructiveRateLimit, provisionRateLimit, runtimeActionRateLimit } from "../http/rateLimits.js";
-import { badRequest } from "../http/validation.js";
+import { badRequest, validateRuntimeActionReason } from "../http/validation.js";
 import { apiErrorResponse, throwHttp } from "../http/errors.js";
 import { consoleLogLineLimit } from "../consoleLogs.js";
 import { hasPermission } from "../permissions.js";
@@ -212,9 +212,10 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRate
   }, () => lifecycleWithIntent(server, "start"));
 });
 
-app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
+app.post<{ Params: { id: string }; Body: { reason?: unknown } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  const reason = validateRuntimeActionReason(request.body?.reason);
   requireNoActiveModMutation(server.id);
   return recordOperation({
     type: "server.stop",
@@ -222,13 +223,19 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateL
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Stopping server",
-    successTask: "Server stopped"
-  }, () => lifecycleWithIntent(server, "stop"));
+    successTask: "Server stopped",
+    result: (value) => ({ reason, runtimeResult: value })
+  }, (operation) => {
+    services.operationsRepository.update(operation.id, { result: { reason } });
+    logInfo({ ...serverLogFields(server), category: "audit", action: "server_stop", status: "requested", operationId: operation.id, reason }, "Server stop requested");
+    return lifecycleWithIntent(server, "stop");
+  });
 });
 
-app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
+app.post<{ Params: { id: string }; Body: { reason?: unknown } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  const reason = validateRuntimeActionReason(request.body?.reason);
   requireNoActiveModMutation(server.id);
   return recordOperation({
     type: "server.restart",
@@ -237,8 +244,13 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRa
     createdBy: user.id,
     task: "Restarting server",
     successTask: "Server restarted",
-    restartEffect: "clear"
-  }, () => lifecycleWithIntent(server, "restart"));
+    restartEffect: "clear",
+    result: (value) => ({ reason, runtimeResult: value })
+  }, (operation) => {
+    services.operationsRepository.update(operation.id, { result: { reason } });
+    logInfo({ ...serverLogFields(server), category: "audit", action: "server_restart", status: "requested", operationId: operation.id, reason }, "Server restart requested");
+    return lifecycleWithIntent(server, "restart");
+  });
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {

@@ -51,4 +51,26 @@ describe("ConfirmationModal", () => {
     expect(html).toContain("Keep running");
     expect(html).toContain("confirmationWarning--warning");
   });
+
+  it("renders a required text area for confirmations that capture a reason", () => {
+    const html = render({
+      title: "Restart Survival?",
+      description: "Survival will be temporarily unavailable while it restarts.",
+      textInput: {
+        label: "Reason for restarting",
+        description: "Saved with the server operation for traceability.",
+        placeholder: "Why is this server being restarted?",
+        required: true,
+        maxLength: 500,
+        rows: 3
+      },
+      confirmLabel: "Restart server",
+      variant: "primary"
+    });
+
+    expect(html).toContain("Reason for restarting");
+    expect(html).toContain("Saved with the server operation for traceability.");
+    expect(html).toMatch(/<textarea[^>]*required=""[^>]*maxLength="500"[^>]*rows="3"/);
+    expect(html).toContain('placeholder="Why is this server being restarted?"');
+  });
 });

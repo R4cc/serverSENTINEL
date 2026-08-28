@@ -37,15 +37,23 @@ describe("runtimeActionConfirmation", () => {
     expect(runtimeActionConfirmation("start", "Survival", liveSnapshot(["Alex"]))).toBeNull();
   });
 
-  it("skips confirmation when nobody is online", () => {
-    expect(runtimeActionConfirmation("stop", "Survival", liveSnapshot([]))).toBeNull();
-    expect(runtimeActionConfirmation("restart", "Survival", undefined)).toBeNull();
+  it("confirms stop and restart actions even when nobody is online", () => {
+    expect(runtimeActionConfirmation("stop", "Survival", liveSnapshot([]))).toMatchObject({
+      title: "Stop Survival?",
+      description: "Survival will remain offline until it is started again.",
+      textInput: { label: "Reason for stopping", required: true, maxLength: 500 }
+    });
+    expect(runtimeActionConfirmation("restart", "Survival", undefined)).toMatchObject({
+      title: "Restart Survival?",
+      description: "Survival will be temporarily unavailable while it restarts.",
+      textInput: { label: "Reason for restarting", required: true, maxLength: 500 }
+    });
   });
 
   it("confirms a stop with the online player names", () => {
     const confirmation = runtimeActionConfirmation("stop", "Survival", liveSnapshot(["Alex", "Steve"]));
     expect(confirmation).toMatchObject({
-      title: "Stop the server with players online?",
+      title: "Stop Survival?",
       description: "2 players are currently connected to Survival.",
       details: "Alex, Steve",
       confirmLabel: "Stop server",

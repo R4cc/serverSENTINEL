@@ -536,6 +536,7 @@ async function assertAllPlayersOfflineTransition(page) {
   assert(online > 0, `Demo roster has no online players to stop: ${JSON.stringify(counts)}`);
 
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByLabel("Reason for stopping").fill("Player activity transition smoke test");
   await page.getByRole("button", { name: "Stop server", exact: true }).click();
   await page.getByRole("button", { name: "Start", exact: true }).waitFor();
   await page.waitForFunction((expectedEarlier) => {

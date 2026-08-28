@@ -514,6 +514,25 @@ async function assertSettingsCategoryGrid(page, label) {
   assert(result.scrollWidth <= result.clientWidth + 1, `${label}: Settings categories scroll horizontally: ${JSON.stringify(result)}`);
 }
 
+async function assertSettingsModuleDescriptionsVisible(page, label) {
+  await page.getByRole("tab", { name: /Modules/ }).click();
+  const result = await page.locator(".settingsModuleCard").evaluateAll((cards) => cards.map((card) => {
+    const description = card.querySelector(".settingsModuleCardCopy > span");
+    if (!(description instanceof HTMLElement)) return { missing: true };
+    const cardRect = card.getBoundingClientRect();
+    const descriptionRect = description.getBoundingClientRect();
+    const cardStyle = getComputedStyle(card);
+    return {
+      missing: false,
+      label: card.getAttribute("aria-label"),
+      clippedText: description.scrollHeight > description.clientHeight + 1,
+      leavesCard: descriptionRect.bottom > cardRect.bottom - Number.parseFloat(cardStyle.paddingBottom) + 1
+    };
+  }));
+  assert(result.every((card) => !card.missing), `${label}: module descriptions are missing`);
+  assert(result.every((card) => !card.clippedText && !card.leavesCard), `${label}: module descriptions are clipped: ${JSON.stringify(result)}`);
+}
+
 async function assertConsoleViewportOwnership(page, label) {
   await openPage(page, "console");
   await page.locator(".minecraftTerminal").waitFor();
@@ -796,6 +815,8 @@ async function runTabletProfile() {
     for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings", "console"]) {
       await assertTabletShellContainment(page, title, `${label} ${title}`);
     }
+    await openPage(page, "settings");
+    await assertSettingsModuleDescriptionsVisible(page, `${label} settings modules`);
 
     await context.close();
     console.log(`mobile smoke passed: ${label}`);

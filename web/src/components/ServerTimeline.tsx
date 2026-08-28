@@ -736,29 +736,29 @@ function PlayerSessionSection({
       data-viewport-to={viewport.to}
       onPointerEnter={onPointerEnter}
     >
+      <header className="serverTimelinePlayerHeader">
+        <div className="serverTimelinePlayerHeading">
+          <strong>Player activity</strong>
+          <span className="serverTimelinePlayerCounts">
+            {onlineCount > 0 && <span className="serverTimelinePlayerCount tone-online"><i aria-hidden="true" />{onlineCount} online</span>}
+            {offlineCount > 0 && <span className="serverTimelinePlayerCount tone-offline"><i aria-hidden="true" />{offlineCount} earlier</span>}
+          </span>
+        </div>
+        {collapsedOverflow && (
+          <Button
+            variant="ghost"
+            compact
+            className="serverTimelinePlayerToggle"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded ? "Show fewer" : "Show more players"}
+            <span className="serverTimelinePlayerToggleGlyph" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
+          </Button>
+        )}
+      </header>
       {lanes.length ? (
         <>
-          <header className="serverTimelinePlayerHeader">
-            <div className="serverTimelinePlayerHeading">
-              <strong>Player activity</strong>
-              <span className="serverTimelinePlayerCounts">
-                {onlineCount > 0 && <span className="serverTimelinePlayerCount tone-online"><i aria-hidden="true" />{onlineCount} online</span>}
-                {offlineCount > 0 && <span className="serverTimelinePlayerCount tone-offline"><i aria-hidden="true" />{offlineCount} earlier</span>}
-              </span>
-            </div>
-            {collapsedOverflow && (
-              <Button
-                variant="ghost"
-                compact
-                className="serverTimelinePlayerToggle"
-                aria-expanded={expanded}
-                onClick={() => setExpanded((current) => !current)}
-              >
-                {expanded ? "Show fewer" : "Show more players"}
-                <span className="serverTimelinePlayerToggleGlyph" aria-hidden="true">{expanded ? "▴" : "▾"}</span>
-              </Button>
-            )}
-          </header>
           <div
             className={`serverTimelinePlayerChart${expanded ? " is-expanded" : ""}`}
             style={{ height: playerTimelineChartHeight(lanes.length, expanded) }}
@@ -771,7 +771,14 @@ function PlayerSessionSection({
             />
           </div>
         </>
-      ) : <div className="serverTimelinePlayerEmpty">No player sessions are available for this time range.</div>}
+      ) : (
+        <div
+          className="serverTimelinePlayerChart serverTimelinePlayerEmpty"
+          style={{ height: playerTimelineChartHeight(0) }}
+        >
+          No player activity in this time range.
+        </div>
+      )}
     </section>
   );
 }

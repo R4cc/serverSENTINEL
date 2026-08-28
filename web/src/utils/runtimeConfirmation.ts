@@ -23,25 +23,38 @@ export function runtimeActionConfirmation(
   serverName: string,
   snapshot: PlayerSnapshot | undefined
 ): ConfirmationOptions | null {
-  if (action === "start" || !snapshot) return null;
+  if (action === "start") return null;
   const count = onlinePlayerCount(snapshot);
-  if (count === 0) return null;
-
   const playerLabel = count === 1 ? "1 player is" : `${count} players are`;
-  const names = onlinePlayerList(snapshot, count);
-  const staleNote = snapshot.state === "stale"
+  const names = snapshot && count > 0 ? onlinePlayerList(snapshot, count) : "";
+  const staleNote = snapshot?.state === "stale"
     ? " The panel could not refresh the player list, so this count may be out of date."
     : "";
+  const stopping = action === "stop";
 
   return {
-    title: action === "stop" ? "Stop the server with players online?" : "Restart the server with players online?",
-    description: `${playerLabel} currently connected to ${serverName}.${staleNote}`,
+    title: stopping ? `Stop ${serverName}?` : `Restart ${serverName}?`,
+    description: count > 0
+      ? `${playerLabel} currently connected to ${serverName}.${staleNote}`
+      : stopping
+        ? `${serverName} will remain offline until it is started again.`
+        : `${serverName} will be temporarily unavailable while it restarts.`,
     details: names || undefined,
-    warning: action === "stop"
-      ? "Everyone online is disconnected immediately, and the server stays offline until you start it again."
-      : "Everyone online is disconnected immediately and can only rejoin once the server finishes starting.",
-    confirmLabel: action === "stop" ? "Stop server" : "Restart server",
+    warning: count > 0
+      ? stopping
+        ? "Everyone online is disconnected immediately, and the server stays offline until you start it again."
+        : "Everyone online is disconnected immediately and can only rejoin once the server finishes starting."
+      : undefined,
+    textInput: {
+      label: stopping ? "Reason for stopping" : "Reason for restarting",
+      description: "Saved with the server operation so administrators can trace why this action was taken.",
+      placeholder: stopping ? "Why is this server being stopped?" : "Why is this server being restarted?",
+      required: true,
+      maxLength: 500,
+      rows: 3
+    },
+    confirmLabel: stopping ? "Stop server" : "Restart server",
     cancelLabel: "Keep running",
-    variant: action === "stop" ? "critical" : "primary"
+    variant: stopping ? "critical" : "primary"
   };
 }

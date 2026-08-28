@@ -16,6 +16,22 @@
   overflow-wrap: anywhere;
 }
 
+.confirmationTextField {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.confirmationTextField textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.confirmationTextField small {
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  line-height: 1.45;
+}
+
 .confirmationWarning {
   margin: 0;
   border-radius: var(--radius-sm);

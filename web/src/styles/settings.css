@@ -751,6 +751,17 @@
   }
 }
 
+@media (min-width: 721px) and (max-width: 1120px) {
+  .settingsModuleCard {
+    min-height: 166px;
+    aspect-ratio: auto;
+  }
+
+  .settingsModuleCardCopy > span {
+    -webkit-line-clamp: 3;
+  }
+}
+
 @media (max-width: 900px) {
   .settingsHubShell {
     grid-template-columns: minmax(0, 1fr);
