@@ -339,6 +339,13 @@
   gap: 5px;
 }
 
+.settingsHubRowTitle {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .settingsHubRowCopy strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
@@ -456,28 +463,81 @@
 }
 
 .settingsHubIntegrationRow {
-  align-items: start;
+  align-items: center;
   grid-template-columns: minmax(260px, 1fr) minmax(360px, 620px);
 }
 
 .settingsHubIntegrationRow .settingsHubRowCopy {
-  padding-top: 6px;
+  position: relative;
 }
 
 .settingsHubIntegrationRow .settingsHubRowCopy a {
   color: var(--accent);
 }
 
+.settingsHubIntegrationInfo {
+  position: static;
+}
+
+.settingsHubIntegrationInfo .roleInfoButton {
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.settingsHubIntegrationInfo .roleInfoButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settingsHubIntegrationTooltip {
+  left: 0;
+  width: min(340px, calc(100vw - 32px));
+  text-align: left;
+}
+
+.settingsHubRowCopy .settingsHubIntegrationInfo .settingsHubIntegrationTooltip {
+  transform: scale(0.94);
+  transform-origin: bottom left;
+}
+
+.settingsHubIntegrationInfo:hover .settingsHubIntegrationTooltip,
+.settingsHubIntegrationInfo:focus-within .settingsHubIntegrationTooltip {
+  pointer-events: auto;
+}
+
+.settingsHubRowCopy .settingsHubIntegrationInfo:hover .settingsHubIntegrationTooltip,
+.settingsHubRowCopy .settingsHubIntegrationInfo:focus-within .settingsHubIntegrationTooltip {
+  transform: scale(1);
+}
+
 .settingsHubIntegrationRow .settingsHubControl {
   width: 100%;
+}
+
+.settingsHubIntegrationField {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settingsHubIntegrationControlLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-title);
+  letter-spacing: var(--tracking-label);
+  line-height: 1.2;
 }
 
 .playerHeadsSettingsControl {
   width: 100%;
   max-width: 620px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  align-items: end;
   column-gap: var(--space-3);
+  row-gap: 7px;
   justify-items: stretch;
 }
 
@@ -494,6 +554,7 @@
   grid-column: 2;
   grid-row: 1;
   width: 168px;
+  min-height: 44px;
 }
 
 .playerHeadsOnboardingBackdrop {
@@ -543,6 +604,11 @@
 
 .settingsHubIntegrationRow .keyFormActions > .uiButton {
   width: 168px;
+  min-height: 44px;
+}
+
+.settingsHubIntegrationRow .secretPreview {
+  min-height: 44px;
 }
 
 .settingsHubUsers {
@@ -563,12 +629,6 @@
 
 .settingsHubUsers .usersTable tbody tr {
   background: var(--surface-raised);
-  transition: background var(--control-transition);
-}
-
-.settingsHubUsers .usersTable tbody tr:hover,
-.settingsHubUsers .usersTable tbody tr:focus-within {
-  background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
 }
 
 /* A long username truncates rather than stretching the row past the panel; the
@@ -751,6 +811,17 @@
   }
 }
 
+@media (min-width: 721px) and (max-width: 1120px) {
+  .settingsModuleCard {
+    min-height: 166px;
+    aspect-ratio: auto;
+  }
+
+  .settingsModuleCardCopy > span {
+    -webkit-line-clamp: 3;
+  }
+}
+
 @media (max-width: 900px) {
   .settingsHubShell {
     grid-template-columns: minmax(0, 1fr);
@@ -909,6 +980,10 @@
     padding-top: 0;
   }
 
+  .settingsHubIntegrationTooltip {
+    width: 100%;
+  }
+
   .settingsHubUsers,
   .settingsHubSystemOverview {
     padding: var(--space-4);
@@ -948,7 +1023,7 @@
 
 .keyForm fieldset {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 168px;
   /* The input sits under its own label, so the action lines up with the input
      rather than centring against the taller label-plus-input stack. */
   align-items: end;
@@ -957,36 +1032,19 @@
 }
 
 .keyForm--credentials fieldset {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) 168px;
 }
 
-/* Both classes land on the same element, so the configured variant has to carry
-   both: a lone `.keyFormConfigured` ties with `.keyForm` on specificity and lost
-   to whichever was written last, which stranded the action on its own line under
-   the stored key at every width.
-   It wraps instead of using a fixed two-column grid because the masked key and
-   its badge need 268px together: where the control column cannot seat both them
-   and the action, the action drops to a second line rather than the key
-   ellipsising into `**** *…`. */
 .keyForm.keyFormConfigured {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  /* Stated rather than inherited: the shared responsive layer turns `.keyForm`
-     into a column below 1100px, which would stack this pair while the row still
-     has width for both. The stacking it wants happens at 860px below. */
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  align-items: end;
   gap: var(--space-3);
   width: 100%;
 }
 
-.keyForm.keyFormConfigured .secretPreview {
-  flex: 1 1 268px;
-}
-
 .keyForm.keyFormConfigured .keyFormActions {
-  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .keyForm fieldset {
@@ -1000,9 +1058,8 @@
 }
 
 .keyFormActions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  display: grid;
+  align-items: stretch;
   gap: var(--space-2);
 }
 
@@ -1086,24 +1143,22 @@
   }
 
   .keyForm.keyFormConfigured {
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
-    flex-direction: column;
   }
 
-  /* Column direction turns the wrap basis into a height, which stretched the
-     stored key into a 268px-tall block. */
-  .keyForm.keyFormConfigured .secretPreview {
-    flex: 0 0 auto;
-  }
-
-  .keyFormActions {
-    justify-content: stretch;
-    flex-wrap: wrap;
+  .keyFormActions,
+  .settingsHubIntegrationRow .keyFormActions {
+    width: 100%;
   }
 
   .keyFormActions .uiButton,
   .keyFormConfigured .uiButton {
-    flex: 1 1 min(160px, 100%);
+    width: 100%;
+  }
+
+  .settingsHubIntegrationRow .keyFormActions > .uiButton {
+    width: 100%;
   }
 
   .secretPreview {
@@ -1142,21 +1197,9 @@
   .secretPreview {
     width: 100%;
   }
-
-  .keyFormActions {
-    justify-content: end;
-  }
 }
 
 @media (max-width: 720px) {
-
-  .keyFormActions button,
-  .keyFormConfigured button {
-    width: 100%;
-  }
-
-  .keyFormActions,
-  .keyFormConfigured,
   .secretPreview {
     align-items: stretch;
     flex-direction: column;
@@ -1172,10 +1215,6 @@
 .keyForm,
 .secretPreview {
   min-width: 0;
-}
-
-.keyFormActions {
-  flex-wrap: wrap;
 }
 
 .settingsHubContent { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }

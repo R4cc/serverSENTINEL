@@ -98,7 +98,7 @@ const provisionJobPollMs = 1_500;
 const serverStatusPollMs = 10_000;
 const nodeOfflineNoticeDelayMs = 3_000;
 export default function App() {
-  const { options: confirmationOptions, requestConfirmation, settle: settleConfirmation } = useConfirmationController();
+  const { options: confirmationOptions, requestConfirmation, requestTextConfirmation, settle: settleConfirmation } = useConfirmationController();
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   // Read once, at mount: the hint only decides which surface the first paint reserves,
   // and it must not change under the pending session or the guess itself shifts layout.
@@ -1823,10 +1823,17 @@ export default function App() {
   async function runContainerAction(action: "start" | "stop" | "restart", options: { announceRequest?: boolean; skipConfirmation?: boolean } = {}) {
     if (isProvisioning || dockerOperationalLock || !canBasic) return;
     if (!activeServer) return;
-    const playersOnlineConfirmation = options.skipConfirmation
+    const runtimeConfirmation = options.skipConfirmation
       ? null
       : runtimeActionConfirmation(action, activeServer.displayName, playerSnapshots[activeServer.id]);
-    if (playersOnlineConfirmation && !(await requestConfirmation(playersOnlineConfirmation))) return;
+    let reason: string | undefined;
+    if (runtimeConfirmation?.textInput) {
+      const enteredReason = await requestTextConfirmation({ ...runtimeConfirmation, textInput: runtimeConfirmation.textInput });
+      if (enteredReason === null) return;
+      reason = enteredReason;
+    } else if (runtimeConfirmation && !(await requestConfirmation(runtimeConfirmation))) {
+      return;
+    }
     setNotice("");
     setRuntimeAction(action);
     const actionLabel = action === "start" ? "Start" : action === "stop" ? "Stop" : "Restart";
@@ -1841,6 +1848,7 @@ export default function App() {
         }
         setDemoRunning(nextRunning);
         setStatus(demoFixtures().demoStatus(activeServer, nextRunning));
+        if (reason && action !== "start") demoFixtures().recordDemoRuntimeEvent(activeServer.id, action, reason);
         setOverviewData(demoFixtures().demoOverviewData(nextRunning, activeServer.id));
         setPlayerSnapshots(demoFixtures().demoPlayerSnapshots(nextRunning));
         // A demo restart replaces the console rather than adding to it, so the terminal is told to
@@ -1849,6 +1857,7 @@ export default function App() {
         const demoRestartLines = toDisplayLines([
           ...(nextRunning ? demoFixtures().demoConsoleMessages(activeServer.id) : []),
           `[demo] ${action === "restart" ? "Restarting" : action === "start" ? "Starting" : "Stopping"} simulated server`,
+          ...(reason ? [`[demo] Reason: ${reason}`] : []),
           `[demo] Server is now ${nextRunning ? "running" : "stopped"}`
         ]);
         setLogs((current) => {
@@ -1860,7 +1869,10 @@ export default function App() {
         notify("success", `Demo server ${completedLabel}`);
         return;
       }
-      await api(`/api/servers/${activeServer.id}/${action}`, { method: "POST" });
+      await api(`/api/servers/${activeServer.id}/${action}`, {
+        method: "POST",
+        body: reason === undefined ? undefined : JSON.stringify({ reason })
+      });
       await refreshApp({ silent: true });
       await refreshStatus(activeServer.id);
       setConsoleStreamVersion((version) => version + 1);
@@ -2298,7 +2310,6 @@ export default function App() {
                   setActivePage("schedule");
                 }}
                 onOpenConsole={() => setActivePage("console")}
-                requestConfirmation={requestConfirmation}
                 relativeTimestamps={relativeTimestamps}
                 formatDate={formatDisplayDate}
                 formatTime={formatDisplayTime}
@@ -2485,7 +2496,7 @@ export default function App() {
       {confirmationOptions ? (
         <ConfirmationModal
           options={confirmationOptions}
-          onConfirm={() => settleConfirmation(true)}
+          onConfirm={(textValue) => settleConfirmation(true, textValue)}
           onCancel={() => settleConfirmation(false)}
         />
       ) : null}

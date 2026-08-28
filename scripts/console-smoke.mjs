@@ -327,10 +327,15 @@ async function assertOutputDoesNotDisturbTheCommandLine(page) {
   // The demo server has players online, so restarting asks before disconnecting them.
   const confirmRestart = page.getByRole("button", { name: "Restart server", exact: true });
   await confirmRestart.waitFor();
+  await page.getByLabel("Reason for restarting").fill("Console input preservation smoke test");
   await confirmRestart.click();
   await page.waitForFunction(
     () => [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
       .some((row) => row.textContent.includes("Restarting simulated server"))
+  );
+  assert(
+    (await terminalRows(page)).some((row) => row.includes("Reason: Console input preservation smoke test")),
+    "The restart reason was not preserved in the demo trace"
   );
 
   const after = await commandCaret(page);

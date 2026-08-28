@@ -9,46 +9,69 @@ export type ConfirmationOptions = {
   details?: ReactNode;
   warning?: string;
   warningTone?: "warning" | "danger";
+  textInput?: {
+    label: string;
+    description?: string;
+    placeholder?: string;
+    required?: boolean;
+    maxLength?: number;
+    rows?: number;
+  };
   confirmLabel: string;
   cancelLabel?: string;
   variant?: "primary" | "critical";
 };
 
 export type RequestConfirmation = (options: ConfirmationOptions) => Promise<boolean>;
+export type RequestTextConfirmation = (options: ConfirmationOptions & { textInput: NonNullable<ConfirmationOptions["textInput"]> }) => Promise<string | null>;
+
+type ConfirmationOutcome = {
+  confirmed: boolean;
+  textValue: string;
+};
 
 export function useConfirmationController() {
   const [options, setOptions] = useState<ConfirmationOptions | null>(null);
-  const resolverRef = useRef<((confirmed: boolean) => void) | null>(null);
+  const resolverRef = useRef<((outcome: ConfirmationOutcome) => void) | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
 
-  const settle = useCallback((confirmed: boolean) => {
+  const settle = useCallback((confirmed: boolean, textValue = "") => {
     const resolve = resolverRef.current;
     const trigger = triggerRef.current;
     resolverRef.current = null;
     triggerRef.current = null;
     setOptions(null);
     if (trigger?.isConnected) trigger.focus({ preventScroll: true });
-    resolve?.(confirmed);
+    resolve?.({ confirmed, textValue: textValue.trim() });
   }, []);
 
-  const requestConfirmation = useCallback<RequestConfirmation>((nextOptions) => {
+  const requestOutcome = useCallback((nextOptions: ConfirmationOptions) => {
     if (resolverRef.current) {
-      resolverRef.current(false);
+      resolverRef.current({ confirmed: false, textValue: "" });
     } else {
       triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     }
     setOptions(nextOptions);
-    return new Promise<boolean>((resolve) => {
+    return new Promise<ConfirmationOutcome>((resolve) => {
       resolverRef.current = resolve;
     });
   }, []);
 
+  const requestConfirmation = useCallback<RequestConfirmation>(async (nextOptions) => (
+    await requestOutcome(nextOptions)
+  ).confirmed, [requestOutcome]);
+
+  const requestTextConfirmation = useCallback<RequestTextConfirmation>(async (nextOptions) => {
+    const outcome = await requestOutcome(nextOptions);
+    return outcome.confirmed ? outcome.textValue : null;
+  }, [requestOutcome]);
+
   useEffect(() => () => {
-    resolverRef.current?.(false);
+    resolverRef.current?.({ confirmed: false, textValue: "" });
     resolverRef.current = null;
   }, []);
 
-  return { options, requestConfirmation, settle };
+  return { options, requestConfirmation, requestTextConfirmation, settle };
 }
 
 export function ConfirmationModal({
@@ -57,16 +80,21 @@ export function ConfirmationModal({
   onCancel
 }: {
   options: ConfirmationOptions;
-  onConfirm: () => void;
+  onConfirm: (textValue?: string) => void;
   onCancel: () => void;
 }) {
   const titleId = useId();
   const descriptionId = useId();
   const warningId = useId();
+  const textInputId = useId();
+  const textInputDescriptionId = useId();
+  const [textValue, setTextValue] = useState("");
+
+  useEffect(() => setTextValue(""), [options]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onConfirm();
+    onConfirm(textValue);
   }
 
   return (
@@ -82,6 +110,22 @@ export function ConfirmationModal({
           <p id={descriptionId}>{options.description}</p>
           {options.details ? <blockquote>{options.details}</blockquote> : null}
           {options.warning ? <p id={warningId} className={`confirmationWarning confirmationWarning--${options.warningTone ?? (options.variant === "primary" ? "warning" : "danger")}`}>{options.warning}</p> : null}
+          {options.textInput ? (
+            <label className="confirmationTextField" htmlFor={textInputId}>
+              <span className="fieldLabel">{options.textInput.label}</span>
+              <textarea
+                id={textInputId}
+                value={textValue}
+                onChange={(event) => setTextValue(event.target.value)}
+                placeholder={options.textInput.placeholder}
+                required={options.textInput.required}
+                maxLength={options.textInput.maxLength}
+                rows={options.textInput.rows ?? 3}
+                aria-describedby={options.textInput.description ? textInputDescriptionId : undefined}
+              />
+              {options.textInput.description ? <small id={textInputDescriptionId}>{options.textInput.description}</small> : null}
+            </label>
+          ) : null}
         </div>
         <footer className="modalFooter">
           <Button variant="secondary" onClick={onCancel}>{options.cancelLabel ?? "Cancel"}</Button>

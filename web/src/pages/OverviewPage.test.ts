@@ -10,13 +10,13 @@ import {
   formatRelativeEventTime,
   formatRelativeScheduleTime,
   groupRecentEvents,
-  groupRecentEventsByTime,
   ModHealthPanel,
   modUpdateRefreshResultMessage,
   OverviewSummary,
   RecentEventsPanel,
   recentEventPresentation,
   SchedulePanel,
+  serverEventCategory,
   storageRemainingIsLow
 } from "./OverviewPage";
 
@@ -319,18 +319,6 @@ describe("recent event grouping", () => {
     expect(recentEventPresentation(left)).toEqual({ title: "Left", subject: "Steve", details: undefined });
   });
 
-  it("groups displayed events into just now, within the last hour, and earlier sections", () => {
-    const groups = groupRecentEvents([
-      serverEvent("player_joined", "2026-07-11T12:03:00.000Z", { text: "Alex joined", subject: "Alex", signature: "player_joined:alex" }),
-      serverEvent("player_left", "2026-07-11T11:30:00.000Z", { text: "Steve left", subject: "Steve", signature: "player_left:steve" }),
-      serverEvent("server_started", "2026-07-11T10:00:00.000Z", { text: "Server started", signature: "server_started" })
-    ], now);
-
-    const sections = groupRecentEventsByTime(groups, now);
-    expect(sections.map((section) => section.label)).toEqual(["Just now", "Within the last hour", "Earlier"]);
-    expect(sections.map((section) => section.events.length)).toEqual([1, 1, 1]);
-  });
-
   it("combines adjacent stop/start lifecycle events into a restart", () => {
     const groups = groupRecentEvents([
       serverEvent("server_started", "2026-07-11T12:01:00.000Z", { text: "Server started", severity: "success" }),
@@ -366,15 +354,21 @@ describe("recent event grouping", () => {
     const html = renderToStaticMarkup(createElement(RecentEventsPanel, {
       events,
       formatDate: String,
-      onOpenConsole: () => undefined,
-      requestConfirmation: async () => false
+      onOpenConsole: () => undefined
     }));
 
-    expect((html.match(/class="eventRow warning/g) ?? [])).toHaveLength(1);
+    expect((html.match(/class="serverEventRow warning/g) ?? [])).toHaveLength(1);
     expect(html).toContain('class="srOnly">9 occurrences');
     expect(html).toContain("×9");
-    expect(html).toContain("<h2>Recent Events</h2>");
+    expect(html).toContain("<h2>Server events</h2>");
+    expect(html).toContain('class="serverEventsTable uiDataTable"');
+    expect(html).toContain("Purpose / details");
+    expect(html).toContain("Player activity");
+    expect(html).toContain("Automation runs");
     expect(html).toContain(">View full log</button>");
+    expect(html).not.toContain("Hide events");
+    expect(html).not.toContain("eventHideButton");
+    expect(html).not.toContain("serverEventActionHeading");
   });
 
   it("uses cached player heads with overlaid join and leave icons when enabled", () => {
@@ -395,16 +389,21 @@ describe("recent event grouping", () => {
       formatDate: String,
       serverId: "server one",
       playerHeadsEnabled: true,
-      onOpenConsole: () => undefined,
-      requestConfirmation: async () => false
+      onOpenConsole: () => undefined
     }));
 
     expect(html).toContain('/api/servers/server%20one/player-head/Alex?v=');
     expect(html).toContain('/api/servers/server%20one/player-head/Steve?v=');
-    expect(html).toContain('eventRow info eventKind--player_left');
+    expect(html).toContain('serverEventRow info eventKind--player_left');
     expect((html.match(/eventIcon eventIcon--withPlayerHead/g) ?? [])).toHaveLength(2);
     expect((html.match(/class="eventPlayerIconBadge"/g) ?? [])).toHaveLength(2);
     expect((html.match(/class="eventPlayerHead"/g) ?? [])).toHaveLength(2);
+  });
+
+  it("categorizes player, server, and automation history for the event filters", () => {
+    expect(serverEventCategory(serverEvent("player_joined", now.toISOString()))).toBe("player");
+    expect(serverEventCategory(serverEvent("server_started", now.toISOString()))).toBe("server");
+    expect(serverEventCategory(serverEvent("automation_run", now.toISOString(), { source: "schedules" }))).toBe("automation");
   });
 
   it("keeps the existing event icons when player heads are disabled", () => {
@@ -418,8 +417,7 @@ describe("recent event grouping", () => {
       formatDate: String,
       serverId: "server one",
       playerHeadsEnabled: false,
-      onOpenConsole: () => undefined,
-      requestConfirmation: async () => false
+      onOpenConsole: () => undefined
     }));
 
     expect(html).not.toContain("/player-head/");

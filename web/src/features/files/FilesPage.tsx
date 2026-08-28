@@ -6,9 +6,11 @@ import { Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitiv
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
+import { TableSortButton } from "../../components/TableControls";
 import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
 import { formatBytes } from "../../utils/format";
 import { hasFileManagerPermission } from "../../utils/permissions";
+import { simpleTableAriaSort } from "../../utils/table";
 import type { PublicUser } from "../../types";
 import type { FileActionDialog, FilesWorkspace } from "./useFilesWorkspace";
 import { fileContextSelectionIntent, fileEntryPointerIntent } from "./fileSelection";
@@ -442,7 +444,7 @@ export function FilesPage({
 
           {initialFilesLoading && <LoadingLabel>Loading files in {listing.path}</LoadingLabel>}
           <div className="fileTable" role="table" aria-label="Server files" aria-busy={filesLoading || Boolean(fileOperationBusy)} aria-rowcount={renderedFileRowCount} ref={fileTableRef} tabIndex={-1} onContextMenu={handleFileTableContextMenu}>
-            <div className="fileTableHead" role="row">
+            <div className="fileTableHead uiTableHeader" role="row">
               <label className="fileCheckboxCell fileSelectAllCell" role="columnheader" aria-label={allFilesSelected ? "Clear visible selection" : "Select all visible files"}>
                 <input
                   ref={refs.fileSelectAllRef}
@@ -458,16 +460,20 @@ export function FilesPage({
                 ["type", "Type"],
                 ["size", "Size"]
               ] as const).map(([id, label]) => (
-                <span className={`fileColumnHeader fileColumnHeader--${id}`} key={id} role="presentation"><button
-                  type="button"
+                <span
+                  className={`fileColumnHeader fileColumnHeader--${id}`}
+                  key={id}
                   role="columnheader"
-                  className="uiSortHeaderButton"
-                  onClick={() => actions.toggleFileSort(id)}
-                  aria-sort={fileSort.id === id ? (fileSort.desc ? "descending" : "ascending") : "none"}
+                  aria-sort={simpleTableAriaSort(fileSort, id)}
                 >
-                  {label}
-                  <span className="uiSortIndicator" aria-hidden="true">{fileSort.id === id ? (fileSort.desc ? "↓" : "↑") : "↕"}</span>
-                </button></span>
+                  <TableSortButton
+                    sorted={fileSort.id === id ? (fileSort.desc ? "desc" : "asc") : false}
+                    onClick={() => actions.toggleFileSort(id)}
+                    label={label}
+                  >
+                    {label}
+                  </TableSortButton>
+                </span>
               ))}
             </div>
             {initialFilesLoading && Array.from({ length: 8 }, (_, index) => <FileTableSkeletonRow key={index} />)}
@@ -485,7 +491,7 @@ export function FilesPage({
               return (
                 <div
                   key={entry.path}
-                  className={`fileTableRow ${selected ? "selected" : ""} ${draggedFilePath === entry.path ? "fileDragging" : ""} ${entry.type === "directory" && fileDropTargetPath === entry.path ? "fileDropTarget" : ""}`.trim()}
+                  className={`fileTableRow uiTableRow ${selected ? "selected" : ""} ${draggedFilePath === entry.path ? "fileDragging" : ""} ${entry.type === "directory" && fileDropTargetPath === entry.path ? "fileDropTarget" : ""}`.trim()}
                   role="row"
                   aria-selected={selected}
                   draggable={actions.canDragFileEntry(entry)}
@@ -530,7 +536,7 @@ export function FilesPage({
                   </button>
                   <span className="fileModifiedCell" role="cell">{dateTimeFormatter.format(new Date(entry.modifiedAt))}</span>
                   <span className="fileTypeCell" role="cell">{fileDisplayType(entry)}</span>
-                  <span className="fileSizeCell" role="cell">{entry.type === "file" ? formatBytes(entry.size) : "-"}</span>
+                  <span className="fileSizeCell" role="cell">{entry.type === "file" ? formatBytes(entry.size) : "—"}</span>
                 </div>
               );
             })}

@@ -113,7 +113,7 @@ const app = Fastify({
   // `request.ip`, and that is what the rate limiter keys on — so login throttling could be defeated
   // by rotating the header. A single hop matches the documented reverse-proxy deployment and makes
   // `request.ip` the address the proxy itself observed, which the client cannot forge.
-  trustProxy: config.trustProxy ? 1 : false,
+  trustProxy: config.trustProxy ? (_address, hop) => hop < 1 : false,
   logger: {
     level: config.logLevel,
     redact: [

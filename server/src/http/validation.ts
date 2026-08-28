@@ -121,6 +121,30 @@ export function validateDockerImageName(image: unknown) {
   return value;
 }
 
+export function optionalBoundedInteger(value: unknown, fieldName: string, min: number, max: number) {
+  if (value === undefined) return undefined;
+  const text = typeof value === "number" ? String(value) : typeof value === "string" ? value : "";
+  if (!/^\d+$/.test(text)) {
+    badRequest(`${fieldName} must be a whole number between ${min} and ${max}`);
+  }
+  const parsed = Number(text);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    badRequest(`${fieldName} must be a whole number between ${min} and ${max}`);
+  }
+  return parsed;
+}
+
+export function validateRuntimeActionReason(reason: unknown) {
+  if (typeof reason !== "string") badRequest("A reason is required to stop or restart a server");
+  const value = reason.trim();
+  if (!value) badRequest("A reason is required to stop or restart a server");
+  if (value.length > 500) badRequest("The stop or restart reason cannot exceed 500 characters");
+  if (/[\u0000\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
+    badRequest("The stop or restart reason contains unsupported control characters");
+  }
+  return value;
+}
+
 export function validateJavaArgs(args: unknown) {
   const value = typeof args === "string" ? args.trim() : "";
   if (!value) return "-Xms2G -Xmx4G";

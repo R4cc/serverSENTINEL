@@ -992,7 +992,6 @@ button .buttonIcon {
 }
 
 .usersTable {
-  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   background: var(--surface);
@@ -1011,38 +1010,26 @@ button .buttonIcon {
 
 .usersTable th:nth-child(1),
 .usersTable td:nth-child(1) {
-  width: 35%;
+  width: 52%;
 }
 
 .usersTable th:nth-child(2),
 .usersTable td:nth-child(2) {
-  width: 20%;
+  width: 32%;
 }
 
 .usersTable th:nth-child(3),
 .usersTable td:nth-child(3) {
-  width: 45%;
+  width: 16%;
 }
 
 .usersTable th,
 .usersTable td {
-  border-bottom: var(--border-strong) solid var(--border);
-  padding: var(--space-3) var(--space-4);
   position: relative;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.usersTable tr:last-child td {
-  border-bottom: 0;
 }
 
 .usersTable th {
-  color: var(--text-muted);
   background: var(--surface-muted);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
 }
 
 .usersTable th:last-child,
@@ -1987,12 +1974,12 @@ button .buttonIcon {
 
 @media (max-width: 720px) {
 
-  .userActions {
-    justify-content: stretch;
+  .usersTable {
+    min-width: 520px;
   }
 
-  .userActions button {
-    flex: 1;
+  .userActions {
+    justify-content: stretch;
   }
 
   .userModalFields,
@@ -2034,6 +2021,13 @@ button .buttonIcon {
   justify-content: flex-end;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+.userActionMenuTrigger.uiButton {
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  min-height: var(--control-height-compact);
+  padding: 0;
 }
 
 .usersSettings { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }

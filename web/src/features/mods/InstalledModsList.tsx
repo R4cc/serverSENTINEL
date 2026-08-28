@@ -83,6 +83,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
 
       <div
         className={`modsWorkspaceTable ${draggingFiles ? "isDragTarget" : ""}`}
+        role={!initialLoading && visible.length > 0 ? "list" : undefined}
         aria-busy={busy}
         onDragEnter={(event) => { if (hasFiles(event) && !dropLocked) { event.preventDefault(); setDraggingFiles(true); } }}
         onDragOver={(event) => { if (hasFiles(event) && !dropLocked) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
@@ -94,7 +95,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
         }}
       >
         {draggingFiles && <div className="modsWorkspaceDropOverlay" role="status"><AppIcon name="fileUp" /><strong>Drop JAR files to upload</strong></div>}
-        <div className="modsWorkspaceTableHead" aria-hidden="true">
+        <div className="modsWorkspaceTableHead uiTableHeader" aria-hidden="true">
           <span>{terminology.singularTitle}</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
         </div>
         {initialLoading && <LoadingLabel>Loading installed {terminology.plural}</LoadingLabel>}
@@ -110,6 +111,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
             <article
               key={mod.filename}
               className={`modsWorkspaceRow ${mod.enabled ? "" : "isDisabled"}`}
+              role="listitem"
             >
               <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} title={`Open details for ${mod.displayName}`}>
                 <ModIconImage src={icon} fallback="JAR" />

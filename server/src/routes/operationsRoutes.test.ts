@@ -74,6 +74,24 @@ describe("operations routes", () => {
     expect(harness.operations.list).toHaveBeenCalledWith({ serverId, status: "running", limit: 17 });
   });
 
+  it("rejects malformed and out-of-range table limits", async () => {
+    const harness = testApp();
+
+    for (const limit of ["17garbage", "0", "251"]) {
+      const response = await harness.app.inject({ method: "GET", url: `/api/operations?limit=${limit}` });
+      expect(response.statusCode).toBe(400);
+    }
+    expect(harness.operations.list).not.toHaveBeenCalled();
+  });
+
+  it("returns a bad request for an unknown status filter", async () => {
+    const harness = testApp();
+    const response = await harness.app.inject({ method: "GET", url: "/api/operations?status=stalled" });
+
+    expect(response.statusCode).toBe(400);
+    expect(harness.operations.list).not.toHaveBeenCalled();
+  });
+
   it("returns an operation and verifies its server still exists", async () => {
     const found = operation();
     const harness = testApp({ found });

@@ -1,5 +1,6 @@
 import type { Header } from "@tanstack/react-table";
 import type { ReactNode } from "react";
+import { Button } from "./UiPrimitives";
 
 /**
  * `aria-sort` belongs on the header cell, not on the control inside it, so the
@@ -20,18 +21,75 @@ export function SortHeaderButton<TData, TValue>({
 }) {
   const sorted = header.column.getIsSorted();
   const canSort = header.column.getCanSort();
+
+  return (
+    <TableSortButton
+      sorted={sorted}
+      onClick={canSort ? () => header.column.toggleSorting() : undefined}
+      disabled={!canSort}
+      label={typeof children === "string" ? children : "this column"}
+    >
+      {children}
+    </TableSortButton>
+  );
+}
+
+export function TableSortButton({
+  sorted,
+  onClick,
+  disabled = false,
+  label,
+  children
+}: {
+  sorted: false | "asc" | "desc";
+  onClick?: () => void;
+  disabled?: boolean;
+  label: string;
+  children: ReactNode;
+}) {
   const indicator = sorted === "asc" ? "↑" : sorted === "desc" ? "↓" : "↕";
 
   return (
     <button
       type="button"
       className="uiSortHeaderButton"
-      onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-      disabled={!canSort}
-      title={canSort ? `Sort by ${typeof children === "string" ? children : "this column"}` : undefined}
+      onClick={onClick}
+      disabled={disabled}
+      title={!disabled ? `Sort by ${label}` : undefined}
     >
       {children}
-      {canSort && <span className="uiSortIndicator" aria-hidden="true">{indicator}</span>}
+      {!disabled && <span className="uiSortIndicator" aria-hidden="true">{indicator}</span>}
     </button>
+  );
+}
+
+export function TablePagination({
+  pageIndex,
+  pageSize,
+  totalItems,
+  itemLabel,
+  onPageChange
+}: {
+  pageIndex: number;
+  pageSize: number;
+  totalItems: number;
+  itemLabel: string;
+  onPageChange: (pageIndex: number) => void;
+}) {
+  if (totalItems <= 0) return null;
+  const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(Math.max(0, pageIndex), pageCount - 1);
+  const firstItem = currentPage * pageSize + 1;
+  const lastItem = Math.min(totalItems, firstItem + pageSize - 1);
+
+  return (
+    <div className="uiTablePagination">
+      <span className="uiTableRange" aria-live="polite">Showing {firstItem}–{lastItem} of {totalItems} {itemLabel}</span>
+      <nav className="uiTablePager" aria-label={`${itemLabel} pagination`}>
+        <Button variant="ghost" compact disabled={currentPage === 0} onClick={() => onPageChange(currentPage - 1)}>Previous</Button>
+        <span>Page {currentPage + 1} of {pageCount}</span>
+        <Button variant="ghost" compact disabled={currentPage >= pageCount - 1} onClick={() => onPageChange(currentPage + 1)}>Next</Button>
+      </nav>
+    </div>
   );
 }

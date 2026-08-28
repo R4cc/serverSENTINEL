@@ -113,9 +113,25 @@
 
 }
 
-/* The compact shell stacks its navigation above the workspace. The desktop console contract uses
-   a full-viewport workspace from 721px upward, so without a bounded shell that workspace adds its
-   own 100vh below the compact navigation and pushes the command line out of short viewports. */
+/* The compact shell stacks its navigation above the workspace. Tablet feature pages keep their
+   desktop-contained scroll surfaces, so the shell must divide the visual viewport between the
+   navigation and workspace instead of letting a 100vh workspace sit below the navigation. */
+@media (min-width: 721px) and (max-width: 1100px) {
+  .appShell,
+  .sidebarCollapsed.appShell {
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .workspace {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+}
 
 @media (max-width: 720px) {
   .workspace,
@@ -136,29 +152,6 @@
     width: 100%;
   }
 
-  .eventRow {
-    grid-template-columns: 10px minmax(0, 1fr) auto 44px;
-    gap: var(--space-2);
-    min-height: 60px;
-    padding: var(--space-2) var(--space-3);
-  }
-
-  .eventRow small {
-    grid-column: 3;
-    grid-row: 1;
-    align-self: center;
-    text-align: right;
-  }
-
-  .eventHideButton.uiButton {
-    grid-column: 4;
-    grid-row: 1;
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
-    justify-self: end;
-  }
 }
 
 .fieldError {
@@ -280,7 +273,6 @@ button,
 .iconButton,
 .iconOnlyButton,
 .modalCloseButton,
-.eventHideButton,
 .iconDangerButton,
 .accountLogoutButton {
   flex: 0 0 auto;
@@ -450,10 +442,6 @@ button:disabled,
   border-color: var(--border-muted);
   background: var(--surface-muted);
   color: var(--status-neutral-foreground);
-}
-
-.eventRow {
-  transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
 }
 
 .modalPanel {
@@ -1122,7 +1110,6 @@ textarea,
 .iconButton,
 .iconOnlyButton,
 .modalCloseButton,
-.eventHideButton,
 .accountLogoutButton {
   border-color: var(--border-muted);
 }
@@ -1138,7 +1125,6 @@ textarea:hover:not(:disabled),
 .iconButton,
 .iconOnlyButton,
 .modalCloseButton,
-.eventHideButton,
 .accountLogoutButton {
   background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
   color: var(--text);
@@ -1147,7 +1133,6 @@ textarea:hover:not(:disabled),
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
 .modalCloseButton:hover:not(:disabled),
-.eventHideButton:hover:not(:disabled),
 .accountLogoutButton:hover:not(:disabled) {
   background: var(--sentinel-accent-soft);
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
@@ -1181,20 +1166,6 @@ textarea:hover:not(:disabled),
   border-color: color-mix(in srgb, var(--sentinel-danger) 38%, transparent);
 }
 
-.eventRow {
-  border-color: var(--border-row);
-  box-shadow: none;
-}
-
-.eventRow {
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
-}
-
-.eventRow:hover {
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface-raised));
-  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
-}
-
 .modalHeader,
 .modalFooter {
   border-color: var(--border-row);
@@ -1221,10 +1192,6 @@ textarea:hover:not(:disabled),
   border-color: transparent;
   background: transparent;
   opacity: 0.46;
-}
-
-.eventList {
-  gap: var(--space-2);
 }
 
 .installTabs {

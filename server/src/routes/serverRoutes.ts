@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js";
 import { config, maxServerPort, minServerPort } from "../config.js";
 import { commandRateLimit, destructiveRateLimit, provisionRateLimit, runtimeActionRateLimit } from "../http/rateLimits.js";
-import { badRequest } from "../http/validation.js";
+import { badRequest, validateRuntimeActionReason } from "../http/validation.js";
 import { apiErrorResponse, throwHttp } from "../http/errors.js";
 import { consoleLogLineLimit } from "../consoleLogs.js";
 import { hasPermission } from "../permissions.js";
@@ -19,13 +19,14 @@ import { type CreateServerInput } from "../servers/ports.js";
 import { lifecycleWithIntent, recordOperation, requireServerStoppedForMutableConfiguration, runtimeResultRunning, sendConsoleCommandWithIntent } from "../servers/lifecycle.js";
 import { measureWorldSize } from "../servers/exportSelection.js";
 import { startConsoleHeartbeat, timelineHistoryWindow as timelineHistoryWindowMs, type Client } from "../servers/overview.js";
+import { persistentServerEvents } from "../servers/serverEvents.js";
 import { createConsoleSender } from "../servers/consoleBackpressure.js";
 import { consoleHub, type ConsoleCursor } from "../servers/consoleService.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import { timelinePlayerActivity, timelinePlayerIsKnown, timelineResourcePoints, timelineScheduleMarkers } from "../serverTimeline.js";
 import { localNodeId } from "../nodes/nodeService.js";
 import { logDebug, logInfo, logWarn, errorLogFields } from "../logging.js";
-import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
+import type { ManagedServer, ServerActivity, ServerEvent, ServerRuntimeProfile } from "../types.js";
 
 /**
  * A viewer's resume point. Both halves have to be present and well formed to be trusted: without a
@@ -212,9 +213,10 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/start", runtimeActionRate
   }, () => lifecycleWithIntent(server, "start"));
 });
 
-app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
+app.post<{ Params: { id: string }; Body: { reason?: unknown } }>("/api/servers/:id/stop", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  const reason = validateRuntimeActionReason(request.body?.reason);
   requireNoActiveModMutation(server.id);
   return recordOperation({
     type: "server.stop",
@@ -222,13 +224,19 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/stop", runtimeActionRateL
     nodeId: server.nodeId,
     createdBy: user.id,
     task: "Stopping server",
-    successTask: "Server stopped"
-  }, () => lifecycleWithIntent(server, "stop"));
+    successTask: "Server stopped",
+    result: (value) => ({ reason, runtimeResult: value })
+  }, (operation) => {
+    services.operationsRepository.update(operation.id, { result: { reason } });
+    logInfo({ ...serverLogFields(server), category: "audit", action: "server_stop", status: "requested", operationId: operation.id, reason }, "Server stop requested");
+    return lifecycleWithIntent(server, "stop");
+  });
 });
 
-app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
+app.post<{ Params: { id: string }; Body: { reason?: unknown } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
+  const reason = validateRuntimeActionReason(request.body?.reason);
   requireNoActiveModMutation(server.id);
   return recordOperation({
     type: "server.restart",
@@ -237,8 +245,13 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/restart", runtimeActionRa
     createdBy: user.id,
     task: "Restarting server",
     successTask: "Server restarted",
-    restartEffect: "clear"
-  }, () => lifecycleWithIntent(server, "restart"));
+    restartEffect: "clear",
+    result: (value) => ({ reason, runtimeResult: value })
+  }, (operation) => {
+    services.operationsRepository.update(operation.id, { result: { reason } });
+    logInfo({ ...serverLogFields(server), category: "audit", action: "server_restart", status: "requested", operationId: operation.id, reason }, "Server restart requested");
+    return lifecycleWithIntent(server, "restart");
+  });
 });
 
 app.post<{ Params: { id: string }; Body: { command?: string } }>("/api/servers/:id/command", commandRateLimit, async (request) => {
@@ -398,9 +411,28 @@ app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; max
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/events", async (request) => {
-  await requireRequestPermission(request, "servers.view");
+  const user = await requireRequestPermission(request, "servers.view");
   const server = await getServer(request.params.id);
-  return runtimeForServer(server).serverOverview(server);
+  const overview = await runtimeForServer(server).serverOverview(server) as {
+    events?: ServerEvent[];
+    eventsStatus?: "ok" | "unavailable";
+    activity?: ServerActivity;
+  };
+  const now = Date.now();
+  const from = now - timelineHistoryWindowMs;
+  const events = persistentServerEvents({
+    timelineEvents: services.timelineEventsRepository.list(server.id, from, now),
+    transientEvents: overview.events,
+    operations: services.operationsRepository.listRecentRuntimeActions(server.id, new Date(from).toISOString()),
+    scheduledRuns: hasPermission(user, "schedules.view")
+      ? services.serversRepository.scheduledRunsInRange(server.id, from, now)
+      : []
+  });
+  return {
+    events,
+    eventsStatus: events.length > 0 ? "ok" : overview.eventsStatus,
+    activity: overview.activity ?? {}
+  };
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/storage", async (request) => {

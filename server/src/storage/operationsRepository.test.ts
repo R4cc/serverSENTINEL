@@ -57,6 +57,17 @@ describe("OperationsRepository", () => {
     });
   });
 
+  it("lists recent stop and restart actions without unrelated operations crowding them out", async () => {
+    const operations = await createRepository();
+    operations.create({ id: "old-restart", type: "server.restart", serverId: "server-id", createdAt: "2026-08-01T00:00:00.000Z" });
+    operations.create({ id: "recent-stop", type: "server.stop", serverId: "server-id", createdAt: "2026-08-28T10:00:00.000Z" });
+    operations.create({ id: "recent-schedule", type: "schedule.run", serverId: "server-id", createdAt: "2026-08-28T11:00:00.000Z" });
+    operations.create({ id: "other-server", type: "server.restart", serverId: "other-server", createdAt: "2026-08-28T12:00:00.000Z" });
+
+    expect(operations.listRecentRuntimeActions("server-id", "2026-08-27T00:00:00.000Z").map((operation) => operation.id))
+      .toEqual(["recent-stop"]);
+  });
+
   it("records failed operations with useful error state", async () => {
     const operations = await createRepository();
     const created = operations.create({ type: "mod.install", serverId: "server-id" });

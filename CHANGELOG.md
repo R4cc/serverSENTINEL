@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.0 - 2026-08-28
+
+- Standardized the Integrations settings rows with consistent field labels, control heights, action widths, alignment, and responsive padding.
+
 ## 26.8.33 - 2026-08-24
 
 - The player geography map now does less work on every hover and redraw: the coastline and each marker's position are computed once instead of repeatedly, and clustering no longer rebuilds its groups member by member. The map behaves exactly as before.

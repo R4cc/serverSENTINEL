@@ -121,13 +121,26 @@ describe("SettingsPage", () => {
   });
 
   it("keeps integration management disabled without permission", () => {
-    const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "integrations" })} />);
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "integrations",
+      modules: [
+        { id: "schedules", enabled: true, accessible: true },
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
+      ]
+    })} />);
     expect(html).toContain("Modrinth API key");
     expect(html).toContain("Manage integrations permission is required");
     expect(html).toContain("Player heads");
     expect(html).toContain("MCHeads");
     expect(html).toContain("cached heads refresh on a rolling daily schedule");
     expect(html).not.toContain("12 hours");
+    expect((html.match(/class="roleInfoWrap settingsHubIntegrationInfo"/g) ?? [])).toHaveLength(3);
+    expect((html.match(/role="tooltip"/g) ?? [])).toHaveLength(3);
+    expect(html).toContain('aria-label="About Modrinth API key"');
+    expect(html).toContain('aria-label="About MaxMind GeoLite2"');
+    expect(html).toContain('aria-label="About Player heads"');
+    expect(html).toContain('class="uiStatusBadge uiStatusBadge--neutral">Optional</span>');
     expect(html).toContain("0 cached heads · 0 B");
     expect(html).toContain('aria-label="Show player heads on Overview"');
   });
@@ -142,6 +155,27 @@ describe("SettingsPage", () => {
     expect(html).toContain("42 cached heads · 12 KiB");
     expect(html).toContain("Clear cache");
     expect(html).toContain('href="https://www.mc-heads.net/"');
+  });
+
+  it("uses the same labeled field and action structure for configured integrations", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "integrations",
+      modrinthConfigured: true,
+      geoIpConfigured: true,
+      modules: [
+        { id: "schedules", enabled: true, accessible: true },
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
+      ]
+    })} />);
+
+    expect((html.match(/class="settingsHubIntegrationField"/g) ?? [])).toHaveLength(3);
+    expect(html).toContain('class="settingsHubIntegrationControlLabel">Modrinth API key</span>');
+    expect(html).toContain('class="settingsHubIntegrationControlLabel">MaxMind credentials</span>');
+    expect(html).toContain('class="settingsHubIntegrationControlLabel">Player head display</span>');
+    expect(html).toContain("Replace key");
+    expect(html).toContain("Replace credentials");
+    expect(html).toContain("Clear cache");
   });
 
   it("renders optional modules as stateful cards and locks them without permission", () => {

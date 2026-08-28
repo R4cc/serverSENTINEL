@@ -11,8 +11,8 @@ import { Activity, Globe, MapPin, Wrench } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerRegionSummary } from "../types";
 import { InlineState } from "../components/InlineState";
 import { PlayerHead } from "../components/PlayerHead";
-import { SortHeaderButton, headerAriaSort } from "../components/TableControls";
-import { Banner, Button, EmptyState, FormField, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from "../components/UiPrimitives";
+import { SortHeaderButton, TablePagination, headerAriaSort } from "../components/TableControls";
+import { Banner, Button, EmptyState, FormField, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from "../components/UiPrimitives";
 import { playerHeadVersion } from "../utils/playerHeads";
 import { PlayerGeographyMap } from "../features/players/PlayerGeographyMap";
 import { ConnectionQualityChart } from "../features/players/ConnectionQualityChart";
@@ -146,8 +146,8 @@ function RegionTable({ regions }: { regions: readonly PlayerRegionSummary[] }) {
     return <EmptyState compact title="No regions yet" message="A region appears once a player has joined from an address GeoLite2 can place." />;
   }
   return (
-    <table className="playerRegionTable">
-      <thead>
+    <table className="playerRegionTable uiDataTable" aria-label="Player regions">
+      <thead className="uiTableHeader">
         <tr>
           <th scope="col">Region</th>
           <th scope="col">Share</th>
@@ -157,7 +157,7 @@ function RegionTable({ regions }: { regions: readonly PlayerRegionSummary[] }) {
       </thead>
       <tbody>
         {regions.map((region) => (
-          <tr key={region.continentCode}>
+          <tr className="uiTableRow" key={region.continentCode}>
             <th scope="row">{region.continent}</th>
             <td>
               <span className="playerRegionShareCell">
@@ -229,8 +229,8 @@ function PlayerRoster({
 
   return (
     <>
-      <table className="playerRosterTable">
-        <thead>
+      <table className="playerRosterTable uiDataTable" aria-label="Player roster">
+        <thead className="uiTableHeader">
           <tr>
             {table.getHeaderGroups()[0]?.headers.map((header) => (
               <th
@@ -250,7 +250,7 @@ function PlayerRoster({
           {visible.map((row) => {
             const entry = row.original;
             return (
-              <tr key={`${entry.serverId}:${entry.player}`} className={entry.online ? "playerRosterRow--online" : undefined}>
+              <tr key={`${entry.serverId}:${entry.player}`} className={`uiTableRow ${entry.online ? "playerRosterRow--online" : ""}`.trim()}>
                 <th scope="row">
                   <span className="playerIdentity">
                     {playerHeadsEnabled && (
@@ -275,16 +275,13 @@ function PlayerRoster({
           })}
         </tbody>
       </table>
-      {pages > 1 && (
-        <div className="playerRosterFooter">
-          <span>Showing {current * rosterPageSize + 1}–{current * rosterPageSize + visible.length} of {rows.length} players</span>
-          <span className="playerRosterPager">
-            <Button variant="ghost" compact disabled={current === 0} onClick={() => setPage(current - 1)}>Previous</Button>
-            <span>{current + 1} / {pages}</span>
-            <Button variant="ghost" compact disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</Button>
-          </span>
-        </div>
-      )}
+      <TablePagination
+        pageIndex={current}
+        pageSize={rosterPageSize}
+        totalItems={rows.length}
+        itemLabel="players"
+        onPageChange={setPage}
+      />
     </>
   );
 }
@@ -377,7 +374,8 @@ export function PlayersPage({
   if (!active) return null;
   if (loading) {
     return (
-      <section className="tabPage playersPage layoutWide">
+      <section className="tabPage playersPage layoutWide" aria-busy="true">
+        <LoadingLabel>Loading player insights</LoadingLabel>
         <div className="playerSummaryGrid" aria-hidden="true">
           {Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="playerSummarySkeleton" />)}
         </div>

@@ -3,6 +3,8 @@ import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
 import { Button, EmptyState, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
+import { ActionMenu } from './ActionMenu';
+import { TableSortButton } from './TableControls';
 import {
   PERMISSION_DEPENDENCIES,
   PERMISSION_GROUPS,
@@ -16,6 +18,9 @@ import {
   userPermissions
 } from '../utils/permissions';
 import { usernameInputPattern } from '../utils/inputPatterns';
+import { nextTableSort, simpleTableAriaSort, type SimpleTableSort } from '../utils/table';
+
+type UserSortColumn = "username" | "role";
 
 export function UserManagement({
   users,
@@ -46,15 +51,28 @@ export function UserManagement({
 }) {
   const modalUser = editingUser && editingUser !== "create" ? editingUser : null;
   const [passwordUser, setPasswordUser] = useState<PublicUser | null>(null);
+  const [sort, setSort] = useState<SimpleTableSort<UserSortColumn>>({ id: "username", desc: false });
   const initialLoading = loading && users.length === 0;
+  const sortedUsers = useMemo(() => [...users].sort((left, right) => {
+    const leftValue = sort.id === "username" ? left.username : rolePresetLabel(displayedRolePreset(left));
+    const rightValue = sort.id === "username" ? right.username : rolePresetLabel(displayedRolePreset(right));
+    const comparison = leftValue.localeCompare(rightValue, undefined, { sensitivity: "base", numeric: true })
+      || left.username.localeCompare(right.username, undefined, { sensitivity: "base", numeric: true })
+      || left.id.localeCompare(right.id);
+    return sort.desc ? -comparison : comparison;
+  }), [sort, users]);
 
   return (
-    <div className="usersSettings">
-      <table className="usersTable" aria-busy={initialLoading}>
-        <thead>
+    <div className="usersSettings uiTableViewport">
+      <table className="usersTable uiDataTable" aria-label="Users" aria-busy={initialLoading}>
+        <thead className="uiTableHeader">
           <tr>
-            <th scope="col">User</th>
-            <th scope="col">Role</th>
+            <th scope="col" aria-sort={simpleTableAriaSort(sort, "username")}>
+              <TableSortButton sorted={sort.id === "username" ? (sort.desc ? "desc" : "asc") : false} onClick={() => setSort((current) => nextTableSort(current, "username"))} label="User">User</TableSortButton>
+            </th>
+            <th scope="col" aria-sort={simpleTableAriaSort(sort, "role")}>
+              <TableSortButton sorted={sort.id === "role" ? (sort.desc ? "desc" : "asc") : false} onClick={() => setSort((current) => nextTableSort(current, "role"))} label="Role">Role</TableSortButton>
+            </th>
             <th scope="col">Actions</th>
           </tr>
         </thead>
@@ -69,8 +87,8 @@ export function UserManagement({
               <td><div className="userActions"><SkeletonBlock className="userActionSkeleton" /><SkeletonBlock className="userActionSkeleton short" /><SkeletonBlock className="userActionSkeleton short" /></div></td>
             </tr>
           ))}
-          {users.map((user) => (
-            <tr key={user.id}>
+          {sortedUsers.map((user) => (
+            <tr className="uiTableRow" key={user.id}>
               <td data-label="User">
                 <div className="userNameCell">
                   {/* The cell truncates a long username, so the full value stays reachable. */}
@@ -99,18 +117,27 @@ export function UserManagement({
               </td>
               <td data-label="Actions">
                 <div className="userActions">
-                  <Button variant="secondary" compact onClick={() => setPasswordUser(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Reset password"}>Reset password</Button>
-                  <Button variant="secondary" compact onClick={() => onOpenEdit(user)} disabled={busy || !canManageUsers} title={!canManageUsers ? "Manage users permission is required" : "Edit user"}>Edit</Button>
-                  <Button
-                    variant="ghost"
-                    compact
-                    className="dangerTextButton"
-                    onClick={() => onDelete(user)}
-                    disabled={busy || user.id === currentUserId || !canManageUsers}
-                    title={user.id === currentUserId ? "You cannot delete your current user" : !canManageUsers ? "Manage users permission is required" : "Delete user"}
-                  >
-                    Delete
-                  </Button>
+                  <ActionMenu
+                    label={`Actions for ${user.username}`}
+                    className="userActionMenu"
+                    triggerClassName="userActionMenuTrigger"
+                    disabled={busy}
+                    items={[
+                      { id: "reset-password", label: "Reset password", icon: <AppIcon name="refresh" />, onSelect: () => setPasswordUser(user), disabled: !canManageUsers, title: !canManageUsers ? "Manage users permission is required" : "Reset password" },
+                      { id: "edit", label: "Edit", icon: <AppIcon name="edit" />, onSelect: () => onOpenEdit(user), disabled: !canManageUsers, title: !canManageUsers ? "Manage users permission is required" : "Edit user" },
+                      {
+                        id: "delete",
+                        label: "Delete",
+                        icon: <AppIcon name="trash" />,
+                        onSelect: () => onDelete(user),
+                        disabled: user.id === currentUserId || !canManageUsers,
+                        title: user.id === currentUserId ? "You cannot delete your current user" : !canManageUsers ? "Manage users permission is required" : `Delete ${user.username}`,
+                        critical: true,
+                        separatorBefore: true
+                      }
+                    ]}
+                    trigger={<AppIcon name="moreHorizontal" />}
+                  />
                 </div>
               </td>
             </tr>

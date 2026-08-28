@@ -239,6 +239,20 @@ export function createDemoSession(random: () => number = Math.random, startedAt 
       message: `${timelineScenarioPlayers.blink} left`,
       signature: `player_left:${timelineScenarioPlayers.blink.toLowerCase()}`,
       subject: timelineScenarioPlayers.blink
+    },
+    {
+      id: "demo-event-automation-backup",
+      eventType: "automation_run",
+      timestamp: new Date(startedAt - 65 * 60_000).toISOString(),
+      occurredAt: startedAt - 65 * 60_000,
+      source: "schedules",
+      type: "success",
+      severity: "success",
+      text: "Nightly backup completed",
+      message: "Nightly backup completed",
+      details: "All steps completed",
+      signature: "automation_run:nightly-backup:success",
+      subject: "Nightly backup"
     }
   ];
 
@@ -879,6 +893,26 @@ export function demoTimelineData(running: boolean, schedules: ScheduledExecution
 
 function demoEvent(event: ServerEvent): ServerEvent {
   return event;
+}
+
+export function recordDemoRuntimeEvent(serverId: string, action: "stop" | "restart", reason: string) {
+  const session = demoSession(serverId);
+  const occurredAt = Date.now();
+  const restarting = action === "restart";
+  const message = restarting ? "Server restarted" : "Server stopped";
+  session.events.push({
+    id: `demo-operation-${action}-${occurredAt}`,
+    eventType: restarting ? "server_restarted" : "server_stopped",
+    timestamp: new Date(occurredAt).toISOString(),
+    occurredAt,
+    source: "operations",
+    type: restarting ? "success" : "info",
+    severity: restarting ? "success" : "info",
+    text: message,
+    message,
+    details: `Purpose: ${reason}`,
+    signature: restarting ? "server_restart_operation" : "server_stop_operation"
+  });
 }
 
 export function demoOverviewData(running: boolean, serverId = demoServerId): ServerOverviewData {

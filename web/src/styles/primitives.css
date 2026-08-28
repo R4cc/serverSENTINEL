@@ -275,10 +275,31 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .inlineState strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-ui); line-height: 1.35; text-transform: none; }
 .inlineState span { color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
 
-.uiSortHeaderButton { min-height: var(--control-height-compact); justify-content: flex-start; gap: var(--space-1); border: 0; border-radius: var(--radius-sm); padding: 0 var(--space-2); background: transparent; color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-align: left; text-transform: uppercase; box-shadow: none; }
+.uiSortHeaderButton { width: 100%; min-height: var(--control-height-compact); justify-content: flex-start; gap: var(--space-1); border: 0; border-radius: var(--radius-sm); padding: 0 var(--space-2); background: transparent; color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-align: left; text-transform: uppercase; box-shadow: none; }
 .uiSortHeaderButton:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); transform: none; }
 .uiSortHeaderButton:disabled { cursor: default; opacity: 1; }
 .uiSortIndicator { width: 1em; color: var(--text-soft); font-size: var(--type-meta-size); line-height: 1; text-align: center; }
+
+.uiDataTable { width: 100%; border-collapse: collapse; font-size: var(--type-body-size); }
+.uiTableViewport { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; contain: inline-size; }
+.uiDataTable th,
+.uiDataTable td { min-width: 0; padding: var(--space-2); border-bottom: var(--border-subtle) solid var(--border-row); vertical-align: middle; text-align: left; }
+.uiTableHeader { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.uiTableHeader [aria-sort="ascending"] .uiSortHeaderButton,
+.uiTableHeader [aria-sort="descending"] .uiSortHeaderButton { background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--text); }
+.uiTableRow { transition: background var(--motion-duration-fast) var(--motion-ease-standard), border-color var(--control-transition); }
+@media (hover: hover) {
+  .uiDataTable .uiTableRow:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+}
+.uiDataTable tbody .uiTableRow:last-child > th,
+.uiDataTable tbody .uiTableRow:last-child > td { border-bottom: 0; }
+.uiTablePagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: auto; padding-top: var(--space-3); border-top: var(--border-subtle) solid var(--border-row); color: var(--text-muted); font-size: var(--type-helper-size); font-variant-numeric: tabular-nums; }
+.uiTablePager { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.uiTablePager > span { min-width: 7ch; color: var(--text); text-align: center; }
+@media (max-width: 560px) {
+  .uiTablePagination { align-items: stretch; flex-direction: column; }
+  .uiTablePager { justify-content: space-between; }
+}
 
 .buttonIcon,
 .sideIcon,
@@ -687,28 +708,12 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   }
 }
 
-.fileTableHead .uiSortHeaderButton,
-.scheduleTableHeader .uiSortHeaderButton {
-  width: 100%;
-  min-height: var(--control-height-compact);
-  border-radius: var(--radius-sm);
-  padding-inline: var(--space-2);
-}
-
 .fileNameCell {
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-strong);
   letter-spacing: var(--tracking-ui);
 }
 
-
-.scheduleTableHeader {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
 
 .scheduleNameCell strong,
 .scheduledRunItem strong {
@@ -938,8 +943,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
 .fileTableRow,
 .modsWorkspaceRow,
-.scheduleTableRow,
-.eventRow {
+.scheduleTableRow {
   border-color: var(--border-row);
   background: var(--surface);
   box-shadow: none;
@@ -948,8 +952,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
 .fileTableRow:hover,
 .modsWorkspaceRow:hover,
-.scheduleTableRow:hover,
-.eventRow:hover {
+.scheduleTableRow:hover {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
 }

@@ -294,17 +294,6 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
-.usersTable th,
-.fileTableHead button,
-.fileTableHead label,
-.fileTableHead span {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .usersTable td,
 .fileTableRow > span {
   color: var(--text-muted);
@@ -314,8 +303,7 @@ textarea:not(.xterm-helper-textarea),
 
 .userNameCell strong,
 .fileNameCell > span:last-child,
-.fileDetailsTitle h2,
-.eventRow strong {
+.fileDetailsTitle h2 {
   color: var(--text);
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-strong);
@@ -328,8 +316,7 @@ textarea:not(.xterm-helper-textarea),
 .nodeModalHeader p,
 .modInstallStepIntro p,
 .fileDetailsTitle > div > span,
-.fileDetailsContent dd,
-.eventRow small {
+.fileDetailsContent dd {
   color: var(--text-muted);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);

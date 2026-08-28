@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { lazyPage } from "../app/lazyPage";
 import type { ManagedServer, PlayerSnapshot, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse } from "../types";
 import type { ModUpdatePlan } from "../types";
-import type { RequestConfirmation } from "../components/ConfirmationModal";
 import { InlineState } from "../components/InlineState";
 import { ServerTimelineLoadingSkeleton } from "../components/LoadingSkeletons";
 import type { ManagedContentTerminology } from "../features/mods/contentTerminology";
@@ -46,7 +45,6 @@ export function ServerOverviewTab({
   canViewSchedules,
   onOpenSchedules,
   onOpenConsole,
-  requestConfirmation,
   relativeTimestamps,
   formatDate,
   formatTime,
@@ -77,7 +75,6 @@ export function ServerOverviewTab({
   canViewSchedules: boolean;
   onOpenSchedules: (target?: ScheduleNavigationTarget) => void;
   onOpenConsole: () => void;
-  requestConfirmation: RequestConfirmation;
   relativeTimestamps: boolean;
   formatDate: (value: string | number | Date) => string;
   formatTime: (value: string | number | Date) => string;
@@ -163,7 +160,6 @@ export function ServerOverviewTab({
           serverId={server.id}
           playerHeadsEnabled={playerHeadsEnabled}
           onOpenConsole={onOpenConsole}
-          requestConfirmation={requestConfirmation}
           loading={overviewLoading && overviewData.events.length === 0}
         />
       </div>

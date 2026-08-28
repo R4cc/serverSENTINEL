@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
-import { inferRolePreset, isFullAccessUser, normalizePermissions, rolePresetFromUnknown } from "../permissions.js";
-import type { Session, StoredUser } from "../types.js";
+import { inferRolePreset, isFullAccessUser, normalizePermissions, rolePresetFromUnknown, ROLE_PRESETS } from "../permissions.js";
+import type { Permission, Session, StoredUser } from "../types.js";
 import { asArray, asObject, optionalString, requiredString } from "./valueValidation.js";
 import { badRequest, notFound, throwHttp } from "../http/errors.js";
 import type { StorageDatabase } from "./database.js";
@@ -20,6 +20,9 @@ function badUserRequest(message: string): never {
   badRequest(message);
 }
 
+/** Permissions added to existing role presets after accounts could already have been stored. */
+const legacyPresetAdditions = ["servers.export", "players.view", "players.manage"] as const satisfies readonly Permission[];
+
 export function validateUsername(username?: string) {
   const value = username?.trim();
   if (!value || value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_.-]+$/.test(value)) {
@@ -33,8 +36,11 @@ export function normalizeStoredUser(value: unknown): StoredUser {
   let permissions = normalizePermissions(asArray(user.permissions, "user.permissions"));
   let inferredPreset = inferRolePreset(permissions);
   const rolePreset = user.rolePreset === undefined ? inferredPreset : rolePresetFromUnknown(user.rolePreset);
-  if (rolePreset !== "custom" && !permissions.includes("servers.export")) {
-    const upgradedPermissions = normalizePermissions([...permissions, "servers.export"]);
+  if (rolePreset !== "custom") {
+    const additions = legacyPresetAdditions.filter((permission) => (
+      ROLE_PRESETS[rolePreset].includes(permission) && !permissions.includes(permission)
+    ));
+    const upgradedPermissions = normalizePermissions([...permissions, ...additions]);
     if (inferRolePreset(upgradedPermissions) === rolePreset) {
       permissions = upgradedPermissions;
       inferredPreset = rolePreset;

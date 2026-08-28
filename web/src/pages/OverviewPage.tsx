@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState
+} from '@tanstack/react-table';
 import { Activity, Blocks, Clock, Cpu, Globe, HardDrive, MemoryStick, TriangleAlert } from 'lucide-react';
 import type {
   ManagedServer,
@@ -14,7 +22,6 @@ import type {
 import { formatUptime } from '../utils/resourceFormatting';
 import { formatAdaptiveBytes, formatRelativeTimestamp, minecraftVersionInfo, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
-import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon, SidebarIcon } from '../components/FileTypeIcon';
 import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
@@ -23,12 +30,14 @@ import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs,
 import { playerHeadVersion } from '../utils/playerHeads';
 import { usePlayerHead } from '../components/PlayerHead';
 import { schedulesNeedingAttention } from '../features/schedules/scheduleHealth';
+import { SortHeaderButton, TablePagination, headerAriaSort } from '../components/TableControls';
+import { InlineState } from '../components/InlineState';
 
-const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const activePlayerPreviewLimit = 8;
 const overviewSupportCardSlotCount = 4;
 const upcomingScheduleDisplayLimit = 4;
 const upcomingScheduleWindowMs = 24 * 60 * 60 * 1000;
+const serverEventsPageSize = 10;
 
 function dockerStateLabel(status: ServerStatus | null, dockerSocketMounted: boolean) {
   if (!dockerSocketMounted) return "Unavailable";
@@ -716,6 +725,27 @@ export function formatRelativeEventTime(value: string | undefined, now = new Dat
 }
 
 type RecentEventKind = EventIconKind;
+export type ServerEventCategory = "player" | "server" | "automation";
+type ServerEventFilter = "all" | ServerEventCategory;
+
+const serverEventFilters: Array<{ id: ServerEventFilter; label: string }> = [
+  { id: "all", label: "All events" },
+  { id: "player", label: "Player activity" },
+  { id: "server", label: "Server events" },
+  { id: "automation", label: "Automation runs" }
+];
+
+export function serverEventCategory(event: ServerEvent): ServerEventCategory {
+  if (event.eventType === "automation_run") return "automation";
+  if (event.eventType === "player_joined" || event.eventType === "player_left") return "player";
+  return "server";
+}
+
+function serverEventCategoryLabel(category: ServerEventCategory) {
+  if (category === "player") return "Player activity";
+  if (category === "automation") return "Automation run";
+  return "Server event";
+}
 
 /** Event kinds whose subject is a player name, so the row can show that player's head. */
 const playerHeadEventKinds = new Set<RecentEventKind>(["player_joined", "player_left", "player_reconnected"]);
@@ -730,12 +760,6 @@ type RecentEventGroup = {
   details?: string;
   timestamp?: string;
   events: ServerEvent[];
-};
-
-type RecentEventTimeSection = {
-  id: "just-now" | "last-hour" | "earlier";
-  label: "Just now" | "Within the last hour" | "Earlier";
-  events: RecentEventGroup[];
 };
 
 function secondsBetween(first: ServerEvent, second: ServerEvent, now: Date) {
@@ -834,23 +858,6 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
   return groups;
 }
 
-export function groupRecentEventsByTime(groups: RecentEventGroup[], now = new Date()): RecentEventTimeSection[] {
-  const sections: RecentEventTimeSection[] = [
-    { id: "just-now", label: "Just now", events: [] },
-    { id: "last-hour", label: "Within the last hour", events: [] },
-    { id: "earlier", label: "Earlier", events: [] }
-  ];
-
-  for (const group of groups) {
-    const timestamp = eventDate(group.timestamp, now);
-    const elapsedMinutes = timestamp ? Math.max(0, (now.getTime() - timestamp.getTime()) / 60_000) : Number.POSITIVE_INFINITY;
-    const section = elapsedMinutes < 15 ? sections[0] : elapsedMinutes < 60 ? sections[1] : sections[2];
-    section.events.push(group);
-  }
-
-  return sections.filter((section) => section.events.length > 0);
-}
-
 export function recentEventPresentation(group: RecentEventGroup) {
   const playerEvent = group.events[0];
   const player = playerEventSubject(playerEvent) || group.title.replace(/\s+(?:joined|left|reconnected)$/i, "").trim();
@@ -885,7 +892,6 @@ export function RecentEventsPanel({
   serverId = "",
   playerHeadsEnabled = false,
   onOpenConsole,
-  requestConfirmation,
   loading = false
 }: {
   events: ServerEvent[];
@@ -895,129 +901,189 @@ export function RecentEventsPanel({
   serverId?: string;
   playerHeadsEnabled?: boolean;
   onOpenConsole: () => void;
-  requestConfirmation: RequestConfirmation;
   loading?: boolean;
 }) {
-  const [hiddenSignatures, setHiddenSignatures] = useState<string[]>(() => {
-    try {
-      const stored = window.localStorage.getItem(hiddenRecentEventsKey);
-      const parsed = stored ? JSON.parse(stored) : [];
-      return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
-    } catch {
-      return [];
-    }
-  });
+  const [filter, setFilter] = useState<ServerEventFilter>("all");
+  const [page, setPage] = useState(0);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "timestamp", desc: true }]);
   const [now, setNow] = useState(() => new Date());
-  const hiddenSignatureSet = useMemo(() => new Set(hiddenSignatures), [hiddenSignatures]);
-  const visibleEvents = useMemo(() => events.filter((event) => !hiddenSignatureSet.has(event.signature)), [events, hiddenSignatureSet]);
-  const displayEvents = useMemo(() => groupRecentEvents(visibleEvents, now).slice(0, 8), [visibleEvents, now]);
-  const eventSections = useMemo(() => groupRecentEventsByTime(displayEvents, now), [displayEvents, now]);
-  const headVersion = playerHeadVersion(now.getTime());
-  const hasHiddenEvents = events.some((event) => hiddenSignatureSet.has(event.signature));
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(hiddenRecentEventsKey, JSON.stringify(hiddenSignatures));
-    } catch {
-      // Hidden event preferences remain available for this session.
+  const groupedEvents = useMemo(() => groupRecentEvents(events, now), [events, now]);
+  const filteredEvents = useMemo(() => filter === "all"
+    ? groupedEvents
+    : groupedEvents.filter((group) => serverEventCategory(group.events[0]) === filter), [filter, groupedEvents]);
+  const columns = useMemo<ColumnDef<RecentEventGroup>[]>(() => [
+    {
+      id: "event",
+      accessorFn: (group) => {
+        const presentation = recentEventPresentation(group);
+        return `${presentation.title} ${presentation.subject ?? ""}`.trim();
+      },
+      header: "Event"
+    },
+    {
+      id: "category",
+      accessorFn: (group) => serverEventCategoryLabel(serverEventCategory(group.events[0])),
+      header: "Category"
+    },
+    {
+      id: "details",
+      accessorFn: (group) => recentEventPresentation(group).details ?? relatedEventLabel(group) ?? "",
+      header: "Purpose / details"
+    },
+    {
+      id: "timestamp",
+      accessorFn: (group) => eventDate(group.timestamp, now)?.getTime() ?? 0,
+      header: "Time"
     }
-  }, [hiddenSignatures]);
+  ], [now]);
+  const tableData = useMemo(() => [...filteredEvents], [filteredEvents]);
+  const table = useReactTable({
+    data: tableData,
+    columns,
+    getRowId: (group) => group.id,
+    state: { sorting },
+    onSortingChange: (updater) => {
+      setSorting(updater);
+      setPage(0);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel()
+  });
+  const rows = table.getRowModel().rows;
+  const pages = Math.max(1, Math.ceil(rows.length / serverEventsPageSize));
+  const currentPage = Math.min(page, pages - 1);
+  const pageRows = rows.slice(currentPage * serverEventsPageSize, currentPage * serverEventsPageSize + serverEventsPageSize);
+  const headVersion = playerHeadVersion(now.getTime());
+  const filterCounts = useMemo(() => groupedEvents.reduce<Record<ServerEventCategory, number>>((counts, group) => {
+    counts[serverEventCategory(group.events[0])] += 1;
+    return counts;
+  }, { player: 0, server: 0, automation: 0 }), [groupedEvents]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  async function confirmHideEvent(group: RecentEventGroup) {
-    const signatures = Array.from(new Set(group.events.map((event) => event.signature)));
-    const confirmed = await requestConfirmation({
-      title: "Hide matching events?",
-      description: "Hide recent events matching this entry.",
-      details: group.title,
-      warning: "You can restore hidden event types with Reset hidden events.",
-      warningTone: "warning",
-      confirmLabel: "Hide events",
-      variant: "critical"
-    });
-    if (confirmed) setHiddenSignatures((current) => Array.from(new Set([...current, ...signatures])));
-  }
+  useEffect(() => setPage(0), [filter, serverId]);
 
   return (
     <OverviewCard
       className="eventsPanel"
-      title="Recent Events"
-      actions={<div className="overviewCardHeaderActions">
-        {hiddenSignatures.length > 0 && <Button variant="ghost" compact className="textLinkButton" onClick={() => setHiddenSignatures([])}>Reset hidden events</Button>}
-        <Button variant="ghost" compact className="textLinkButton" onClick={onOpenConsole}>View full log</Button>
-      </div>}
+      title="Server events"
+      actions={<Button variant="ghost" compact className="textLinkButton" onClick={onOpenConsole}>View full log</Button>}
       loading={loading}
     >
-      <div className="eventList">
-        {loading && <LoadingLabel>Loading recent events</LoadingLabel>}
-        {loading ? Array.from({ length: 5 }, (_, index) => (
-          <div className="eventRow eventSkeletonRow" key={index} aria-hidden="true">
-            <SkeletonBlock className="eventMarkerSkeleton" />
-            <SkeletonBlock className="eventTextSkeleton" />
-            <SkeletonBlock className="eventTimeSkeleton" />
+      <div className="serverEventsBody">
+        <div className="serverEventFilters" role="group" aria-label="Filter server events">
+          {serverEventFilters.map((option) => {
+            const count = option.id === "all" ? groupedEvents.length : filterCounts[option.id];
+            return (
+              <Button
+                key={option.id}
+                variant="ghost"
+                compact
+                className={filter === option.id ? "active" : undefined}
+                aria-pressed={filter === option.id}
+                onClick={() => setFilter(option.id)}
+              >
+                {option.label}<span className="serverEventFilterCount">{count}</span>
+              </Button>
+            );
+          })}
+        </div>
+        {loading && <LoadingLabel>Loading server events</LoadingLabel>}
+        {loading ? (
+          <div className="serverEventsSkeleton" aria-hidden="true">
+            {Array.from({ length: 5 }, (_, index) => (
+              <div className="eventSkeletonRow" key={index}>
+                <SkeletonBlock className="eventMarkerSkeleton" />
+                <SkeletonBlock className="eventTextSkeleton" />
+                <SkeletonBlock className="eventTimeSkeleton" />
+              </div>
+            ))}
           </div>
-        )) : displayEvents.length ? eventSections.map((section) => (
-          <section className="eventTimeGroup" aria-labelledby={`event-time-group-${section.id}`} key={section.id}>
-            <h3 className="eventTimeGroupHeading" id={`event-time-group-${section.id}`}>{section.label}</h3>
-            <div className="eventTimeGroupList">
-              {section.events.map((group) => {
-                const timestamp = eventDate(group.timestamp, now);
-                const presentation = recentEventPresentation(group);
-                const relatedLabel = relatedEventLabel(group);
-                const playerName = playerHeadEventKinds.has(group.kind) ? presentation.subject : undefined;
-                const occurrenceCount = group.events.length > 1 && !uncountedEventKinds.has(group.kind) ? group.events.length : 0;
-                return (
-                  <article className={`eventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
-                    <RecentEventMarker
-                      kind={group.kind}
-                      playerName={playerName}
-                      serverId={serverId}
-                      playerHeadsEnabled={playerHeadsEnabled}
-                      version={headVersion}
-                    >
-                      {occurrenceCount > 0 && <span className="eventOccurrenceBadge">×{occurrenceCount}</span>}
-                    </RecentEventMarker>
-                    <div className="eventCopy">
-                      <strong>{presentation.title}</strong>
-                      {presentation.subject && <span className="eventSubject" title={presentation.subject}>{presentation.subject}</span>}
-                      {occurrenceCount > 0 && <span className="srOnly">{occurrenceCount} occurrences</span>}
-                      {(presentation.details || relatedLabel) && (
-                        <span className="eventDetailLine">
-                          {presentation.details && <span title={presentation.details}>{presentation.details}</span>}
-                          {relatedLabel && <span className="eventCount">{relatedLabel}</span>}
+        ) : rows.length ? (
+          <div className="serverEventsTableViewport uiTableViewport">
+            <table className="serverEventsTable uiDataTable" aria-label="Server events">
+              <thead className="uiTableHeader">
+                <tr>
+                  {table.getHeaderGroups()[0]?.headers.map((header) => (
+                    <th key={header.id} scope="col" aria-sort={headerAriaSort(header)}>
+                      <SortHeaderButton header={header}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </SortHeaderButton>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((row) => {
+                  const group = row.original;
+                  const timestamp = eventDate(group.timestamp, now);
+                  const presentation = recentEventPresentation(group);
+                  const relatedLabel = relatedEventLabel(group);
+                  const playerName = playerHeadEventKinds.has(group.kind) ? presentation.subject : undefined;
+                  const occurrenceCount = group.events.length > 1 && !uncountedEventKinds.has(group.kind) ? group.events.length : 0;
+                  const category = serverEventCategory(group.events[0]);
+                  return (
+                    <tr className={`serverEventRow ${group.severity} eventKind--${group.kind} uiTableRow`} key={group.id}>
+                      <th scope="row">
+                        <span className="serverEventIdentity">
+                          <RecentEventMarker
+                            kind={group.kind}
+                            playerName={playerName}
+                            serverId={serverId}
+                            playerHeadsEnabled={playerHeadsEnabled}
+                            version={headVersion}
+                          >
+                            {occurrenceCount > 0 && <span className="eventOccurrenceBadge">×{occurrenceCount}</span>}
+                          </RecentEventMarker>
+                          <span className="eventCopy">
+                            <strong>{presentation.title}</strong>
+                            {presentation.subject && <small className="eventSubject" title={presentation.subject}>{presentation.subject}</small>}
+                            {occurrenceCount > 0 && <span className="srOnly">{occurrenceCount} occurrences</span>}
+                          </span>
                         </span>
-                      )}
-                    </div>
-                    <div className="eventMeta">
-                      <small title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
-                        {relativeTimestamps ? formatRelativeEventTime(group.timestamp, now) : timestamp ? formatDate(timestamp) : group.timestamp ? "Unknown" : "No timestamp"}
-                      </small>
-                    </div>
-                    <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(group)} aria-label={`Hide events matching ${group.title}`}>
-                      <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
-                        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                        <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                        <line x1="2" y1="2" x2="22" y2="22" />
-                      </svg>
-                    </Button>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        )) : (
+                      </th>
+                      <td><span className={`serverEventCategory tone-${category}`}>{serverEventCategoryLabel(category)}</span></td>
+                      <td className="serverEventDetails">
+                        <span title={presentation.details}>{presentation.details || "—"}</span>
+                        {relatedLabel && <small className="eventCount">{relatedLabel}</small>}
+                      </td>
+                      <td className="serverEventTime">
+                        <time dateTime={timestamp?.toISOString()} title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
+                          {relativeTimestamps ? formatRelativeEventTime(group.timestamp, now) : timestamp ? formatDate(timestamp) : group.timestamp ? "Unknown" : "No timestamp"}
+                        </time>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : eventsStatus === "unavailable" ? (
+          <InlineState
+            tone="warning"
+            title="Events are unavailable"
+            message="Open the console to inspect raw logs, or try again after the server writes new output."
+            actionLabel="View full log"
+            onAction={onOpenConsole}
+          />
+        ) : (
           <EmptyState
             compact
             className="eventEmpty"
-            title={hasHiddenEvents ? "Recent events are hidden" : eventsStatus === "unavailable" ? "Events are unavailable" : "No recent events yet"}
-            message={hasHiddenEvents ? "Reset hidden events to show them again." : eventsStatus === "unavailable" ? "Open the console to inspect raw logs, or try again after the server writes new output." : undefined}
+            title={filter !== "all" && groupedEvents.length > 0 ? `No ${serverEventFilters.find((option) => option.id === filter)?.label.toLowerCase()} yet` : "No server events yet"}
+            message={filter !== "all" && groupedEvents.length > 0 ? "Choose another filter to view the rest of the event history." : undefined}
           />
         )}
+        {!loading && <TablePagination
+          pageIndex={currentPage}
+          pageSize={serverEventsPageSize}
+          totalItems={rows.length}
+          itemLabel="events"
+          onPageChange={setPage}
+        />}
       </div>
     </OverviewCard>
   );

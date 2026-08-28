@@ -35,6 +35,10 @@
 .overviewDashboardGrid > .playersPanel { grid-area: players; align-self: stretch; }
 .overviewDashboardGrid > .eventsPanel { grid-area: events; align-self: stretch; }
 
+.overviewDashboardGrid > .eventsPanel {
+  overflow: hidden;
+}
+
 .overviewDashboardGrid--chartless {
   grid-template-areas:
     "summary summary summary summary summary summary summary summary summary summary summary summary"
@@ -1517,49 +1521,6 @@ button.overviewCardRow:focus-visible {
 .eventMarkerSkeleton { width: 8px; height: 8px; border-radius: 999px; }
 .eventTextSkeleton { width: min(230px, 82%); height: 13px; }
 .eventTimeSkeleton { width: 64px; height: 11px; }
-.overviewPage .eventsPanel .eventList {
-  gap: var(--space-3);
-}
-
-.overviewPage .eventsPanel .eventTimeGroup {
-  display: grid;
-  gap: 6px;
-}
-
-.overviewPage .eventsPanel .eventTimeGroupHeading {
-  margin: 0;
-  padding: 0 4px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-  line-height: 1.3;
-  text-transform: uppercase;
-}
-
-.overviewPage .eventsPanel .eventTimeGroupList {
-  display: grid;
-  gap: 4px;
-}
-
-.overviewPage .eventsPanel .eventRow {
-  position: relative;
-  grid-template-columns: 38px minmax(0, 1fr) minmax(96px, auto) 32px;
-  gap: var(--space-2);
-  min-height: 62px;
-  overflow: hidden;
-  padding: 8px 8px 8px 11px;
-  border-color: var(--border-row);
-  background: var(--surface);
-}
-
-.overviewPage .eventsPanel .eventRow::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--accent);
-}
 
 .overviewPage .eventsPanel .eventIcon {
   position: relative;
@@ -1579,9 +1540,9 @@ button.overviewCardRow:focus-visible {
   background: var(--accent);
 }
 
-.overviewPage .eventsPanel .eventRow.success .eventOccurrenceBadge { background: var(--sentinel-success); }
-.overviewPage .eventsPanel .eventRow.warning .eventOccurrenceBadge { background: var(--sentinel-warning); }
-.overviewPage .eventsPanel .eventRow.error .eventOccurrenceBadge { background: var(--sentinel-danger); }
+.overviewPage .eventsPanel .serverEventRow.success .eventOccurrenceBadge { background: var(--sentinel-success); }
+.overviewPage .eventsPanel .serverEventRow.warning .eventOccurrenceBadge { background: var(--sentinel-warning); }
+.overviewPage .eventsPanel .serverEventRow.error .eventOccurrenceBadge { background: var(--sentinel-danger); }
 
 .overviewPage .eventsPanel .eventIcon svg {
   width: 20px;
@@ -1593,41 +1554,19 @@ button.overviewCardRow:focus-visible {
   stroke-linejoin: round;
 }
 
-.overviewPage .eventsPanel .eventRow.success {
-  border-color: color-mix(in srgb, var(--sentinel-success) 32%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-success) 5%, var(--surface));
-}
-
-.overviewPage .eventsPanel .eventRow.success::before { background: var(--sentinel-success); }
-.overviewPage .eventsPanel .eventRow.success .eventIcon {
+.overviewPage .eventsPanel .serverEventRow.success .eventIcon {
   background: color-mix(in srgb, var(--sentinel-success) 14%, var(--surface-raised));
   color: var(--sentinel-success);
 }
 
-.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected,
-.overviewPage .eventsPanel .eventRow.warning {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 38%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
-}
-
-.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected::before,
-.overviewPage .eventsPanel .eventRow.warning::before { background: var(--sentinel-warning); }
-.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected .eventIcon,
-.overviewPage .eventsPanel .eventRow.warning .eventIcon {
+.overviewPage .eventsPanel .serverEventRow.eventKind--player_reconnected .eventIcon,
+.overviewPage .eventsPanel .serverEventRow.warning .eventIcon {
   background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface-raised));
   color: var(--sentinel-warning);
 }
 
-.overviewPage .eventsPanel .eventRow.eventKind--player_left,
-.overviewPage .eventsPanel .eventRow.error {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 38%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface));
-}
-
-.overviewPage .eventsPanel .eventRow.eventKind--player_left::before,
-.overviewPage .eventsPanel .eventRow.error::before { background: var(--sentinel-danger); }
-.overviewPage .eventsPanel .eventRow.eventKind--player_left .eventIcon,
-.overviewPage .eventsPanel .eventRow.error .eventIcon {
+.overviewPage .eventsPanel .serverEventRow.eventKind--player_left .eventIcon,
+.overviewPage .eventsPanel .serverEventRow.error .eventIcon {
   background: color-mix(in srgb, var(--sentinel-danger) 14%, var(--surface-raised));
   color: var(--sentinel-danger);
 }
@@ -1668,76 +1607,16 @@ button.overviewCardRow:focus-visible {
   stroke-width: 2.2;
 }
 
-.overviewPage .eventsPanel .eventRow.eventKind--player_joined .eventPlayerIconBadge {
+.overviewPage .eventsPanel .serverEventRow.eventKind--player_joined .eventPlayerIconBadge {
   background: var(--sentinel-success);
 }
 
-.overviewPage .eventsPanel .eventRow.eventKind--player_left .eventPlayerIconBadge {
+.overviewPage .eventsPanel .serverEventRow.eventKind--player_left .eventPlayerIconBadge {
   background: var(--sentinel-danger);
 }
 
-.overviewPage .eventsPanel .eventRow.eventKind--player_reconnected .eventPlayerIconBadge {
+.overviewPage .eventsPanel .serverEventRow.eventKind--player_reconnected .eventPlayerIconBadge {
   background: var(--sentinel-warning);
-}
-
-.overviewPage .eventsPanel .eventCopy {
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-  align-content: center;
-}
-
-.overviewPage .eventsPanel .eventCopy > strong {
-  display: block;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: var(--weight-title);
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overviewPage .eventsPanel .eventCopy > .eventSubject {
-  display: block;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: var(--weight-meta);
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overviewPage .eventsPanel .eventDetailLine {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 7px;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: var(--weight-meta);
-  line-height: 1.35;
-}
-
-.overviewPage .eventsPanel .eventDetailLine > span:first-child:not(.eventCount) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.overviewPage .eventsPanel .eventMeta {
-  display: grid;
-  gap: 4px;
-  justify-items: end;
-  align-content: center;
-}
-
-.overviewPage .eventsPanel .eventMeta small {
-  text-align: right;
-  white-space: nowrap;
 }
 
 .overviewPage .eventsPanel .eventCount {
@@ -1751,55 +1630,225 @@ button.overviewCardRow:focus-visible {
   white-space: nowrap;
 }
 
-.overviewPage .eventsPanel .eventHideButton.uiButton {
-  align-self: center;
-  opacity: 0.55;
+
+/* Server events is a real data table now. Its own viewport contains the minimum-width table so a
+   narrow phone can navigate columns without widening the overview workspace itself. */
+.overviewPage .eventsPanel .serverEventsBody {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: start;
+  gap: var(--space-3);
 }
 
-.overviewPage .eventsPanel .eventRow:hover .eventHideButton.uiButton,
-.overviewPage .eventsPanel .eventHideButton.uiButton:focus-visible {
-  opacity: 1;
+.serverEventFilters {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  contain: inline-size;
+}
+
+.serverEventFilters .uiButton {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.serverEventFilters .uiButton.active {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.serverEventFilterCount {
+  min-width: 19px;
+  border-radius: 999px;
+  padding-inline: 5px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: var(--type-badge-size);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.serverEventsSkeleton {
+  display: grid;
+  align-content: start;
+}
+
+.serverEventsSkeleton .eventSkeletonRow {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 80px;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+}
+
+.serverEventsTableViewport {
+  overflow-y: hidden;
+}
+
+.serverEventsTable {
+  min-width: 760px;
+  table-layout: fixed;
+}
+
+.serverEventsTable thead th:nth-child(1) { width: 30%; }
+.serverEventsTable thead th:nth-child(2) { width: 16%; }
+.serverEventsTable thead th:nth-child(3) { width: 35%; }
+.serverEventsTable thead th:nth-child(4) { width: 19%; }
+
+.serverEventsTable tbody tr {
+  height: 58px;
+}
+
+.serverEventsTable tbody tr.error {
+  background: color-mix(in srgb, var(--sentinel-danger) 3.5%, transparent);
+}
+
+.serverEventIdentity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.overviewPage .eventsPanel .serverEventIdentity .eventIcon {
+  width: 32px;
+  height: 32px;
+}
+
+.overviewPage .eventsPanel .serverEventIdentity .eventIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.serverEventIdentity .eventCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.serverEventIdentity .eventCopy strong,
+.serverEventIdentity .eventCopy small,
+.serverEventDetails > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverEventIdentity .eventCopy strong {
+  color: var(--text);
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.serverEventIdentity .eventCopy small,
+.serverEventDetails,
+.serverEventTime {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+}
+
+.serverEventCategory {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  border: var(--border-subtle) solid var(--border-muted);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverEventCategory.tone-player {
+  border-color: color-mix(in srgb, var(--sentinel-success) 30%, var(--border-muted));
+  color: var(--sentinel-success);
+}
+
+.serverEventCategory.tone-automation {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-muted));
+  color: var(--sentinel-accent-strong);
+}
+
+.serverEventDetails {
+  min-width: 0;
+}
+
+.serverEventDetails .eventCount {
+  display: inline-flex;
+  margin-top: 3px;
+}
+
+.serverEventTime {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.serverEventsFooter {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  border-top: var(--border-subtle) solid var(--border-row);
+  padding-top: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.serverEventsPager {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* On tall, wide workstations the final dashboard row absorbs unused viewport height. The pager
+   stays at the bottom of the card while the table remains at the top, so the page ends cleanly. */
+@media (min-width: 1920px) and (min-height: 1200px) {
+  .overviewDashboardGrid {
+    min-height: calc(var(--visual-viewport-height, 100dvh) - 156px);
+    grid-template-rows: auto auto auto minmax(420px, 1fr);
+  }
 }
 
 @media (max-width: 720px) {
-  .overviewPage .eventsPanel .eventTimeGroup {
-    gap: var(--space-1);
+  .serverEventFilters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
   }
 
-  .overviewPage .eventsPanel .eventTimeGroupHeading {
-    padding-left: 2px;
+  .serverEventFilters .uiButton {
+    flex: 0 0 auto;
   }
 
-  .overviewPage .eventsPanel .eventRow {
-    grid-template-columns: 36px minmax(0, 1fr) 44px;
-    gap: var(--space-2);
-    min-height: 70px;
-    padding: 10px 8px 10px 10px;
+  .serverEventsFooter {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .overviewPage .eventsPanel .eventIcon {
-    width: 32px;
-    height: 32px;
+  .serverEventsFooter > span:first-child {
+    text-align: center;
   }
 
-  .overviewPage .eventsPanel .eventMeta {
-    grid-column: 2;
-    grid-row: 2;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: var(--space-2);
-    padding-top: 2px;
-  }
-
-  .overviewPage .eventsPanel .eventHideButton.uiButton {
-    grid-column: 3;
-    grid-row: 1 / span 2;
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
-    justify-self: end;
+  .serverEventsPager {
+    justify-content: space-between;
   }
 }
 
@@ -2134,46 +2183,10 @@ button.overviewCardRow:focus-visible {
   color: var(--status-neutral-foreground);
 }
 
-.eventRow {
-  min-height: 40px;
-  border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
-}
-
-.eventRow strong {
-  font-size: var(--type-row-title-size);
-  font-weight: var(--weight-strong);
-}
-
-.eventRow small,
 .scheduledRunTime {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
-}
-
-/* One definition for the hide control: it used to be described twice, once here
-   at 32px and once as a 28px square in the nodes sheet, so its resting size and
-   its hover treatment came from different rules. */
-.eventHideButton.uiButton {
-  width: var(--control-height-compact);
-  min-width: var(--control-height-compact);
-  height: var(--control-height-compact);
-  min-height: var(--control-height-compact);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  padding: 0;
-  box-shadow: none;
-}
-
-.eventHideButton.uiButton:hover:not(:disabled),
-.eventHideButton.uiButton:focus-visible {
-  border-color: transparent;
-  background: var(--surface-muted);
-  color: var(--text);
-  transform: none;
 }
 
 .uiButton.runtimeControlButton {
@@ -2339,19 +2352,6 @@ button.overviewCardRow:focus-visible {
     grid-template-rows: auto minmax(0, 1fr);
   }
 
-  .overviewPage .eventsPanel .eventRow,
-  .overviewPage .eventsPanel .eventRow.success,
-  .overviewPage .eventsPanel .eventRow.warning,
-  .overviewPage .eventsPanel .eventRow.eventKind--player_reconnected {
-    border-color: var(--border-row);
-    background: transparent;
-  }
-
-  .overviewPage .eventsPanel .eventRow.eventKind--player_left,
-  .overviewPage .eventsPanel .eventRow.error {
-    border-color: color-mix(in srgb, var(--sentinel-danger) 24%, var(--border-row));
-    background: color-mix(in srgb, var(--sentinel-danger) 3.5%, var(--surface-raised));
-  }
 }
 
 @media (min-width: 1321px) {

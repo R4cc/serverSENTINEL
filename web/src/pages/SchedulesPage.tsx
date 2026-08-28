@@ -200,6 +200,9 @@ export function SchedulePage({
   onRunNow,
   onCancelRun,
   onLoadRunLogs,
+  loading = false,
+  error = "",
+  onReload,
   disabled,
   disabledReason,
   formatDate,
@@ -222,6 +225,9 @@ export function SchedulePage({
   onRunNow: (schedule: ScheduledExecution) => boolean | Promise<boolean>;
   onCancelRun: (run: ScheduledActiveRun) => boolean | Promise<boolean>;
   onLoadRunLogs?: (run: ScheduledRun) => Promise<ScheduledRun>;
+  loading?: boolean;
+  error?: string;
+  onReload?: () => void;
   disabled: boolean;
   disabledReason?: string;
 }) {
@@ -240,6 +246,7 @@ export function SchedulePage({
   const [historySchedule, setHistorySchedule] = useState<ScheduledExecution | null>(null);
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [relativeNow, setRelativeNow] = useState(() => Date.now());
+  const initialLoading = loading && schedules.length === 0;
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
   const runsFeedRef = useRef<HTMLDivElement>(null);
   const scheduleRowRefs = useRef(new Map<string, HTMLElement>());
@@ -489,6 +496,17 @@ export function SchedulePage({
         <InlineState tone="warning" title="Schedules are unavailable" message={disabledReason} />
       )}
 
+      {error && (
+        <InlineState
+          tone="error"
+          title={schedules.length ? "Schedules could not be refreshed" : "Schedules could not be loaded"}
+          message={error}
+          actionLabel={onReload ? "Retry" : undefined}
+          onAction={onReload}
+          busy={loading}
+        />
+      )}
+
       <div className="scheduleWorkspaceGrid">
         <section className="panel scheduleTableCard">
           <PanelHeader
@@ -496,8 +514,8 @@ export function SchedulePage({
             title="Configured schedules"
           />
 
-          <div className="scheduleTableFrame" role="table" aria-label="Schedules">
-            <div className="scheduleTableHeader" role="row">
+          <div className="scheduleTableFrame" role="table" aria-label="Schedules" aria-busy={loading}>
+            <div className="scheduleTableHeader uiTableHeader" role="row">
               {scheduleTable.getHeaderGroups()[0]?.headers.map((header) => (
                 <span key={header.id} role="columnheader" aria-sort={headerAriaSort(header)}>
                   {header.id === "actions" ? (
@@ -519,7 +537,13 @@ export function SchedulePage({
               ))}
             </div>
             <div className="scheduleTableBody" role="rowgroup">
-              {scheduleRows.length ? scheduleRows.map((row) => {
+              {initialLoading ? (
+                <div className="scheduleNoRowsRow" role="row">
+                  <div role="cell">
+                    <InlineState tone="loading" title="Loading schedules" message="Reading configured automation and recent runs." />
+                  </div>
+                </div>
+              ) : scheduleRows.length ? scheduleRows.map((row) => {
                 const schedule = row.original;
                 const scheduleIsActive = Boolean(schedule.activeRuns?.length);
                 const health = scheduleHealth(schedule);
@@ -530,7 +554,7 @@ export function SchedulePage({
                     if (element) scheduleRowRefs.current.set(schedule.id, element);
                     else scheduleRowRefs.current.delete(schedule.id);
                   }}
-                  className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"}`}
+                  className={`scheduleTableRow ${schedule.enabled ? "enabled" : "disabled"} uiTableRow`}
                   role="row"
                   tabIndex={-1}
                 >
@@ -669,7 +693,11 @@ export function SchedulePage({
                 </article>
                 );
               }) : (
-                <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
+                <div className="scheduleNoRowsRow" role="row">
+                  <div role="cell">
+                    <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
+                  </div>
+                </div>
               )}
             </div>
           </div>

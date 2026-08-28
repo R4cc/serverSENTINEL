@@ -170,6 +170,23 @@ describe("schedule routes", () => {
     expect(harness.updateSchedule).toHaveBeenCalledWith(serverId, updated, updated.updatedAt);
   });
 
+  it("returns the same not-found response for stale update and delete actions", async () => {
+    const harness = testApp({ schedules: [] });
+    const updateResponse = await harness.app.inject({
+      method: "PUT",
+      url: `/api/servers/${serverId}/schedules/${scheduleId}`,
+      payload: { name: "Missing", cron: "0 5 * * *", steps: [] }
+    });
+    const deleteResponse = await harness.app.inject({ method: "DELETE", url: `/api/servers/${serverId}/schedules/${scheduleId}` });
+
+    expect(updateResponse.statusCode).toBe(404);
+    expect(updateResponse.json().error.code).toBe("SCHEDULE_NOT_FOUND");
+    expect(deleteResponse.statusCode).toBe(404);
+    expect(deleteResponse.json().error.code).toBe("SCHEDULE_NOT_FOUND");
+    expect(harness.updateSchedule).not.toHaveBeenCalled();
+    expect(harness.deleteSchedule).not.toHaveBeenCalled();
+  });
+
   it("deletes a validated schedule and updates the server timestamp", async () => {
     const harness = testApp();
 
