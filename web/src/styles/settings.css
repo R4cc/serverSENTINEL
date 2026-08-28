@@ -960,6 +960,10 @@
     padding-top: 0;
   }
 
+  .settingsHubIntegrationTooltip {
+    width: 100%;
+  }
+
   .settingsHubUsers,
   .settingsHubSystemOverview {
     padding: var(--space-4);
