@@ -113,9 +113,25 @@
 
 }
 
-/* The compact shell stacks its navigation above the workspace. The desktop console contract uses
-   a full-viewport workspace from 721px upward, so without a bounded shell that workspace adds its
-   own 100vh below the compact navigation and pushes the command line out of short viewports. */
+/* The compact shell stacks its navigation above the workspace. Tablet feature pages keep their
+   desktop-contained scroll surfaces, so the shell must divide the visual viewport between the
+   navigation and workspace instead of letting a 100vh workspace sit below the navigation. */
+@media (min-width: 721px) and (max-width: 1100px) {
+  .appShell,
+  .sidebarCollapsed.appShell {
+    height: var(--visual-viewport-height, 100dvh);
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .workspace {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+}
 
 @media (max-width: 720px) {
   .workspace,

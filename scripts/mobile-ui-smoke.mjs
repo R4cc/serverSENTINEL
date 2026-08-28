@@ -275,38 +275,9 @@ async function assertModsToolbarVisible(page, label) {
   assert(result.coveredActions.length === 0, `${label}: mods toolbar actions are covered: ${JSON.stringify(result.coveredActions)}`);
 }
 
-async function assertNodeUpdateToast(page, label) {
-  const toast = page.locator(".sonnerToast").filter({ hasText: "Multiple nodes have an update available." });
-  await toast.waitFor();
-  await page.waitForFunction(() => Array.from(document.querySelectorAll(".sonnerToast")).some((element) => {
-    if (!(element instanceof HTMLElement) || !element.textContent?.includes("Multiple nodes have an update available.")) return false;
-    const rect = element.getBoundingClientRect();
-    return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
-  }));
-  const mute = toast.getByRole("button", { name: "Mute for 3 days", exact: true });
-  const geometry = await toast.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    const action = element.querySelector("[data-button]");
-    const actionRect = action?.getBoundingClientRect();
-    return {
-      left: rect.left,
-      right: rect.right,
-      top: rect.top,
-      bottom: rect.bottom,
-      viewportWidth: innerWidth,
-      viewportHeight: innerHeight,
-      actionWidth: actionRect?.width ?? 0,
-      actionHeight: actionRect?.height ?? 0
-    };
-  });
-  assert(geometry.left >= 0 && geometry.right <= geometry.viewportWidth && geometry.top >= 0 && geometry.bottom <= geometry.viewportHeight, `${label}: node update toast leaves the viewport: ${JSON.stringify(geometry)}`);
-  assert(geometry.actionWidth >= 44 && geometry.actionHeight >= 44, `${label}: node update mute action is smaller than 44px: ${JSON.stringify(geometry)}`);
-  await assertTargets(page, [".sonnerToast [data-close-button]"], `${label} node update toast`);
-  await mute.click();
-  await page.reload();
-  await page.locator(".appShell").waitFor();
+async function assertDemoSuppressesNodeUpdateToast(page, label) {
   await page.waitForTimeout(100);
-  assert(await page.getByText("Multiple nodes have an update available.", { exact: true }).count() === 0, `${label}: muted node update toast returned after reload`);
+  assert(await page.getByText("Multiple nodes have an update available.", { exact: true }).count() === 0, `${label}: demo mode rendered a node update notification`);
 }
 
 async function assertNodeDetailsOpeningPosition(page, label) {
@@ -382,6 +353,65 @@ async function assertPageDocumentScroll(page, title, label) {
   assert(!result.canOverflow || result.moved, `${label}: document cannot reach overflowing content`);
   assert(result.shellTop === 0, `${label}: shell became a competing scroll surface`);
   assert(result.horizontalOverflow <= 1, `${label}: page has horizontal overflow (${result.horizontalOverflow}px)`);
+}
+
+async function assertTabletShellContainment(page, title, label) {
+  await openPage(page, title);
+  const result = await page.evaluate(() => {
+    const shell = document.querySelector(".appShell");
+    const sidebar = document.querySelector(".sidebar");
+    const workspace = document.querySelector(".workspace");
+    const owner = document.scrollingElement;
+    if (!(shell instanceof HTMLElement) || !(sidebar instanceof HTMLElement) || !(workspace instanceof HTMLElement) || !(owner instanceof HTMLElement)) return { missing: true };
+    const shellRect = shell.getBoundingClientRect();
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const workspaceRect = workspace.getBoundingClientRect();
+    return {
+      missing: false,
+      viewportHeight: innerHeight,
+      documentHeight: owner.scrollHeight,
+      documentViewportHeight: owner.clientHeight,
+      documentTop: owner.scrollTop,
+      shellHeight: shellRect.height,
+      shellOverflow: getComputedStyle(shell).overflow,
+      sidebarBottom: sidebarRect.bottom,
+      sidebarScrollable: sidebar.scrollHeight > sidebar.clientHeight + 1,
+      workspaceTop: workspaceRect.top,
+      workspaceBottom: workspaceRect.bottom,
+      workspaceOverflowY: getComputedStyle(workspace).overflowY
+    };
+  });
+  assert(!result.missing, `${label}: tablet shell surfaces are missing`);
+  assert(Math.abs(result.shellHeight - result.viewportHeight) <= 1, `${label}: shell does not match the visual viewport: ${JSON.stringify(result)}`);
+  assert(result.documentHeight <= result.documentViewportHeight + 1 && result.documentTop === 0, `${label}: shell leaks into document scrolling: ${JSON.stringify(result)}`);
+  assert(result.shellOverflow === "hidden", `${label}: shell does not contain tablet scrolling: ${JSON.stringify(result)}`);
+  assert(!result.sidebarScrollable, `${label}: navigation became independently scrollable: ${JSON.stringify(result)}`);
+  assert(Math.abs(result.workspaceTop - result.sidebarBottom) <= 1 && result.workspaceBottom <= result.viewportHeight + 1, `${label}: workspace does not use the viewport remainder: ${JSON.stringify(result)}`);
+  assert(["auto", "scroll"].includes(result.workspaceOverflowY), `${label}: workspace is not the tablet scroll owner: ${JSON.stringify(result)}`);
+}
+
+async function assertTabletNavigationContainment(page, label) {
+  await page.getByRole("button", { name: "Expand navigation" }).click();
+  const result = await page.evaluate(() => {
+    const shell = document.querySelector(".appShell");
+    const sidebar = document.querySelector(".sidebar");
+    const owner = document.scrollingElement;
+    if (!(shell instanceof HTMLElement) || !(sidebar instanceof HTMLElement) || !(owner instanceof HTMLElement)) return { missing: true };
+    return {
+      missing: false,
+      documentHeight: owner.scrollHeight,
+      documentViewportHeight: owner.clientHeight,
+      shellHeight: shell.getBoundingClientRect().height,
+      sidebarBottom: sidebar.getBoundingClientRect().bottom,
+      sidebarScrollable: sidebar.scrollHeight > sidebar.clientHeight + 1,
+      viewportHeight: innerHeight
+    };
+  });
+  assert(!result.missing, `${label}: expanded navigation surfaces are missing`);
+  assert(result.documentHeight <= result.documentViewportHeight + 1, `${label}: expanded navigation made the document scrollable: ${JSON.stringify(result)}`);
+  assert(Math.abs(result.shellHeight - result.viewportHeight) <= 1 && result.sidebarBottom <= result.viewportHeight + 1, `${label}: expanded navigation left the viewport: ${JSON.stringify(result)}`);
+  assert(!result.sidebarScrollable, `${label}: expanded navigation became independently scrollable: ${JSON.stringify(result)}`);
+  await page.getByRole("button", { name: "Collapse navigation" }).click();
 }
 
 async function overviewDensityMetrics(page) {
@@ -649,7 +679,7 @@ async function runProfile(engine, profile, label) {
     });
     await signInThroughForm(page, baseUrl, () => assertTargets(page, [".authPanel .uiButton"], `${label} sign in`));
 
-    await assertNodeUpdateToast(page, label);
+    await assertDemoSuppressesNodeUpdateToast(page, label);
 
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
@@ -743,7 +773,39 @@ async function runProfile(engine, profile, label) {
   }
 }
 
+async function runTabletProfile() {
+  let browser;
+  const label = "WebKit iPad landscape 1024x768";
+  try {
+    browser = await launchBrowser(webkit);
+    const context = await browser.newContext({
+      ...devices["iPad (gen 7) landscape"],
+      locale: "en-US",
+      timezoneId: "UTC",
+      colorScheme: "light",
+      reducedMotion: "reduce"
+    });
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      localStorage.setItem("serversentinel-theme", "light");
+      localStorage.setItem("serversentinel-active-page", "files");
+    });
+    await signInThroughForm(page, baseUrl);
+    await assertTabletNavigationContainment(page, label);
+
+    for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings", "console"]) {
+      await assertTabletShellContainment(page, title, `${label} ${title}`);
+    }
+
+    await context.close();
+    console.log(`mobile smoke passed: ${label}`);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 try {
+  await runTabletProfile();
   await runProfile(chromium, {
     ...devices["Pixel 7"],
     viewport: { width: 390, height: 844 }
