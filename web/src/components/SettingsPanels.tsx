@@ -1,5 +1,14 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, ReactNode, useState } from 'react';
 import { Button, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
+
+export function IntegrationControlField({ label, children, ariaHidden = false }: { label: string; children: ReactNode; ariaHidden?: boolean }) {
+  return (
+    <div className="settingsHubIntegrationField" aria-hidden={ariaHidden || undefined}>
+      <span className="settingsHubIntegrationControlLabel">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 /**
  * The MaxMind account that lets the panel download the GeoLite2 City database.
@@ -31,10 +40,12 @@ export function MaxmindCredentialsForm({
     return (
       <div className="keyForm keyFormConfigured keyFormPending" aria-busy="true">
         <LoadingLabel>Loading GeoLite2 integration status</LoadingLabel>
-        <div className="secretPreview" aria-hidden="true">
-          <SkeletonBlock className="integrationKeySkeleton" />
-          <SkeletonBlock className="uiSkeleton--badge" />
-        </div>
+        <IntegrationControlField label="MaxMind credentials" ariaHidden>
+          <div className="secretPreview">
+            <SkeletonBlock className="integrationKeySkeleton" />
+            <SkeletonBlock className="uiSkeleton--badge" />
+          </div>
+        </IntegrationControlField>
         <div className="keyFormActions" aria-hidden="true">
           <SkeletonBlock className="integrationActionSkeleton" />
         </div>
@@ -45,10 +56,12 @@ export function MaxmindCredentialsForm({
   if (configured && !editing) {
     return (
       <div className="keyForm keyFormConfigured">
-        <div className="secretPreview" aria-label="Stored MaxMind credentials">
-          <code aria-hidden="true">**** **** **** ****</code>
-          <StatusBadge tone="success">Configured</StatusBadge>
-        </div>
+        <IntegrationControlField label="MaxMind credentials">
+          <div className="secretPreview" aria-label="Stored MaxMind credentials">
+            <code aria-hidden="true">**** **** **** ****</code>
+            <StatusBadge tone="success">Configured</StatusBadge>
+          </div>
+        </IntegrationControlField>
         <div className="keyFormActions">
           <Button variant="secondary" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace MaxMind credentials"}>Replace credentials</Button>
         </div>
@@ -114,10 +127,12 @@ export function ModrinthKeyForm({
     return (
       <div className="keyForm keyFormConfigured keyFormPending" aria-busy="true">
         <LoadingLabel>Loading Modrinth integration status</LoadingLabel>
-        <div className="secretPreview" aria-hidden="true">
-          <SkeletonBlock className="integrationKeySkeleton" />
-          <SkeletonBlock className="uiSkeleton--badge" />
-        </div>
+        <IntegrationControlField label="Modrinth API key" ariaHidden>
+          <div className="secretPreview">
+            <SkeletonBlock className="integrationKeySkeleton" />
+            <SkeletonBlock className="uiSkeleton--badge" />
+          </div>
+        </IntegrationControlField>
         <div className="keyFormActions" aria-hidden="true">
           <SkeletonBlock className="integrationActionSkeleton" />
         </div>
@@ -128,10 +143,12 @@ export function ModrinthKeyForm({
   if (configured && !editing) {
     return (
       <div className="keyForm keyFormConfigured">
-        <div className="secretPreview" aria-label="Stored Modrinth API key">
-          <code aria-hidden="true">**** **** **** ****</code>
-          <StatusBadge tone="success">Configured</StatusBadge>
-        </div>
+        <IntegrationControlField label="Modrinth API key">
+          <div className="secretPreview" aria-label="Stored Modrinth API key">
+            <code aria-hidden="true">**** **** **** ****</code>
+            <StatusBadge tone="success">Configured</StatusBadge>
+          </div>
+        </IntegrationControlField>
         <div className="keyFormActions">
           <Button variant="secondary" onClick={() => setEditing(true)} disabled={disabled} title={disabled ? "Manage integrations permission is required" : "Replace Modrinth API key"}>Replace key</Button>
         </div>

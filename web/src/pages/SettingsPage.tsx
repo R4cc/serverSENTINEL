@@ -6,7 +6,7 @@ import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/se
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
 import { themeOptions } from "../features/settings/themePreferences";
-import { MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
+import { IntegrationControlField, MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
 import { Button, StatusBadge } from "../components/UiPrimitives";
@@ -142,12 +142,13 @@ function PreferenceDescriptionTooltip({ title, children }: { title: string; chil
   );
 }
 
-function PreferenceRow({ title, description, children, className = "", descriptionTooltip = false }: { title: string; description: ReactNode; children: ReactNode; className?: string; descriptionTooltip?: boolean }) {
+function PreferenceRow({ title, description, children, className = "", descriptionTooltip = false, optional = false }: { title: string; description: ReactNode; children: ReactNode; className?: string; descriptionTooltip?: boolean; optional?: boolean }) {
   return (
     <div className={`settingsHubRow ${className}`.trim()}>
       <div className="settingsHubRowCopy">
         <span className="settingsHubRowTitle">
           <strong>{title}</strong>
+          {optional && <StatusBadge tone="neutral">Optional</StatusBadge>}
           {descriptionTooltip && <PreferenceDescriptionTooltip title={title}>{description}</PreferenceDescriptionTooltip>}
         </span>
         {!descriptionTooltip && <span>{description}</span>}
@@ -302,6 +303,7 @@ export function SettingsPage(props: SettingsPageProps) {
               description={<>Let the panel download the <a href="https://dev.maxmind.com/geoip/geolite2-free-geolocation-data" target="_blank" rel="noreferrer">GeoLite2 City</a> database it reads locally for Player insights. Player addresses are looked up against that local copy and are never sent to MaxMind or any other geolocation service.</>}
               className="settingsHubIntegrationRow"
               descriptionTooltip
+              optional
             >
               <MaxmindCredentialsForm onSubmit={props.onSubmitMaxmindCredentials} configured={props.geoIpConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
             </PreferenceRow>
@@ -313,14 +315,16 @@ export function SettingsPage(props: SettingsPageProps) {
             descriptionTooltip
           >
             <div className="settingsHubControlStack playerHeadsSettingsControl">
-              <Toggle
-                checked={props.playerHeads.enabled}
-                onChange={props.onPlayerHeadsEnabledChange}
-                label="Show player heads on Overview"
-                stateLabel={props.playerHeads.enabled ? "Enabled" : "Disabled"}
-                disabled={!props.canManageIntegrations || props.playerHeadsBusy}
-                title={!props.canManageIntegrations ? "Manage integrations permission is required" : undefined}
-              />
+              <IntegrationControlField label="Player head display">
+                <Toggle
+                  checked={props.playerHeads.enabled}
+                  onChange={props.onPlayerHeadsEnabledChange}
+                  label="Show player heads on Overview"
+                  stateLabel={props.playerHeads.enabled ? "Enabled" : "Disabled"}
+                  disabled={!props.canManageIntegrations || props.playerHeadsBusy}
+                  title={!props.canManageIntegrations ? "Manage integrations permission is required" : undefined}
+                />
+              </IntegrationControlField>
               <span className="settingsHubPreferenceExample">
                 {props.playerHeads.cacheEntries.toLocaleString()} cached {props.playerHeads.cacheEntries === 1 ? "head" : "heads"} · {formatCacheSize(props.playerHeads.cacheBytes)}
               </span>
