@@ -938,8 +938,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
 .fileTableRow,
 .modsWorkspaceRow,
-.scheduleTableRow,
-.eventRow {
+.scheduleTableRow {
   border-color: var(--border-row);
   background: var(--surface);
   box-shadow: none;
@@ -948,8 +947,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
 .fileTableRow:hover,
 .modsWorkspaceRow:hover,
-.scheduleTableRow:hover,
-.eventRow:hover {
+.scheduleTableRow:hover {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 54%, var(--surface-raised));
 }

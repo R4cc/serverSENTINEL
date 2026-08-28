@@ -22,7 +22,6 @@ import type {
 import { formatUptime } from '../utils/resourceFormatting';
 import { formatAdaptiveBytes, formatRelativeTimestamp, minecraftVersionInfo, versionValue } from '../utils/format';
 import { Button, EmptyState, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
-import type { RequestConfirmation } from '../components/ConfirmationModal';
 import { AppIcon, SidebarIcon } from '../components/FileTypeIcon';
 import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
@@ -33,7 +32,6 @@ import { usePlayerHead } from '../components/PlayerHead';
 import { schedulesNeedingAttention } from '../features/schedules/scheduleHealth';
 import { SortHeaderButton, headerAriaSort } from '../components/TableControls';
 
-const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
 const activePlayerPreviewLimit = 8;
 const overviewSupportCardSlotCount = 4;
 const upcomingScheduleDisplayLimit = 4;
@@ -763,12 +761,6 @@ type RecentEventGroup = {
   events: ServerEvent[];
 };
 
-type RecentEventTimeSection = {
-  id: "just-now" | "last-hour" | "earlier";
-  label: "Just now" | "Within the last hour" | "Earlier";
-  events: RecentEventGroup[];
-};
-
 function secondsBetween(first: ServerEvent, second: ServerEvent, now: Date) {
   const firstDate = eventDate(first.timestamp, now);
   const secondDate = eventDate(second.timestamp, now);
@@ -865,23 +857,6 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
   return groups;
 }
 
-export function groupRecentEventsByTime(groups: RecentEventGroup[], now = new Date()): RecentEventTimeSection[] {
-  const sections: RecentEventTimeSection[] = [
-    { id: "just-now", label: "Just now", events: [] },
-    { id: "last-hour", label: "Within the last hour", events: [] },
-    { id: "earlier", label: "Earlier", events: [] }
-  ];
-
-  for (const group of groups) {
-    const timestamp = eventDate(group.timestamp, now);
-    const elapsedMinutes = timestamp ? Math.max(0, (now.getTime() - timestamp.getTime()) / 60_000) : Number.POSITIVE_INFINITY;
-    const section = elapsedMinutes < 15 ? sections[0] : elapsedMinutes < 60 ? sections[1] : sections[2];
-    section.events.push(group);
-  }
-
-  return sections.filter((section) => section.events.length > 0);
-}
-
 export function recentEventPresentation(group: RecentEventGroup) {
   const playerEvent = group.events[0];
   const player = playerEventSubject(playerEvent) || group.title.replace(/\s+(?:joined|left|reconnected)$/i, "").trim();
@@ -916,7 +891,6 @@ export function RecentEventsPanel({
   serverId = "",
   playerHeadsEnabled = false,
   onOpenConsole,
-  requestConfirmation,
   loading = false
 }: {
   events: ServerEvent[];
@@ -926,25 +900,13 @@ export function RecentEventsPanel({
   serverId?: string;
   playerHeadsEnabled?: boolean;
   onOpenConsole: () => void;
-  requestConfirmation: RequestConfirmation;
   loading?: boolean;
 }) {
   const [filter, setFilter] = useState<ServerEventFilter>("all");
   const [page, setPage] = useState(0);
   const [sorting, setSorting] = useState<SortingState>([{ id: "timestamp", desc: true }]);
-  const [hiddenSignatures, setHiddenSignatures] = useState<string[]>(() => {
-    try {
-      const stored = window.localStorage.getItem(hiddenRecentEventsKey);
-      const parsed = stored ? JSON.parse(stored) : [];
-      return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
-    } catch {
-      return [];
-    }
-  });
   const [now, setNow] = useState(() => new Date());
-  const hiddenSignatureSet = useMemo(() => new Set(hiddenSignatures), [hiddenSignatures]);
-  const visibleEvents = useMemo(() => events.filter((event) => !hiddenSignatureSet.has(event.signature)), [events, hiddenSignatureSet]);
-  const groupedEvents = useMemo(() => groupRecentEvents(visibleEvents, now), [visibleEvents, now]);
+  const groupedEvents = useMemo(() => groupRecentEvents(events, now), [events, now]);
   const filteredEvents = useMemo(() => filter === "all"
     ? groupedEvents
     : groupedEvents.filter((group) => serverEventCategory(group.events[0]) === filter), [filter, groupedEvents]);
@@ -991,49 +953,23 @@ export function RecentEventsPanel({
   const currentPage = Math.min(page, pages - 1);
   const pageRows = rows.slice(currentPage * serverEventsPageSize, currentPage * serverEventsPageSize + serverEventsPageSize);
   const headVersion = playerHeadVersion(now.getTime());
-  const hasHiddenEvents = events.some((event) => hiddenSignatureSet.has(event.signature));
   const filterCounts = useMemo(() => groupedEvents.reduce<Record<ServerEventCategory, number>>((counts, group) => {
     counts[serverEventCategory(group.events[0])] += 1;
     return counts;
   }, { player: 0, server: 0, automation: 0 }), [groupedEvents]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(hiddenRecentEventsKey, JSON.stringify(hiddenSignatures));
-    } catch {
-      // Hidden event preferences remain available for this session.
-    }
-  }, [hiddenSignatures]);
-
-  useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  useEffect(() => setPage(0), [filter, serverId, hiddenSignatures]);
-
-  async function confirmHideEvent(group: RecentEventGroup) {
-    const signatures = Array.from(new Set(group.events.map((event) => event.signature)));
-    const confirmed = await requestConfirmation({
-      title: "Hide matching events?",
-      description: "Hide recent events matching this entry.",
-      details: group.title,
-      warning: "You can restore hidden event types with Reset hidden events.",
-      warningTone: "warning",
-      confirmLabel: "Hide events",
-      variant: "critical"
-    });
-    if (confirmed) setHiddenSignatures((current) => Array.from(new Set([...current, ...signatures])));
-  }
+  useEffect(() => setPage(0), [filter, serverId]);
 
   return (
     <OverviewCard
       className="eventsPanel"
       title="Server events"
-      actions={<div className="overviewCardHeaderActions">
-        {hiddenSignatures.length > 0 && <Button variant="ghost" compact className="textLinkButton" onClick={() => setHiddenSignatures([])}>Reset hidden events</Button>}
-        <Button variant="ghost" compact className="textLinkButton" onClick={onOpenConsole}>View full log</Button>
-      </div>}
+      actions={<Button variant="ghost" compact className="textLinkButton" onClick={onOpenConsole}>View full log</Button>}
       loading={loading}
     >
       <div className="serverEventsBody">
@@ -1077,7 +1013,6 @@ export function RecentEventsPanel({
                       </SortHeaderButton>
                     </th>
                   ))}
-                  <th scope="col" className="serverEventActionHeading"><span className="srOnly">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -1119,16 +1054,6 @@ export function RecentEventsPanel({
                           {relativeTimestamps ? formatRelativeEventTime(group.timestamp, now) : timestamp ? formatDate(timestamp) : group.timestamp ? "Unknown" : "No timestamp"}
                         </time>
                       </td>
-                      <td className="serverEventAction">
-                        <Button variant="ghost" iconOnly className="eventHideButton" onClick={() => void confirmHideEvent(group)} aria-label={`Hide events matching ${group.title}`}>
-                          <svg viewBox="0 0 24 24" className="buttonIcon" aria-hidden="true">
-                            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                            <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                            <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                            <line x1="2" y1="2" x2="22" y2="22" />
-                          </svg>
-                        </Button>
-                      </td>
                     </tr>
                   );
                 })}
@@ -1139,8 +1064,8 @@ export function RecentEventsPanel({
           <EmptyState
             compact
             className="eventEmpty"
-            title={filter !== "all" && groupedEvents.length > 0 ? `No ${serverEventFilters.find((option) => option.id === filter)?.label.toLowerCase()} yet` : hasHiddenEvents ? "Server events are hidden" : eventsStatus === "unavailable" ? "Events are unavailable" : "No server events yet"}
-            message={filter !== "all" && groupedEvents.length > 0 ? "Choose another filter to view the rest of the event history." : hasHiddenEvents ? "Reset hidden events to show them again." : eventsStatus === "unavailable" ? "Open the console to inspect raw logs, or try again after the server writes new output." : undefined}
+            title={filter !== "all" && groupedEvents.length > 0 ? `No ${serverEventFilters.find((option) => option.id === filter)?.label.toLowerCase()} yet` : eventsStatus === "unavailable" ? "Events are unavailable" : "No server events yet"}
+            message={filter !== "all" && groupedEvents.length > 0 ? "Choose another filter to view the rest of the event history." : eventsStatus === "unavailable" ? "Open the console to inspect raw logs, or try again after the server writes new output." : undefined}
           />
         )}
         {!loading && rows.length > 0 && (

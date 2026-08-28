@@ -143,5 +143,3 @@ export function usePlayersWorkspace(inputs: {
     refreshGeoDatabase
   };
 }
-
-export type PlayersWorkspace = ReturnType<typeof usePlayersWorkspace>;

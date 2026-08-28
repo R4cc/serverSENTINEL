@@ -2310,7 +2310,6 @@ export default function App() {
                   setActivePage("schedule");
                 }}
                 onOpenConsole={() => setActivePage("console")}
-                requestConfirmation={requestConfirmation}
                 relativeTimestamps={relativeTimestamps}
                 formatDate={formatDisplayDate}
                 formatTime={formatDisplayTime}

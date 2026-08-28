@@ -239,13 +239,8 @@
   gap: var(--space-1);
 }
 
-.eventRow,
 .fileTableRow {
   min-height: 0;
-}
-
-.eventRow {
-  padding: var(--space-2) var(--space-3);
 }
 
 .consolePanel,

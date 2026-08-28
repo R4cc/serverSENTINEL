@@ -10,7 +10,6 @@ import {
   formatRelativeEventTime,
   formatRelativeScheduleTime,
   groupRecentEvents,
-  groupRecentEventsByTime,
   ModHealthPanel,
   modUpdateRefreshResultMessage,
   OverviewSummary,
@@ -320,18 +319,6 @@ describe("recent event grouping", () => {
     expect(recentEventPresentation(left)).toEqual({ title: "Left", subject: "Steve", details: undefined });
   });
 
-  it("groups displayed events into just now, within the last hour, and earlier sections", () => {
-    const groups = groupRecentEvents([
-      serverEvent("player_joined", "2026-07-11T12:03:00.000Z", { text: "Alex joined", subject: "Alex", signature: "player_joined:alex" }),
-      serverEvent("player_left", "2026-07-11T11:30:00.000Z", { text: "Steve left", subject: "Steve", signature: "player_left:steve" }),
-      serverEvent("server_started", "2026-07-11T10:00:00.000Z", { text: "Server started", signature: "server_started" })
-    ], now);
-
-    const sections = groupRecentEventsByTime(groups, now);
-    expect(sections.map((section) => section.label)).toEqual(["Just now", "Within the last hour", "Earlier"]);
-    expect(sections.map((section) => section.events.length)).toEqual([1, 1, 1]);
-  });
-
   it("combines adjacent stop/start lifecycle events into a restart", () => {
     const groups = groupRecentEvents([
       serverEvent("server_started", "2026-07-11T12:01:00.000Z", { text: "Server started", severity: "success" }),
@@ -367,8 +354,7 @@ describe("recent event grouping", () => {
     const html = renderToStaticMarkup(createElement(RecentEventsPanel, {
       events,
       formatDate: String,
-      onOpenConsole: () => undefined,
-      requestConfirmation: async () => false
+      onOpenConsole: () => undefined
     }));
 
     expect((html.match(/class="serverEventRow warning/g) ?? [])).toHaveLength(1);
@@ -380,6 +366,9 @@ describe("recent event grouping", () => {
     expect(html).toContain("Player activity");
     expect(html).toContain("Automation runs");
     expect(html).toContain(">View full log</button>");
+    expect(html).not.toContain("Hide events");
+    expect(html).not.toContain("eventHideButton");
+    expect(html).not.toContain("serverEventActionHeading");
   });
 
   it("uses cached player heads with overlaid join and leave icons when enabled", () => {
@@ -400,8 +389,7 @@ describe("recent event grouping", () => {
       formatDate: String,
       serverId: "server one",
       playerHeadsEnabled: true,
-      onOpenConsole: () => undefined,
-      requestConfirmation: async () => false
+      onOpenConsole: () => undefined
     }));
 
     expect(html).toContain('/api/servers/server%20one/player-head/Alex?v=');
@@ -429,8 +417,7 @@ describe("recent event grouping", () => {
       formatDate: String,
       serverId: "server one",
       playerHeadsEnabled: false,
-      onOpenConsole: () => undefined,
-      requestConfirmation: async () => false
+      onOpenConsole: () => undefined
     }));
 
     expect(html).not.toContain("/player-head/");
