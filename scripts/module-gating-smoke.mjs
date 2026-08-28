@@ -77,14 +77,27 @@ async function openSettingsCategory(page, category) {
   await page.locator(`#settings-tab-${category}`).click();
 }
 
-async function withPanel(run) {
-  const harness = await startDemoHarness({ dataDirectory });
+async function withPanel(run, options = {}) {
+  const harness = await startDemoHarness({ dataDirectory, ...options });
   const browser = await launchBrowser(chromium);
   try {
     return await run(harness, browser);
   } finally {
     await browser.close();
     await harness.stop();
+  }
+}
+
+function storeLegacyAdminPermissions() {
+  const database = new Database(join(dataDirectory, "serversentinel.sqlite"));
+  try {
+    const row = database.prepare("SELECT permissions_json FROM users WHERE username = 'demo'").get();
+    assert(row, "the demo account was not stored before the legacy-permission check");
+    const permissions = JSON.parse(row.permissions_json).filter((permission) => !permission.startsWith("players."));
+    database.prepare("UPDATE users SET role_preset = 'admin', permissions_json = ? WHERE username = 'demo'")
+      .run(JSON.stringify(permissions));
+  } finally {
+    database.close();
   }
 }
 
@@ -135,6 +148,29 @@ try {
       "returning to the managed content page rebuilt its list, so the module did not survive leaving the server workspace"
     );
   });
+
+  // Player Insights added permissions to every preset after installations already had accounts.
+  // Reopen the seeded account outside demo mode with the old Admin grant and prove the stored
+  // preset is upgraded before module access reaches the rendered navigation.
+  storeLegacyAdminPermissions();
+  await withPanel(async ({ baseUrl }, browser) => {
+    const { page } = await openSession(browser);
+    await signInThroughForm(page, baseUrl);
+    const playerHeadsOnboarding = page.getByRole("dialog", { name: "Player heads on Overview" });
+    await playerHeadsOnboarding.waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
+    if (await playerHeadsOnboarding.isVisible()) {
+      await playerHeadsOnboarding.getByRole("button", { name: "Keep disabled", exact: true }).click();
+      await playerHeadsOnboarding.waitFor({ state: "hidden" });
+    }
+    await openSettingsCategory(page, "modules");
+
+    const playerInsights = page.getByRole("switch", { name: "Player insights module", exact: true });
+    assert(await playerInsights.isChecked(), "the legacy Admin check did not keep Player Insights enabled");
+    assert(
+      await page.locator('.sideNav button[data-nav-page="players"]').isVisible(),
+      "an enabled Player Insights module is missing from the navigation for a legacy Admin account"
+    );
+  }, { env: { SERVERSENTINEL_ENABLE_DEMO: "false" } });
 
   disableModulesInStorage(modules.map((module) => module.id));
 

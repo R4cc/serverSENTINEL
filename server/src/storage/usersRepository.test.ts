@@ -47,27 +47,70 @@ describe("UsersRepository.findById", () => {
     expect(repository.findById("missing-user")).toBeUndefined();
   });
 
-  it("upgrades stored Manager and Admin presets with the dedicated export permission", async () => {
+  it("upgrades stored presets with permissions introduced after their accounts were created", async () => {
     const repository = await createRepository();
     const legacyAdmin = storedUser({
-      permissions: ROLE_PRESETS.admin.filter((permission) => permission !== "servers.export")
+      permissions: ROLE_PRESETS.admin.filter((permission) => !["servers.export", "players.view", "players.manage"].includes(permission))
     });
     const legacyManager = storedUser({
       id: "manager-1",
       username: "manager",
       rolePreset: "manager",
-      permissions: ROLE_PRESETS.manager.filter((permission) => permission !== "servers.export")
+      permissions: ROLE_PRESETS.manager.filter((permission) => !["servers.export", "players.view", "players.manage"].includes(permission))
+    });
+    const legacyViewer = storedUser({
+      id: "viewer-1",
+      username: "viewer",
+      rolePreset: "viewer",
+      permissions: ROLE_PRESETS.viewer.filter((permission) => permission !== "players.view")
     });
     repository.create(legacyAdmin);
     repository.create(legacyManager);
+    repository.create(legacyViewer);
 
     expect(repository.findById(legacyAdmin.id)).toMatchObject({
       rolePreset: "admin",
-      permissions: expect.arrayContaining(["servers.export"])
+      permissions: expect.arrayContaining(["servers.export", "players.view", "players.manage"])
     });
     expect(repository.findById(legacyManager.id)).toMatchObject({
       rolePreset: "manager",
-      permissions: expect.arrayContaining(["servers.export"])
+      permissions: expect.arrayContaining(["servers.export", "players.view", "players.manage"])
+    });
+    expect(repository.findById(legacyViewer.id)).toMatchObject({
+      rolePreset: "viewer",
+      permissions: expect.arrayContaining(["players.view"])
+    });
+  });
+
+  it("does not grant new preset permissions to a custom account", async () => {
+    const repository = await createRepository();
+    repository.create(storedUser());
+    const custom = storedUser({
+      id: "custom-1",
+      username: "custom",
+      rolePreset: "custom",
+      permissions: ["servers.view", "settings.view"]
+    });
+    repository.create(custom);
+
+    expect(repository.findById(custom.id)).toEqual(custom);
+    expect(repository.findById(custom.id)?.permissions).not.toContain("players.view");
+  });
+
+  it("does not repair a divergent grant merely because its stored role names a preset", async () => {
+    const repository = await createRepository();
+    repository.create(storedUser());
+    const divergent = storedUser({
+      id: "divergent-1",
+      username: "divergent",
+      rolePreset: "viewer",
+      permissions: ["servers.view", "settings.view"]
+    });
+    repository.create(divergent);
+
+    expect(repository.findById(divergent.id)).toMatchObject({
+      rolePreset: "custom",
+      permissions: ["servers.view", "settings.view"]
     });
   });
 });
