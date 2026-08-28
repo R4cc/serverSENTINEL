@@ -1,4 +1,5 @@
 import { createElement, forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
+import { CheckCircle2, CircleAlert, Info, TriangleAlert } from "lucide-react";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "critical";
 type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
@@ -232,19 +233,32 @@ export function Banner({
   title,
   message,
   action,
+  icon,
+  compact = false,
   className,
+  children,
+  role,
   ...props
 }: HTMLAttributes<HTMLElement> & {
   tone?: BannerTone;
   title: ReactNode;
   message?: ReactNode;
   action?: ReactNode;
+  icon?: ReactNode;
+  compact?: boolean;
 }) {
+  const ToneIcon = tone === "success" ? CheckCircle2 : tone === "warning" ? TriangleAlert : tone === "error" ? CircleAlert : Info;
+  const resolvedRole = role ?? (tone === "error" ? "alert" : tone === "warning" ? "status" : undefined);
+
   return (
-    <section {...props} role={tone === "error" ? "alert" : props.role} className={classes("uiBanner", `uiBanner--${tone}`, className)}>
+    <section {...props} role={resolvedRole} className={classes("uiBanner", `uiBanner--${tone}`, compact && "uiBanner--compact", className)}>
+      <span className="uiBannerIcon" aria-hidden="true">
+        {icon ?? <ToneIcon />}
+      </span>
       <div className="uiBannerCopy">
         <strong>{title}</strong>
-        {message && <span>{message}</span>}
+        {message && <div className="uiBannerMessage">{message}</div>}
+        {children && <div className="uiBannerDetails">{children}</div>}
       </div>
       {action && <div className="uiBannerAction">{action}</div>}
     </section>

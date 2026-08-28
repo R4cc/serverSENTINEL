@@ -387,9 +387,7 @@
   overflow-wrap: anywhere;
 }
 
-.fileActionWarning,
-.fileActionDanger,
-.fileActionError {
+.fileActionDanger {
   margin: 0;
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
@@ -397,13 +395,7 @@
   line-height: 1.45;
 }
 
-.fileActionWarning {
-  background: color-mix(in srgb, var(--sentinel-warning) 12%, var(--surface));
-  color: var(--sentinel-warning);
-}
-
-.fileActionDanger,
-.fileActionError {
+.fileActionDanger {
   background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface));
   color: var(--sentinel-danger);
 }

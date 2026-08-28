@@ -530,55 +530,7 @@ button .buttonIcon {
   font-weight: var(--weight-heading);
 }
 
-/* No bottom margin: the workspace is a grid and already spaces its children, so
-   a margin here made this the one notice in the stack that sat further from the
-   page than the `uiBanner` notices beside it. */
-.systemBanner {
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  display: grid;
-  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: center;
-  color: var(--text);
-}
-
-.systemBanner strong {
-  font-size: 16px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-tight);
-}
-
-.systemBanner span {
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.systemBanner.warning {
-  border-color: var(--sentinel-warning);
-  background:
-    repeating-linear-gradient(45deg, color-mix(in srgb, var(--sentinel-warning) 18%, transparent) 0 1px, transparent 1px 10px),
-    color-mix(in srgb, var(--surface) 88%, var(--sentinel-warning) 12%);
-}
-
-.systemBanner.error {
-  border-color: var(--sentinel-danger);
-  background:
-    repeating-linear-gradient(45deg, color-mix(in srgb, var(--sentinel-danger) 18%, transparent) 0 1px, transparent 1px 10px),
-    color-mix(in srgb, var(--surface) 82%, var(--sentinel-danger) 18%);
-  color: var(--sentinel-danger);
-}
-
-.systemBanner.accent {
-  border-color: var(--accent);
-  background:
-    repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 14%, transparent) 0 1px, transparent 1px 10px),
-    var(--sentinel-accent-soft);
-  color: var(--text);
-}
-
-.inlineState {
+.inlineState:not(.uiBanner) {
   border: var(--border-strong) solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -590,21 +542,25 @@ button .buttonIcon {
   margin: var(--space-3) 0;
 }
 
-.inlineState div {
+.inlineState:not(.uiBanner) > div {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.inlineState strong {
+.inlineState:not(.uiBanner) strong {
   font-size: 13px;
   font-weight: var(--weight-title);
 }
 
-.inlineState span {
+.inlineState:not(.uiBanner) span {
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.4;
+}
+
+.inlineState.uiBanner {
+  margin: var(--space-3) 0;
 }
 
 .inlineState-loading {
@@ -612,18 +568,6 @@ button .buttonIcon {
   background:
     repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 8%, transparent) 0 1px, transparent 1px 10px),
     var(--surface);
-}
-
-.inlineState-error {
-  border-color: var(--sentinel-danger);
-  color: var(--sentinel-danger);
-  background: color-mix(in srgb, var(--surface) 86%, var(--sentinel-danger) 14%);
-}
-
-/* Third child of the two-column banner grid, so without this it lands back in
-   the narrow title column and the failure log scrolls inside ~180px. */
-.systemBanner > .failureDetails {
-  grid-column: 1 / -1;
 }
 
 .failureDetails {
@@ -656,11 +600,6 @@ button .buttonIcon {
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.inlineState-warning {
-  border-color: var(--sentinel-warning);
-  background: color-mix(in srgb, var(--surface) 88%, var(--sentinel-warning) 12%);
 }
 
 .inlineState-empty {
@@ -1302,16 +1241,6 @@ button .buttonIcon {
   color: var(--text);
 }
 
-.permissionWarning {
-  margin-top: var(--space-3);
-  border: var(--border-strong) solid var(--sentinel-warning);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  color: var(--sentinel-warning);
-  font-size: 12px;
-  font-weight: var(--weight-heading);
-}
-
 .permissionsSection {
   margin-top: var(--space-4);
 }
@@ -1766,82 +1695,14 @@ button .buttonIcon {
 }
 
 .serverRuntimeAlert {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-3);
   width: 100%;
-  min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--sentinel-danger) 58%, var(--border-row));
-  border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
-  background: color-mix(in srgb, var(--sentinel-danger) 11%, var(--surface-raised));
-  color: var(--text);
-}
-
-.activeServerStrip .serverRuntimeAlertIcon {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sentinel-danger) 15%, transparent);
-  color: var(--sentinel-danger);
-}
-
-.activeServerStrip .serverRuntimeAlertIcon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.serverRuntimeAlertCopy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.serverRuntimeAlertCopy strong {
-  color: var(--sentinel-danger);
-  font-size: 13px;
-  font-weight: var(--weight-title);
-  line-height: 1.3;
-}
-
-.serverRuntimeAlertCopy span {
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.serverRuntimeAlertCopy .uiButton {
-  justify-self: start;
-  margin-top: var(--space-2);
 }
 
 .activeServerStrip .serverRuntimeAlert.compact {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
   width: auto;
   min-height: 40px;
   flex: 0 0 auto;
-  padding: 0 var(--space-3);
   white-space: nowrap;
-}
-
-.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertIcon {
-  width: 20px;
-  height: 20px;
-}
-
-.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertIcon svg {
-  width: 14px;
-  height: 14px;
-}
-
-.activeServerStrip .serverRuntimeAlert.compact .serverRuntimeAlertCopy {
-  display: inline-flex;
 }
 
 .activeServerStrip .runtimeControlsCompact {
@@ -2157,7 +2018,6 @@ button .buttonIcon {
   border-color: var(--border-row);
 }
 
-.permissionWarning,
 .permissionGroup {
   border-color: var(--border-muted);
 }

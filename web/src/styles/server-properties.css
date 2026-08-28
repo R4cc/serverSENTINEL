@@ -273,47 +273,6 @@
   border-top: 1px solid var(--border-row);
 }
 
-.propertiesLockBanner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 42px;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sentinel-warning) 9%, var(--surface-raised));
-  color: var(--text);
-  font-size: var(--type-helper-size);
-  font-weight: var(--weight-strong);
-}
-
-/* Over-allocating memory is advice, not a rejected value, so it carries the
-   warning tone instead of borrowing the red `fieldError` treatment. */
-.propertiesMemoryWarning {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  border: var(--border-strong) solid color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
-  color: var(--status-warning-foreground);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  line-height: 1.4;
-}
-
-.propertiesLockBanner svg {
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: var(--sentinel-warning);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .propertiesSaveDock {
   position: fixed;
   right: var(--space-5);
@@ -456,14 +415,8 @@
   line-height: 1.4;
 }
 
-.exportTaskEmpty,
-.exportTaskError {
+.exportTaskEmpty {
   margin: 0;
-}
-
-.exportTaskError {
-  color: var(--sentinel-danger);
-  font-size: var(--type-helper-size);
 }
 
 .exportTaskProgress {

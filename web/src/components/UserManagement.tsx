@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
-import { Button, EmptyState, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
+import { Banner, Button, EmptyState, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
 import { ActionMenu } from './ActionMenu';
 import { TableSortButton } from './TableControls';
@@ -295,9 +295,12 @@ function UserPermissionModal({
           </div>
 
           {unknownPermissions.length > 0 && (
-            <div className="permissionWarning" role="status">
-              This user has unknown permissions from the backend: {unknownPermissions.join(", ")}.
-            </div>
+            <Banner
+              tone="warning"
+              compact
+              title="Unknown permissions"
+              message={`This user has permissions not recognized by this panel: ${unknownPermissions.join(", ")}.`}
+            />
           )}
 
           <div className="permissionsSection">

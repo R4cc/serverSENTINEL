@@ -179,11 +179,6 @@
   padding: var(--space-3);
 }
 
-.panelAddressSuggestion.warning {
-  border-left-color: var(--sentinel-warning);
-  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
-}
-
 .panelAddressSuggestion > div {
   min-width: 0;
   display: grid;
@@ -425,16 +420,6 @@
 .addNodeStatusCard.success h3,
 .addNodeStatusCard.success .addNodeStatusIcon {
   color: var(--sentinel-success);
-}
-
-.addNodeStatusCard.error {
-  border-color: var(--sentinel-danger);
-  background: color-mix(in srgb, var(--sentinel-danger) 8%, var(--surface));
-}
-
-.addNodeStatusCard.error h3,
-.addNodeStatusCard.error .addNodeStatusIcon {
-  color: var(--sentinel-danger);
 }
 
 .addNodeStatusIcon {
@@ -986,16 +971,8 @@
   background: currentColor;
 }
 
-.createWizardValidation {
+.createWizardAlert {
   margin: var(--space-4) var(--space-4) 0;
-  border: var(--border-strong) solid color-mix(in srgb, var(--sentinel-warning) 72%, var(--border));
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
-  color: var(--sentinel-warning);
-  padding: var(--space-3);
-  font-size: 13px;
-  font-weight: var(--weight-meta);
-  line-height: 1.4;
 }
 
 .resourcesWizardFields {
@@ -2222,7 +2199,6 @@
   text-transform: capitalize;
 }
 
-.nodeDrawerNotice,
 .nodeManualCommand {
   border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 35%, var(--border-row));
   border-radius: var(--radius-md);
@@ -2230,52 +2206,24 @@
   padding: var(--space-4);
 }
 
-.nodeDrawerNotice > strong,
 .nodeManualCommand strong {
   color: color-mix(in srgb, var(--sentinel-warning) 72%, var(--text));
   font-size: var(--type-helper-size);
 }
 
-.nodeDrawerNotice ul {
+.nodeDrawerAlertList {
   display: grid;
   gap: var(--space-2);
-  margin: var(--space-2) 0 0;
+  margin: var(--space-1) 0 0;
   padding-left: 18px;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  line-height: 1.4;
 }
 
-.nodeDrawerNotice.failure {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 35%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--surface-raised));
-}
-
-.nodeDrawerNotice.failure > strong {
-  color: color-mix(in srgb, var(--sentinel-danger) 72%, var(--text));
-}
-
-.nodeDrawerNotice.failure p {
-  margin: var(--space-2) 0 0;
-  overflow-wrap: anywhere;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  line-height: 1.45;
-}
-
-.nodeDrawerNotice.failure small {
+.nodeDrawerAlertMeta {
   display: block;
   margin-top: var(--space-2);
   overflow-wrap: anywhere;
   color: var(--text-soft);
   font-size: var(--type-meta-size);
-}
-
-.nodeDrawerNoticeActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
 }
 
 .nodeManualCommand {

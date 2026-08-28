@@ -13,7 +13,7 @@ import {
 } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Button } from "../components/UiPrimitives";
+import { Banner, Button } from "../components/UiPrimitives";
 import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from "../utils/validation";
 import {
   clampNumber,
@@ -370,7 +370,7 @@ export function ManagedServerForm({
       <CreateServerStepper activeStep={activeWizardStep} />
 
       <section className="createWizardCard">
-        {wizardError && <div className="createWizardValidation" role="alert">{wizardError}</div>}
+        {wizardError && <Banner tone="error" className="createWizardAlert" title="Check server details" message={wizardError} />}
         {activeWizardStep === 1 ? (
           <>
             <div className="modInstallStepIntro">

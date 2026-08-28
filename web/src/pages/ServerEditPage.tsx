@@ -364,7 +364,7 @@ export function ServerEditForm({
   return (
     <div className="serverPropertiesWorkspace">
       <form id={formId} onSubmit={submitForm} onChange={() => setDirty(true)} className="serverPropertiesForm">
-        {disabled && disabledReason && !saving && <Banner tone="warning" className="propertiesLockBanner" title={disabledReason} />}
+        {disabled && disabledReason && !saving && <Banner tone="warning" title={disabledReason} />}
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
           <section className="propertiesSettingsSurface">
@@ -452,7 +452,7 @@ export function ServerEditForm({
                   <span>Total available: {memoryBounds.max} GB</span>
                 </div>
                 {memoryWarning && (
-                  <span className="propertiesMemoryWarning">Leave some RAM for the host. Using nearly all memory may cause instability.</span>
+                  <Banner tone="warning" compact title="Leave some RAM for the host" message="Using nearly all available memory may cause host instability." />
                 )}
                 <input type="hidden" name="javaArgs" value={javaArgs} />
               </section>
@@ -642,14 +642,18 @@ export function ExportServerPanel({
             </div>
           )}
           {(latest.status === "failed" || latest.status === "cancelled") && latest.errorMessage && (
-            <p className="exportTaskError">{latest.errorMessage}</p>
+            <Banner tone="error" compact title="Export failed" message={latest.errorMessage} />
           )}
           {active && !latest.canCancel && latest.task !== "Finalizing export" && !latest.startedByRequester && (
             <small>This export was started by another user.</small>
           )}
         </div>
+      ) : loading ? (
+        <p className="exportTaskEmpty">Loading export status…</p>
+      ) : error ? (
+        <Banner tone="error" compact title="Could not load exports" message={error} />
       ) : (
-        <p className="exportTaskEmpty">{loading ? "Loading export status…" : error || "No export has been created yet."}</p>
+        <p className="exportTaskEmpty">No export has been created yet.</p>
       )}
 
       {artifact && (
@@ -688,7 +692,7 @@ export function ExportServerPanel({
         </div>
       )}
 
-      {error && latest && <p className="exportTaskError">{error}</p>}
+      {error && latest && <Banner tone="error" compact title="Could not refresh exports" message={error} />}
       <div className="exportPanelActions">
         <Button variant="secondary" onClick={onExport} disabled={disabled || active}>
           <AppIcon name="download" /> {latest ? "New export" : "Export server"}

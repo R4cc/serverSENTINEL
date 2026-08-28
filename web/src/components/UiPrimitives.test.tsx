@@ -47,9 +47,29 @@ describe("UI primitives", () => {
     expect(html).toContain('role="alert"');
   });
 
-  it("uses alert semantics only for error banners", () => {
-    expect(renderToStaticMarkup(<Banner tone="error" title="Could not connect" />)).toContain('role="alert"');
-    expect(renderToStaticMarkup(<Banner tone="warning" title="Restart required" />)).not.toContain('role="alert"');
+  it("gives warning and error banners unified icons and live-region semantics", () => {
+    const error = renderToStaticMarkup(<Banner tone="error" title="Could not connect" />);
+    const warning = renderToStaticMarkup(<Banner tone="warning" title="Restart required" />);
+
+    expect(error).toContain('role="alert"');
+    expect(error).toContain("lucide-circle-alert");
+    expect(warning).toContain('role="status"');
+    expect(warning).not.toContain('role="alert"');
+    expect(warning).toContain("lucide-triangle-alert");
+    expect(warning).toContain("uiBannerIcon");
+  });
+
+  it("supports compact alerts, rich details, and remediation actions", () => {
+    const html = renderToStaticMarkup(
+      <Banner tone="warning" compact title="Update required" message="Install the matching panel version." action={<Button>Open settings</Button>}>
+        <code>26.9.1</code>
+      </Banner>
+    );
+
+    expect(html).toContain("uiBanner--compact");
+    expect(html).toContain("uiBannerDetails");
+    expect(html).toContain("uiBannerAction");
+    expect(html).toContain("Open settings");
   });
 
   it("renders metric tiles with semantic tones and optional detail", () => {

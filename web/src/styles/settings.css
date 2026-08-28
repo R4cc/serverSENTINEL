@@ -1126,9 +1126,7 @@
   text-transform: none;
 }
 
-.systemBanner,
-.notice,
-.permissionWarning {
+.notice {
   border-radius: var(--radius-md);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);

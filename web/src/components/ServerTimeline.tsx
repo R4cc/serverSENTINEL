@@ -39,7 +39,7 @@ import {
   timelineRetentionMs,
   type TimelinePalette
 } from "./serverTimelineChart";
-import { Button, LoadingLabel, PanelHeader } from "./UiPrimitives";
+import { Banner, Button, LoadingLabel, PanelHeader } from "./UiPrimitives";
 import { playerHeadSource, playerHeadVersion } from "../utils/playerHeads";
 
 const timelineRanges = [
@@ -1333,9 +1333,9 @@ export function ServerTimeline({
           <Button variant="secondary" compact onClick={() => pan(1)} aria-label="Later timeline window" disabled={live}>›</Button>
         </div>
       </div>
-      {error && <div className="serverTimelineNotice tone-warning">{error}. Previously loaded data is still shown.</div>}
-      {data?.truncated.schedules && <div className="serverTimelineNotice tone-warning">Some high-frequency schedule markers were omitted because this window exceeds the annotation limit.</div>}
-      {!loading && resourceState === "unavailable" && <div className="serverTimelineNotice tone-warning">Resource history is unavailable for this window. Event and schedule annotations are still shown.</div>}
+      {error && <Banner tone="warning" compact title="Timeline refresh failed" message={`${error}. Previously loaded data is still shown.`} />}
+      {data?.truncated.schedules && <Banner tone="warning" compact title="Schedule markers were limited" message="Some high-frequency markers were omitted because this window exceeds the annotation limit." />}
+      {!loading && resourceState === "unavailable" && <Banner tone="warning" compact title="Resource history is unavailable" message="Event and schedule annotations are still shown for this window." />}
       <div
         ref={visualizationRef}
         className="serverTimelineVisualization"
@@ -1479,7 +1479,7 @@ export function ServerTimeline({
           />
         )}
         {annotationEnabled.player && data && (data.playerActivity?.snapshotState ?? "unavailable") === "unavailable" && (
-          <div className="serverTimelinePlayerStatusNotice">Current player status is unavailable; retained sessions are shown as offline.</div>
+          <Banner tone="warning" compact className="serverTimelinePlayerAlert" title="Current player status is unavailable" message="Retained sessions are shown as offline." />
         )}
         <div className="serverTimelineMetricBands">
           {metricBands.map((band) => (

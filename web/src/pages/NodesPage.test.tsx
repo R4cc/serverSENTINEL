@@ -49,6 +49,7 @@ describe("new node panel address", () => {
     expect(html).toContain("How the node connects");
     expect(html).toContain("This is the panel&#x27;s address, not the new node&#x27;s address.");
     expect(html).toContain("local-only address");
+    expect(html).toContain("uiBanner--warning");
     expect(html).not.toContain("Use this address");
     expect(html).toContain('name="panelUrl" value=""');
     expect(html).toContain("Create install command");

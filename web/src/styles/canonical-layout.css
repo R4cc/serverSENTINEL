@@ -133,7 +133,6 @@
 
 .panel,
 .inlineState,
-.systemBanner,
 .notice,
 .activeServerStrip,
 .modalPanel {
@@ -218,7 +217,6 @@
   gap: var(--space-3);
 }
 
-.systemBanner,
 .notice,
 .inlineState {
   padding: var(--space-3) var(--space-4);

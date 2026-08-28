@@ -761,14 +761,8 @@ button.overviewCardRow:focus-visible {
   font-size: 11px;
 }
 
-.serverTimelinePlayerStatusNotice {
+.serverTimelinePlayerAlert {
   margin-top: calc(var(--space-3) * -1);
-  padding: var(--space-2) var(--space-3);
-  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-muted));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-muted));
-  color: var(--status-warning-foreground);
-  font-size: 10px;
 }
 
 .serverTimelineMetricBands {
@@ -1292,18 +1286,12 @@ button.overviewCardRow:focus-visible {
   color: var(--text-muted);
 }
 
-.serverTimelineNotice,
 .serverTimelineEmpty {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   background: var(--surface-muted);
   font-size: 12px;
-}
-
-.serverTimelineNotice.tone-warning {
-  color: var(--status-warning-foreground);
-  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-muted));
 }
 
 @media (min-width: 981px) and (max-width: 1180px) {

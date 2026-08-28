@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Keybo
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
-import { Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
+import { Banner, Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
@@ -775,11 +775,11 @@ export function FileActionModal({
                 {dialog.entries.slice(0, 6).map((entry) => <li key={entry.path}>{entry.path}</li>)}
                 {dialog.entries.length > 6 && <li>…and {dialog.entries.length - 6} more</li>}
               </ul>
-              {folders > 0 && <p className="fileActionWarning">Selected folders and everything inside them will be deleted.</p>}
+              {folders > 0 && <Banner tone="warning" compact title="Folders include their contents" message="Selected folders and everything inside them will be deleted." />}
               <p className="fileActionDanger">This action cannot be undone.</p>
             </>
           )}
-          {error && <p className="fileActionError" id="file-action-error" role="alert">{error}</p>}
+          {error && <Banner tone="error" compact id="file-action-error" title="Could not complete this action" message={error} />}
         </div>
         <footer className="modalFooter">
           <Button variant="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>

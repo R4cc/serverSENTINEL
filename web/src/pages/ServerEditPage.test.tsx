@@ -114,7 +114,7 @@ describe("ServerEditForm", () => {
       <ServerEditForm server={server} totalMemory={4 * 1024 * 1024 * 1024} onSubmit={vi.fn()} />
     );
 
-    expect(html).toContain("propertiesMemoryWarning");
+    expect(html).toContain("uiBanner--warning");
     expect(html).toContain("Leave some RAM for the host");
     expect(html).not.toMatch(/class="fieldError"[^>]*>Leave some RAM for the host/);
   });
@@ -123,7 +123,7 @@ describe("ServerEditForm", () => {
     const reason = "Stop the server before changing mods or server properties.";
     const html = renderForm(true, reason);
 
-    expect(html).toMatch(/class="[^"]*propertiesLockBanner[^"]*"/);
+    expect(html).toContain("uiBanner--warning");
     expect(html).toContain(reason);
     expect(html).toMatch(/<fieldset disabled=""/);
     expect(html).not.toContain("propertiesSaveDock");
@@ -168,7 +168,7 @@ describe("ExportServerPanel", () => {
   it("moves saving feedback into the animated save button without a warning banner", () => {
     const html = renderForm(true, "Server settings are saving.", true);
 
-    expect(html).not.toContain("propertiesLockBanner");
+    expect(html).not.toContain("uiBanner--warning");
     expect(html).not.toContain("Server settings are saving.");
     expect(html).toContain("propertiesSaveDock");
     expect(html).toContain("Saving changes");
@@ -258,6 +258,7 @@ describe("ExportServerPanel", () => {
 
     expect(html).toContain("Failed");
     expect(html).toContain("A very long remote stream error");
+    expect(html).toContain("uiBanner--error");
     expect(html).toContain("Last successful export");
     expect(html).toContain("7.48 GiB");
     expect(html).toContain(`title="${artifactBytes.toLocaleString()} bytes"`);

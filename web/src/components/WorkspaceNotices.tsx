@@ -41,16 +41,18 @@ export function WorkspaceNotices({
       )}
 
       {provisioningError && activePage === "overview" && (
-        <section className="systemBanner error" role="alert">
-          <strong>Server setup failed.</strong>
-          <span>{provisioningError} Resolve the reported problem, then try creating the server again.</span>
+        <Banner
+          tone="error"
+          title="Server setup failed"
+          message={`${provisioningError} Resolve the reported problem, then try creating the server again.`}
+        >
           {provisioningErrorDetails && (
             <details className="failureDetails">
               <summary>Show full API failure log</summary>
               <pre>{provisioningErrorDetails}</pre>
             </details>
           )}
-        </section>
+        </Banner>
       )}
 
       {notice && activePage !== "files" && <Banner tone="info" title={notice} />}

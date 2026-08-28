@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Button, EmptyState, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
+import { Banner, Button, EmptyState, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
@@ -239,25 +239,21 @@ function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowStat
 
   if (flowState === "expired") {
     return (
-      <div className="addNodeStatusCard error" role="alert">
-        <span className="addNodeStatusIcon" aria-hidden="true">!</span>
-        <div>
-          <h3>Join token expired</h3>
-          <p>The join token for {nodeName} expired before the node connected. Rotate the token or create a new pending node, then run the updated install command.</p>
-        </div>
-      </div>
+      <Banner
+        tone="error"
+        title="Join token expired"
+        message={`The join token for ${nodeName} expired before the node connected. Rotate the token or create a new pending node, then run the updated install command.`}
+      />
     );
   }
 
   if (flowState === "disconnected") {
     return (
-      <div className="addNodeStatusCard error" role="alert">
-        <span className="addNodeStatusIcon" aria-hidden="true">!</span>
-        <div>
-          <h3>Node disconnected</h3>
-          <p>{nodeName} connected once, but it is offline now. Check the node host and run the install command again if needed.</p>
-        </div>
-      </div>
+      <Banner
+        tone="error"
+        title="Node disconnected"
+        message={`${nodeName} connected once, but it is offline now. Check the node host and run the install command again if needed.`}
+      />
     );
   }
 
@@ -377,18 +373,23 @@ export function AddNodeModal({
                 />
                 <span className="fieldHint" id="node-panel-address-hint">This is the panel's address, not the new node's address. Include the port when your panel uses one.</span>
               </label>
-              <div className={`panelAddressSuggestion ${browserAddressUsable ? "" : "warning"}`}>
-                <div>
-                  <span className="panelAddressSuggestionLabel">Address used by this browser</span>
-                  <code>{browserPanelUrl}</code>
-                  <p>{browserAddressUsable
-                    ? "This may work if the node computer can open the same address."
-                    : "This browser is using a local-only address. A Docker node would point that address back at itself, not at this panel."}</p>
-                </div>
-                {browserAddressUsable && (
+              {browserAddressUsable ? (
+                <div className="panelAddressSuggestion">
+                  <div>
+                    <span className="panelAddressSuggestionLabel">Address used by this browser</span>
+                    <code>{browserPanelUrl}</code>
+                    <p>This may work if the node computer can open the same address.</p>
+                  </div>
                   <Button type="button" variant="secondary" compact onClick={() => setPanelUrl(browserPanelUrl)}>Use this address</Button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <Banner
+                  tone="warning"
+                  compact
+                  title="Browser uses a local-only address"
+                  message={`${browserPanelUrl} would point a Docker node back at itself, not at this panel. Enter an address the node host can reach.`}
+                />
+              )}
             </section>
             <label>
               <span className="fieldLabelWithInfo">

@@ -31,7 +31,7 @@ describe("ConfirmationModal", () => {
     expect(html).toContain("Delete Example?");
     expect(html).toContain("example-user");
     expect(html).toContain("This action cannot be undone.");
-    expect(html).toContain("confirmationWarning--danger");
+    expect(html).toContain("uiBanner--error");
     expect(html).toContain("uiButton--critical");
     expect(html).toContain("Delete user");
   });
@@ -49,7 +49,7 @@ describe("ConfirmationModal", () => {
     expect(html).toContain("uiButton--primary");
     expect(html).toContain("Restart node");
     expect(html).toContain("Keep running");
-    expect(html).toContain("confirmationWarning--warning");
+    expect(html).toContain("uiBanner--warning");
   });
 
   it("renders a required text area for confirmations that capture a reason", () => {

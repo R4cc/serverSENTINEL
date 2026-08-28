@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.1 - 2026-08-28
+
+- Unified page-level warnings and errors as liquid-glass alert cards with consistent severity colors, icons, actions, details, and responsive behavior.
+
 ## 26.9.0 - 2026-08-28
 
 - Standardized the Integrations settings rows with consistent field labels, control heights, action widths, alignment, and responsive padding.

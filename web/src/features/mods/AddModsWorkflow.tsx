@@ -3,7 +3,7 @@ import type { ModInstallModalState } from "../../app/uiState";
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
-import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
+import { Banner, Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getSearchResultHealth } from "./modHealth";
 import { ModIconImage } from "./ModIconImage";
@@ -66,10 +66,20 @@ export function AddModsWorkflow(props: Props) {
           <label><AppIcon name="search" /><span className="srOnly">Search Modrinth for {terminology.plural}</span><input type="search" autoComplete="off" autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder={`Search by ${terminology.singular} name…`} disabled={!props.configured || props.versionsUnknown} /></label>
           <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? "Results update as you type" : ""}</span>
         </div>
-        <div className={`modsSafeSearchNote ${props.showIncompatibleResults ? "warning" : ""}`}>
-          <AppIcon name="shield" />
-          <span>{props.showIncompatibleResults ? `Incompatible ${terminology.plural} may fail to load or crash the server. Install only if you know the ${terminology.singular} works anyway.` : `Showing compatible ${terminology.runtimeName} server ${terminology.plural} for this server.`}</span>
-        </div>
+        {props.showIncompatibleResults ? (
+          <Banner
+            tone="warning"
+            compact
+            className="modsSafeSearchAlert"
+            title={`Showing incompatible ${terminology.plural}`}
+            message={`These ${terminology.plural} may fail to load or crash the server. Install only if you know the ${terminology.singular} works anyway.`}
+          />
+        ) : (
+          <div className="modsSafeSearchNote">
+            <AppIcon name="shield" />
+            <span>Showing compatible {terminology.runtimeName} server {terminology.plural} for this server.</span>
+          </div>
+        )}
         <label className="modsCompatibilityToggle">
           <input type="checkbox" checked={props.showIncompatibleResults} onChange={(event) => props.onShowIncompatibleResultsChange(event.target.checked)} disabled={!props.configured || props.versionsUnknown} />
           <span><strong>Show incompatible {terminology.plural}</strong><small>Includes {terminology.plural} that are not marked compatible with this server version.</small></span>
