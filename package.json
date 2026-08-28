@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "26.8.17",
+  "version": "26.8.33",
   "private": true,
   "packageManager": "npm@11.17.0",
   "workspaces": [
@@ -15,8 +15,9 @@
     "test": "npm --workspace server run test && npm --workspace web run test",
     "test:console": "npm run build && node scripts/console-smoke.mjs",
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
+    "test:modules": "npm run build && node scripts/module-gating-smoke.mjs",
     "test:overview": "npm run build && node scripts/overview-timeline-smoke.mjs",
-    "test:smoke": "npm run build && node scripts/console-smoke.mjs && node scripts/mobile-ui-smoke.mjs && node scripts/overview-timeline-smoke.mjs",
+    "test:smoke": "npm run build && node scripts/console-smoke.mjs && node scripts/mobile-ui-smoke.mjs && node scripts/module-gating-smoke.mjs && node scripts/overview-timeline-smoke.mjs",
     "test:server": "npm --workspace server run test",
     "test:web": "npm --workspace web run test",
     "typecheck": "npm run check:versions && npm --workspace server run typecheck && npm --workspace web run typecheck",

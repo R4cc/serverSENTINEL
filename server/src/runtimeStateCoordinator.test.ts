@@ -63,6 +63,44 @@ describe("RuntimeStateCoordinator", () => {
     expect(states).toEqual([[running.id, "running"], [stopped.id, "stopped"]]);
   });
 
+  it("clears a pending restart once the runtime is confirmed stopped", async () => {
+    const managed = { ...server("stopped"), restartRequiredSince: "2026-01-01T00:00:00.000Z" };
+    const cleared: string[] = [];
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => status(false),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer: async () => status(true),
+      setRuntimeIntent: () => {},
+      clearRestartRequired: (id) => cleared.push(id)
+    });
+
+    await coordinator.poll();
+    await coordinator.poll();
+
+    expect(cleared).toEqual([managed.id]);
+    expect(managed.restartRequiredSince).toBeUndefined();
+  });
+
+  it("keeps a pending restart while the runtime is still running", async () => {
+    const managed = { ...server("running"), restartRequiredSince: "2026-01-01T00:00:00.000Z" };
+    const cleared: string[] = [];
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed],
+      serverStatus: async () => status(true),
+      connectionEpoch: async () => "epoch-1",
+      restoreServer: async () => status(true),
+      setRuntimeIntent: () => {},
+      setLifecycle: () => {},
+      clearRestartRequired: (id) => cleared.push(id)
+    });
+
+    await coordinator.poll();
+
+    expect(cleared).toEqual([]);
+    expect(managed.restartRequiredSince).toBe("2026-01-01T00:00:00.000Z");
+  });
+
   it("restores desired-running servers once and stops retrying after failure", async () => {
     const managed = server("running");
     const restoreServer = vi.fn().mockRejectedValue(new Error("mod crashed"));

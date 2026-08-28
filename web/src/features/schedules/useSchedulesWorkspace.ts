@@ -1,4 +1,4 @@
-import { useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { api } from "../../api";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { demoFixtures } from "../../demoRuntime";
@@ -36,6 +36,13 @@ type SchedulesWorkspaceInputs = {
   refreshApp(): Promise<void>;
 };
 
+/**
+ * Demo runs continue in the background after the workspace is left, and the panel is not holding
+ * them for us, so the handles that can cancel one live beside the module rather than inside the
+ * component. Coming back to a run still in progress can then still cancel it.
+ */
+const demoRunControllers = new Map<string, AbortController>();
+
 export function useSchedulesWorkspace({
   activeServer,
   activeServerIsDemo,
@@ -58,7 +65,6 @@ export function useSchedulesWorkspace({
   refreshApp
 }: SchedulesWorkspaceInputs) {
   const [busy, setBusy] = useState(false);
-  const demoRunControllersRef = useRef(new Map<string, AbortController>());
   const locked = isProvisioning || busy || dockerOperationalLock || serverMutationLocked || !canManage || !activeServer;
 
   async function createSchedule(patch: SchedulePatch) {
@@ -219,7 +225,7 @@ export function useSchedulesWorkspace({
         return true;
       }
       const controller = new AbortController();
-      demoRunControllersRef.current.set(runId, controller);
+      demoRunControllers.set(runId, controller);
       const activeRun: ScheduledActiveRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "running", startedAt, stepCount: schedule.steps.length, cancellable: true, message: "Starting" };
       setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [activeRun] } : candidate));
       notify("success", `Started ${schedule.name}`);
@@ -321,7 +327,7 @@ export function useSchedulesWorkspace({
         steps[steps.length - 1].completedAt = new Date().toISOString();
       }
     } finally {
-      demoRunControllersRef.current.delete(activeRun.id);
+      demoRunControllers.delete(activeRun.id);
       const run: ScheduledRun = { id: activeRun.id, scheduleId: schedule.id, scheduleName: schedule.name, status: outcome, message, ranAt: activeRun.startedAt, details: { stepCount: schedule.steps.length, completedStepCount, terminalStepIndex, terminalStep, steps } };
       setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [], lastRunAt: activeRun.startedAt, lastStatus: outcome, lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
     }
@@ -338,7 +344,7 @@ export function useSchedulesWorkspace({
     });
     if (!confirmed) return false;
     if (activeServerIsDemo) {
-      demoRunControllersRef.current.get(run.id)?.abort();
+      demoRunControllers.get(run.id)?.abort();
       notify("success", `Cancelled ${run.scheduleName}`);
       return true;
     }

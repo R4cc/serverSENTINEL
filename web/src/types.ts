@@ -1,6 +1,7 @@
 import type {
   ModCompatibility,
   ModrinthInstallVersionStatus,
+  ModuleAccessState,
   NodeInstallInstructions,
   PublicNode,
   PublicServer,
@@ -19,11 +20,25 @@ export type {
   CreateNodeResponse,
   FileEditLease,
   ModCompatibility,
+  ModuleAccessState,
+  ModuleDescriptor,
+  ModuleId,
   ModUpdatePlan,
   ModUpdatePlanEntry,
   NodeInstallInstructions,
   OperationRecord,
   Permission as PermissionKey,
+  PlayerActivityHour,
+  PlayerContinentCode,
+  PlayerGeoDatabaseState,
+  PlayerInsightsEntry,
+  PlayerInsightsResponse,
+  PlayerInsightsServerLocation,
+  PlayerInsightsSummary,
+  PlayerLatencyPoint,
+  PlayerLocation,
+  PlayerMaintenanceWindow,
+  PlayerRegionSummary,
   PlayerSnapshot,
   PublicUser,
   ReleaseChannel,
@@ -137,7 +152,14 @@ export type AppState = {
   runtimeMode?: "all-in-one" | "panel" | "node";
   timeZone?: string;
   modrinthApiConfigured: boolean;
+  /** Whether MaxMind credentials exist, so the panel may download the GeoLite2 database it reads locally. */
+  geoIpConfigured: boolean;
   playerHeads: PlayerHeadsState;
+  /**
+   * Optional features, as this installation has them configured and this account may use them.
+   * Absent until `/api/app` has answered, which the shell treats as "no module available yet".
+   */
+  modules?: ModuleAccessState[];
   onboarding: OnboardingState;
   dockerSocketMounted: boolean;
   totalMemory: number;
@@ -358,7 +380,7 @@ export type GeneralJob = {
   dismissible: boolean;
 };
 
-export type ActivePage = "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "properties";
+export type ActivePage = "settings" | "nodes" | "create" | "overview" | "console" | "files" | "mods" | "schedule" | "players" | "properties";
 
 export type ScheduleNavigationTarget =
   | { kind: "schedule"; scheduleId: string }

@@ -29,12 +29,18 @@ async function availablePort() {
  */
 export async function startDemoHarness({
   dataDirectoryPrefix,
+  /**
+   * Reuses an existing data directory instead of creating one, for a script that has to restart
+   * the panel against state it wrote between runs. The caller then owns removing it: `stop()`
+   * only deletes a directory this harness created.
+   */
+  dataDirectory: existingDataDirectory,
   port,
   mode = "all-in-one",
   env = {},
   readinessTimeoutMs = 30_000
 } = {}) {
-  const dataDirectory = await mkdtemp(join(tmpdir(), dataDirectoryPrefix));
+  const dataDirectory = existingDataDirectory ?? await mkdtemp(join(tmpdir(), dataDirectoryPrefix));
   const selectedPort = port ?? await availablePort();
   const baseUrl = `http://127.0.0.1:${selectedPort}`;
   let serverOutput = "";
@@ -57,7 +63,7 @@ export async function startDemoHarness({
       });
       if (server.exitCode === null) server.kill("SIGKILL");
     }
-    await rm(dataDirectory, { recursive: true, force: true });
+    if (!existingDataDirectory) await rm(dataDirectory, { recursive: true, force: true });
   };
 
   try {

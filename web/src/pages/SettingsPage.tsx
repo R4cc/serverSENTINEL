@@ -1,17 +1,18 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import { Copy, Palette, PlugZap, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
-import type { DisplayTimeZonePreference, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
+import { Blocks, CalendarDays, Check, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
+import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";
+import type { DisplayTimeZonePreference, ModuleAccessState, ModuleId, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
 import { themeOptions } from "../features/settings/themePreferences";
-import { ModrinthKeyForm } from "../components/SettingsPanels";
+import { MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
 import { Button, StatusBadge } from "../components/UiPrimitives";
 import { resolveRegionalFormatLocale } from "../utils/format";
 
-type SettingsCategory = "appearance" | "console" | "integrations" | "users" | "system";
+type SettingsCategory = "appearance" | "console" | "integrations" | "modules" | "users" | "system";
 
 type SettingsUserState = {
   users: PublicUser[];
@@ -54,12 +55,18 @@ export type SettingsPageProps = {
   onConsoleScrollbackChange(value: ConsoleScrollback): void;
   onClearConsoleHistory(): void;
   modrinthConfigured: boolean;
+  geoIpConfigured: boolean;
   canManageIntegrations: boolean;
   onSubmitModrinthKey(event: FormEvent<HTMLFormElement>): void;
+  onSubmitMaxmindCredentials(event: FormEvent<HTMLFormElement>): void;
   playerHeads: PlayerHeadsState;
   playerHeadsBusy: boolean;
   onPlayerHeadsEnabledChange(value: boolean): void;
   onClearPlayerHeadCache(): void;
+  modules: ModuleAccessState[] | undefined;
+  modulesBusy: boolean;
+  canManageModules: boolean;
+  onModuleEnabledChange(id: ModuleId, enabled: boolean): void;
   canViewUsers: boolean;
   userState: SettingsUserState;
   systemInfo: SettingsSystemInfo;
@@ -77,6 +84,7 @@ const categoryDetails: Record<SettingsCategory, { label: string; description: st
   appearance: { label: "Appearance", description: "Theme, timestamps, and regional formats" },
   console: { label: "Console", description: "History, text size, and retained output" },
   integrations: { label: "Integrations", description: "External services and credentials" },
+  modules: { label: "Modules", description: "Optional features this installation runs" },
   users: { label: "Users", description: "Accounts, roles, and permissions" },
   system: { label: "System", description: "Panel health, runtime, and diagnostics" }
 };
@@ -94,12 +102,24 @@ function SettingsGlyph({ name }: { name: SettingsCategory | "refresh" | "copy" }
     appearance: Palette,
     console: SquareTerminal,
     integrations: PlugZap,
+    modules: Blocks,
     users: Users,
     system: SettingsIcon,
     refresh: RefreshCw,
     copy: Copy
   };
   const Icon = icons[name];
+  return <Icon strokeWidth={1.8} aria-hidden="true" />;
+}
+
+const moduleIcons: Record<ModuleId, LucideIcon> = {
+  schedules: CalendarDays,
+  managedContent: Puzzle,
+  playerInsights: Users
+};
+
+function ModuleGlyph({ id }: { id: ModuleId }) {
+  const Icon = moduleIcons[id];
   return <Icon strokeWidth={1.8} aria-hidden="true" />;
 }
 
@@ -139,7 +159,7 @@ function CategoryHeader({ category, actions }: { category: SettingsCategory; act
 }
 
 export function SettingsPage(props: SettingsPageProps) {
-  const categories = useMemo<SettingsCategory[]>(() => ["appearance", "console", "integrations", ...(props.canViewUsers ? ["users" as const] : []), "system"], [props.canViewUsers]);
+  const categories = useMemo<SettingsCategory[]>(() => ["appearance", "console", "integrations", "modules", ...(props.canViewUsers ? ["users" as const] : []), "system"], [props.canViewUsers]);
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(props.initialCategory ?? "appearance");
   const selectedCategory = categories.includes(activeCategory) ? activeCategory : "appearance";
   const systemSummary = summarizeSettingsSystemInfo(props.systemInfo);
@@ -174,6 +194,19 @@ export function SettingsPage(props: SettingsPageProps) {
     setActiveCategory(next);
     window.requestAnimationFrame(() => document.getElementById(`settings-tab-${next}`)?.focus());
   }
+
+  // Why the module cards cannot be operated, if they cannot. None of this varies by module, so the
+  // card loop reads it rather than re-deriving the same answer for each descriptor.
+  const modulesUnavailable = !props.canManageModules || props.modulesBusy || props.loading;
+  const moduleBlockedReason = props.systemInfo.demoMode
+    ? "Module configuration is read-only in demo mode"
+    : !props.canManageModules
+      ? "Manage integrations permission is required"
+      : props.modulesBusy
+        ? "Another module change is in progress"
+        : props.loading
+          ? "Modules are loading"
+          : undefined;
 
   const categoryContent: Record<SettingsCategory, ReactNode> = {
     appearance: (
@@ -234,9 +267,22 @@ export function SettingsPage(props: SettingsPageProps) {
       <>
         <CategoryHeader category="integrations" />
         <div className="settingsHubRows">
-          <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow">
-            <ModrinthKeyForm onSubmit={props.onSubmitModrinthKey} configured={props.modrinthConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
-          </PreferenceRow>
+          {/* Modrinth exists to serve managed content; with that module off there is nothing to configure. */}
+          {isModuleEnabled(props.modules, "managedContent") && (
+            <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow">
+              <ModrinthKeyForm onSubmit={props.onSubmitModrinthKey} configured={props.modrinthConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
+            </PreferenceRow>
+          )}
+          {/* GeoLite2 exists to serve Player insights; with that module off there is nothing to configure. */}
+          {isModuleEnabled(props.modules, "playerInsights") && (
+            <PreferenceRow
+              title="MaxMind GeoLite2"
+              description={<>Let the panel download the <a href="https://dev.maxmind.com/geoip/geolite2-free-geolocation-data" target="_blank" rel="noreferrer">GeoLite2 City</a> database it reads locally for Player insights. Player addresses are looked up against that local copy and are never sent to MaxMind or any other geolocation service.</>}
+              className="settingsHubIntegrationRow"
+            >
+              <MaxmindCredentialsForm onSubmit={props.onSubmitMaxmindCredentials} configured={props.geoIpConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
+            </PreferenceRow>
+          )}
           <PreferenceRow
             title="Player heads"
             description={<>Show player heads through <a href="https://www.mc-heads.net/" target="_blank" rel="noreferrer">MCHeads</a>. Usernames are shared only when enabled; cached heads refresh on a rolling daily schedule.</>}
@@ -264,6 +310,53 @@ export function SettingsPage(props: SettingsPageProps) {
               </Button>
             </div>
           </PreferenceRow>
+        </div>
+      </>
+    ),
+    modules: (
+      <>
+        <CategoryHeader category="modules" actions={<StatusBadge tone="neutral">Whole installation</StatusBadge>} />
+        {props.systemInfo.demoMode && (
+          <div className="settingsHubDemoCallout settingsModuleDemoCallout" role="status">
+            <div>
+              <strong>Read-only in demo mode</strong>
+              <span>Sign in with a non-demo administrator account to enable or disable installation modules.</span>
+            </div>
+          </div>
+        )}
+        <div className="settingsModuleGrid">
+          {MODULE_DESCRIPTORS.map((descriptor) => {
+            const enabled = isModuleEnabled(props.modules, descriptor.id);
+            const descriptionId = `settings-module-${descriptor.id}-description`;
+            const title = moduleBlockedReason ?? `${enabled ? "Disable" : "Enable"} ${descriptor.label}`;
+            return (
+              <button
+                key={descriptor.id}
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                aria-label={`${descriptor.label} module`}
+                aria-describedby={descriptionId}
+                aria-busy={props.modulesBusy || undefined}
+                className={`settingsModuleCard ${enabled ? "is-enabled" : "is-disabled"}`}
+                disabled={modulesUnavailable}
+                title={title}
+                onClick={() => props.onModuleEnabledChange(descriptor.id, !enabled)}
+              >
+                <span className="settingsModuleCardIcon"><ModuleGlyph id={descriptor.id} /></span>
+                {enabled && <span className="settingsModuleCardCheck" aria-hidden="true"><Check /></span>}
+                <span className="settingsModuleCardCopy">
+                  <strong>{descriptor.label}</strong>
+                  <span>{descriptor.summary}</span>
+                </span>
+                <span id={descriptionId} className="srOnly">
+                  {enabled
+                    ? `Enabled. Visible to accounts with the ${descriptor.accessPermission} permission.`
+                    : `Disabled. ${descriptor.disabledEffect}`}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </>
     ),

@@ -36,6 +36,16 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
+/**
+ * How many readers the timeline collector is handing its console output to.
+ *
+ * Reaches past the public surface on purpose: the point being asserted is that Player Insights adds
+ * a subscriber rather than a second poll, and the count is the only observable difference.
+ */
+function observedLogSubscribers(collector: unknown) {
+  return (collector as { logObservers?: Set<unknown> } | undefined)?.logObservers?.size ?? 0;
+}
+
 describe("Fastify application factory", () => {
   it("builds without listening and closes against an isolated data directory", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-app-factory-"));
@@ -1030,6 +1040,367 @@ describe("Fastify application factory", () => {
         message: expect.stringContaining('25565/tcp is already used on this node by "Survival"')
       });
       expect(services.serversRepository.find(imported.id)?.runtimeIntent).toBe("stopped");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("switches an optional module off for the whole installation and keeps it off across restarts", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-modules-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18095",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    let app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const scheduleUrl = "/api/servers/11111111-1111-4111-8111-111111111111/schedules";
+    const modsUrl = "/api/servers/11111111-1111-4111-8111-111111111111/mods";
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const adminCookie = sessionCookieFrom(registered);
+
+      const initial = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: adminCookie } });
+      expect(initial.statusCode, initial.body).toBe(200);
+      expect(initial.json().modules).toEqual([
+        { id: "schedules", enabled: true, accessible: true },
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
+      ]);
+
+      // An account without schedules.view sees the module as present but out of reach, which is
+      // what keeps the browser from fetching its code for them.
+      const viewerCreated = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { username: "console-only", password: "password123", permissions: ["servers.view", "settings.view"] }
+      });
+      expect(viewerCreated.statusCode, viewerCreated.body).toBe(200);
+      const viewerLogin = await app.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        headers: csrf,
+        payload: { username: "console-only", password: "password123" }
+      });
+      const viewerCookie = sessionCookieFrom(viewerLogin);
+      const viewerApp = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: viewerCookie } });
+      expect(viewerApp.json().modules).toEqual([
+        { id: "schedules", enabled: true, accessible: false },
+        { id: "managedContent", enabled: true, accessible: false },
+        { id: "playerInsights", enabled: true, accessible: false }
+      ]);
+
+      // Reading the catalog is a settings-level right; changing it is not.
+      expect((await app.inject({ method: "GET", url: "/api/modules", headers: { ...csrf, cookie: viewerCookie } })).statusCode).toBe(200);
+      const refusedToggle = await app.inject({
+        method: "PUT",
+        url: "/api/modules/schedules",
+        headers: { ...csrf, cookie: viewerCookie },
+        payload: { enabled: false }
+      });
+      expect(refusedToggle.statusCode, refusedToggle.body).toBe(403);
+
+      const disabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/schedules",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect(disabled.json().modules).toEqual([
+        { id: "schedules", enabled: false, accessible: false },
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
+      ]);
+
+      const refused = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(refused.statusCode, refused.body).toBe(403);
+      expect(refused.json().error.code).toBe("MODULE_DISABLED");
+
+      // Modules are independent: switching one off leaves the other one's endpoints answering.
+      const otherModule = await app.inject({ method: "GET", url: modsUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(otherModule.json().error?.code).not.toBe("MODULE_DISABLED");
+
+      const afterDisable = await app.inject({ method: "GET", url: "/api/app", headers: { ...csrf, cookie: adminCookie } });
+      expect(afterDisable.json().modules).toEqual([
+        { id: "schedules", enabled: false, accessible: false },
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
+      ]);
+      await app.close();
+
+      app = await buildApp();
+      const restarted = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(restarted.statusCode, restarted.body).toBe(403);
+      expect(restarted.json().error.code).toBe("MODULE_DISABLED");
+
+      const reEnabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/schedules",
+        headers: { ...csrf, cookie: adminCookie },
+        payload: { enabled: true }
+      });
+      expect(reEnabled.statusCode, reEnabled.body).toBe(200);
+      const reachable = await app.inject({ method: "GET", url: scheduleUrl, headers: { ...csrf, cookie: adminCookie } });
+      expect(reachable.json().error?.code).not.toBe("MODULE_DISABLED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("stops the managed content module's update checker and endpoints without touching installed content", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-managed-content-module-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18096",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    let app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const contentDirectory = join(dataDir, "servers", "survival", "mods");
+    await mkdir(contentDirectory, { recursive: true });
+    const installedJar = join(contentDirectory, "example-mod.jar");
+    await writeFile(installedJar, "installed content");
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const cookie = sessionCookieFrom(registered);
+
+      // The hourly update check is the module's background work, and it only exists while the
+      // module does: nothing builds it at boot when the module is off.
+      expect(services.modUpdatePlanCoordinator).toBeDefined();
+
+      const disabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/managedContent",
+        headers: { ...csrf, cookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect(services.modUpdatePlanCoordinator).toBeUndefined();
+
+      for (const url of [
+        `/api/servers/${serverId}/mods`,
+        `/api/servers/${serverId}/mods/update-plan`,
+        "/api/modrinth/search?query=sodium"
+      ]) {
+        const response = await app.inject({ method: "GET", url, headers: { ...csrf, cookie } });
+        expect(response.statusCode, `${url} -> ${response.body}`).toBe(403);
+        expect(response.json().error.code).toBe("MODULE_DISABLED");
+      }
+
+      // Installing is refused by the same guard, before any handler could touch the filesystem.
+      const install = await app.inject({
+        method: "POST",
+        url: "/api/modrinth/install",
+        headers: { ...csrf, cookie },
+        payload: { serverId, projectId: "AANobbMI", versionId: "abcdefgh" }
+      });
+      expect(install.statusCode, install.body).toBe(403);
+      expect(install.json().error.code).toBe("MODULE_DISABLED");
+
+      await app.close();
+      app = await buildApp();
+      const { services: restartedServices } = await import("./appServices.js");
+      expect(restartedServices.modUpdatePlanCoordinator).toBeUndefined();
+
+      const stillRefused = await app.inject({ method: "GET", url: `/api/servers/${serverId}/mods`, headers: { ...csrf, cookie } });
+      expect(stillRefused.json().error.code).toBe("MODULE_DISABLED");
+
+      const reEnabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/managedContent",
+        headers: { ...csrf, cookie },
+        payload: { enabled: true }
+      });
+      expect(reEnabled.statusCode, reEnabled.body).toBe(200);
+      expect(restartedServices.modUpdatePlanCoordinator).toBeDefined();
+
+      const reachable = await app.inject({ method: "GET", url: `/api/servers/${serverId}/mods`, headers: { ...csrf, cookie } });
+      expect(reachable.json().error?.code).not.toBe("MODULE_DISABLED");
+
+      // Switching the module off is not an uninstall: what a server has on disk is left alone.
+      expect(await readFile(installedJar, "utf8")).toBe("installed content");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("stops every part of Player Insights when the module is switched off, and keeps the geography it derived", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-player-insights-module-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv,
+      SS_MODE: "panel",
+      SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false",
+      SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef",
+      LOG_LEVEL: "silent",
+      PORT: "18097",
+      TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    let app = await buildApp();
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    const insightsUrl = "/api/players/insights";
+
+    try {
+      const registered = await app.inject({
+        method: "POST",
+        url: "/api/auth/register-first",
+        headers: csrf,
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(registered.statusCode, registered.body).toBe(200);
+      const cookie = sessionCookieFrom(registered);
+
+      // The database and the collector are the module's whole exposure to a player's address, and
+      // they exist only while the module does.
+      expect(services.playerGeoDatabase).toBeDefined();
+      expect(services.playerGeoCollector).toBeDefined();
+      // The collector reads the console output the timeline collector already fetched rather than
+      // asking a node for it again, so switching the module on adds exactly one subscriber.
+      expect(observedLogSubscribers(services.timelineEventCollector)).toBe(1);
+
+      const insights = await app.inject({ method: "GET", url: insightsUrl, headers: { ...csrf, cookie } });
+      expect(insights.statusCode, insights.body).toBe(200);
+      expect(insights.json().attribution).toContain("MaxMind");
+      // Nothing was configured, so the panel says it has no database rather than pretending to.
+      expect(insights.json().geoDatabase).toMatchObject({ available: false, configured: false });
+      expect(insights.json().summary).toMatchObject({ countries: 0, knownPlayers: 0 });
+
+      // Something the module derived earlier, which must survive being switched off.
+      services.storageDatabase.connection.prepare("INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES ('node-1', 'Node', 'remote', 'online', 0, '2026-01-01', '2026-01-01')").run();
+      services.storageDatabase.connection.prepare(`
+        INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at)
+        VALUES (
+          '11111111-1111-4111-8111-111111111111',
+          'node-1',
+          'Survival',
+          '/servers/survival',
+          '{"minecraftVersion":"1.21.4","runtimeType":"fabric","runtimeVersion":"0.16.10","javaMajorVersion":21,"jarProvider":"mcjars","jarArtifact":{"filename":"fabric-server-launch.jar"},"compatibilityStatus":"compatible","resolvedAt":"2026-01-01T00:00:00.000Z"}',
+          '2026-01-01',
+          '2026-01-01'
+        )
+      `).run();
+      services.playerGeoRepository.record({
+        serverId: "11111111-1111-4111-8111-111111111111",
+        player: "SullyTheSnak",
+        location: { label: "Copenhagen", countryCode: "DK", continentCode: "EU", latitude: 55.68, longitude: 12.57, precision: "city" },
+        at: Date.now()
+      });
+      expect(services.playerGeoRepository.stats().entries).toBe(1);
+
+      const scopedGeo = vi.spyOn(services.playerGeoRepository, "listForServer");
+      const allGeo = vi.spyOn(services.playerGeoRepository, "list");
+      const scopedInsights = await app.inject({
+        method: "GET",
+        url: `${insightsUrl}?serverId=11111111-1111-4111-8111-111111111111`,
+        headers: { ...csrf, cookie }
+      });
+      expect(scopedInsights.statusCode, scopedInsights.body).toBe(200);
+      expect(scopedInsights.json().players).toMatchObject([{ player: "SullyTheSnak" }]);
+      expect(scopedGeo).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
+      expect(allGeo).not.toHaveBeenCalled();
+
+      const missingServer = await app.inject({
+        method: "GET",
+        url: `${insightsUrl}?serverId=22222222-2222-4222-8222-222222222222`,
+        headers: { ...csrf, cookie }
+      });
+      expect(missingServer.statusCode, missingServer.body).toBe(404);
+      expect(missingServer.json().error.code).toBe("NOT_FOUND");
+
+      const withoutPermission = await app.inject({
+        method: "POST",
+        url: "/api/users",
+        headers: { ...csrf, cookie },
+        payload: { username: "console-only", password: "password123", permissions: ["servers.view", "settings.view"] }
+      });
+      expect(withoutPermission.statusCode, withoutPermission.body).toBe(200);
+      const viewerLogin = await app.inject({ method: "POST", url: "/api/auth/login", headers: csrf, payload: { username: "console-only", password: "password123" } });
+      const viewerCookie = sessionCookieFrom(viewerLogin);
+      // Backend authorization stays the authority: the browser's gating is a saving, not the fence.
+      const refusedForViewer = await app.inject({ method: "GET", url: insightsUrl, headers: { ...csrf, cookie: viewerCookie } });
+      expect(refusedForViewer.statusCode, refusedForViewer.body).toBe(403);
+
+      const disabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/playerInsights",
+        headers: { ...csrf, cookie },
+        payload: { enabled: false }
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect(services.playerGeoDatabase).toBeUndefined();
+      expect(services.playerGeoCollector).toBeUndefined();
+      // The subscription goes with it, so the panel keeps reading logs for the timeline and nothing
+      // looks at a login line.
+      expect(observedLogSubscribers(services.timelineEventCollector)).toBe(0);
+
+      for (const request of [
+        { method: "GET" as const, url: insightsUrl },
+        { method: "PUT" as const, url: "/api/players/servers/11111111-1111-4111-8111-111111111111/location", payload: { address: "play.example.net" } },
+        { method: "POST" as const, url: "/api/players/geo-database/refresh" }
+      ]) {
+        const response = await app.inject({ ...request, headers: { ...csrf, cookie } });
+        expect(response.statusCode, `${request.url} -> ${response.body}`).toBe(403);
+        expect(response.json().error.code).toBe("MODULE_DISABLED");
+      }
+
+      await app.close();
+      app = await buildApp();
+      const { services: restarted } = await import("./appServices.js");
+      expect(restarted.playerGeoCollector).toBeUndefined();
+      const stillRefused = await app.inject({ method: "GET", url: insightsUrl, headers: { ...csrf, cookie } });
+      expect(stillRefused.json().error.code).toBe("MODULE_DISABLED");
+
+      const reEnabled = await app.inject({
+        method: "PUT",
+        url: "/api/modules/playerInsights",
+        headers: { ...csrf, cookie },
+        payload: { enabled: true }
+      });
+      expect(reEnabled.statusCode, reEnabled.body).toBe(200);
+      expect(restarted.playerGeoCollector).toBeDefined();
+      // Disabling was not deleting: the module resumes from what it already knew.
+      expect(restarted.playerGeoRepository.stats().entries).toBe(1);
     } finally {
       await app.close();
     }

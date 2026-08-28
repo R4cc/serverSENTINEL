@@ -25,6 +25,9 @@ export function useServerContext(input: {
         ...input.appState.servers.filter((server) => !isDemoServerId(server.id))
       ],
       nodes: demoFixtures().demoFleetNodes(),
+      // `modules` is deliberately not overridden here. Demo mode replaces the data, not the
+      // installation's configuration, and the Modules settings would otherwise report every module
+      // as enabled while the switch beside it wrote to the real panel.
       runtimeMode,
       modrinthApiConfigured: demoFixtureModrinthConfigured(modsDemoFixture),
       dockerSocketMounted: true,

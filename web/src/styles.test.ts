@@ -146,6 +146,13 @@ describe("stylesheet ownership", () => {
     for (const summary of [modsSummary, nodesPage]) expect(summary).toContain('variant="summary"');
   });
 
+  it("keeps summary marker decoration off leading icon wells", () => {
+    expect(primitiveStyles).toContain(".uiMetricTile--summary:not(.uiMetricTile--leadingIcon) .uiMetricTileMarker");
+    for (const tone of ["neutral", "info", "accent", "success", "warning", "danger"]) {
+      expect(primitiveStyles).toContain(`.uiMetricTile--summary:not(.uiMetricTile--leadingIcon).uiMetricTile--${tone} .uiMetricTileMarker`);
+    }
+  });
+
   it("hands the timeline charts color tokens rather than border-width tokens", () => {
     const widthTokens = [...tokenStyles.matchAll(/(--[\w-]+):\s*\d+(?:\.\d+)?px;/g)].map((match) => match[1]);
     expect(widthTokens).toContain("--border-subtle");
@@ -194,7 +201,7 @@ describe("stylesheet ownership", () => {
   // token that was never defined reads as "this rule silently does less than it
   // says". Custom properties set from TSX are the only legitimate exception.
   it("defines every token the stylesheets consume", () => {
-    const runtimeTokens = ["--visual-viewport-height", "--visual-viewport-offset-top", "--xms-percent", "--xmx-percent", "--timeline-annotation-extra", "--console-prompt-font-size"];
+    const runtimeTokens = ["--visual-viewport-height", "--visual-viewport-offset-top", "--xms-percent", "--xmx-percent", "--timeline-annotation-extra", "--console-prompt-font-size", "--player-activity-height", "--player-region-share"];
     const allStyles = Object.values(featureStyles).join("\n");
     const defined = new Set([...allStyles.matchAll(/(--[\w-]+)\s*:/g)].map((match) => match[1]));
     const referenced = [...allStyles.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1]);

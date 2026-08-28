@@ -135,7 +135,11 @@ export async function stopServerWithIntent(server: ManagedServer) {
       crashStableSince: undefined
     });
     services.runtimeStateCoordinator?.noteStopped(server.id);
-    return runtimeForServer(server).lifecycle(server, "stop");
+    const result = await runtimeForServer(server).lifecycle(server, "stop");
+    // The stopped process cannot be running stale mods, and the next start loads whatever is on
+    // disk, so a stop resolves a pending restart just as a restart does.
+    services.serversRepository.clearRestartRequired(server.id);
+    return result;
   });
 }
 

@@ -1,0 +1,1442 @@
+/* Player Insights: the summary tiles, the world map, the region and roster tables, and the two
+   small charts. The workspace deliberately reuses `uiMetricTile`, `uiSurface`, and `uiPanelHeader`
+   rather than growing lookalikes; what is left here is the geography and the two chart shapes,
+   which nothing else in the panel has. */
+
+.playersPage.layoutWide {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.playersPage > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.playerSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.playerSummaryGrid .uiMetricTileCopy strong {
+  font-size: var(--type-card-title-size);
+}
+
+.playerSummarySkeleton {
+  height: 96px;
+  border-radius: var(--radius-md);
+}
+
+.playerMapSkeleton {
+  height: 320px;
+  border-radius: var(--radius-md);
+}
+
+.playerGeographyRow,
+.playerAnalysisRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.playerCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.playerCardNote {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+}
+
+/* World map. The ocean is the card's own surface rather than a colour of its own, so the map reads
+   as part of the panel instead of as an embedded image. */
+.playerMap {
+  position: relative;
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.playerGeographyCard > .playerMap {
+  z-index: 2;
+}
+
+.playerMapViewport {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-width: 0;
+  isolation: isolate;
+}
+
+.playerMapCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-muted);
+}
+
+.playerMapOcean {
+  fill: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.playerMapLand {
+  fill: color-mix(in srgb, var(--text) 12%, transparent);
+  stroke: none;
+}
+
+.playerMapRoute {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text-muted) 34%, transparent);
+  stroke-width: 0.85;
+  stroke-linecap: round;
+  stroke-dasharray: 3 5;
+  opacity: 0.72;
+  vector-effect: non-scaling-stroke;
+}
+
+.playerMapRoute--success { stroke: color-mix(in srgb, var(--sentinel-success) 46%, transparent); }
+.playerMapRoute--info { stroke: color-mix(in srgb, var(--sentinel-info) 44%, transparent); }
+.playerMapRoute--warning { stroke: color-mix(in srgb, var(--sentinel-warning) 46%, transparent); }
+.playerMapRoute--danger { stroke: color-mix(in srgb, var(--sentinel-danger) 48%, transparent); }
+
+.playerMapRoute--active {
+  stroke-width: 1.1;
+  opacity: 1;
+}
+
+.playerMapOverlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+
+.playerMapPingLabel {
+  position: absolute;
+  display: inline-flex;
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-xs);
+  padding: 1px 3px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  text-shadow: 0 1px 2px var(--surface), 0 0 4px var(--surface);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.playerMapPingLabel--success,
+.playerMapPingValue--success { color: var(--sentinel-success); }
+.playerMapPingLabel--info,
+.playerMapPingValue--info { color: var(--sentinel-info); }
+.playerMapPingLabel--warning,
+.playerMapPingValue--warning { color: var(--status-warning-foreground); }
+.playerMapPingLabel--danger,
+.playerMapPingValue--danger { color: var(--status-danger-foreground); }
+
+.playerMapMarkerWrap {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.playerMapMarkerWrap--active {
+  z-index: 5;
+}
+
+.playerMapMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  /* These are map glyphs, not full-size controls; the shared button minimum would leave a tall
+     rectangular hover surface around the marker. */
+  min-height: 0;
+  height: 30px;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 34%, var(--surface));
+  border-radius: var(--radius-xs);
+  padding: 2px;
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--shadow-xs);
+}
+
+button.playerMapMarker {
+  appearance: none;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.playerMapAvatar--known {
+  filter: saturate(0.58);
+  opacity: 0.78;
+}
+
+.playerMapMarkerWrap--active .playerMapMarker,
+button.playerMapMarker:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 66%, var(--surface));
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-xs);
+  color: inherit;
+  transform: none;
+}
+
+.playerMapMarker:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.playerMapAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid var(--border-muted);
+  border-radius: calc(var(--radius-xs) / 2);
+  background: color-mix(in srgb, var(--text-muted) 16%, var(--surface));
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+.playerMapAvatar--online {
+  border-color: var(--sentinel-success);
+}
+
+.playerMapAvatar--compact {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+}
+
+.playerMapAvatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.playerMapAvatar--fallback {
+  background: color-mix(in srgb, var(--text-muted) 22%, var(--surface));
+}
+
+.playerMapClusterMarker {
+  position: relative;
+  width: 44px;
+  min-width: 44px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.playerMapClusterMarker--server {
+  width: 44px;
+  min-width: 44px;
+}
+
+.playerMapClusterHeads {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 30px;
+}
+
+.playerMapClusterHeads--server {
+  width: 38px;
+}
+
+.playerMapSharedServer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.playerMapSharedServer--running {
+  color: var(--sentinel-success);
+  animation: playerMapSharedServerPulse 1.8s ease-out infinite;
+}
+
+.playerMapSharedServer--stopped {
+  color: var(--sentinel-danger);
+}
+
+.playerMapSharedServerIcon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.playerMapClusterHeads--server .playerMapSharedServer {
+  position: absolute;
+  z-index: 4;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.playerMapClusterHeads .playerMapAvatar {
+  position: absolute;
+  top: 1px;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  box-shadow: 0 0 0 1px var(--surface), var(--shadow-xs);
+}
+
+.playerMapClusterHeads .playerMapAvatar:nth-child(2) {
+  top: 0;
+  left: 7px;
+  z-index: 1;
+}
+
+.playerMapClusterHeads .playerMapAvatar:nth-child(3) {
+  left: 14px;
+  z-index: 2;
+}
+
+.playerMapPlayerMarker {
+  box-sizing: border-box;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.playerMapMarkerWrap--active .playerMapPlayerMarker,
+button.playerMapPlayerMarker:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  transform: none;
+}
+
+.playerMapPlayerMarker .playerMapAvatar {
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+  box-shadow: var(--shadow-xs);
+}
+
+.playerMapPlayerMarker--server {
+  position: relative;
+}
+
+.playerMapPlayerMarker--server .playerMapSharedServer {
+  position: absolute;
+  z-index: 2;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.playerMapClusterCount {
+  position: absolute;
+  z-index: 3;
+  right: -5px;
+  bottom: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 17px;
+  border: 1px solid var(--border-panel);
+  border-radius: 999px;
+  padding: 0 4px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+  color: var(--text);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+  line-height: 1;
+}
+
+.playerMapClusterPopup {
+  position: absolute;
+  z-index: 8;
+  display: grid;
+  gap: var(--space-2);
+  border: var(--border-subtle) solid var(--border-panel);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-elevated);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.playerMapFloatingPanel--above {
+  transform: translateY(-100%);
+}
+
+.playerMapClusterPopup:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.playerMapClusterPopupHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  border-bottom: 1px solid var(--border-row);
+  padding-bottom: var(--space-2);
+}
+
+.playerMapClusterPopupHeader strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--type-body-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerMapClusterPopupHeader > span {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  white-space: nowrap;
+}
+
+.playerMapClusterList {
+  display: grid;
+  max-height: 176px;
+  padding-inline-end: var(--space-3);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.playerMapClusterRow {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 0.8fr) minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  border-bottom: 1px solid var(--border-row);
+  font-size: var(--type-meta-size);
+}
+
+.playerMapClusterRow:last-child {
+  border-bottom: none;
+}
+
+.playerMapClusterRow > strong,
+.playerMapClusterRow > span:not(.playerMapAvatar) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerMapClusterRow > span:not(.playerMapAvatar) {
+  color: var(--text-muted);
+}
+
+.playerMapPingValue {
+  min-width: 0;
+  font-weight: var(--weight-strong);
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.playerMapPlayerPopup .playerMapPlayerStatus--online { color: var(--sentinel-success); }
+.playerMapPlayerPopup .playerMapPlayerStatus--known { color: var(--text-muted); }
+
+.playerMapSinglePlayerList {
+  padding-inline-end: 0;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+.playerMapSinglePlayerRow {
+  grid-template-columns: 22px minmax(0, 1fr) max-content;
+  border-bottom: 0;
+}
+
+/* The accuracy ring is the honest part of the drawing: it stops a head marker from reading as an
+   address, so it stays visible rather than decorative. */
+.playerMapAccuracy {
+  fill: color-mix(in srgb, var(--accent) 4%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke-width: 0.65;
+  opacity: 0.66;
+  vector-effect: non-scaling-stroke;
+}
+
+.playerMapAccuracy--active {
+  fill: color-mix(in srgb, var(--accent) 9%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 28%, transparent);
+  opacity: 1;
+}
+
+.playerMapServerHalo {
+  fill: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.playerMapServer--running .playerMapServerHalo {
+  fill: color-mix(in srgb, var(--sentinel-success) 20%, transparent);
+  animation: playerMapServerHaloPulse 1.8s ease-in-out infinite;
+}
+
+.playerMapServer--stopped .playerMapServerHalo {
+  fill: color-mix(in srgb, var(--sentinel-danger) 18%, transparent);
+}
+
+.playerMapServerBadge {
+  fill: var(--surface);
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--surface));
+  stroke-width: 1;
+}
+
+.playerMapServer--running .playerMapServerBadge {
+  stroke: var(--sentinel-success);
+}
+
+.playerMapServer--stopped .playerMapServerBadge {
+  stroke: var(--sentinel-danger);
+}
+
+.playerMapServerIcon {
+  color: var(--accent);
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.playerMapServer--running .playerMapServerIcon { color: var(--sentinel-success); }
+.playerMapServer--stopped .playerMapServerIcon { color: var(--sentinel-danger); }
+
+@keyframes playerMapSharedServerPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sentinel-success) 32%, transparent), var(--shadow-xs); }
+  50% { box-shadow: 0 0 0 5px transparent, var(--shadow-xs); }
+}
+
+@keyframes playerMapServerHaloPulse {
+  0%, 100% { opacity: 0.48; }
+  50% { opacity: 1; }
+}
+
+.playerMapServerIcon * {
+  vector-effect: non-scaling-stroke;
+}
+
+.playerMapLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerMapLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.playerMapLegendMark {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.playerMapLegendMark--server {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--surface));
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+}
+
+.playerMapLegendMark--server::before,
+.playerMapLegendMark--server::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  left: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.playerMapLegendMark--server::before { top: 2px; }
+.playerMapLegendMark--server::after { bottom: 2px; }
+
+.playerMapLegendPlayer {
+  display: inline-flex;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 32%, var(--surface));
+  border-radius: var(--radius-xs);
+  padding: 1px;
+  background: var(--surface-raised);
+}
+
+.playerMapLegendPlayer--online {
+  border-color: color-mix(in srgb, var(--sentinel-success) 38%, var(--surface));
+}
+
+.playerMapLegendPlayer--known {
+  filter: saturate(0.5);
+  opacity: 0.72;
+}
+
+.playerMapLegendHead {
+  display: block;
+  width: 12px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 62%, var(--surface)), color-mix(in srgb, var(--sentinel-warning) 38%, var(--surface)));
+}
+
+.playerMapLegendHead img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.playerMapLegendCluster {
+  position: relative;
+  display: inline-flex;
+  width: 25px;
+  height: 16px;
+}
+
+.playerMapLegendCluster .playerMapLegendHead {
+  position: absolute;
+  top: 1px;
+  border: 1px solid var(--surface);
+}
+
+.playerMapLegendCluster .playerMapLegendHead:first-child { left: 0; }
+.playerMapLegendCluster .playerMapLegendHead:nth-child(2) { left: 5px; }
+.playerMapLegendCluster .playerMapLegendHead:nth-child(3) { left: 10px; }
+
+.playerMapLegendCluster b {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 12px;
+  height: 12px;
+  border: 1px solid var(--border-panel);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 7px;
+  line-height: 1;
+}
+
+.playerMapLegendMark--accuracy {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.playerLocationForm {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border-muted);
+  padding-top: var(--space-3);
+}
+
+.playerLocationForm .uiFormField {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+/* Tables. Both share the panel's row rhythm; only the numeric alignment and the latency tone are
+   particular to this workspace. */
+.playerRegionTable,
+.playerRosterTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-body-size);
+}
+
+/* Sorting changes which eight rows are visible. Fixed layout keeps those row contents from
+   renegotiating the five column widths every time a heading is pressed. */
+.playerRosterTable {
+  table-layout: fixed;
+}
+
+.playerRosterTable thead th:nth-child(1) { width: 20%; }
+.playerRosterTable thead th:nth-child(2) { width: 35%; }
+.playerRosterTable thead th:nth-child(3) { width: 12%; }
+.playerRosterTable thead th:nth-child(4) { width: 12%; }
+.playerRosterTable thead th:nth-child(5) { width: 21%; }
+
+/* Online rows have a second identity line while historical rows do not. Reserve that line's
+   footprint for every desktop row so a different online/offline mix cannot resize the card. */
+.playerRosterTable tbody tr {
+  height: 56px;
+}
+
+.playerRegionTable th,
+.playerRegionTable td,
+.playerRosterTable th,
+.playerRosterTable td {
+  text-align: left;
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--border-row);
+  vertical-align: middle;
+}
+
+.playerRegionTable thead th,
+.playerRosterTable thead th {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.playerRosterTable .uiSortHeaderButton {
+  width: 100%;
+  min-height: var(--control-height-compact);
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.playerRosterTable th.playerNumericColumn .uiSortHeaderButton {
+  justify-content: flex-end;
+}
+
+.playerRosterTable th[aria-sort="ascending"] .uiSortHeaderButton,
+.playerRosterTable th[aria-sort="descending"] .uiSortHeaderButton {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--text);
+}
+
+.playerRegionTable tbody tr,
+.playerRosterTable tbody tr {
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+@media (hover: hover) {
+  .playerRegionTable tbody tr:hover,
+  .playerRosterTable tbody tr:hover {
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+  }
+}
+
+.playerRegionTable tbody tr:last-child th,
+.playerRegionTable tbody tr:last-child td,
+.playerRosterTable tbody tr:last-child th,
+.playerRosterTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.playerNumericColumn {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Qualified by the table, because the cell rule above it is too: a bare .playerNumericColumn
+   loses to `.playerRegionTable td` on specificity, which left every numeric column aligned left
+   while looking, in the stylesheet, as though it were not. */
+.playerRegionTable th.playerNumericColumn,
+.playerRegionTable td.playerNumericColumn,
+.playerRosterTable th.playerNumericColumn,
+.playerRosterTable td.playerNumericColumn {
+  text-align: right;
+}
+
+.playerRegionShareCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.playerRegionBar {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 24px;
+  max-width: 120px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+
+.playerRegionBarFill {
+  display: block;
+  height: 100%;
+  width: var(--player-region-share);
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.playerRegionShare {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.playerLatency--success { color: var(--sentinel-success); }
+.playerLatency--info { color: var(--sentinel-info); }
+.playerLatency--warning { color: var(--sentinel-warning); }
+.playerLatency--danger { color: var(--sentinel-danger); }
+.playerLatency--neutral { color: var(--text-muted); }
+
+.playerIdentity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.playerIdentityCopy {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playerIdentityCopy strong {
+  font-weight: var(--weight-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerOnlineFlag {
+  color: var(--sentinel-success);
+  font-size: var(--type-meta-size);
+}
+
+.playerHead {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.playerHead img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.playerHead--placeholder {
+  border: 1px solid var(--border-muted);
+}
+
+.playerLocation {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.playerLocationLabel {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.playerCountryFlag {
+  flex: 0 0 auto;
+  font-family: "Twemoji Country Flags", "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.playerLocationText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playerLocationAccuracy {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.playerAccuracyBadge.uiStatusBadge {
+  min-height: 20px;
+  padding: 2px 7px;
+  cursor: help;
+  outline-offset: 2px;
+  letter-spacing: var(--tracking-ui);
+  text-transform: none;
+}
+
+.playerAccuracyBadge--precise.uiStatusBadge {
+  border-color: color-mix(in srgb, var(--sentinel-success) 24%, transparent);
+  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-success) 72%, var(--text));
+}
+
+.playerAccuracyBadge--approx.uiStatusBadge {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 24%, transparent);
+  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-warning) 68%, var(--text));
+}
+
+.playerAccuracyBadge--broad.uiStatusBadge {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 18%, transparent);
+  background: color-mix(in srgb, var(--sentinel-danger) 5%, var(--surface));
+  color: color-mix(in srgb, var(--sentinel-danger) 52%, var(--sentinel-warning));
+}
+
+.playerAccuracyBadge:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.playerAccuracyTooltip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 48px));
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: var(--weight-strong);
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-base) var(--motion-ease-spring);
+  white-space: normal;
+}
+
+.playerLocationAccuracy:hover .playerAccuracyTooltip,
+.playerLocationAccuracy:focus-within .playerAccuracyTooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.playerRosterFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-top: 1px solid var(--border-row);
+  padding-top: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerRosterPager {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Connection quality uses the same ECharts canvas and time-axis primitives as Server Timeline.
+   The card owns only its compact summary and fixed plot box. */
+.playerConnectionQuality {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.playerConnectionSnapshot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  margin: 0;
+  background: color-mix(in srgb, var(--surface-muted) 34%, transparent);
+}
+
+.playerConnectionSnapshot > div {
+  min-width: 0;
+  padding: 9px var(--space-3);
+}
+
+.playerConnectionSnapshot > div + div {
+  border-left: 1px solid var(--border-muted);
+}
+
+.playerConnectionSnapshot dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerConnectionSnapshot dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text);
+  font-size: var(--type-card-title-size);
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.playerLatencyChart {
+  width: 100%;
+  min-width: 0;
+  height: 184px;
+}
+
+.playerConnectionEChart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  touch-action: pan-y;
+}
+
+.playerConnectionTooltip {
+  border-color: var(--border-panel) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+.playerConnectionTooltipTime {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.playerConnectionTooltipRow {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 180px;
+  margin-top: 3px;
+}
+
+.playerConnectionTooltipRow i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+
+.playerConnectionTooltipRow span,
+.playerConnectionTooltipPlayers {
+  color: var(--text-muted);
+}
+
+.playerConnectionTooltipRow strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.playerConnectionTooltipPlayers {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-muted);
+  padding-top: 6px;
+  font-size: var(--type-meta-size);
+}
+
+.playerChartSwatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 2px;
+  border-radius: 999px;
+}
+
+.playerChartSwatch--median { background: var(--sentinel-success); }
+.playerChartSwatch--p95 {
+  background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 6px);
+}
+
+.playerRangeSwitch {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.playerActivityHours {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: var(--space-2);
+}
+
+.playerActivityBars {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+  height: 120px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.playerActivityBar {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  border-radius: var(--radius-xs);
+  cursor: default;
+  outline: none;
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.playerActivityBarFill {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  height: var(--player-activity-height);
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  transform-origin: bottom;
+  transition: background var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-base) var(--motion-ease-spring);
+}
+
+.playerActivityHourLabel {
+  position: absolute;
+  left: 50%;
+  bottom: min(calc(var(--player-activity-height) + 7px), calc(100% - 28px));
+  z-index: 1;
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--shadow-xs);
+  display: grid;
+  gap: 1px;
+  color: var(--text);
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 3px);
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-base) var(--motion-ease-spring);
+  white-space: nowrap;
+}
+
+.playerActivityHourLabel strong {
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-strong);
+}
+
+.playerActivityHourLabel small {
+  color: var(--text-muted);
+  font-size: var(--type-badge-size);
+}
+
+.playerActivityBar:first-child .playerActivityHourLabel {
+  left: 0;
+  transform: translateY(3px);
+}
+
+.playerActivityBar:last-child .playerActivityHourLabel {
+  right: 0;
+  left: auto;
+  transform: translateY(3px);
+}
+
+.playerActivityBar:hover,
+.playerActivityBar:focus-visible {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.playerActivityBar:hover .playerActivityBarFill,
+.playerActivityBar:focus-visible .playerActivityBarFill {
+  background: color-mix(in srgb, var(--accent) 78%, var(--text));
+  transform: scaleY(1.035);
+}
+
+.playerActivityBar:hover .playerActivityHourLabel,
+.playerActivityBar:focus-visible .playerActivityHourLabel {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.playerActivityBar:first-child:hover .playerActivityHourLabel,
+.playerActivityBar:first-child:focus-visible .playerActivityHourLabel,
+.playerActivityBar:last-child:hover .playerActivityHourLabel,
+.playerActivityBar:last-child:focus-visible .playerActivityHourLabel {
+  transform: translateY(0);
+}
+
+/* An hour with no samples is not a quiet hour, and must not look like one — but a full-height
+   hatched bar reads as a busy one, which is the opposite mistake. Ghost the column the bar would
+   have stood in and draw no bar at all. */
+.playerActivityBar--unobserved {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--text) 9%, transparent),
+    color-mix(in srgb, var(--text) 9%, transparent) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  border-radius: var(--radius-xs);
+}
+
+.playerActivityBar--unobserved .playerActivityBarFill {
+  display: none;
+}
+
+.playerActivityScale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.playerAttribution {
+  color: var(--text-soft);
+  font-size: var(--type-meta-size);
+}
+
+.playerAttribution p {
+  margin: 0;
+}
+
+/* The shared shell still has a full sidebar below 1440px. Keep these cards stacked there so the
+   narrower region table never forces the workspace wider than the viewport. */
+@media (max-width: 1439px) {
+  .playerGeographyRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1100px) {
+  .playerAnalysisRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Two by two rather than three and a lonely fourth. */
+  .playerSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1101px) {
+  .playerActivityBars {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 120px;
+  }
+}
+
+@media (max-width: 560px) {
+  .playerSummaryGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The desktop roster's intrinsic content width is wider than the usable workspace on small
+   tablets. Switch to the compact rows before that can create page-level horizontal scrolling. */
+@media (max-width: 800px) {
+  .playerRosterTable thead {
+    display: none;
+  }
+
+  .playerRosterTable tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 39px minmax(20px, auto);
+    gap: var(--space-1) var(--space-2);
+    height: auto;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-row);
+  }
+
+  .playerRosterTable tbody th,
+  .playerRosterTable tbody td {
+    border-bottom: none;
+    padding: 0;
+  }
+
+  .playerRosterTable tbody th {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(1) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(2) {
+    display: none;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(3) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(4) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 560px) {
+  .playerRosterCard .uiPanelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playerRosterCard .uiPanelHeaderActions {
+    justify-content: flex-start;
+  }
+
+  .playerRosterFooter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playerRosterFooter > span:first-child {
+    text-align: center;
+  }
+
+  .playerRosterPager {
+    justify-content: space-between;
+  }
+
+  .playerRosterPager > span {
+    white-space: nowrap;
+  }
+
+  .playerRosterTable tbody tr {
+    grid-template-rows: 39px minmax(20px, auto) 20px;
+  }
+
+  /* Give the location the full row instead of truncating it beside a long localized timestamp.
+     The quieter third line keeps the time available without competing with identity and ping. */
+  .playerRosterTable tbody td:nth-of-type(1) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .playerRosterTable tbody td:nth-of-type(4) {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding-top: 2px;
+    color: var(--text-muted);
+    font-size: var(--type-meta-size);
+  }
+
+  .playerRosterTable tbody td:nth-of-type(4)::before {
+    content: attr(data-label);
+    color: var(--text-soft);
+    font-size: var(--type-badge-size);
+    font-weight: var(--weight-meta);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+}
+
+@media (max-width: 720px) {
+  /* The bar is decoration and the percentage is the fact. A phone cannot afford both beside four
+     other columns, and letting them wrap instead is what made the rows ragged to begin with. */
+  .playerRegionBar {
+    display: none;
+  }
+
+  .playerLatencyCard .uiPanelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playerLatencyCard .uiPanelHeaderActions {
+    justify-content: flex-start;
+  }
+
+  .playerConnectionSnapshot {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .playerConnectionSnapshot > div:last-child {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border-muted);
+    border-left: 0;
+  }
+
+  .playerLatencyChart {
+    height: 202px;
+  }
+
+  .playerRegionBar {
+    width: min(90px, 25vw);
+  }
+
+  .playerActivityBars {
+    height: 96px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playerAccuracyTooltip,
+  .playerActivityBar,
+  .playerActivityBarFill,
+  .playerActivityHourLabel {
+    transition: none;
+  }
+
+  .playerMapSharedServer--running,
+  .playerMapServer--running .playerMapServerHalo {
+    animation: none;
+  }
+}

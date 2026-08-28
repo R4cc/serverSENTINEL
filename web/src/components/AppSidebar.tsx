@@ -17,6 +17,7 @@ export function AppSidebar({
   activePage,
   onNavigate,
   onPrefetch,
+  isPageAvailable,
   servers,
   activeServer,
   onSelectServer,
@@ -37,6 +38,8 @@ export function AppSidebar({
   activePage: ActivePage;
   onNavigate: (page: ActivePage) => void;
   onPrefetch: (page: ActivePage) => void;
+  /** False for a page whose optional module this installation, or this account, cannot reach. */
+  isPageAvailable: (page: ActivePage) => boolean;
   servers: ManagedServer[];
   activeServer: ManagedServer | undefined;
   onSelectServer: (serverId: string) => void;
@@ -88,6 +91,10 @@ export function AppSidebar({
   // not only tinted, and so no entry can drift away from the others as items are added.
   const navItem = (page: ActivePage, disabled: boolean, disabledReason: string, label: string) => ({
     type: "button" as const,
+    // Names the destination independently of its wording, which changes with the runtime for
+    // managed content. Tests use it to assert that no module-owned entry survives its module
+    // being unavailable — the check that would otherwise be forgotten when a module is added.
+    "data-nav-page": page,
     className: activePage === page ? "active" : "",
     "aria-current": activePage === page ? ("page" as const) : undefined,
     onClick: () => onNavigate(page),
@@ -159,16 +166,24 @@ export function AppSidebar({
               <SidebarIcon name="files" />
               <span className="navLabel">Files</span>
             </button>
-            {supportsManagedMods && (
+            {supportsManagedMods && isPageAvailable("mods") && (
               <button {...serverNavItem("mods", `Open ${managedContent.plural}`)}>
                 <SidebarIcon name="mods" />
                 <span className="navLabel">{managedContent.pluralTitle}</span>
               </button>
             )}
-            <button {...serverNavItem("schedule", "Open schedules")}>
-              <SidebarIcon name="schedule" />
-              <span className="navLabel">Schedules</span>
-            </button>
+            {isPageAvailable("schedule") && (
+              <button {...serverNavItem("schedule", "Open schedules")}>
+                <SidebarIcon name="schedule" />
+                <span className="navLabel">Schedules</span>
+              </button>
+            )}
+            {isPageAvailable("players") && (
+              <button {...serverNavItem("players", "Open players")}>
+                <SidebarIcon name="players" />
+                <span className="navLabel">Players</span>
+              </button>
+            )}
             <button {...serverNavItem("properties", "Open properties")}>
               <SidebarIcon name="properties" />
               <span className="navLabel">Properties</span>

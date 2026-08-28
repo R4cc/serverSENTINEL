@@ -1,8 +1,8 @@
 import type { ActivePage, AppState, PlaceholderNode } from "../types";
 
-export const appVersion = "26.8.17";
+export const appVersion = "26.8.33";
 export const defaultNodeDataPath = "/var/lib/serversentinel";
-const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "properties"];
+const serverWorkspacePages: ActivePage[] = ["overview", "console", "files", "mods", "schedule", "players", "properties"];
 export const demoLocalStorageKey = "serversentinel-demo-mode";
 const signedInLocalStorageKey = "serversentinel-signed-in";
 
@@ -13,6 +13,7 @@ export const emptyApp: AppState = {
   runtimeMode: "all-in-one",
   timeZone: "UTC",
   modrinthApiConfigured: false,
+  geoIpConfigured: false,
   playerHeads: {
     enabled: false,
     onboardingRequired: false,
@@ -121,6 +122,7 @@ export function pageTitle(page: ActivePage, contentPluralTitle: string, applicat
     files: "Files",
     mods: contentPluralTitle,
     schedule: "Schedules",
+    players: "Players",
     properties: "Properties",
     settings: "Settings",
     nodes: "Nodes"

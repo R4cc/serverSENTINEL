@@ -1,0 +1,65 @@
+import { isModuleAccessible, type ModuleAccessState } from "@serversentinel/contracts";
+import type { ActivePage, ModuleId } from "../types";
+import { lazyPage } from "./lazyPage";
+
+/**
+ * The browser half of the module system. Every optional feature that owns a workspace page is
+ * listed here once, with the dynamic import that brings it in; navigation, prefetching, and the
+ * page itself all consult this table rather than naming a module directly.
+ *
+ * Because the import lives behind `isPageAvailable`, a module that is switched off — or that the
+ * signed-in account has no permission for — never has its chunk requested. The panel enforces the
+ * same two gates on every request, so this is a saving, not the security boundary.
+ *
+ * Adding a module means adding a chunk and one row below, plus the block in `App.tsx` that renders
+ * it. Nothing else in the shell has to change.
+ */
+const schedulesChunk = lazyPage(() => import("../features/schedules/SchedulesModule"), (module) => module.SchedulesModule);
+const managedContentChunk = lazyPage(() => import("../features/mods/ModsModule"), (module) => module.ModsModule);
+const playerInsightsChunk = lazyPage(() => import("../features/players/PlayersModule"), (module) => module.PlayersModule);
+
+export const SchedulesModule = schedulesChunk.Component;
+export const ModsModule = managedContentChunk.Component;
+export const PlayersModule = playerInsightsChunk.Component;
+
+export type WebModuleDefinition = {
+  id: ModuleId;
+  /** The workspace page the module owns. */
+  page: ActivePage;
+  preload(): Promise<unknown>;
+};
+
+export const webModules: readonly WebModuleDefinition[] = [
+  { id: "schedules", page: "schedule", preload: schedulesChunk.preload },
+  { id: "managedContent", page: "mods", preload: managedContentChunk.preload },
+  { id: "playerInsights", page: "players", preload: playerInsightsChunk.preload }
+];
+
+export function moduleForPage(page: ActivePage) {
+  return webModules.find((module) => module.page === page);
+}
+
+/** Whether a page may be opened, rendered, or fetched. Pages no module owns are always available. */
+export function isPageAvailable(modules: readonly ModuleAccessState[] | undefined, page: ActivePage) {
+  const owner = moduleForPage(page);
+  return !owner || isModuleAccessible(modules, owner.id);
+}
+
+/**
+ * A stable identity for what the module catalog means to this viewer. `/api/app` hands back a new
+ * array on every refresh, and the shell refreshes often; without this, every refresh looked like a
+ * module change and restarted work keyed on it — most visibly the idle prefetch walk.
+ */
+export function moduleAccessSignature(modules: readonly ModuleAccessState[] | undefined) {
+  return (modules ?? []).map((module) => `${module.id}:${module.enabled ? 1 : 0}${module.accessible ? 1 : 0}`).join(",");
+}
+
+/**
+ * The page to actually show. A module page can be reached without passing a navigation entry —
+ * restored from the last visit, or already open when an administrator switches the module off or
+ * an account loses the permission — and each of those has to land somewhere real rather than on an
+ * empty workspace. Core pages are returned untouched.
+ */
+export function resolveAvailablePage(page: ActivePage, modules: readonly ModuleAccessState[] | undefined): ActivePage {
+  return isPageAvailable(modules, page) ? page : "overview";
+}

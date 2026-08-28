@@ -1,6 +1,5 @@
 import type { ActivePage, ServerRuntimeIssue, ServerStatus } from "../types";
 import type { ConsoleConnectionState } from "../utils/consolePipeline";
-import type { ManagedContentTerminology } from "../features/mods/contentTerminology";
 import type { ServerStripAlert, ServerStripHealth } from "../components/ActiveServerStrip";
 
 export const stoppedServerMutationMessage = "Stop the server before changing mods, plugins, or server properties.";
@@ -161,64 +160,5 @@ export function resolveServerSettingsGuards(input: {
             : serverSettingsSaving
               ? "Server settings are saving."
               : ""
-  };
-}
-
-/** Which mod/plugin actions are available on the mods page, and why not. */
-export function resolveModGuards(input: {
-  isProvisioning: boolean;
-  dockerOperationalLock: boolean;
-  canManageMods: boolean;
-  canInstallMods: boolean;
-  activeStatus: ServerStatus | null;
-  isAnyModJobRunning: boolean;
-  modrinthApiConfigured: boolean;
-  runtimeControlsDisabledReason: string;
-  managedContent: ManagedContentTerminology;
-  exportMutationLocked?: boolean;
-  exportMutationBlockedReason?: string;
-}) {
-  const {
-    isProvisioning, dockerOperationalLock, canManageMods, canInstallMods, activeStatus,
-    isAnyModJobRunning, modrinthApiConfigured, runtimeControlsDisabledReason, managedContent,
-    exportMutationLocked = false, exportMutationBlockedReason = ""
-  } = input;
-
-  const modsLocked = isProvisioning || dockerOperationalLock || exportMutationLocked || !canManageMods || !activeStatus || isAnyModJobRunning;
-
-  return {
-    modsLocked,
-    modReviewAcknowledgementLocked: isProvisioning || dockerOperationalLock || exportMutationLocked || !canManageMods || !activeStatus || isAnyModJobRunning,
-    modToggleLocked: modsLocked,
-    addModFromModrinthDisabled: isProvisioning || dockerOperationalLock || exportMutationLocked || !activeStatus || isAnyModJobRunning || !canInstallMods || !modrinthApiConfigured,
-    uploadModDisabled: modsLocked,
-    addModFromModrinthDisabledReason: isProvisioning
-      ? "Server setup is still running."
-      : dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : exportMutationLocked
-          ? exportMutationBlockedReason
-        : !activeStatus
-          ? "Server status is still loading."
-          : isAnyModJobRunning
-            ? `A ${managedContent.singular} operation is already running.`
-            : !canInstallMods
-              ? "Server management permission is required."
-              : !modrinthApiConfigured
-                ? `Add a Modrinth API key in Settings before searching for ${managedContent.plural}.`
-                : `Search Modrinth for compatible ${managedContent.runtimeName} ${managedContent.plural}.`,
-    uploadModDisabledReason: isProvisioning
-      ? "Server setup is still running."
-      : dockerOperationalLock
-        ? runtimeControlsDisabledReason || "Server runtime is unavailable."
-        : exportMutationLocked
-          ? exportMutationBlockedReason
-        : !canManageMods
-          ? "Server management permission is required."
-          : !activeStatus
-            ? "Server status is still loading."
-            : isAnyModJobRunning
-              ? `A ${managedContent.singular} operation is already running.`
-              : `Upload a local ${managedContent.runtimeName} ${managedContent.singular} file.`
   };
 }

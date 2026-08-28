@@ -26,6 +26,8 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   "mods.update": "update mods",
   "schedules.view": "view schedules",
   "schedules.manage": "manage schedules",
+  "players.view": "view player insights",
+  "players.manage": "configure player insights",
   "settings.view": "view settings",
   "integrations.manage": "manage integrations",
   "users.view": "view users",

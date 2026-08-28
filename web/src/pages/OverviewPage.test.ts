@@ -140,6 +140,54 @@ describe("overview summary", () => {
     expect(html).toContain("Loading server summary");
   });
 
+  it("shows cached storage sizes while the measurement is still running", () => {
+    const server = demoServer();
+    const html = renderToStaticMarkup(createElement(OverviewSummary, {
+      server,
+      status: demoStatus(server, true),
+      dockerSocketMounted: true,
+      activity: demoOverviewData(true).activity,
+      worldSizeBytes: 7_566 * 1024 ** 2,
+      storageAvailableBytes: 8 * 1024 ** 3,
+      storageTotalBytes: 100 * 1024 ** 3,
+      storageLoading: true,
+      loading: true
+    }));
+
+    // Only the five tiles without a cached figure may fall back to a skeleton.
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(5);
+    expect(html).toContain("7.39 GiB");
+    expect(html).toContain("8 GiB");
+  });
+
+  it("keeps the storage tiles on a skeleton while the first measurement runs uncached", () => {
+    const server = demoServer();
+    const html = renderToStaticMarkup(createElement(OverviewSummary, {
+      server,
+      status: demoStatus(server, true),
+      dockerSocketMounted: true,
+      activity: demoOverviewData(true).activity,
+      storageLoading: true
+    }));
+
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(2);
+    expect(html).not.toContain("Unavailable");
+  });
+
+  it("reports storage as unavailable once a measurement has finished without one", () => {
+    const server = demoServer();
+    const html = renderToStaticMarkup(createElement(OverviewSummary, {
+      server,
+      status: demoStatus(server, true),
+      dockerSocketMounted: true,
+      activity: demoOverviewData(true).activity,
+      storageLoading: false
+    }));
+
+    expect(html).not.toContain("overviewSummaryValueSkeleton");
+    expect((html.match(/Unavailable/g) ?? []).length).toBe(2);
+  });
+
   it.each<[
     string,
     string,

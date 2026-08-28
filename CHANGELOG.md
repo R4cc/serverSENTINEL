@@ -1,5 +1,65 @@
 # Changelog
 
+## 26.8.33 - 2026-08-24
+
+- The player geography map now does less work on every hover and redraw: the coastline and each marker's position are computed once instead of repeatedly, and clustering no longer rebuilds its groups member by member. The map behaves exactly as before.
+- Fixed the panel reporting version 26.8.18 while running 26.8.32.
+
+## 26.8.32 - 2026-08-24
+
+- Demo Player geography now distributes its roster across dozens of cities and countries on all six populated continents instead of repeating one location per region.
+- Player map heads now use square status borders, individual-player hover cards, and denser nearby ping labels. Cluster panels stay anchored beside lower map markers instead of floating toward the map centre.
+
+## 26.8.31 - 2026-08-24
+
+- Demo players now receive stable, varied heads from a bundled library of Minecraft developers and creators instead of all sharing the same Steve head. Demo pages never contact an avatar provider at runtime.
+
+## 26.8.30 - 2026-08-24
+
+- Player distances now use the selected regional number format with grouped whole kilometres instead of compact phrases such as "6.2 thousand km."
+
+## 26.8.29 - 2026-08-24
+
+- Simplified Players locations into one-line flag, place, and accuracy displays. Subtle Precise, Approx, and Broad badges now explain the underlying IP-based estimate on hover or keyboard focus without crowding the roster.
+
+## 26.8.28 - 2026-08-24
+
+- Demo mode now shows the same bundled Steve head for every player without contacting MCHeads or any other external service. Real installations keep their existing opt-in player-head behavior.
+
+## 26.8.27 - 2026-08-24
+
+- Fixed the Players dashboard cards using mismatched column widths and leaving gaps below shorter panels. Geography and analysis cards now share aligned columns, fill each row evenly, and let the hourly activity chart use the available height.
+
+## 26.8.26 - 2026-08-16
+
+- Fixed the Players roster jumping back to its first page every time somebody joined or left. Only switching server starts it over now.
+- Fixed the connection-quality chart on phones, where the enlarged axis labels ran "150 ms" off the left edge and dropped "0 ms" on top of the date beneath it. The chart now picks proportions to suit the width it is drawn at.
+- Fixed the distance, ping, players, and share columns never actually aligning right, and the region share bar wrapping under its percentage on wide screens, which left the region rows at uneven heights.
+- Fixed the four summary tiles arranging themselves three-and-one on medium screens; they now fall to two rows of two.
+- Hours the panel has not observed yet are drawn as a ghosted column rather than a full-height bar, so a day of partial history no longer reads as a day of peak activity.
+- The geography card no longer tells you to set a server address you have already set; it says the address could not be placed instead.
+
+## 26.8.25 - 2026-08-16
+
+- Polished the Players workspace so its region table stays within its card on desktop and its connection-quality range controls no longer crowd the heading on phones.
+
+## 26.8.24 - 2026-08-16
+
+- Player Insights now estimates past latency from where each player was at the time. Geography is kept as a short history rather than a single latest place, so a player moving between continents no longer rewrites every hour of the connection-quality chart that had already been drawn. Sessions from before the panel first placed a player are counted but not estimated, rather than being attributed to wherever that player is now.
+- A GeoLite2 download must open as a City database before it is allowed to replace the one in use. A truncated, corrupt, or wrong-edition refresh is reported and discarded, and the working database keeps answering instead of being overwritten by it.
+- Switching Player Insights off now cancels a GeoLite2 download already running, and a download that outlives the switch can no longer install a database or reload the module afterwards. Repeatedly switching the module on and off leaves no temporary files behind.
+- A city is named only where GeoLite2's accuracy radius supports it, around 50 km rather than 200; broader answers are shown as their region or country, with the accuracy radius still drawn on the map.
+- Player Insights no longer polls each server's console output on its own. It reads the output the panel already collects for the timeline, halving the log requests a node receives, and unsubscribes when the module is switched off so no login line is examined while it is.
+
+## 26.8.23 - 2026-08-16
+
+- Added Players, an optional module that shows where a server's players connect from: a world map of approximate locations, the spread and estimated latency by region, connection quality over time, the quietest hours for maintenance, and a roster with each player's city or region.
+- Geography is resolved against a MaxMind GeoLite2 City database the panel downloads and keeps current itself. No player address is sent to MaxMind or to any other geolocation service, and Player Insights stores none: the address a Minecraft server logs at login is resolved in memory and dropped, leaving only the derived place behind. (A server on a remote node still streams its console output, addresses included, to the panel over the node protocol, exactly as it did before.)
+- Latency is estimated from distance and labelled as an estimate everywhere it appears — no Minecraft protocol the panel speaks reports a player's own round-trip time — and is withheld entirely until the server's own public address is configured.
+- Add a MaxMind account ID and license key under Settings → Integrations, or through `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY`, to switch geography on. Without them the workspace still reports who plays and when, and says why locations are missing.
+- Switching the module off stops the download, the lookup, the API, and the workspace, and never loads its code in the browser. The geography already derived is kept and the module resumes from it.
+- Existing accounts do not receive the new `players.view` grant automatically; add it to the roles that should see the workspace.
+
 ## Unreleased
 
 - Fixed mobile Node Details opening below its header, standardized compact tap targets, reduced Mods toolbar height, and expanded the mobile smoke coverage for those interactions.
@@ -23,6 +83,29 @@
 - Fixed updating a mod deleting the running copy when a disabled copy of the target version was also present, and reporting it as a successful update.
 - Fixed the login rate limit being bypassable, and the demo-mode gate not covering the console stream.
 - Reduced repeated Modrinth lookups and full jar re-reads when listing manually uploaded mods, and cleaned up install temporary files abandoned by an interrupted download.
+
+## 26.8.22 - 2026-08-15
+
+- The overview now remembers the last World Size and Free Space it measured, so a reload shows those figures straight away and replaces them once the new measurement arrives instead of holding both tiles on a placeholder.
+
+## 26.8.21 - 2026-08-15
+
+- Fixed the user and reset-password dialogs drawing a grey browser border around their contents and leaving empty strips above and below it.
+
+## 26.8.20 - 2026-08-15
+
+- A module that fails to start is now handled cleanly: enabling one reports the failure and leaves it switched off rather than recording a module that does not work, and one that fails while the panel starts is hidden from the interface and refuses its API instead of half-answering, while Settings keeps showing the setting you chose.
+- Switching a module on or off can no longer interleave with another administrator doing the same, and a module setting written by a newer release is preserved instead of being dropped when an older one saves.
+
+## 26.8.19 - 2026-08-15
+
+- Managed content — mods, plugins, Modrinth browsing, and the hourly update check — is now an optional module alongside Schedules. Switching it off closes its API, stops the update checker being built at all, and takes the workspace, the overview content card, and the Modrinth API key setting with it. Installed jars are left untouched and are managed again as soon as it is switched back on.
+- Accounts without `mods.view` no longer download the managed-content interface, which also makes the panel's initial download smaller for everyone.
+
+## 26.8.18 - 2026-08-15
+
+- Optional features can now be switched off for an installation. Settings gains a Modules category; Schedules is the first module, and turning it off stops scheduled runs, closes the schedule API, and hides the workspace while keeping every existing schedule and its history intact.
+- A module is only visible to accounts that hold its permission — `schedules.view` for Schedules — so it can be enabled for the installation and still limited to the operators who should use it. The browser no longer downloads a module's code for anyone who cannot reach it.
 
 ## 26.8.17 - 2026-08-14
 

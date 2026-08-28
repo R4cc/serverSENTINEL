@@ -101,6 +101,79 @@ async function assertFloatingSurfaces(page, label) {
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
 }
 
+async function assertPlayerClusterPopupDismisses(page, label) {
+  await openPage(page, "players");
+  const serverCluster = page.locator(".playerMapClusterMarker--server");
+  const cluster = await serverCluster.count() ? serverCluster : page.locator(".playerMapClusterMarker").first();
+  await cluster.waitFor();
+  await cluster.click();
+
+  const popup = page.locator(".playerMapClusterPopup");
+  await popup.waitFor();
+  assert(await cluster.getAttribute("aria-expanded") === "true", `${label}: player cluster did not expand`);
+  const geometry = await page.evaluate(() => {
+    const marker = document.querySelector('.playerMapClusterMarker[aria-expanded="true"]');
+    const serverMarker = document.querySelector(".playerMapMarkerWrap--server .playerMapMarker");
+    const serverBadge = document.querySelector(".playerMapSharedServer");
+    const standaloneServer = document.querySelector(".playerMapServer");
+    const halo = document.querySelector(".playerMapAccuracy--active");
+    const popup = document.querySelector(".playerMapClusterPopup");
+    const list = popup?.querySelector(".playerMapClusterList");
+    if (!(marker instanceof HTMLElement) || !(halo instanceof SVGGraphicsElement) || !(popup instanceof HTMLElement) || !(list instanceof HTMLElement)) return { missing: true };
+    const markerRect = marker.getBoundingClientRect();
+    const viewportRect = document.querySelector(".playerMapViewport")?.getBoundingClientRect();
+    const haloRect = halo.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const pings = Array.from(popup.querySelectorAll(".playerMapClusterRow .playerMapPingValue"));
+    const onlineAvatar = document.querySelector(".playerMapAvatar--online");
+    const knownAvatar = document.querySelector(".playerMapAvatar--known");
+    const onlineAvatarRect = onlineAvatar?.getBoundingClientRect();
+    return {
+      missing: false,
+      centreDelta: Math.hypot(
+        markerRect.left + markerRect.width / 2 - haloRect.left - haloRect.width / 2,
+        markerRect.top + markerRect.height / 2 - haloRect.top - haloRect.height / 2
+      ),
+      standaloneServerMarkers: document.querySelectorAll(".playerMapServer").length,
+      sharedServerIcons: document.querySelectorAll(".playerMapSharedServerIcon").length,
+      runningServerMarkers: document.querySelectorAll(".playerMapSharedServer--running, .playerMapServer--running").length,
+      serverBadgeAbovePlayers: serverBadge instanceof HTMLElement && serverMarker instanceof HTMLElement
+        ? serverBadge.getBoundingClientRect().bottom <= serverMarker.getBoundingClientRect().top + 3
+        : standaloneServer instanceof SVGGraphicsElement,
+      popupOverflow: popup.scrollWidth - popup.clientWidth,
+      overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length,
+      pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right)),
+      avatarIsSquare: onlineAvatarRect ? Math.abs(onlineAvatarRect.width - onlineAvatarRect.height) <= 1 : false,
+      avatarRadius: onlineAvatar instanceof HTMLElement ? Number.parseFloat(getComputedStyle(onlineAvatar).borderRadius) : Number.POSITIVE_INFINITY,
+      onlineBorder: onlineAvatar instanceof HTMLElement ? getComputedStyle(onlineAvatar).borderColor : "",
+      knownBorder: knownAvatar instanceof HTMLElement ? getComputedStyle(knownAvatar).borderColor : "",
+      overflowingMarkerSurfaces: viewportRect
+        ? Array.from(document.querySelectorAll(".playerMapMarker, .playerMapClusterCount, .playerMapSharedServer")).filter((surface) => {
+          const rect = surface.getBoundingClientRect();
+          return rect.left < viewportRect.left - 1 || rect.right > viewportRect.right + 1 || rect.top < viewportRect.top - 1 || rect.bottom > viewportRect.bottom + 1;
+        }).length
+        : Number.POSITIVE_INFINITY
+    };
+  });
+  assert(!geometry.missing, `${label}: player cluster marker surfaces are missing`);
+  assert(geometry.centreDelta <= 1.5, `${label}: active accuracy halo is offset from the combined marker by ${geometry.centreDelta}px`);
+  assert(geometry.standaloneServerMarkers + geometry.sharedServerIcons === 1, `${label}: server marker representation is missing or duplicated`);
+  assert(geometry.runningServerMarkers === 1 && geometry.serverBadgeAbovePlayers, `${label}: running server marker is not visually distinct`);
+  assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
+  assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
+  assert(geometry.avatarIsSquare && geometry.avatarRadius <= 4, `${label}: player head border does not fit the square avatar`);
+  assert(geometry.onlineBorder && geometry.onlineBorder !== geometry.knownBorder, `${label}: online player head has no distinct status border`);
+  assert(geometry.overflowingMarkerSurfaces === 0, `${label}: ${geometry.overflowingMarkerSurfaces} player marker surfaces cross the map frame`);
+
+  // Blank map space is outside the floating panel even though it remains inside the map viewport.
+  // This catches the old map-level boundary that left the popup pinned until navigation changed.
+  await page.locator(".playerMapViewport").click({ position: { x: 2, y: 2 } });
+  await popup.waitFor({ state: "detached" });
+  assert(await cluster.getAttribute("aria-expanded") === "false", `${label}: player cluster stayed expanded after an outside click`);
+  assert(await cluster.getAttribute("aria-controls") === null, `${label}: dismissed player cluster kept a popup reference`);
+
+}
+
 async function assertScheduleActionMenuVisible(page, label) {
   const trigger = page.locator(".scheduleActionMenuTrigger").first();
   assert(await trigger.count(), `${label}: demo schedule action trigger is missing`);
@@ -583,6 +656,7 @@ async function runProfile(engine, profile, label) {
     await assertNavigationOverlay(page, label);
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .refreshStatusButton"], label);
     await assertFloatingSurfaces(page, label);
+    await assertPlayerClusterPopupDismisses(page, `${label} players`);
 
     for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings"]) {
       await assertPageDocumentScroll(page, title, `${label} ${title}`);

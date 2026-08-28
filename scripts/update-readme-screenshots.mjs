@@ -142,6 +142,12 @@ async function waitForSettingsPage(page) {
   await page.getByLabel("Theme", { exact: true }).waitFor();
 }
 
+async function waitForPlayersPage(page) {
+  await page.locator(".playerGeographyCard .playerMapCanvas").waitFor();
+  await page.locator(".playerConnectionEChart svg").waitFor();
+  await page.locator(".playerRosterTable").waitFor();
+}
+
 try {
   if (process.env.SERVERSENTINEL_SCREENSHOT_SKIP_BUILD !== "true") {
     await runNpm(["run", "build"]);
@@ -216,6 +222,10 @@ try {
   await openPage(page, "schedules", "Schedules");
   await page.getByRole("table", { name: "Schedules" }).waitFor();
   await capture(page, "schedules.png");
+
+  await openPage(page, "players", "Players");
+  await waitForPlayersPage(page);
+  await capture(page, "players.png");
 
   await openPage(page, "properties", "Properties");
   await page.getByRole("heading", { name: "General", exact: true }).waitFor();

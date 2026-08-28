@@ -6,6 +6,7 @@ The root `AGENTS.md` still applies. Use this table to avoid routing feature stat
 | --- | --- |
 | App-wide authentication, navigation, active server, console pipeline | `src/App.tsx` |
 | Shell config, persisted navigation, guards, formatting state | `src/app/` |
+| Optional feature modules and their lazy entries | `src/app/moduleRegistry.ts`; see `docs/modules.md` before adding one |
 | Feature state and data loading | `src/features/<area>/` and its `use*Workspace.ts` or area hook; prefer this over adding state to `App.tsx` |
 | Page presentation | `src/pages/`; pages primarily receive state and actions as props |
 | Reusable UI and charts | `src/components/` |

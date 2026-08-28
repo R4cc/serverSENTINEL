@@ -96,6 +96,15 @@ The screenshots below show the default dark theme. Light mode is also available 
   </tr>
   <tr>
     <td valign="top" colspan="2">
+      <p align="center"><strong>Players</strong></p>
+      <a href="docs/screenshots/players.png">
+        <img width="1440" height="1000" alt="serverSENTINEL player insights and activity" src="docs/screenshots/players.png" style="max-width: 100%;" />
+      </a>
+      <p align="center">Explore player geography, connection quality, activity patterns, and history.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" colspan="2">
       <p align="center"><strong>Light Mode</strong></p>
       <a href="docs/screenshots/overview-light.png">
         <img width="1440" height="1000" alt="serverSENTINEL server overview in light mode" src="docs/screenshots/overview-light.png" style="max-width: 100%;" />

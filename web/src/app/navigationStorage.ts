@@ -5,7 +5,7 @@ export const navigationStorageDurationMs = 30 * 60 * 1000;
 
 const activePageStorageKey = "serversentinel-active-page";
 const activeServerStorageKey = "serversentinel-active-server";
-const activePages = new Set<ActivePage>(["settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "properties"]);
+const activePages = new Set<ActivePage>(["settings", "nodes", "create", "overview", "console", "files", "mods", "schedule", "players", "properties"]);
 
 export function readStoredActivePage(storage: Storage = window.localStorage, now = Date.now()): ActivePage {
   const stored = readExpiringStoredValue(storage, activePageStorageKey, navigationStorageDurationMs, now);

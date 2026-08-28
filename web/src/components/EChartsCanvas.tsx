@@ -5,7 +5,8 @@ import {
   DataZoomInsideComponent,
   DataZoomSliderComponent,
   GridComponent,
-  MarkLineComponent
+  MarkLineComponent,
+  TooltipComponent
 } from "echarts/components";
 import { init, use, type EChartsCoreOption, type EChartsType } from "echarts/core";
 import { SVGRenderer } from "echarts/renderers";
@@ -18,6 +19,7 @@ use([
   DataZoomSliderComponent,
   GridComponent,
   MarkLineComponent,
+  TooltipComponent,
   SVGRenderer
 ]);
 
@@ -153,6 +155,8 @@ export function createChartInputActivityTracker(onStart: () => void, onFinish: (
 export function EChartsCanvas({
   option,
   onDataZoom,
+  className = "serverTimelineEChart",
+  ariaLabel,
   onInteractionChange,
   onPointerMove,
   onPointerLeave,
@@ -160,7 +164,9 @@ export function EChartsCanvas({
   onWheel
 }: {
   option: EChartsCoreOption;
-  onDataZoom: (event: TimelineDataZoomEvent) => void;
+  onDataZoom?: (event: TimelineDataZoomEvent) => void;
+  className?: string;
+  ariaLabel?: string;
   onInteractionChange?: (interacting: boolean) => void;
   onPointerMove?: React.PointerEventHandler<HTMLDivElement>;
   onPointerLeave?: React.PointerEventHandler<HTMLDivElement>;
@@ -191,7 +197,7 @@ export function EChartsCanvas({
       optionScheduler.finishInteraction();
       onInteractionChangeRef.current?.(false);
     });
-    const handleDataZoom = (event: unknown) => onDataZoomRef.current(event as TimelineDataZoomEvent);
+    const handleDataZoom = (event: unknown) => onDataZoomRef.current?.(event as TimelineDataZoomEvent);
     const handleWheel = (event: globalThis.WheelEvent) => {
       const claimed = onWheelRef.current?.(event) ?? false;
       if (!claimed) inputActivity.wheel();
@@ -235,5 +241,15 @@ export function EChartsCanvas({
     optionSchedulerRef.current?.update(option);
   }, [option]);
 
-  return <div ref={containerRef} className="serverTimelineEChart" onPointerMove={onPointerMove} onPointerLeave={onPointerLeave} onClick={onClick} />;
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      role={ariaLabel ? "img" : undefined}
+      aria-label={ariaLabel}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      onClick={onClick}
+    />
+  );
 }

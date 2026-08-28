@@ -5,6 +5,7 @@ import type { NodeRuntime } from "./nodes/types.js";
 import type { ManagedServer } from "./types.js";
 import type { RemoteObservationCoordinator } from "./nodes/observationCoordinator.js";
 import type { ModUpdatePlanCoordinator } from "./modrinth/updatePlanCoordinator.js";
+import type { ModuleRegistry } from "./modules/moduleRegistry.js";
 import type { OperationService } from "./operations/operationService.js";
 import type { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
 import type { ExportCoordinator } from "./exportCoordinator.js";
@@ -25,6 +26,10 @@ import type { ResourceStatsRepository } from "./storage/resourceStatsRepository.
 import type { TimelineEventsRepository } from "./storage/timelineEventsRepository.js";
 import type { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
 import type { OperationsRepository } from "./storage/operationsRepository.js";
+import type { PlayerGeoRepository } from "./storage/playerGeoRepository.js";
+import type { GeoDatabase } from "./players/geoDatabase.js";
+import type { PlayerGeoCollector } from "./players/playerGeoCollector.js";
+import type { ServerLocationStore } from "./players/serverLocations.js";
 
 /**
  * Singletons created while the Fastify instance boots (see buildApp in app.ts)
@@ -47,9 +52,20 @@ interface AppServices {
   exportArtifactMaintenance: ExportArtifactMaintenance;
   exportCoordinator: ExportCoordinator;
   storageDatabase: StorageDatabase;
-  modUpdatePlanCoordinator: ModUpdatePlanCoordinator;
+  moduleRegistry: ModuleRegistry;
+  /** Published by the managed-content module runtime; absent while that module is switched off. */
+  modUpdatePlanCoordinator: ModUpdatePlanCoordinator | undefined;
   resourceStatsRepository: ResourceStatsRepository;
   timelineEventsRepository: TimelineEventsRepository;
+  playerGeoRepository: PlayerGeoRepository;
+  playerInsightsServerLocations: ServerLocationStore;
+  /**
+   * Published by the Player Insights module runtime, and absent while that module is switched off.
+   * Their absence is what makes "no GeoIP work runs" true rather than merely hidden: no MMDB is
+   * held in memory and nothing reads a player's address.
+   */
+  playerGeoDatabase: GeoDatabase | undefined;
+  playerGeoCollector: PlayerGeoCollector | undefined;
   appLogger: FastifyBaseLogger | undefined;
   runtimeRegistry: NodeRuntimeRegistry | undefined;
   resourceStatsCollector: ResourceStatsCollector | undefined;

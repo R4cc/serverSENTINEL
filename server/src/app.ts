@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { join } from "node:path";
 import { config } from "./config.js";
 import { panelNodeConnections, runtimeForServer, services } from "./appServices.js";
 import { dockerAction, dockerResourceStats, serverLogFields } from "./runtime/local/dockerContainers.js";
@@ -44,6 +45,16 @@ import { registerFileRoutes } from "./routes/fileRoutes.js";
 import { buildModUpdatePlan, localInstallMod, localListMods, localModIcon, localRemoveMod, localToggleMod, localUploadMod, modrinthApiKey } from "./mods/modService.js";
 import { registerOperationsRoutes } from "./routes/operationsRoutes.js";
 import { registerScheduleRoutes } from "./routes/scheduleRoutes.js";
+import { registerModuleRoutes } from "./routes/moduleRoutes.js";
+import { registerPlayerInsightsRoutes } from "./routes/playerInsightsRoutes.js";
+import { ModuleRegistry } from "./modules/moduleRegistry.js";
+import { createScheduleModuleRuntime } from "./modules/scheduleModule.js";
+import { createManagedContentModuleRuntime, modUpdateCheckIntervalMs } from "./modules/managedContentModule.js";
+import { createPlayerInsightsModuleRuntime } from "./modules/playerInsightsModule.js";
+import { GeoDatabase } from "./players/geoDatabase.js";
+import { PlayerGeoCollector } from "./players/playerGeoCollector.js";
+import { buildPlayerInsights } from "./players/playerInsights.js";
+import { resolveServerLocation, ServerLocationStore } from "./players/serverLocations.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
 import { RuntimeStateCoordinator } from "./runtimeStateCoordinator.js";
@@ -61,6 +72,7 @@ import { FileEditLeasesRepository } from "./storage/fileEditLeasesRepository.js"
 import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
 import { TimelineEventsRepository } from "./storage/timelineEventsRepository.js";
 import { ModPreferencesRepository } from "./storage/modPreferencesRepository.js";
+import { PlayerGeoRepository } from "./storage/playerGeoRepository.js";
 import { ModUpdatePlanRepository } from "./storage/modUpdatePlanRepository.js";
 import { OperationsRepository } from "./storage/operationsRepository.js";
 import { PlayerHeadService } from "./playerHeadService.js";
@@ -81,7 +93,12 @@ import { resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, sched
 
 const resourceStatsPollMs = 5_000;
 const timelineEventPollMs = 10_000;
-const modUpdateCheckIntervalMs = 60 * 60 * 1000;
+/**
+ * How far back Player Insights reads. Bounded by what the panel already retains — timeline events
+ * and resource samples are both kept for a week — so the module adds no history of its own beyond
+ * the per-player geography it stores.
+ */
+const playerInsightsHistoryWindow = 7 * 24 * 60 * 60 * 1000;
 const operationRetentionMs = 30 * 24 * 60 * 60 * 1000;
 const operationRetentionMaxRows = 1_000;
 const exportMaintenanceIntervalMs = 15 * 60 * 1000;
@@ -173,6 +190,11 @@ if (initialSetupToken) {
   app.log.warn({ setupToken: initialSetupToken }, "Initial admin registration requires this one-time setup token");
 }
 services.nodesRepository = new NodesRepository(services.storageDatabase);
+services.moduleRegistry = new ModuleRegistry(services.storageDatabase, {
+  onRuntimeError: (error, moduleId, phase) => {
+    logWarn({ ...errorLogFields(error), moduleId, phase, category: "modules" }, "Optional module runtime could not be reconfigured");
+  }
+});
 services.settingsRepository = new SettingsRepository(services.storageDatabase);
 services.playerHeadCacheRepository = new PlayerHeadCacheRepository(services.storageDatabase);
 instancePlayerHeadService = new PlayerHeadService({
@@ -185,6 +207,8 @@ services.sessionsRepository = new SessionsRepository(services.storageDatabase);
 services.serversRepository = new ServersRepository(services.storageDatabase, normalizeManagedServer);
 services.fileEditLeasesRepository = new FileEditLeasesRepository(services.storageDatabase);
 services.modPreferencesRepository = new ModPreferencesRepository(services.storageDatabase);
+services.playerGeoRepository = new PlayerGeoRepository(services.storageDatabase);
+services.playerInsightsServerLocations = new ServerLocationStore(services.storageDatabase);
 services.operationsRepository = new OperationsRepository(services.storageDatabase);
 services.exportCoordinator = new ExportCoordinator(services.operationsRepository);
 services.operationService = new OperationService(services.operationsRepository, {
@@ -198,9 +222,11 @@ services.exportArtifactMaintenance = new ExportArtifactMaintenance(
   operationRetentionMs,
   operationRetentionMaxRows
 );
-const resumableScheduleWaits = resumableScheduleWaitOperations(
-  services.operationsRepository.listActiveByType("schedule.run")
-);
+// With the schedules module switched off nothing will resume these, so they are left out of the
+// resumable set and failed with the rest of the incomplete work rather than staying "running".
+const resumableScheduleWaits = services.moduleRegistry.isEnabled("schedules")
+  ? resumableScheduleWaitOperations(services.operationsRepository.listActiveByType("schedule.run"))
+  : [];
 const recoveredOperations = services.operationsRepository.failIncompleteOnStartup(
   undefined,
   undefined,
@@ -406,7 +432,16 @@ registerOperationsRoutes(app, {
   operations: services.operationsRepository
 });
 
-registerScheduleRoutes(app, {
+registerModuleRoutes(app, {
+  destructiveRateLimit,
+  requireRequestPermission,
+  states: (user) => services.moduleRegistry.states(user),
+  setEnabled: (id, enabled) => services.moduleRegistry.setEnabled(id, enabled),
+  logInfo,
+  logWarn
+});
+
+await services.moduleRegistry.registerRoutes(app, "schedules", (scope) => registerScheduleRoutes(scope, {
   destructiveRateLimit,
   requireRequestPermission,
   getServer,
@@ -422,9 +457,95 @@ registerScheduleRoutes(app, {
   serverLogFields,
   logInfo,
   withServerMutation: (serverId, action) => services.exportCoordinator.withMutation(serverId, action)
-});
+}));
 
-registerModRoutes(app);
+await services.moduleRegistry.registerRoutes(app, "managedContent", registerModRoutes);
+
+/**
+ * Settings first, then the environment. An installation configured through a compose file keeps
+ * working untouched, and an operator who enters credentials in Settings overrides it without
+ * having to edit the deployment.
+ */
+function maxmindCredentials() {
+  const settings = services.settingsRepository.get();
+  const accountId = settings.maxmindAccountId ?? config.maxmindAccountId;
+  const licenseKey = settings.maxmindLicenseKey ?? config.maxmindLicenseKey;
+  return accountId && licenseKey ? { accountId, licenseKey } : undefined;
+}
+
+async function playerInsightsSnapshot(options: { serverId?: string; windowMs?: number } = {}) {
+  // Scoped to one server when the workspace asks for it, which is how the page is reached: the
+  // reference location, the roster, and the quiet hours all belong to the server being looked at.
+  // Resolve the requested server through the shared lookup so a stale id gets the same 404 as the
+  // rest of the API instead of a plausible-looking empty workspace.
+  const servers = options.serverId ? [await getServer(options.serverId)] : await listManagedServers();
+  const geoDatabase = services.playerGeoDatabase;
+  const historyWindowMs = options.windowMs ?? playerInsightsHistoryWindow;
+  const now = Date.now();
+  const activityFrom = now - playerInsightsHistoryWindow;
+  return buildPlayerInsights({
+    servers,
+    snapshots: await services.playerSnapshotCoordinator?.snapshots(servers) ?? {},
+    geo: options.serverId
+      ? services.playerGeoRepository.listForServer(options.serverId)
+      : services.playerGeoRepository.list(),
+    serverLocations: services.playerInsightsServerLocations.list(servers.map((server) => server.id)),
+    timelineEvents: Object.fromEntries(servers.map((server) => [server.id, services.timelineEventsRepository.list(server.id, activityFrom, now)])),
+    resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.list(server.id, activityFrom)])),
+    geoDatabase: geoDatabase?.state() ?? {
+      available: false,
+      configured: Boolean(maxmindCredentials()),
+      updating: false,
+      error: "The Player insights module is not running, so no GeoLite2 database is loaded."
+    },
+    timeZone: config.timeZone,
+    historyWindowMs,
+    activityWindowMs: playerInsightsHistoryWindow,
+    now
+  });
+}
+
+await services.moduleRegistry.registerRoutes(app, "playerInsights", (scope) => registerPlayerInsightsRoutes(scope, {
+  destructiveRateLimit,
+  requireRequestPermission,
+  insights: playerInsightsSnapshot,
+  setServerLocation: async (serverId, address) => {
+    // Confirms the server exists before writing configuration for it, so a stale id cannot leave an
+    // orphaned entry behind, and so the caller gets the same 404 the rest of the API gives.
+    await getServer(serverId);
+    if (!address) return services.playerInsightsServerLocations.set(serverId, {});
+    const resolved = await resolveServerLocation(services.playerGeoDatabase?.cityReader, address);
+    return services.playerInsightsServerLocations.set(serverId, {
+      address,
+      ...(resolved.location ? { location: resolved.location } : {}),
+      ...(resolved.location ? { resolvedAt: new Date().toISOString() } : {}),
+      ...(resolved.error ? { error: resolved.error } : {})
+    });
+  },
+  refreshGeoDatabase: async () => {
+    const geoDatabase = services.playerGeoDatabase;
+    if (!geoDatabase) throwHttp(503, "The Player insights module is not running.", { code: "MODULE_UNAVAILABLE" });
+    await geoDatabase.refresh({ force: true });
+    // A newly downloaded database can place addresses the previous one could not, so every
+    // configured server address is measured against it again rather than staying unresolved.
+    const servers = await listManagedServers();
+    for (const entry of services.playerInsightsServerLocations.list(servers.map((server) => server.id))) {
+      if (!entry.address) continue;
+      const resolved = await resolveServerLocation(geoDatabase.cityReader, entry.address);
+      // A location edit, clear, or module stop can land while DNS is in flight. Only publish this
+      // result if both the runtime and the address it was resolving are still current.
+      if (services.playerGeoDatabase !== geoDatabase) break;
+      services.playerInsightsServerLocations.setIfAddress(entry.serverId, entry.address, {
+        address: entry.address,
+        ...(resolved.location ? { location: resolved.location } : {}),
+        ...(resolved.location ? { resolvedAt: new Date().toISOString() } : {}),
+        ...(resolved.error ? { error: resolved.error } : {})
+      });
+    }
+    return geoDatabase.state();
+  },
+  logInfo
+}));
 
 const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime({
   publicServer,
@@ -545,22 +666,28 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
   setRuntimeIntent: (serverId, state) => {
     services.serversRepository.setRuntimeIntent(serverId, state);
   },
+  clearRestartRequired: (serverId) => {
+    services.serversRepository.clearRestartRequired(serverId);
+  },
   onError: (error, server) => {
     logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "runtime_state" }, "Runtime state reconciliation deferred");
   }
 });
 if (config.runtimeMode === "all-in-one") services.serversRepository.markStartOnNodeStart(localNodeId);
 services.runtimeStateCoordinator.start();
-services.modUpdatePlanCoordinator = new ModUpdatePlanCoordinator({
-  intervalMs: modUpdateCheckIntervalMs,
-  readServers: async () => (await readServers()).filter(supportsManagedMods),
-  buildPlan: (server, options) => buildModUpdatePlan(server, options),
-  cache: new ModUpdatePlanRepository(services.storageDatabase),
-  onError: (error, server) => {
-    logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "mod_update_check" }, "Automatic mod update check deferred");
-  }
-});
-services.modUpdatePlanCoordinator.start();
+services.moduleRegistry.registerRuntime("managedContent", createManagedContentModuleRuntime({
+  createCoordinator: () => new ModUpdatePlanCoordinator({
+    intervalMs: modUpdateCheckIntervalMs,
+    readServers: async () => (await readServers()).filter(supportsManagedMods),
+    buildPlan: (server, options) => buildModUpdatePlan(server, options),
+    cache: new ModUpdatePlanRepository(services.storageDatabase),
+    onError: (error, server) => {
+      logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "mod_update_check" }, "Automatic mod update check deferred");
+    }
+  }),
+  publish: (coordinator) => { services.modUpdatePlanCoordinator = coordinator; }
+}));
+
 services.resourceStatsRepository = new ResourceStatsRepository(services.storageDatabase);
 services.timelineEventsRepository = new TimelineEventsRepository(services.storageDatabase);
 services.resourceStatsCollector = new ResourceStatsCollector({
@@ -590,10 +717,52 @@ services.timelineEventCollector = new TimelineEventCollector({
   }
 });
 services.timelineEventCollector.start();
+
+services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsModuleRuntime({
+  create: () => {
+    const geoDatabase = new GeoDatabase({
+      directory: join(config.dataDir, "geoip"),
+      credentials: maxmindCredentials,
+      userAgent: appUserAgentFor("geolite2"),
+      onInfo: logInfo,
+      onWarn: logWarn
+    });
+    return {
+      geoDatabase,
+      collector: new PlayerGeoCollector({
+        // Registered after the timeline collector above precisely because it reads that collector's
+        // output: Player Insights adds no node request of its own, it reads the console text the
+        // panel already fetched. A missing collector is a wiring mistake, and failing the module's
+        // start is how the registry reports one — quietly collecting nothing would not.
+        observeLogs: (observer) => {
+          const collector = services.timelineEventCollector;
+          if (!collector) throw new Error("Player Insights needs the timeline event collector to read console output");
+          return collector.observeLogs(({ server, text }) => observer({ server, text }));
+        },
+        readServers: listManagedServers,
+        repository: services.playerGeoRepository,
+        cityReader: () => geoDatabase.cityReader,
+        retainServers: (serverIds) => services.playerInsightsServerLocations.retain(serverIds),
+        onError: (error, server) => {
+          logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "player_insights" }, "Player geography collection deferred");
+        }
+      })
+    };
+  },
+  publish: (runtime) => {
+    services.playerGeoDatabase = runtime?.geoDatabase;
+    services.playerGeoCollector = runtime?.collector;
+  },
+  onError: (error) => {
+    logWarn({ ...errorLogFields(error), category: "player_insights" }, "GeoLite2 database could not be prepared; player geography is unavailable until it is");
+  }
+}));
+
 app.addHook("onClose", async () => {
   services.remoteObservationCoordinator?.stop();
   services.runtimeStateCoordinator?.stop();
-  services.modUpdatePlanCoordinator?.stop();
+  // The mod update coordinator belongs to the managed-content module and is stopped by the
+  // registry's own shutdown hook below, along with every other module runtime.
   services.resourceStatsCollector?.stop();
   services.timelineEventCollector?.stop();
   services.playerSnapshotCoordinator?.stop();
@@ -606,26 +775,15 @@ if (resumedScheduleWaits > 0) {
 
 await registerStaticFrontend(app);
 
-let scheduleTimer: NodeJS.Timeout | undefined;
-let schedulerClosed = false;
-function scheduleNextTick() {
-  scheduleTimer = setTimeout(async () => {
-    scheduleTimer = undefined;
-    try {
-      await tickSchedules();
-    } catch (error: unknown) {
-      app.log.error({ ...errorLogFields(error), category: "scheduler" }, "Schedule polling failed");
-    } finally {
-      if (!schedulerClosed) scheduleNextTick();
-    }
-  }, 30_000);
-  scheduleTimer.unref();
-}
-scheduleNextTick();
+services.moduleRegistry.registerRuntime("schedules", createScheduleModuleRuntime({
+  tick: tickSchedules,
+  onError: (error) => {
+    app.log.error({ ...errorLogFields(error), category: "scheduler" }, "Schedule polling failed");
+  }
+}));
+await services.moduleRegistry.startEnabled();
 app.addHook("onClose", async () => {
-  schedulerClosed = true;
-  if (scheduleTimer) clearTimeout(scheduleTimer);
-  scheduleTimer = undefined;
+  await services.moduleRegistry.stopAll();
 });
 
 const startupUsers = await readUsers().catch(() => []);
@@ -649,6 +807,7 @@ app.log.info({
   dockerLiveRestore,
   minecraftStopTimeoutSeconds: config.minecraftStopTimeoutSeconds,
   modrinthApiConfigured: modrinthConfigured,
+  disabledModules: services.moduleRegistry.states().filter((module) => !module.enabled).map((module) => module.id),
   playerHeadsEnabled,
   authEnabled: startupUsers.length > 0,
   logLevel: config.logLevel,

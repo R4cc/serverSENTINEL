@@ -37,6 +37,15 @@ export function snapshotMods(result: unknown): RestartRequiredModSnapshot[] {
   }).filter((mod) => mod.identity !== "file:");
 }
 
+/**
+ * Only mods the running server actually loaded can make a restart necessary. A mod that is
+ * disabled before and after the change never reached the classpath, so adding, updating, or
+ * removing it leaves the running process exactly as it was.
+ */
+function affectsLoadedMods(before: RestartRequiredModSnapshot | undefined, after: RestartRequiredModSnapshot | undefined) {
+  return before?.enabled === true || after?.enabled === true;
+}
+
 export function diffModSnapshots(baseline: RestartRequiredModSnapshot[], current: RestartRequiredModSnapshot[]): RestartRequiredChange[] {
   const before = new Map(baseline.map((mod) => [mod.identity, mod]));
   const after = new Map(current.map((mod) => [mod.identity, mod]));
@@ -44,6 +53,7 @@ export function diffModSnapshots(baseline: RestartRequiredModSnapshot[], current
 
   for (const [identity, original] of before) {
     const next = after.get(identity);
+    if (!affectsLoadedMods(original, next)) continue;
     if (!next) {
       changes.push({ type: "mod", identity, displayName: original.displayName, filename: original.filename, action: "removed" });
       continue;
@@ -56,7 +66,7 @@ export function diffModSnapshots(baseline: RestartRequiredModSnapshot[], current
   }
 
   for (const [identity, next] of after) {
-    if (!before.has(identity)) {
+    if (!before.has(identity) && affectsLoadedMods(undefined, next)) {
       changes.push({ type: "mod", identity, displayName: next.displayName, filename: next.filename, action: "added" });
     }
   }

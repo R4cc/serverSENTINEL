@@ -4,7 +4,7 @@ import { pagePrefetchAllowed, pagePrefetchOrder } from "./pagePrefetch";
 describe("page prefetch", () => {
   it("queues every lazily loaded workspace page", () => {
     expect([...pagePrefetchOrder].sort()).toEqual(
-      ["console", "files", "mods", "nodes", "properties", "schedule", "settings"]
+      ["console", "files", "mods", "nodes", "players", "properties", "schedule", "settings"]
     );
   });
 

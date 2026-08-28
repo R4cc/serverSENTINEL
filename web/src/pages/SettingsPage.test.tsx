@@ -25,12 +25,21 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     onConsoleScrollbackChange: vi.fn(),
     onClearConsoleHistory: vi.fn(),
     modrinthConfigured: false,
+    geoIpConfigured: false,
     canManageIntegrations: false,
     onSubmitModrinthKey: vi.fn(),
+    onSubmitMaxmindCredentials: vi.fn(),
     playerHeads: { enabled: false, onboardingRequired: false, provider: "mc-heads.net", cacheEntries: 0, cacheBytes: 0 },
     playerHeadsBusy: false,
     onPlayerHeadsEnabledChange: vi.fn(),
     onClearPlayerHeadCache: vi.fn(),
+    modules: [
+      { id: "schedules", enabled: true, accessible: true },
+      { id: "managedContent", enabled: true, accessible: true }
+    ],
+    modulesBusy: false,
+    canManageModules: false,
+    onModuleEnabledChange: vi.fn(),
     canViewUsers: false,
     userState: {
       users: [],
@@ -133,6 +142,62 @@ describe("SettingsPage", () => {
     expect(html).toContain("42 cached heads · 12 KiB");
     expect(html).toContain("Clear cache");
     expect(html).toContain('href="https://www.mc-heads.net/"');
+  });
+
+  it("renders optional modules as stateful cards and locks them without permission", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "modules" })} />);
+    expect(html).toContain('id="settings-tab-modules"');
+    expect(html).toContain("Schedules");
+    expect(html).toContain("schedules.view");
+    expect(html).toContain("Whole installation");
+    expect(html).toContain('class="settingsModuleGrid"');
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('aria-label="Schedules module"');
+    expect(html).toContain("Manage integrations permission is required");
+    expect(html).not.toContain("settingsHubToggleTrack");
+  });
+
+  it("explains that installation modules are read-only for the demo account", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "modules",
+      systemInfo: { ...props().systemInfo, demoMode: true }
+    })} />);
+
+    expect(html).toContain("Read-only in demo mode");
+    expect(html).toContain("Sign in with a non-demo administrator account");
+    expect(html).toContain("Module configuration is read-only in demo mode");
+    expect(html).not.toContain("Manage integrations permission is required");
+  });
+
+  it("explains what stops happening while a module is switched off", () => {
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "modules",
+      canManageModules: true,
+      modules: [
+        { id: "schedules", enabled: false, accessible: false },
+        { id: "managedContent", enabled: true, accessible: true }
+      ]
+    })} />);
+    expect(html).toContain("Nothing is scheduled while this is off");
+    expect(html).toContain("Disabled");
+    expect(html).not.toContain("Manage integrations permission is required");
+  });
+
+  it("drops an integration that only exists to configure a switched-off module", () => {
+    const withManagedContent = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "integrations" })} />);
+    const withoutManagedContent = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "integrations",
+      modules: [
+        { id: "schedules", enabled: true, accessible: true },
+        { id: "managedContent", enabled: false, accessible: false }
+      ]
+    })} />);
+
+    expect(withManagedContent).toContain("Modrinth API key");
+    expect(withoutManagedContent).not.toContain("Modrinth API key");
+    // The unrelated integration in the same category is untouched.
+    expect(withoutManagedContent).toContain("Player heads");
   });
 
   it("renders console defaults and command-history state", () => {

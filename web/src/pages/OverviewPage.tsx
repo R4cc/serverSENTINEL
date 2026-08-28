@@ -20,7 +20,8 @@ import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
 import { modIconSource } from '../utils/appHelpers';
 import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs, samePlayerName } from '../utils/serverEvents';
-import { playerHeadSource, playerHeadVersion } from '../utils/playerHeads';
+import { playerHeadVersion } from '../utils/playerHeads';
+import { usePlayerHead } from '../components/PlayerHead';
 import { schedulesNeedingAttention } from '../features/schedules/scheduleHealth';
 
 const hiddenRecentEventsKey = 'serversentinel-hidden-recent-event-signatures';
@@ -202,11 +203,11 @@ export function OverviewSummary({
         label="World Size"
         icon={<Globe />}
         iconPlacement="leading"
-        value={loading || (storageLoading && worldSizeBytes === null)
-          ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
-          : worldSizeBytes === null
-            ? "Unavailable"
-            : <span className="summaryByteValue" title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
+        value={worldSizeBytes === null
+          ? loading || storageLoading
+            ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
+            : "Unavailable"
+          : <span className="summaryByteValue" title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
       />
       <MetricTile
         className="summaryTile storageRemainingTile"
@@ -214,11 +215,11 @@ export function OverviewSummary({
         icon={<HardDrive />}
         iconPlacement="leading"
         tone={storageLow ? "warning" : "neutral"}
-        value={loading || (storageLoading && storageAvailableBytes === null)
-          ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
-          : storageAvailableBytes === null
-            ? "Unavailable"
-            : (
+        value={storageAvailableBytes === null
+          ? loading || storageLoading
+            ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
+            : "Unavailable"
+          : (
               <span
                 className={`summaryByteValue summaryStorageValue${storageLow ? " summaryStorageValue--warning" : ""}`}
                 title={storageTitle}
@@ -326,13 +327,6 @@ export function ActivePlayersPanel({
 }
 
 /** Player head image state, falling back to the caller's own icon once a head fails to load. */
-function usePlayerHead(serverId: string, playerName: string | undefined, version: number, enabled: boolean) {
-  const source = playerName && serverId ? playerHeadSource(serverId, playerName, version) : "";
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [source, enabled]);
-  return { source, showHead: enabled && Boolean(source) && !failed, onHeadError: () => setFailed(true) };
-}
-
 function ActivePlayerRow({
   serverId,
   playerName,
