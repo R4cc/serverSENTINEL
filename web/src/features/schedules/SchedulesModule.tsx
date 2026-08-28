@@ -91,6 +91,9 @@ export function SchedulesModule(props: SchedulesModuleProps) {
       onRunNow={workspace.actions.runNow}
       onCancelRun={workspace.actions.cancelRun}
       onLoadRunLogs={workspace.actions.loadRunLogs}
+      loading={workspace.loading}
+      error={workspace.error}
+      onReload={() => { void props.refreshApp(); }}
       disabled={workspace.disabled}
       disabledReason={workspace.disabledReason}
     />

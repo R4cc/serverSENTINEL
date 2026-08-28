@@ -1,5 +1,5 @@
-import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import { Blocks, CalendarDays, Check, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
+import { FormEvent, KeyboardEvent, ReactNode, useId, useMemo, useState } from "react";
+import { Blocks, CalendarDays, Check, Copy, Info, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
 import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";
 import type { DisplayTimeZonePreference, ModuleAccessState, ModuleId, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
@@ -123,12 +123,34 @@ function ModuleGlyph({ id }: { id: ModuleId }) {
   return <Icon strokeWidth={1.8} aria-hidden="true" />;
 }
 
-function PreferenceRow({ title, description, children, className = "" }: { title: string; description: ReactNode; children: ReactNode; className?: string }) {
+function PreferenceDescriptionTooltip({ title, children }: { title: string; children: ReactNode }) {
+  const tooltipId = useId();
+  return (
+    <span className="roleInfoWrap settingsHubIntegrationInfo">
+      <Button
+        type="button"
+        variant="ghost"
+        iconOnly
+        className="roleInfoButton"
+        aria-label={`About ${title}`}
+        aria-describedby={tooltipId}
+      >
+        <Info className="buttonIcon" aria-hidden="true" />
+      </Button>
+      <span id={tooltipId} role="tooltip" className="roleTooltip fieldTooltip settingsHubIntegrationTooltip">{children}</span>
+    </span>
+  );
+}
+
+function PreferenceRow({ title, description, children, className = "", descriptionTooltip = false }: { title: string; description: ReactNode; children: ReactNode; className?: string; descriptionTooltip?: boolean }) {
   return (
     <div className={`settingsHubRow ${className}`.trim()}>
       <div className="settingsHubRowCopy">
-        <strong>{title}</strong>
-        <span>{description}</span>
+        <span className="settingsHubRowTitle">
+          <strong>{title}</strong>
+          {descriptionTooltip && <PreferenceDescriptionTooltip title={title}>{description}</PreferenceDescriptionTooltip>}
+        </span>
+        {!descriptionTooltip && <span>{description}</span>}
       </div>
       <div className="settingsHubControl">{children}</div>
     </div>
@@ -269,7 +291,7 @@ export function SettingsPage(props: SettingsPageProps) {
         <div className="settingsHubRows">
           {/* Modrinth exists to serve managed content; with that module off there is nothing to configure. */}
           {isModuleEnabled(props.modules, "managedContent") && (
-            <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow">
+            <PreferenceRow title="Modrinth API key" description="Enable mod search, compatibility checks, and installs." className="settingsHubIntegrationRow" descriptionTooltip>
               <ModrinthKeyForm onSubmit={props.onSubmitModrinthKey} configured={props.modrinthConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
             </PreferenceRow>
           )}
@@ -279,6 +301,7 @@ export function SettingsPage(props: SettingsPageProps) {
               title="MaxMind GeoLite2"
               description={<>Let the panel download the <a href="https://dev.maxmind.com/geoip/geolite2-free-geolocation-data" target="_blank" rel="noreferrer">GeoLite2 City</a> database it reads locally for Player insights. Player addresses are looked up against that local copy and are never sent to MaxMind or any other geolocation service.</>}
               className="settingsHubIntegrationRow"
+              descriptionTooltip
             >
               <MaxmindCredentialsForm onSubmit={props.onSubmitMaxmindCredentials} configured={props.geoIpConfigured} disabled={!props.canManageIntegrations} loading={props.loading} />
             </PreferenceRow>
@@ -287,6 +310,7 @@ export function SettingsPage(props: SettingsPageProps) {
             title="Player heads"
             description={<>Show player heads through <a href="https://www.mc-heads.net/" target="_blank" rel="noreferrer">MCHeads</a>. Usernames are shared only when enabled; cached heads refresh on a rolling daily schedule.</>}
             className="settingsHubIntegrationRow"
+            descriptionTooltip
           >
             <div className="settingsHubControlStack playerHeadsSettingsControl">
               <Toggle

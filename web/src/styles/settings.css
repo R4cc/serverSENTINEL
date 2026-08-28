@@ -339,6 +339,13 @@
   gap: 5px;
 }
 
+.settingsHubRowTitle {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .settingsHubRowCopy strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
@@ -461,11 +468,50 @@
 }
 
 .settingsHubIntegrationRow .settingsHubRowCopy {
+  position: relative;
   padding-top: 6px;
 }
 
 .settingsHubIntegrationRow .settingsHubRowCopy a {
   color: var(--accent);
+}
+
+.settingsHubIntegrationInfo {
+  position: static;
+}
+
+.settingsHubIntegrationInfo .roleInfoButton {
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.settingsHubIntegrationInfo .roleInfoButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settingsHubIntegrationTooltip {
+  left: 0;
+  width: min(340px, calc(100vw - 32px));
+  text-align: left;
+}
+
+.settingsHubRowCopy .settingsHubIntegrationInfo .settingsHubIntegrationTooltip {
+  transform: scale(0.94);
+  transform-origin: bottom left;
+}
+
+.settingsHubIntegrationInfo:hover .settingsHubIntegrationTooltip,
+.settingsHubIntegrationInfo:focus-within .settingsHubIntegrationTooltip {
+  pointer-events: auto;
+}
+
+.settingsHubRowCopy .settingsHubIntegrationInfo:hover .settingsHubIntegrationTooltip,
+.settingsHubRowCopy .settingsHubIntegrationInfo:focus-within .settingsHubIntegrationTooltip {
+  transform: scale(1);
 }
 
 .settingsHubIntegrationRow .settingsHubControl {
@@ -563,12 +609,6 @@
 
 .settingsHubUsers .usersTable tbody tr {
   background: var(--surface-raised);
-  transition: background var(--control-transition);
-}
-
-.settingsHubUsers .usersTable tbody tr:hover,
-.settingsHubUsers .usersTable tbody tr:focus-within {
-  background: color-mix(in srgb, var(--surface-muted) 38%, var(--surface-raised));
 }
 
 /* A long username truncates rather than stretching the row past the panel; the

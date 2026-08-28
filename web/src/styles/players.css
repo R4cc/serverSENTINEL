@@ -686,15 +686,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   min-width: 0;
 }
 
-/* Tables. Both share the panel's row rhythm; only the numeric alignment and the latency tone are
-   particular to this workspace. */
-.playerRegionTable,
-.playerRosterTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--type-body-size);
-}
-
 /* Sorting changes which eight rows are visible. Fixed layout keeps those row contents from
    renegotiating the five column widths every time a heading is pressed. */
 .playerRosterTable {
@@ -713,59 +704,8 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   height: 56px;
 }
 
-.playerRegionTable th,
-.playerRegionTable td,
-.playerRosterTable th,
-.playerRosterTable td {
-  text-align: left;
-  padding: var(--space-2) var(--space-2);
-  border-bottom: 1px solid var(--border-row);
-  vertical-align: middle;
-}
-
-.playerRegionTable thead th,
-.playerRosterTable thead th {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.playerRosterTable .uiSortHeaderButton {
-  width: 100%;
-  min-height: var(--control-height-compact);
-  justify-content: flex-start;
-  padding: 0;
-}
-
 .playerRosterTable th.playerNumericColumn .uiSortHeaderButton {
   justify-content: flex-end;
-}
-
-.playerRosterTable th[aria-sort="ascending"] .uiSortHeaderButton,
-.playerRosterTable th[aria-sort="descending"] .uiSortHeaderButton {
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  color: var(--text);
-}
-
-.playerRegionTable tbody tr,
-.playerRosterTable tbody tr {
-  transition: background var(--motion-duration-fast) var(--motion-ease-standard);
-}
-
-@media (hover: hover) {
-  .playerRegionTable tbody tr:hover,
-  .playerRosterTable tbody tr:hover {
-    background: color-mix(in srgb, var(--accent) 5%, transparent);
-  }
-}
-
-.playerRegionTable tbody tr:last-child th,
-.playerRegionTable tbody tr:last-child td,
-.playerRosterTable tbody tr:last-child th,
-.playerRosterTable tbody tr:last-child td {
-  border-bottom: none;
 }
 
 .playerNumericColumn {

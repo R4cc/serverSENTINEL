@@ -4,7 +4,7 @@ import { durationSince, errorLogFields, logDebug, logError, logInfo } from "../l
 import { apiErrorResponse, throwHttp } from "../http/errors.js";
 import { modChangeRateLimit } from "../http/rateLimits.js";
 import { multipartUpload } from "../http/multipart.js";
-import { optionalCompatibilityFilter, optionalReleaseChannel, validateModrinthProjectId } from "../http/validation.js";
+import { optionalBoundedInteger, optionalCompatibilityFilter, optionalReleaseChannel, validateModrinthProjectId } from "../http/validation.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
 import { asArray, requiredString } from "../storage/valueValidation.js";
 import { safeInstalledModFilename } from "../core.js";
@@ -15,6 +15,7 @@ import { recordOperation } from "../servers/lifecycle.js";
 import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { searchModrinth } from "../modrinth/searchCache.js";
+import { modrinthSearchPageInfo } from "../modrinth/pagination.js";
 import { executeSafeUpdatePlan } from "../modrinth/updatePlan.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, unknownCompatibility } from "../modrinth/compatibility.js";
 import { fetchModrinthIcon, modrinthIconProxyUrl } from "../mods/icons.js";
@@ -288,16 +289,9 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
   try {
     const url = new URL("https://api.modrinth.com/v2/search");
     url.searchParams.set("query", query);
-    const parsedLimit = request.query.limit ? parseInt(request.query.limit, 10) : 20;
-    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 20) : 20;
+    const limit = optionalBoundedInteger(request.query.limit, "Limit", 1, 20) ?? 20;
     url.searchParams.set("limit", String(limit));
-    let offset = 0;
-    if (request.query.offset) {
-      const parsedOffset = parseInt(request.query.offset, 10);
-      if (Number.isFinite(parsedOffset) && parsedOffset > 0) {
-        offset = parsedOffset;
-      }
-    }
+    const offset = optionalBoundedInteger(request.query.offset, "Offset", 0, Number.MAX_SAFE_INTEGER) ?? 0;
     url.searchParams.set("offset", String(offset));
     url.searchParams.set("facets", JSON.stringify(modrinthSearchFacets(contentDefinition.loaders, minecraftVersion, compatibilityFilter ?? "compatible", contentDefinition.definition.modrinthProjectType)));
     const searchResponse = await searchModrinth(url.toString());
@@ -308,7 +302,8 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
       const serverMatches = modrinthServerSideSupported(hit.server_side);
       return { loaderMatches, versionMatches, serverMatches, compatible: loaderMatches && versionMatches && serverMatches };
     };
-    const searchableHits = (body.hits ?? []).filter((hit) => {
+    const rawHits = body.hits ?? [];
+    const searchableHits = rawHits.filter((hit) => {
       const projectTypes = hit.all_project_types ?? (hit.project_type ? [hit.project_type] : []);
       return projectTypes.length === 0 || projectTypes.includes(contentDefinition.definition.modrinthProjectType);
     });
@@ -373,7 +368,13 @@ app.get<{ Querystring: { query?: string; serverId?: string; channel?: ReleaseCha
       };
     });
     logInfo({ ...serverLogFields(server), resultCount: hits.length, cacheStatus: searchResponse.cacheStatus, durationMs: durationSince(startedAt), action: "modrinth_search", status: hits.length > 0 ? "projects_found" : "no_project_found" }, "Modrinth search completed");
-    return { ...body, hits, status: hits.length > 0 ? "projects_found" : "no_project_found" };
+    const pageInfo = modrinthSearchPageInfo(offset, rawHits.length, body.total_hits ?? offset + rawHits.length);
+    return {
+      ...body,
+      hits,
+      ...pageInfo,
+      status: hits.length > 0 ? "projects_found" : "no_project_found"
+    };
   } catch (error) {
     logError({ ...serverLogFields(server), durationMs: durationSince(startedAt), action: "modrinth_search", status: "failed", ...errorLogFields(error) }, "Modrinth search failed");
     throw error;

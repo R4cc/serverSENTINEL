@@ -111,7 +111,7 @@ export class OperationsRepository {
       return this.storage.connection.prepare<[string, string, number], OperationRow>(`
         SELECT * FROM operations
         WHERE server_id = ? AND status = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ?
       `).all(filters.serverId, filters.status, limit).map(operationFromRow);
     }
@@ -119,7 +119,7 @@ export class OperationsRepository {
       return this.storage.connection.prepare<[string, number], OperationRow>(`
         SELECT * FROM operations
         WHERE server_id = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ?
       `).all(filters.serverId, limit).map(operationFromRow);
     }
@@ -127,11 +127,11 @@ export class OperationsRepository {
       return this.storage.connection.prepare<[string, number], OperationRow>(`
         SELECT * FROM operations
         WHERE status = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ?
       `).all(filters.status, limit).map(operationFromRow);
     }
-    return this.storage.connection.prepare<[number], OperationRow>("SELECT * FROM operations ORDER BY created_at DESC LIMIT ?")
+    return this.storage.connection.prepare<[number], OperationRow>("SELECT * FROM operations ORDER BY created_at DESC, id DESC LIMIT ?")
       .all(limit)
       .map(operationFromRow);
   }
@@ -141,7 +141,7 @@ export class OperationsRepository {
     return this.storage.connection.prepare<[string, number], OperationRow>(`
       SELECT * FROM operations
       WHERE server_id = ? AND status IN ('queued', 'running')
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT ?
     `).all(serverId, safeLimit).map(operationFromRow);
   }

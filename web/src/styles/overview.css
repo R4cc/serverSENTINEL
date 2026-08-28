@@ -1692,21 +1692,12 @@ button.overviewCardRow:focus-visible {
 }
 
 .serverEventsTableViewport {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-inline: contain;
-  contain: inline-size;
 }
 
 .serverEventsTable {
-  width: 100%;
   min-width: 760px;
   table-layout: fixed;
-  border-collapse: collapse;
-  font-size: var(--type-body-size);
 }
 
 .serverEventsTable thead th:nth-child(1) { width: 30%; }
@@ -1714,45 +1705,12 @@ button.overviewCardRow:focus-visible {
 .serverEventsTable thead th:nth-child(3) { width: 35%; }
 .serverEventsTable thead th:nth-child(4) { width: 19%; }
 
-.serverEventsTable th,
-.serverEventsTable td {
-  min-width: 0;
-  padding: var(--space-2);
-  border-bottom: var(--border-subtle) solid var(--border-row);
-  vertical-align: middle;
-  text-align: left;
-}
-
-.serverEventsTable thead th {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.serverEventsTable thead .uiSortHeaderButton {
-  width: 100%;
-}
-
 .serverEventsTable tbody tr {
   height: 58px;
-  transition: background var(--motion-duration-fast) var(--motion-ease-standard);
-}
-
-@media (hover: hover) {
-  .serverEventsTable tbody tr:hover {
-    background: color-mix(in srgb, var(--accent) 5%, transparent);
-  }
 }
 
 .serverEventsTable tbody tr.error {
   background: color-mix(in srgb, var(--sentinel-danger) 3.5%, transparent);
-}
-
-.serverEventsTable tbody tr:last-child th,
-.serverEventsTable tbody tr:last-child td {
-  border-bottom: none;
 }
 
 .serverEventIdentity {

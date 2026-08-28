@@ -361,7 +361,7 @@ describe("recent event grouping", () => {
     expect(html).toContain('class="srOnly">9 occurrences');
     expect(html).toContain("×9");
     expect(html).toContain("<h2>Server events</h2>");
-    expect(html).toContain('class="serverEventsTable"');
+    expect(html).toContain('class="serverEventsTable uiDataTable"');
     expect(html).toContain("Purpose / details");
     expect(html).toContain("Player activity");
     expect(html).toContain("Automation runs");

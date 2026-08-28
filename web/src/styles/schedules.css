@@ -90,26 +90,6 @@
   padding: var(--space-2) var(--space-3);
   border-bottom: var(--border-subtle) solid var(--border-row);
   background: var(--surface-muted);
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
-
-.scheduleTableHeader button {
-  width: 100%;
-  min-height: var(--control-height-compact);
-  justify-content: flex-start;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding-inline: var(--space-2);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-align: left;
-  text-transform: inherit;
 }
 
 .scheduleTableBody {
@@ -119,6 +99,12 @@
 }
 
 .scheduleTableBody:has(.scheduleNoRows) {
+  display: grid;
+}
+
+.scheduleNoRowsRow,
+.scheduleNoRowsRow > [role="cell"] {
+  min-width: 0;
   display: grid;
 }
 

@@ -294,17 +294,6 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
-.usersTable th,
-.fileTableHead button,
-.fileTableHead label,
-.fileTableHead span {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .usersTable td,
 .fileTableRow > span {
   color: var(--text-muted);

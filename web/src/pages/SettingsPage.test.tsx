@@ -121,13 +121,25 @@ describe("SettingsPage", () => {
   });
 
   it("keeps integration management disabled without permission", () => {
-    const html = renderToStaticMarkup(<SettingsPage {...props({ initialCategory: "integrations" })} />);
+    const html = renderToStaticMarkup(<SettingsPage {...props({
+      initialCategory: "integrations",
+      modules: [
+        { id: "schedules", enabled: true, accessible: true },
+        { id: "managedContent", enabled: true, accessible: true },
+        { id: "playerInsights", enabled: true, accessible: true }
+      ]
+    })} />);
     expect(html).toContain("Modrinth API key");
     expect(html).toContain("Manage integrations permission is required");
     expect(html).toContain("Player heads");
     expect(html).toContain("MCHeads");
     expect(html).toContain("cached heads refresh on a rolling daily schedule");
     expect(html).not.toContain("12 hours");
+    expect((html.match(/class="roleInfoWrap settingsHubIntegrationInfo"/g) ?? [])).toHaveLength(3);
+    expect((html.match(/role="tooltip"/g) ?? [])).toHaveLength(3);
+    expect(html).toContain('aria-label="About Modrinth API key"');
+    expect(html).toContain('aria-label="About MaxMind GeoLite2"');
+    expect(html).toContain('aria-label="About Player heads"');
     expect(html).toContain("0 cached heads · 0 B");
     expect(html).toContain('aria-label="Show player heads on Overview"');
   });

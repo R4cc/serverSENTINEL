@@ -48,12 +48,14 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     return context.publicSchedule(server.id, createdSchedule);
   });
 
-  app.put<{ Params: { id: string; scheduleId: string }; Body: ScheduleBody }>("/api/servers/:id/schedules/:scheduleId", context.destructiveRateLimit, async (request) => {
+  app.put<{ Params: { id: string; scheduleId: string }; Body: ScheduleBody }>("/api/servers/:id/schedules/:scheduleId", context.destructiveRateLimit, async (request, reply) => {
     await context.requireRequestPermission(request, "schedules.manage");
     const server = await context.getServer(request.params.id);
     const scheduleId = validateScheduleId(request.params.scheduleId);
     const existing = server.schedules?.find((candidate) => candidate.id === scheduleId);
-    if (!existing) throw new Error("Schedule not found");
+    if (!existing) {
+      return reply.code(404).send(apiErrorResponse("SCHEDULE_NOT_FOUND", "Schedule not found"));
+    }
     const updatedSchedule = context.parseSchedule(request.body, existing);
     await withServerMutation(server.id, async () => { context.updateSchedule(server.id, updatedSchedule, updatedSchedule.updatedAt); });
     context.logInfo({ ...context.serverLogFields(server), scheduleId: updatedSchedule.id, enabled: updatedSchedule.enabled, action: "update_schedule" }, "Schedule updated");
@@ -66,6 +68,10 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     await context.requireRequestPermission(request, "schedules.manage");
     const server = await context.getServer(request.params.id);
     const scheduleId = validateScheduleId(request.params.scheduleId);
+    const existing = server.schedules?.find((candidate) => candidate.id === scheduleId);
+    if (!existing) {
+      return reply.code(404).send(apiErrorResponse("SCHEDULE_NOT_FOUND", "Schedule not found"));
+    }
     // Deleting the schedule takes away the only control that could have stopped its active run, so
     // the run is cancelled first and the delete is refused outright when it cannot be.
     if (!context.cancelActiveScheduleRunsForSchedule(server.id, scheduleId)) {

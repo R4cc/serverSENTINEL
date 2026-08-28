@@ -1,13 +1,14 @@
 import type { FileEntry } from "../../types";
 import { fileDisplayType } from "../../utils/files";
+import { nextTableSort, type SimpleTableSort } from "../../utils/table";
 
-type FileSortColumn = "name" | "modifiedAt" | "type" | "size";
-type FileSort = { id: FileSortColumn; desc: boolean };
+export type FileSortColumn = "name" | "modifiedAt" | "type" | "size";
+type FileSort = SimpleTableSort<FileSortColumn>;
 
 export const defaultFileSort: FileSort = { id: "name", desc: false };
 
 export function nextFileSort(current: FileSort, id: FileSortColumn): FileSort {
-  return current.id === id ? { id, desc: !current.desc } : { id, desc: false };
+  return nextTableSort(current, id);
 }
 
 export function sortFileEntries(entries: FileEntry[], sort: FileSort): FileEntry[] {

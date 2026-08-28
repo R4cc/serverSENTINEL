@@ -30,7 +30,8 @@ import { groupNearbyRepeatedEvents, playerEventSubject, playerReconnectWindowMs,
 import { playerHeadVersion } from '../utils/playerHeads';
 import { usePlayerHead } from '../components/PlayerHead';
 import { schedulesNeedingAttention } from '../features/schedules/scheduleHealth';
-import { SortHeaderButton, headerAriaSort } from '../components/TableControls';
+import { SortHeaderButton, TablePagination, headerAriaSort } from '../components/TableControls';
+import { InlineState } from '../components/InlineState';
 
 const activePlayerPreviewLimit = 8;
 const overviewSupportCardSlotCount = 4;
@@ -1002,9 +1003,9 @@ export function RecentEventsPanel({
             ))}
           </div>
         ) : rows.length ? (
-          <div className="serverEventsTableViewport">
-            <table className="serverEventsTable">
-              <thead>
+          <div className="serverEventsTableViewport uiTableViewport">
+            <table className="serverEventsTable uiDataTable" aria-label="Server events">
+              <thead className="uiTableHeader">
                 <tr>
                   {table.getHeaderGroups()[0]?.headers.map((header) => (
                     <th key={header.id} scope="col" aria-sort={headerAriaSort(header)}>
@@ -1025,7 +1026,7 @@ export function RecentEventsPanel({
                   const occurrenceCount = group.events.length > 1 && !uncountedEventKinds.has(group.kind) ? group.events.length : 0;
                   const category = serverEventCategory(group.events[0]);
                   return (
-                    <tr className={`serverEventRow ${group.severity} eventKind--${group.kind}`} key={group.id}>
+                    <tr className={`serverEventRow ${group.severity} eventKind--${group.kind} uiTableRow`} key={group.id}>
                       <th scope="row">
                         <span className="serverEventIdentity">
                           <RecentEventMarker
@@ -1060,24 +1061,29 @@ export function RecentEventsPanel({
               </tbody>
             </table>
           </div>
+        ) : eventsStatus === "unavailable" ? (
+          <InlineState
+            tone="warning"
+            title="Events are unavailable"
+            message="Open the console to inspect raw logs, or try again after the server writes new output."
+            actionLabel="View full log"
+            onAction={onOpenConsole}
+          />
         ) : (
           <EmptyState
             compact
             className="eventEmpty"
-            title={filter !== "all" && groupedEvents.length > 0 ? `No ${serverEventFilters.find((option) => option.id === filter)?.label.toLowerCase()} yet` : eventsStatus === "unavailable" ? "Events are unavailable" : "No server events yet"}
-            message={filter !== "all" && groupedEvents.length > 0 ? "Choose another filter to view the rest of the event history." : eventsStatus === "unavailable" ? "Open the console to inspect raw logs, or try again after the server writes new output." : undefined}
+            title={filter !== "all" && groupedEvents.length > 0 ? `No ${serverEventFilters.find((option) => option.id === filter)?.label.toLowerCase()} yet` : "No server events yet"}
+            message={filter !== "all" && groupedEvents.length > 0 ? "Choose another filter to view the rest of the event history." : undefined}
           />
         )}
-        {!loading && rows.length > 0 && (
-          <div className="serverEventsFooter">
-            <span>Showing {currentPage * serverEventsPageSize + 1}–{currentPage * serverEventsPageSize + pageRows.length} of {rows.length} events</span>
-            <span className="serverEventsPager">
-              <Button variant="ghost" compact disabled={currentPage === 0} onClick={() => setPage(Math.max(0, currentPage - 1))}>Previous</Button>
-              <span>Page {currentPage + 1} of {pages}</span>
-              <Button variant="ghost" compact disabled={currentPage >= pages - 1} onClick={() => setPage(Math.min(pages - 1, currentPage + 1))}>Next</Button>
-            </span>
-          </div>
-        )}
+        {!loading && <TablePagination
+          pageIndex={currentPage}
+          pageSize={serverEventsPageSize}
+          totalItems={rows.length}
+          itemLabel="events"
+          onPageChange={setPage}
+        />}
       </div>
     </OverviewCard>
   );

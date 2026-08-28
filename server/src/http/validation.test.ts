@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { validateRuntimeActionReason } from "./validation.js";
+import { optionalBoundedInteger, validateRuntimeActionReason } from "./validation.js";
+
+describe("optionalBoundedInteger", () => {
+  it("accepts an omitted or bounded whole-number query value", () => {
+    expect(optionalBoundedInteger(undefined, "Limit", 1, 250)).toBeUndefined();
+    expect(optionalBoundedInteger("25", "Limit", 1, 250)).toBe(25);
+    expect(optionalBoundedInteger("0", "Offset", 0, 1_000)).toBe(0);
+  });
+
+  it("rejects partial, fractional, signed, and out-of-range values", () => {
+    for (const value of ["17garbage", "1.5", "-1", "+2", "251"]) {
+      expect(() => optionalBoundedInteger(value, "Limit", 1, 250)).toThrow("Limit must be a whole number between 1 and 250");
+    }
+  });
+});
 
 describe("validateRuntimeActionReason", () => {
   it("trims and accepts a traceable stop or restart reason", () => {

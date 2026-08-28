@@ -121,6 +121,19 @@ export function validateDockerImageName(image: unknown) {
   return value;
 }
 
+export function optionalBoundedInteger(value: unknown, fieldName: string, min: number, max: number) {
+  if (value === undefined) return undefined;
+  const text = typeof value === "number" ? String(value) : typeof value === "string" ? value : "";
+  if (!/^\d+$/.test(text)) {
+    badRequest(`${fieldName} must be a whole number between ${min} and ${max}`);
+  }
+  const parsed = Number(text);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    badRequest(`${fieldName} must be a whole number between ${min} and ${max}`);
+  }
+  return parsed;
+}
+
 export function validateRuntimeActionReason(reason: unknown) {
   if (typeof reason !== "string") badRequest("A reason is required to stop or restart a server");
   const value = reason.trim();

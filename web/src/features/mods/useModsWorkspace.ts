@@ -13,6 +13,13 @@ import { managedContentTerminology } from "./contentTerminology";
 
 const modSearchDebounceMs = 650;
 
+type ModrinthSearchPage = {
+  hits: ModrinthHit[];
+  total_hits: number;
+  nextOffset: number;
+  hasMore: boolean;
+};
+
 function modrinthSearchErrorMessage(error: unknown) {
   if (error instanceof ApiError && error.status === 424 && /^Request failed with 424$/i.test(error.message)) {
     return "Modrinth is temporarily unavailable. Try the search again in a moment.";
@@ -184,6 +191,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [searchRequestVersion, setSearchRequestVersion] = useState(0);
   const [searchResults, setSearchResults] = useState<ModrinthHit[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
+  const [searchNextOffset, setSearchNextOffset] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(false);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -332,6 +341,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setSearchRequestVersion((current) => current + 1);
     setSearchResults([]);
     setSearchTotal(0);
+    setSearchNextOffset(0);
+    setSearchHasMore(false);
     setSearchError("");
     setSearching(false);
     setLoadingMore(false);
@@ -449,6 +460,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         const results = demoSearchPage(trimmedQuery, showIncompatibleResults);
         setSearchResults(results.slice(0, 20));
         setSearchTotal(results.length);
+        setSearchNextOffset(Math.min(20, results.length));
+        setSearchHasMore(results.length > 20);
         setSearching(false);
       }, 250);
       return () => { setSearching(false); window.clearTimeout(timeout); };
@@ -458,13 +471,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     searchAbortControllerRef.current?.abort();
     searchAbortControllerRef.current = abortController;
     setSearching(true);
-    void api<{ hits: ModrinthHit[]; total_hits: number }>(
+    void api<ModrinthSearchPage>(
       buildModrinthSearchPath({ query: trimmedQuery, serverId: activeServer.id, showIncompatibleResults }),
       { signal: abortController.signal }
     ).then((result) => {
       if (!cancelled) {
         setSearchResults(result.hits);
         setSearchTotal(result.total_hits ?? 0);
+        setSearchNextOffset(result.nextOffset ?? result.hits.length);
+        setSearchHasMore(result.hasMore ?? result.hits.length < (result.total_hits ?? 0));
       }
     }).catch((error) => {
       if (cancelled || abortController.signal.aborted) return;
@@ -480,8 +495,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function loadMoreMods() {
     if (loadMoreInFlightRef.current || loadingMore || searching || !activeServer || installState) return;
-    const offset = searchResults.length;
-    if (offset >= searchTotal) return;
+    const offset = searchNextOffset;
+    if (!searchHasMore) return;
     loadMoreInFlightRef.current = true;
     setLoadingMore(true);
     const searchQuery = query.trim();
@@ -489,6 +504,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       window.setTimeout(() => {
         const results = demoSearchPage(searchQuery, showIncompatibleResults);
         setSearchResults((current) => [...current, ...results.slice(offset, offset + 20)]);
+        const nextOffset = Math.min(offset + 20, results.length);
+        setSearchNextOffset(nextOffset);
+        setSearchHasMore(nextOffset < results.length);
         loadMoreInFlightRef.current = false;
         setLoadingMore(false);
       }, 250);
@@ -497,9 +515,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     try {
       const serverId = activeServer.id;
       const compatibility = showIncompatibleResults;
-      const result = await api<{ hits: ModrinthHit[]; total_hits: number }>(buildModrinthSearchPath({ query: searchQuery, serverId, showIncompatibleResults: compatibility, offset, limit: 20 }));
+      const result = await api<ModrinthSearchPage>(buildModrinthSearchPath({ query: searchQuery, serverId, showIncompatibleResults: compatibility, offset, limit: 20 }));
       if (activeServerIdRef.current === serverId && query.trim() === searchQuery && showIncompatibleResults === compatibility && !installReviewOpenRef.current) {
-        setSearchResults((current) => [...current, ...result.hits]);
+        setSearchResults((current) => {
+          const seen = new Set(current.map((hit) => hit.project_id));
+          return [...current, ...result.hits.filter((hit) => !seen.has(hit.project_id))];
+        });
+        setSearchNextOffset(result.nextOffset ?? offset + result.hits.length);
+        setSearchHasMore(result.hasMore ?? false);
       }
     } catch (error) {
       if (handleStaleSession(error)) return;
@@ -513,11 +536,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   useEffect(() => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !loadingMore && !searching && searchResults.length < searchTotal) void loadMoreMods();
+      if (entries[0].isIntersecting && !loadingMore && !searching && searchHasMore) void loadMoreMods();
     }, { rootMargin: "200px" });
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [searchResults.length, searchTotal, loadingMore, searching, query, showIncompatibleResults, Boolean(installState)]);
+  }, [searchHasMore, searchNextOffset, loadingMore, searching, query, showIncompatibleResults, Boolean(installState)]);
 
   async function loadInstallVersions(mod: ModrinthHit, channel: ReleaseChannel, options: { useFallbackChannel?: boolean } = {}) {
     if (!activeServer) return;

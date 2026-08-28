@@ -1,7 +1,7 @@
 import type { FastifyInstance, RouteShorthandOptions } from "fastify";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
-import { apiErrorResponse } from "../http/errors.js";
-import { validateOperationId, validateServerId } from "../http/validation.js";
+import { apiErrorResponse, badRequest } from "../http/errors.js";
+import { optionalBoundedInteger, validateOperationId, validateServerId } from "../http/validation.js";
 import type { OperationRecord, OperationStatus, Permission, StoredUser } from "../types.js";
 
 type OperationListFilters = {
@@ -46,21 +46,21 @@ function optionalOperationStatus(value: unknown): OperationStatus | undefined {
   if (value === "queued" || value === "running" || value === "succeeded" || value === "failed" || value === "cancelled") {
     return value;
   }
-  throw new Error("Operation status must be queued, running, succeeded, failed, or cancelled");
+  badRequest("Operation status must be queued, running, succeeded, failed, or cancelled");
 }
 
 export function registerOperationsRoutes(app: FastifyInstance, context: OperationsRoutesContext) {
   app.get<{ Querystring: { serverId?: string; status?: string; limit?: string } }>("/api/operations", async (request) => {
     const user = await context.requireRequestPermission(request, "servers.view");
     const status = optionalOperationStatus(request.query.status);
-    const parsedLimit = request.query.limit ? Number.parseInt(request.query.limit, 10) : undefined;
+    const limit = optionalBoundedInteger(request.query.limit, "Limit", 1, 250);
     const serverId = request.query.serverId ? validateServerId(request.query.serverId) : undefined;
     if (serverId) await context.assertServerExists(serverId);
     return {
       operations: context.operations.list({
         serverId,
         status,
-        limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined
+        limit
       }).map((operation) => withoutForeignArtifactLocation(operation, user))
     };
   });
