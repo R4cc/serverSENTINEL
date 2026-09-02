@@ -1,4 +1,3 @@
-import { estimatedLatencyMsForDistanceKm } from "@serversentinel/contracts";
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadDemoFixtures } from "../../demoRuntime";
 import { demoPlayerInsights } from "./playersDemoFixtures";
@@ -19,12 +18,10 @@ describe("demo player insight locations", () => {
     expect(insights.summary.countries).toBe(countries.size);
   });
 
-  it("derives fixture latency from each location's geographic distance", () => {
+  it("keeps demo ping measured and independent of geographic distance", () => {
     const insights = demoPlayerInsights("demo-server", true, "24h");
 
-    expect(insights.players.every((player) => (
-      player.distanceKm !== undefined
-      && player.estimatedLatencyMs === estimatedLatencyMsForDistanceKm(player.distanceKm)
-    ))).toBe(true);
+    expect(insights.players.filter((player) => player.online).every((player) => player.distanceKm !== undefined && player.pingMs !== undefined)).toBe(true);
+    expect(insights.players.filter((player) => !player.online).every((player) => player.pingMs === undefined)).toBe(true);
   });
 });

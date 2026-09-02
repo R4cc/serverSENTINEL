@@ -7,7 +7,7 @@ import { playerHeadVersion } from "../../utils/playerHeads";
 import {
   accuracyRadiusToMapUnits,
   clampPlayerMapPoint,
-  formatEstimatedLatency,
+  formatPing,
   formatLocation,
   latencyTone,
   playerMapArc,
@@ -56,7 +56,7 @@ const landPath = buildLandPath();
 function markTitle(mark: PlayerMapMark) {
   const players = mark.players.length === 1 ? mark.players[0] : `${mark.players.length} players`;
   const accuracy = mark.accuracyRadiusKm ? `, accurate to about ${mark.accuracyRadiusKm} km` : "";
-  const latency = mark.estimatedLatencyMs === undefined ? "" : ` · ~${mark.estimatedLatencyMs} ms estimated`;
+  const latency = mark.pingMs === undefined ? "" : ` · ${mark.pingMs} ms ping`;
   return `${players} near ${mark.label}${accuracy}${latency}`;
 }
 
@@ -224,7 +224,7 @@ export function PlayerGeographyMap({
         return {
           ...plotted,
           arc: playerMapArc(server, plotted.point),
-          tone: latencyTone(plotted.mark.estimatedLatencyMs),
+          tone: latencyTone(plotted.mark.pingMs),
           label: {
             x: Math.min(mapWidth - horizontalLabelInset, Math.max(horizontalLabelInset, label.x)),
             y: label.y
@@ -234,7 +234,7 @@ export function PlayerGeographyMap({
     : [];
   const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 4 : renderedWidth < 900 ? 10 : 14;
   const routeLabels = routes
-    .filter((route) => route.mark.estimatedLatencyMs !== undefined && route.arc.distance * scale >= 56)
+    .filter((route) => route.mark.pingMs !== undefined && route.arc.distance * scale >= 56)
     .sort((left, right) => right.arc.distance - left.arc.distance)
     .reduce<typeof routes>((accepted, route) => {
       if (accepted.length >= labelLimit) return accepted;
@@ -307,7 +307,7 @@ export function PlayerGeographyMap({
               className={`playerMapRoute playerMapRoute--${tone} ${hoveredMarkId === mark.id ? "playerMapRoute--active" : ""}`.trim()}
               d={arc.path}
               data-player-count={mark.entries.length}
-              data-estimated-ping={mark.estimatedLatencyMs}
+              data-ping={mark.pingMs}
             />
           ))}
           {server && !serverMarkId && (
@@ -336,7 +336,7 @@ export function PlayerGeographyMap({
               style={{ left: `${(label.x / mapWidth) * 100}%`, top: `${(label.y / mapHeight) * 100}%` }}
               aria-hidden="true"
             >
-              {formatEstimatedLatency(mark.estimatedLatencyMs)}
+              {formatPing(mark.pingMs)}
             </span>
           ))}
 
@@ -366,7 +366,7 @@ export function PlayerGeographyMap({
               top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
             };
             const markerLabel = clustered
-              ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average estimated ping ${formatEstimatedLatency(mark.estimatedLatencyMs)}.`
+              ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average ping ${formatPing(mark.pingMs)}.`
               : markTitle(mark);
             return (
               <KeepScale
@@ -440,7 +440,7 @@ export function PlayerGeographyMap({
                   >
                     <span className="playerMapClusterPopupHeader">
                       <strong>{mark.label}</strong>
-                      <span>{mark.entries.length} players · <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.estimatedLatencyMs)} avg.</b></span>
+                      <span>{mark.entries.length} players · <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.pingMs)}`}>{formatPing(mark.pingMs)} avg.</b></span>
                     </span>
                     <span className="playerMapClusterList">
                       {mark.entries.map((entry) => (
@@ -448,7 +448,7 @@ export function PlayerGeographyMap({
                           <MapPlayerAvatar entry={entry} version={headVersion} enabled={playerHeadsEnabled} compact />
                           <strong>{entry.player}</strong>
                           <span>{formatLocation(entry.location)}</span>
-                          <b className={`playerMapPingValue playerMapPingValue--${latencyTone(entry.estimatedLatencyMs)}`}>{formatEstimatedLatency(entry.estimatedLatencyMs)}</b>
+                          <b className={`playerMapPingValue playerMapPingValue--${latencyTone(entry.pingMs)}`}>{formatPing(entry.pingMs)}</b>
                         </span>
                       ))}
                     </span>
@@ -471,7 +471,7 @@ export function PlayerGeographyMap({
                       <span className="playerMapClusterRow playerMapSinglePlayerRow">
                         <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} compact />
                         <span>{formatLocation(mark.entries[0].location)}</span>
-                        <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.entries[0].estimatedLatencyMs)}</b>
+                        <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].pingMs)}`}>{formatPing(mark.entries[0].pingMs)}</b>
                       </span>
                     </span>
                   </span>

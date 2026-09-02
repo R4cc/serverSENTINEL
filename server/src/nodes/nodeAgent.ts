@@ -59,6 +59,7 @@ import { parseServerProperties, serializeServerProperties } from "../runtime/ser
 import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
+import { readDockerPlayerConnections } from "../players/dockerPlayerConnections.js";
 import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizeNodeUpdateFailure, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
 import type { NodeCancelMessage, NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, NodeTransferCancelMessage, NodeTransferFinishMessage, NodeTransferResultMessage, NodeTransferStartMessage, PanelWelcome, ServerLogCursor, ServerObservationItem, ServerObservationResponse, ServerObservationResultItem, ServerObservationSection } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
@@ -1703,6 +1704,7 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
   }
   if (command === "server.inspect") return runtimeStatus(server);
   if (command === "server.players.read") return playerObservation(server);
+  if (command === "server.connections.read") return readDockerPlayerConnections(server);
   if (command === "server.start") {
     await ensureContainer(server);
     await requestContainerLifecycleAction(server, "start", signal);

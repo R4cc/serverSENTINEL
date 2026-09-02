@@ -104,6 +104,27 @@ describe("player geography collection", () => {
     expect(records).toEqual([]);
   });
 
+  it("shares the parsed login endpoint with the in-memory ping tracker even without a geography database", async () => {
+    const source = fakeLogSource();
+    const { repository } = recordingRepository();
+    const observeLogin = vi.fn();
+    const collector = new PlayerGeoCollector({
+      observeLogs: (observer) => source.observeLogs(observer),
+      repository,
+      cityReader: () => undefined,
+      observeLogin
+    });
+    collector.start();
+    await source.emit(logs);
+
+    expect(observeLogin).toHaveBeenCalledTimes(1);
+    expect(observeLogin).toHaveBeenCalledWith(server, expect.objectContaining({
+      player: "SullyTheSnak",
+      address: "203.0.113.5",
+      port: 51234
+    }));
+  });
+
   it("skips a player whose address has no public location", async () => {
     const source = fakeLogSource();
     const { records, repository } = recordingRepository();

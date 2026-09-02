@@ -1,5 +1,4 @@
 import {
-  estimatedLatencyMsForDistanceKm,
   geoLite2Attribution,
   greatCircleDistanceKm,
   quietestWindow
@@ -45,8 +44,7 @@ function demoPlace(location: DemoLocation) {
   const distanceKm = greatCircleDistanceKm(demoServerCoordinates, location);
   return {
     location,
-    distanceKm,
-    estimatedLatencyMs: estimatedLatencyMsForDistanceKm(distanceKm)!
+    distanceKm
   };
 }
 
@@ -111,8 +109,9 @@ function demoLatencySeries(range: PlayerInsightsRange, now: number, online: numb
     return {
       at: Math.round(at),
       players: online,
-      medianEstimatedLatencyMs: Math.max(12, Math.round(34 + wave)),
-      p95EstimatedLatencyMs: Math.max(30, Math.round(98 + wave * 2))
+      measuredPlayers: online,
+      medianPingMs: Math.max(12, Math.round(34 + wave)),
+      p95PingMs: Math.max(30, Math.round(98 + wave * 2))
     };
   });
 }
@@ -134,9 +133,13 @@ function demoRegions(entries: readonly PlayerInsightsEntry[]): PlayerRegionSumma
       players: members.length,
       share: members.length / located,
       onlinePlayers: members.filter((member) => member.online).length,
-      averageEstimatedLatencyMs: Math.round(
-        members.reduce((total, member) => total + (member.estimatedLatencyMs ?? 0), 0) / members.length
-      )
+      ...(members.some((member) => member.pingMs !== undefined) ? {
+        averagePingMs: Math.round(
+          members.flatMap((member) => member.pingMs === undefined ? [] : [member.pingMs])
+            .reduce((total, ping) => total + ping, 0)
+          / members.filter((member) => member.pingMs !== undefined).length
+        )
+      } : {})
     }))
     .sort((left, right) => right.players - left.players);
 }
@@ -159,15 +162,15 @@ export function demoPlayerInsights(serverId: string, running: boolean, range: Pl
       online: onlineNow.has(player),
       location: place.location,
       distanceKm: place.distanceKm,
-      estimatedLatencyMs: place.estimatedLatencyMs,
+      ...(onlineNow.has(player) ? { pingMs: 18 + (index * 17) % 165 } : {}),
       firstSeenAt: new Date(now - (index + 3) * 86_400_000).toISOString(),
       lastSeenAt: new Date(now - index * 1_800_000).toISOString(),
       observations: 12 - index
     };
   });
 
-  const latencies = players.filter((player) => running ? player.online : true).map((player) => player.estimatedLatencyMs!);
-  const sorted = [...latencies].sort((left, right) => left - right);
+  const pings = players.flatMap((player) => player.pingMs === undefined ? [] : [player.pingMs]);
+  const sorted = [...pings].sort((left, right) => left - right);
   const activityHours = demoActivityHours();
   const regions = demoRegions(players);
 
@@ -175,8 +178,7 @@ export function demoPlayerInsights(serverId: string, running: boolean, range: Pl
     generatedAt: new Date(now).toISOString(),
     timeZone: "UTC",
     summary: {
-      medianEstimatedLatencyMs: sorted[Math.floor(sorted.length / 2)],
-      p95EstimatedLatencyMs: sorted.at(-1),
+      ...(sorted.length ? { medianPingMs: sorted[Math.floor(sorted.length / 2)], p95PingMs: sorted.at(-1) } : {}),
       countries: new Set(players.map((player) => player.location?.countryCode)).size,
       onlinePlayers: onlineNames.length,
       locatedPlayers: players.length,
@@ -187,6 +189,13 @@ export function demoPlayerInsights(serverId: string, running: boolean, range: Pl
     players,
     regions,
     latency: demoLatencySeries(range, now, onlineNames.length),
+    pingMeasurements: [{
+      serverId,
+      status: onlineNames.length ? "available" : "idle",
+      onlinePlayers: onlineNames.length,
+      measuredPlayers: onlineNames.length,
+      sampledAt: new Date(now).toISOString()
+    }],
     activityHours,
     serverLocations: [{
       serverId,

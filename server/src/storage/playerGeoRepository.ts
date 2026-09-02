@@ -9,11 +9,9 @@ import type { StorageDatabase } from "./database.js";
  * "roughly where in the world do this server's players connect from", which is the whole question
  * the feature exists to answer.
  *
- * What it stores is a short history rather than a single latest place. Estimated latency for a
- * session that happened last Tuesday has to be estimated from where the player was last Tuesday —
- * with one row per player, someone moving across an ocean silently rewrote every past hour of the
- * connection-quality chart. A row is added only when the derived place actually changes, so a
- * player who never moves still costs exactly one row, and this never becomes a time series.
+ * What it stores is a short history rather than a single latest place. A row is added only when the
+ * derived place actually changes, so a player who never moves still costs exactly one row, and
+ * this never becomes a time series.
  */
 
 /** One run of joins from the same place. */

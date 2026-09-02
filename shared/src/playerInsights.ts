@@ -7,17 +7,17 @@
  * logged when the player joined.
  *
  * The guarantee this module makes about that address is precise, and worth stating precisely.
- * Player Insights does not store it: the lookup happens in memory and only the derived location
- * below survives, so nothing this module keeps can be turned back into who connected from where.
- * The lookup itself is a local database read, so no address is sent to MaxMind or to any other
- * geolocation service. What it is *not* is a claim that the address never leaves the machine the
- * Minecraft server runs on — a server on a remote node reaches the panel over the node protocol,
- * and its console output travels with it, addresses and all, exactly as it did before this module
- * existed.
+ * Player Insights does not persist it: geography lookup and live TCP matching happen in memory,
+ * and the endpoint is discarded when the player disconnects. Only the derived location and
+ * anonymous RTT samples survive. The lookup itself is a local database read, so no address is sent
+ * to MaxMind or to any other geolocation service. What this is *not* is a claim that the address
+ * never leaves the machine the Minecraft server runs on — a server on a remote node reaches the
+ * panel over the node protocol, and its console output travels with it, addresses and all, exactly
+ * as it did before this module existed.
  *
- * No Minecraft protocol the panel can speak reports a player's own round-trip time, so latency is
- * never claimed as measured. It is estimated from the distance between the player's approximate
- * location and the server's, and every latency field in this file is named accordingly.
+ * Player latency is measured from the Linux TCP connection owned by the Minecraft server
+ * container. The connection endpoint used to associate that measurement with a player remains
+ * private to the collector and is never part of this public contract.
  */
 
 /** GeoLite2's own continent codes, kept verbatim so a lookup result maps straight onto the UI. */
@@ -87,8 +87,8 @@ export type PlayerInsightsEntry = {
   location?: PlayerLocation;
   /** Great-circle distance to the server's own location, when both are known. */
   distanceKm?: number;
-  /** Estimated, never measured. Absent whenever the server or the player location is unknown. */
-  estimatedLatencyMs?: number;
+  /** Linux TCP round-trip time while this player is directly matched and currently connected. */
+  pingMs?: number;
   firstSeenAt?: string;
   lastSeenAt?: string;
   /** How many distinct joins this player's stored location was derived from. */
@@ -102,16 +102,30 @@ export type PlayerRegionSummary = {
   /** Share of all players whose continent is known, 0-1. */
   share: number;
   onlinePlayers: number;
-  averageEstimatedLatencyMs?: number;
+  /** Average measured ping of currently connected, matched players in this region. */
+  averagePingMs?: number;
 };
 
 export type PlayerLatencyPoint = {
   at: number;
-  /** Players online at this instant, reconstructed from the panel's own join and leave history. */
+  /** Players online in the resource sample represented by this point. */
   players: number;
-  /** Median estimated latency of the players online then; absent when none of them are located. */
-  medianEstimatedLatencyMs?: number;
-  p95EstimatedLatencyMs?: number;
+  /** Number of player TCP connections contributing measured RTT values. */
+  measuredPlayers: number;
+  medianPingMs?: number;
+  p95PingMs?: number;
+};
+
+export type PlayerPingMeasurementStatus = "idle" | "available" | "unsupported" | "unavailable";
+
+export type PlayerPingMeasurement = {
+  serverId: string;
+  status: PlayerPingMeasurementStatus;
+  onlinePlayers: number;
+  measuredPlayers: number;
+  sampledAt?: string;
+  /** Sanitized operational guidance; never contains a player address or connection endpoint. */
+  message?: string;
 };
 
 /** One hour of the day, averaged over the retained activity history, in the panel's time zone. */
@@ -155,9 +169,9 @@ export type PlayerGeoDatabaseState = {
 };
 
 export type PlayerInsightsSummary = {
-  /** Median estimated latency of the players currently online, across every managed server. */
-  medianEstimatedLatencyMs?: number;
-  p95EstimatedLatencyMs?: number;
+  /** Median measured TCP RTT of the players currently online and matched. */
+  medianPingMs?: number;
+  p95PingMs?: number;
   /** Distinct countries seen across the retained history. */
   countries: number;
   onlinePlayers: number;
@@ -174,6 +188,7 @@ export type PlayerInsightsResponse = {
   players: PlayerInsightsEntry[];
   regions: PlayerRegionSummary[];
   latency: PlayerLatencyPoint[];
+  pingMeasurements: PlayerPingMeasurement[];
   activityHours: PlayerActivityHour[];
   serverLocations: PlayerInsightsServerLocation[];
   geoDatabase: PlayerGeoDatabaseState;
@@ -198,31 +213,6 @@ export function greatCircleDistanceKm(
   const haversine = Math.sin(deltaLatitude / 2) ** 2
     + Math.cos(fromLatitude) * Math.cos(toLatitude) * Math.sin(deltaLongitude / 2) ** 2;
   return 2 * earthRadiusKm * Math.asin(Math.min(1, Math.sqrt(haversine)));
-}
-
-/**
- * The latency model, written down once so the UI can explain it in the same terms the panel used.
- *
- * Light travels through fibre at roughly two thirds of its vacuum speed, a real route is longer
- * than the great-circle path between its ends, and every hop adds a little switching and queuing
- * delay. None of that makes the result a measurement, which is why every field it feeds is named
- * "estimated" — but it is derived from the two positions rather than invented, and it ranks and
- * groups players the way their real latency does.
- */
-export const latencyModel = {
-  /** Kilometres per millisecond through fibre: about 0.66c. */
-  fibrePropagationKmPerMs: 199.9,
-  /** How much longer a routed path is than the straight line between its ends. */
-  routePathFactor: 1.5,
-  /** Switching, queuing, and last-mile delay that does not scale with distance. */
-  fixedOverheadMs: 10
-};
-
-/** Estimated round-trip latency in milliseconds for a distance, rounded to whole milliseconds. */
-export function estimatedLatencyMsForDistanceKm(distanceKm: number) {
-  if (!Number.isFinite(distanceKm) || distanceKm < 0) return undefined;
-  const oneWayMs = (distanceKm * latencyModel.routePathFactor) / latencyModel.fibrePropagationKmPerMs;
-  return Math.round(oneWayMs * 2 + latencyModel.fixedOverheadMs);
 }
 
 export function medianOf(values: readonly number[]) {

@@ -10,6 +10,8 @@ export type ResourceStatsSample = {
   memoryUsageBytes: number;
   memoryLimitBytes: number;
   playersOnline?: number;
+  /** Anonymous measured TCP RTT values retained for the Player Insights history chart. */
+  playerPingMs?: number[];
   networkRxBytes?: number;
   networkTxBytes?: number;
   readAt: string;

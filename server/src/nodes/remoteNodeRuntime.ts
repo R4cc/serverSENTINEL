@@ -16,6 +16,7 @@ import { runtimeTarget } from "../runtime/profile.js";
 import { config } from "../config.js";
 import { validateServerId } from "../http/validation.js";
 import type { ConsoleUpstream } from "../servers/consoleChannel.js";
+import type { PlayerConnectionObservation } from "../players/dockerPlayerConnections.js";
 
 type NodeLookup = (nodeId: string) => Promise<ManagedNode | undefined>;
 type PublicServerFn = (server: ManagedServer, nodes?: ManagedNode[], servers?: ManagedServer[]) => Promise<PublicServer>;
@@ -292,6 +293,18 @@ export class RemoteNodeRuntime implements NodeRuntime {
       return this.observations.read(server, "players", 11_000) as Promise<PlayerObservation>;
     }
     return this.command(server, "server.players.read") as Promise<PlayerObservation>;
+  }
+
+  async readPlayerConnections(server: ManagedServer): Promise<PlayerConnectionObservation> {
+    const node = await this.lookupNode(server.nodeId);
+    const sampledAt = new Date().toISOString();
+    if (!node || !this.connections.isConnected(node.id)) {
+      return { status: "unavailable", sampledAt, connections: [], message: "The server node is offline." };
+    }
+    if (!nodeAdvertisesCapability(node, "server.connections.read")) {
+      return { status: "unsupported", sampledAt, connections: [], message: "Update this server node to measure player ping." };
+    }
+    return this.command(server, "server.connections.read") as Promise<PlayerConnectionObservation>;
   }
 
   async serverStats(server: ManagedServer) {

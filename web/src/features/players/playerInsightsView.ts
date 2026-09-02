@@ -4,9 +4,8 @@ import type { PlayerActivityHour, PlayerInsightsEntry, PlayerLocation, PlayerMai
  * The presentation decisions Player Insights makes, kept out of the components so they can be
  * tested as the small pure functions they are.
  *
- * The recurring rule here is that an estimate must read as an estimate and an absent value must
- * read as absent. Nothing in this file invents a fallback number: where the panel could not derive
- * something, these return an em dash and the caller shows the reason.
+ * An absent measurement stays absent. Nothing in this file invents a fallback number: where the
+ * panel could not measure something, these return an em dash.
  */
 
 export const unknownValue = "—";
@@ -39,7 +38,7 @@ export type PlayerMapMark = {
   entries: PlayerInsightsEntry[];
   accuracyRadiusKm?: number;
   label: string;
-  estimatedLatencyMs?: number;
+  pingMs?: number;
 };
 
 /**
@@ -96,7 +95,7 @@ export function playerMapMarks(
     const members = group
       .map(({ entry }) => entry)
       .sort((left, right) => left.player.localeCompare(right.player));
-    const latencies = members.flatMap((entry) => entry.estimatedLatencyMs === undefined ? [] : [entry.estimatedLatencyMs]);
+    const pings = members.flatMap((entry) => entry.pingMs === undefined ? [] : [entry.pingMs]);
     const labels = [...new Set(members.map((entry) => entry.location?.label).filter((label): label is string => Boolean(label)))];
     const accuracyRadii = members.flatMap((entry) => entry.location?.accuracyRadiusKm === undefined ? [] : [entry.location.accuracyRadiusKm]);
     const id = members.map((entry) => `${entry.serverId}:${entry.player.toLowerCase()}`).sort().join("|");
@@ -108,8 +107,8 @@ export function playerMapMarks(
       entries: members,
       ...(accuracyRadii.length ? { accuracyRadiusKm: Math.max(...accuracyRadii) } : {}),
       label: labels.length === 1 ? labels[0] : `${labels[0] ?? "Nearby locations"} area`,
-      ...(latencies.length
-        ? { estimatedLatencyMs: Math.round(latencies.reduce((total, latency) => total + latency, 0) / latencies.length) }
+      ...(pings.length
+        ? { pingMs: Math.round(pings.reduce((total, ping) => total + ping, 0) / pings.length) }
         : {})
     };
   });
@@ -211,16 +210,16 @@ export function playerMapPopupPlacement({
 }
 
 /** Bands chosen so the colour says something a player would recognise, not merely "higher". */
-export function latencyTone(estimatedLatencyMs: number | undefined) {
-  if (estimatedLatencyMs === undefined) return "neutral" as const;
-  if (estimatedLatencyMs < 60) return "success" as const;
-  if (estimatedLatencyMs < 120) return "info" as const;
-  if (estimatedLatencyMs < 200) return "warning" as const;
+export function latencyTone(pingMs: number | undefined) {
+  if (pingMs === undefined) return "neutral" as const;
+  if (pingMs < 60) return "success" as const;
+  if (pingMs < 120) return "info" as const;
+  if (pingMs < 200) return "warning" as const;
   return "danger" as const;
 }
 
-export function formatEstimatedLatency(estimatedLatencyMs: number | undefined) {
-  return estimatedLatencyMs === undefined ? unknownValue : `${estimatedLatencyMs} ms`;
+export function formatPing(pingMs: number | undefined) {
+  return pingMs === undefined ? unknownValue : `${pingMs} ms`;
 }
 
 export function formatDistance(distanceKm: number | undefined, formatNumber: (value: number) => string) {

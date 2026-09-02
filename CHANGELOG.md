@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.9.4 - 2026-09-02
+
+- Replaced geographic ping estimates with live Linux TCP round-trip measurements matched to connected players without retaining their network endpoints.
+- Kept player markers anchored to their map coordinates while zooming and panning, and preserved the active workspace across page refreshes.
+
 ## 26.9.3 - 2026-09-02
 
 - Decluttered routine screens by removing repeated guidance and moving useful caveats into consistent, accessible question-mark help.

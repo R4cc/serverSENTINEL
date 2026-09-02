@@ -94,6 +94,7 @@ function runtimeWithRecorder(result: unknown = { ok: true }, nodeOverrides: Part
   const calls: Array<{ command: string; timeoutMs?: number; requireSize?: boolean }> = [];
   const node = { ...testNode(), ...nodeOverrides };
   const connections = {
+    isConnected: () => true,
     connectedNode: () => ({ ...node, features: [...nodeFeatures] }),
     request: async (_node: ManagedNode, command: string, _payload: unknown, timeoutMs?: number) => {
       calls.push({ command, timeoutMs });
@@ -125,6 +126,34 @@ async function drain(stream: Readable) {
     // Drain the stream so lazy archive entries open their remote transfers.
   }
 }
+
+describe("RemoteNodeRuntime player connection measurement", () => {
+  it("uses the optional node capability without changing the protocol version", async () => {
+    const result = {
+      status: "available",
+      instanceId: "container-1",
+      sampledAt: "2026-09-02T12:00:00.000Z",
+      connections: [{ remoteAddress: "203.0.113.5", remotePort: 50123, rttUs: 42_000 }]
+    };
+    const { runtime, calls } = runtimeWithRecorder(result);
+
+    await expect(runtime.readPlayerConnections(testServer())).resolves.toEqual(result);
+    expect(calls).toEqual([{ command: "server.connections.read", timeoutMs: 15_000 }]);
+    expect(nodeProtocolVersion).toBe("3.1");
+  });
+
+  it("reports unsupported without contacting an older node", async () => {
+    const { runtime, calls } = runtimeWithRecorder(undefined, {
+      capabilities: nodeCapabilities.filter((capability) => capability !== "server.connections.read")
+    });
+
+    await expect(runtime.readPlayerConnections(testServer())).resolves.toMatchObject({
+      status: "unsupported",
+      connections: []
+    });
+    expect(calls).toEqual([]);
+  });
+});
 
 describe("RemoteNodeRuntime export streaming", () => {
   it("uses the node-side export stream when the connected node advertises it", async () => {

@@ -86,7 +86,16 @@ async function assertScenarioData(page) {
   assert(ariaDescription?.includes("Player session timeline") && ariaDescription.includes("Online now"), `Player timeline accessibility description is incomplete: ${ariaDescription}`);
   for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
 
-  const eventsText = await page.locator(".eventsPanel").innerText();
+  const eventsPanel = page.locator(".eventsPanel");
+  let eventsText = await eventsPanel.innerText();
+  if (!eventsText.includes("Reconnected")) {
+    const next = eventsPanel.getByRole("button", { name: "Next", exact: true });
+    if (await next.isEnabled()) {
+      await next.click();
+      eventsText += `\n${await eventsPanel.innerText()}`;
+      await eventsPanel.getByRole("button", { name: "Previous", exact: true }).click();
+    }
+  }
   assert(eventsText.includes("Reconnected") && eventsText.includes("Offline for 7 seconds"), `The reconnect event is not summarized correctly: ${eventsText}`);
   const joinedSubjects = await page.locator(".eventsPanel .eventKind--player_joined .eventSubject").allTextContents();
   const leftSubjects = await page.locator(".eventsPanel .eventKind--player_left .eventSubject").allTextContents();
@@ -470,8 +479,12 @@ async function assertDesktop(page) {
   const playerChart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
   const playerChartBox = await playerChart.boundingBox();
   assert(playerChartBox, "Player timeline disappeared in the seven-day range");
-  await page.mouse.move(playerChartBox.x + playerChartBox.width / 2, playerChartBox.y + playerChartBox.height / 2);
-  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
+  await playerChart.hover();
+  for (let index = 0; index < 60; index += 1) {
+    await page.mouse.wheel(0, -600);
+    if (index % 10 === 9) await page.waitForTimeout(20);
+  }
+  await page.waitForTimeout(180);
   const retainedRangeLabels = new Set();
   for (let index = 0; index < 240; index += 1) {
     for (const label of await playerChart.locator("svg text").allTextContents()) retainedRangeLabels.add(label.trim());

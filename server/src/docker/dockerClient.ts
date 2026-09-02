@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import http from "node:http";
 import { config } from "../config.js";
 
-type DockerMethod = "GET" | "POST" | "DELETE";
+type DockerMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 type DockerStdinOptions = { timeoutMs?: number };
 
@@ -61,7 +61,7 @@ async function dockerSocketRequest(
   method: DockerMethod,
   path: string,
   expectedStatus: number | number[],
-  options: { payload?: string; timeoutMs?: number; signal?: AbortSignal; maxBytes?: number } = {}
+  options: { payload?: string | Buffer; contentType?: string; timeoutMs?: number; signal?: AbortSignal; maxBytes?: number } = {}
 ) {
   if (!dockerAvailable()) {
     throw new Error("Docker integration is not configured; mount /var/run/docker.sock to enable it");
@@ -79,7 +79,7 @@ async function dockerSocketRequest(
         timeout: options.timeoutMs ?? 15000,
         signal: options.signal,
         headers: payload === undefined ? undefined : {
-          "Content-Type": "application/json",
+          "Content-Type": options.contentType ?? "application/json",
           "Content-Length": Buffer.byteLength(payload)
         }
       },
@@ -132,6 +132,17 @@ export async function dockerRequest<T>(
 
 export async function dockerBufferRequest(method: "GET" | "POST", path: string, expectedStatus: number | number[] = 200, timeoutMs = 15000, signal?: AbortSignal, maxBytes?: number) {
   return dockerSocketRequest(method, path, expectedStatus, { timeoutMs, signal, maxBytes });
+}
+
+/** Sends a bounded raw request body and returns a bounded raw Docker response. */
+export async function dockerBufferBodyRequest(
+  method: "POST" | "PUT",
+  path: string,
+  payload: string | Buffer,
+  expectedStatus: number | number[] = 200,
+  options: { contentType?: string; timeoutMs?: number; signal?: AbortSignal; maxBytes?: number } = {}
+) {
+  return dockerSocketRequest(method, path, expectedStatus, { payload, ...options });
 }
 
 /**

@@ -24,6 +24,12 @@ The panel coordinator polls status and resource stats every five seconds and add
 
 File logs use a cursor containing source, file identity, and byte offset. Append-only reads return deltas. Rotation, truncation, identity changes, or deltas larger than 128 KiB reset the cursor to the bounded 128 KiB tail. If `logs/latest.log` is unavailable, the existing bounded Docker log tail remains the fallback.
 
+## Optional player connection measurement
+
+`server.connections.read` is an additive capability under protocol 3.1. Updated nodes advertise it; older 3.1 nodes remain compatible and the panel reports player ping as unsupported instead of sending an unknown command.
+
+The command runs the bundled static TCP RTT probe inside the managed Minecraft container through a direct Docker exec. The probe reads established sockets for the configured internal Minecraft TCP port through `NETLINK_SOCK_DIAG` and returns a bounded list of remote endpoints and `tcp_info.tcpi_rtt` values. The panel uses those endpoints only for an in-memory exact address-and-source-port match to login lines. Endpoints never enter the public player contract, logs, or retained resource samples; retained samples contain anonymous RTT arrays only.
+
 ## Binary transfers and HTTP uploads
 
 Transfers use `transferStart`, `transferReady`, `transferFinish`, `transferResult`, and `transferCancel`. A binary chunk contains byte `0x01`, the transfer UUID as 16 raw bytes, and at most 256 KiB of payload. Send callbacks serialize chunks and bound sender buffering. The finish control carries the observed length and SHA-256 digest.

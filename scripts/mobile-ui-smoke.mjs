@@ -370,6 +370,7 @@ async function assertConfiguredPlayerAddressEditor() {
       players: [],
       regions: [],
       latency: [],
+      pingMeasurements: [{ serverId: server.id, status: "idle", onlinePlayers: 0, measuredPlayers: 0 }],
       activityHours: Array.from({ length: 24 }, (_, hour) => ({ hour, averagePlayers: 0, peakPlayers: 0, samples: 0 })),
       serverLocations: [{ serverId: server.id, address: "play.example.net" }],
       geoDatabase: { available: false, configured: false, updating: false },

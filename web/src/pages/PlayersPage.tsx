@@ -19,7 +19,7 @@ import { ConnectionQualityChart } from "../features/players/ConnectionQualityCha
 import {
   countryFlag,
   formatDistance,
-  formatEstimatedLatency,
+  formatPing,
   formatLocation,
   formatMaintenanceWindow,
   latencyTone,
@@ -132,7 +132,7 @@ function RegionTable({ regions }: { regions: readonly PlayerRegionSummary[] }) {
           <th scope="col">Region</th>
           <th scope="col">Share</th>
           <th scope="col" className="playerNumericColumn">Players</th>
-          <th scope="col" className="playerNumericColumn">Est. ping</th>
+          <th scope="col" className="playerNumericColumn">Ping</th>
         </tr>
       </thead>
       <tbody>
@@ -148,8 +148,8 @@ function RegionTable({ regions }: { regions: readonly PlayerRegionSummary[] }) {
               </span>
             </td>
             <td className="playerNumericColumn">{region.players}</td>
-            <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(region.averageEstimatedLatencyMs)}`}>
-              {formatEstimatedLatency(region.averageEstimatedLatencyMs)}
+            <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(region.averagePingMs)}`}>
+              {formatPing(region.averagePingMs)}
             </td>
           </tr>
         ))}
@@ -182,7 +182,7 @@ function PlayerRoster({
     { id: "player", accessorKey: "player", header: "Player" },
     { id: "location", accessorFn: (entry) => formatLocation(entry.location), header: "Location" },
     { id: "distanceKm", accessorKey: "distanceKm", header: "Distance" },
-    { id: "estimatedLatencyMs", accessorKey: "estimatedLatencyMs", header: "Est. ping" },
+    { id: "pingMs", accessorKey: "pingMs", header: "Ping" },
     { id: "lastSeenAt", accessorKey: "lastSeenAt", header: "Last seen" }
   ], []);
   const tableData = useMemo(() => [...players], [players]);
@@ -246,8 +246,8 @@ function PlayerRoster({
                   <PlayerLocationDisplay location={entry.location} />
                 </td>
                 <td className="playerNumericColumn">{formatDistance(entry.distanceKm, formatNumber)}</td>
-                <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.estimatedLatencyMs)}`}>
-                  {formatEstimatedLatency(entry.estimatedLatencyMs)}
+                <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.pingMs)}`}>
+                  {formatPing(entry.pingMs)}
                 </td>
                 <td className="playerNumericColumn" data-label="Last seen">{entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}</td>
               </tr>
@@ -393,6 +393,7 @@ export function PlayersPage({
   const serverLocation = insights?.serverLocations.find((entry) => entry.serverId === server.id);
   const geoDatabase = insights?.geoDatabase;
   const summary = insights?.summary;
+  const pingMeasurement = insights?.pingMeasurements.find((entry) => entry.serverId === server.id);
   const mapPlayers = mapScope === "online"
     ? insights?.players.filter((entry) => entry.online) ?? []
     : insights?.players ?? [];
@@ -427,10 +428,12 @@ export function PlayersPage({
           variant="summary"
           icon={<Activity aria-hidden="true" />}
           iconPlacement="leading"
-          tone={latencyTone(summary?.medianEstimatedLatencyMs)}
-          label="Median est. ping"
-          value={formatEstimatedLatency(summary?.medianEstimatedLatencyMs)}
-          detail={summary?.onlinePlayers ? "Players online now" : "Everyone seen so far"}
+          tone={latencyTone(summary?.medianPingMs)}
+          label="Median ping"
+          value={formatPing(summary?.medianPingMs)}
+          detail={pingMeasurement?.onlinePlayers
+            ? `${pingMeasurement.measuredPlayers} of ${pingMeasurement.onlinePlayers} online measured`
+            : "No players online"}
         />
         <MetricTile
           variant="summary"
@@ -515,7 +518,7 @@ export function PlayersPage({
         <Surface className="playerCard playerLatencyCard">
           <PanelHeader
             title="Connection quality"
-            help={<HelpTooltip label="connection quality">Latency is estimated from player distance and session history; it is not measured. Hover or focus the chart to inspect a moment.</HelpTooltip>}
+            help={<HelpTooltip label="connection quality">Ping is the Linux TCP round-trip time measured on the server host for directly matched, currently connected players. Proxies and unsupported nodes may leave it unavailable. {pingMeasurement?.message ?? "Hover or focus the chart to inspect a moment."}</HelpTooltip>}
             actions={(
               <div className="playerRangeSwitch" role="group" aria-label="Latency history range">
                 {playerInsightsRanges.map((option) => (
@@ -544,7 +547,7 @@ export function PlayersPage({
       <Surface className="playerCard playerRosterCard">
         <PanelHeader
           title="Players"
-          help={<HelpTooltip label="player data">Locations are approximate and latency is estimated from distance rather than measured.</HelpTooltip>}
+          help={<HelpTooltip label="player data">Locations are approximate. Ping is measured from the player's active TCP connection and is unavailable for offline or unmatched players.</HelpTooltip>}
           actions={summary && (
             <StatusBadge tone={summary.onlinePlayers ? "success" : "neutral"}>
               {summary.onlinePlayers} online · {summary.knownPlayers} known

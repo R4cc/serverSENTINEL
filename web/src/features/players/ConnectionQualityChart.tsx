@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlayerLatencyPoint } from "../../types";
 import { EChartsCanvas } from "../../components/EChartsCanvas";
 import { EmptyState } from "../../components/UiPrimitives";
-import { formatEstimatedLatency, unknownValue } from "./playerInsightsView";
+import { formatPing, unknownValue } from "./playerInsightsView";
 import {
   buildConnectionQualityChartOption,
   defaultConnectionQualityPalette,
@@ -32,7 +32,7 @@ export function ConnectionQualityChart({
   timeZone: string;
   compact: boolean;
 }) {
-  const measured = points.filter((point) => point.medianEstimatedLatencyMs !== undefined);
+  const measured = points.filter((point) => point.medianPingMs !== undefined);
   const rootRef = useRef<HTMLDivElement>(null);
   const [palette, setPalette] = useState<ConnectionQualityPalette>(defaultConnectionQualityPalette);
 
@@ -66,14 +66,14 @@ export function ConnectionQualityChart({
 
   return (
     <div className="playerConnectionQuality" ref={rootRef}>
-      <dl className="playerConnectionSnapshot" aria-label="Latest connection quality estimate">
+      <dl className="playerConnectionSnapshot" aria-label="Latest measured connection quality">
         <div>
           <dt><i className="playerChartSwatch playerChartSwatch--median" aria-hidden="true" />Median</dt>
-          <dd>{formatEstimatedLatency(latest.medianEstimatedLatencyMs)}</dd>
+          <dd>{formatPing(latest.medianPingMs)}</dd>
         </div>
         <div>
           <dt><i className="playerChartSwatch playerChartSwatch--p95" aria-hidden="true" />95th percentile</dt>
-          <dd>{formatEstimatedLatency(latest.p95EstimatedLatencyMs)}</dd>
+          <dd>{formatPing(latest.p95PingMs)}</dd>
         </div>
         <div>
           <dt>Active players</dt>
@@ -86,7 +86,7 @@ export function ConnectionQualityChart({
             key={`${palette.surface}:${palette.text}:${palette.accent}:${palette.median}`}
             className="playerConnectionEChart"
             option={option}
-            ariaLabel={`Estimated connection quality over time. Latest median ${formatEstimatedLatency(latest.medianEstimatedLatencyMs)}, 95th percentile ${formatEstimatedLatency(latest.p95EstimatedLatencyMs)}, with ${latest.players} active players.`}
+            ariaLabel={`Measured connection quality over time. Latest median ${formatPing(latest.medianPingMs)}, 95th percentile ${formatPing(latest.p95PingMs)}, with ${latest.measuredPlayers} of ${latest.players} active players measured.`}
           />
         )}
       </div>

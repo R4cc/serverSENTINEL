@@ -29,6 +29,7 @@ import type { OperationsRepository } from "./storage/operationsRepository.js";
 import type { PlayerGeoRepository } from "./storage/playerGeoRepository.js";
 import type { GeoDatabase } from "./players/geoDatabase.js";
 import type { PlayerGeoCollector } from "./players/playerGeoCollector.js";
+import type { PlayerPingCollector } from "./players/playerPingCollector.js";
 import type { ServerLocationStore } from "./players/serverLocations.js";
 
 /**
@@ -66,6 +67,7 @@ interface AppServices {
    */
   playerGeoDatabase: GeoDatabase | undefined;
   playerGeoCollector: PlayerGeoCollector | undefined;
+  playerPingCollector: PlayerPingCollector | undefined;
   appLogger: FastifyBaseLogger | undefined;
   runtimeRegistry: NodeRuntimeRegistry | undefined;
   resourceStatsCollector: ResourceStatsCollector | undefined;
