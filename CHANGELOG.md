@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.2 - 2026-09-02
+
+- Made the Players world map easier to use on phones with smaller location markers, pinch and scroll zooming, drag-to-pan navigation, and dedicated zoom controls across screen sizes.
+
 ## 26.9.1 - 2026-08-28
 
 - Unified page-level warnings and errors as liquid-glass alert cards with consistent severity colors, icons, actions, details, and responsive behavior.

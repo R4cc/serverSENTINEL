@@ -180,6 +180,10 @@ describe("the Players workspace with partial knowledge", () => {
     const map = mapMarkup(html);
     expect(html).toContain('role="group" aria-label="Players shown on map"');
     expect(html).toContain('aria-pressed="true" type="button" class="uiButton uiButton--secondary uiButton--compact">Online</button>');
+    expect(map).toContain('aria-label="Interactive player world map. Pinch or scroll to zoom and drag to move."');
+    expect(map).toContain('aria-label="Zoom in"');
+    expect(map).toContain('aria-label="Zoom out"');
+    expect(map).toContain('aria-label="Reset map view"');
     expect(map).toContain("SullyTheSnak");
     expect(map).toContain("playerMapPlayerMarker");
     expect(map).not.toContain("playerMapAvatar--online");

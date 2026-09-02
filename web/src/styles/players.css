@@ -68,20 +68,48 @@
   z-index: 2;
 }
 
+.playerMapFrame {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-md);
+  aspect-ratio: 2 / 1;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
 .playerMapViewport {
   position: relative;
   z-index: 1;
   width: 100%;
+  height: 100%;
   min-width: 0;
-  isolation: isolate;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.playerMapViewport:active {
+  cursor: grabbing;
+}
+
+.playerMapTransformContent,
+.playerMapScene {
+  width: 100%;
+  height: 100%;
+}
+
+.playerMapScene {
+  position: relative;
+  flex: 0 0 100%;
 }
 
 .playerMapCanvas {
   display: block;
   width: 100%;
-  height: auto;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-muted);
+  height: 100%;
 }
 
 .playerMapOcean {
@@ -147,9 +175,13 @@
 .playerMapMarkerWrap {
   position: absolute;
   z-index: 2;
+  pointer-events: auto;
+}
+
+.playerMapMarkerScale {
+  position: relative;
   display: inline-flex;
   transform: translate(-50%, -50%);
-  pointer-events: auto;
 }
 
 .playerMapMarkerWrap--active {
@@ -192,6 +224,60 @@ button.playerMapMarker:hover:not(:disabled) {
 .playerMapMarker:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 3px;
+}
+
+.playerMapControls {
+  position: absolute;
+  z-index: 10;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
+}
+
+.playerMapControlButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.playerMapControlButton + .playerMapControlButton {
+  border-top: 1px solid var(--border-row);
+}
+
+.playerMapControlButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.playerMapControlButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+.playerMapControlButton:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.playerMapControlButton > svg {
+  width: 17px;
+  height: 17px;
 }
 
 .playerMapAvatar {
@@ -372,6 +458,91 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
   line-height: 1;
+}
+
+@media (max-width: 560px) {
+  .playerMapControls {
+    position: static;
+    grid-auto-flow: column;
+    width: max-content;
+    margin: var(--space-2) 0 0 auto;
+  }
+
+  .playerMapControlButton {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .playerMapControlButton + .playerMapControlButton {
+    border-top: 0;
+    border-left: 1px solid var(--border-row);
+  }
+
+  .playerMapClusterMarker,
+  .playerMapClusterMarker--server {
+    width: 32px;
+    min-width: 32px;
+    height: 30px;
+  }
+
+  .playerMapClusterHeads,
+  .playerMapClusterHeads--server {
+    width: 28px;
+    height: 22px;
+  }
+
+  .playerMapClusterHeads .playerMapAvatar {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .playerMapClusterHeads .playerMapAvatar:nth-child(2) {
+    left: 5px;
+  }
+
+  .playerMapClusterHeads .playerMapAvatar:nth-child(3) {
+    left: 10px;
+  }
+
+  .playerMapPlayerMarker {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+  }
+
+  .playerMapPlayerMarker .playerMapAvatar {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+  }
+
+  .playerMapClusterCount {
+    right: -4px;
+    bottom: -4px;
+    min-width: 16px;
+    height: 14px;
+    padding-inline: 3px;
+    font-size: 9px;
+  }
+
+  .playerMapSharedServer {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .playerMapSharedServerIcon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .playerMapClusterHeads--server .playerMapSharedServer,
+  .playerMapPlayerMarker--server .playerMapSharedServer {
+    top: -23px;
+  }
 }
 
 .playerMapClusterPopup {

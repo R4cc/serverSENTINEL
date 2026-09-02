@@ -117,6 +117,67 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(allTimePlayers > onlinePlayers, `${label}: all-time map did not add historical players (${onlinePlayers} online, ${allTimePlayers} all time)`);
   assert.equal(await page.locator(".playerMapAvatar--online, .playerMapAvatar--known, .playerMapMarker--online, .playerMapMarker--known").count(), 0, `${label}: player map still encodes online status in marker styling`);
 
+  await assertTargets(page, [
+    ".playerMapControlButton:nth-child(1)",
+    ".playerMapControlButton:nth-child(2)",
+    ".playerMapControlButton:nth-child(3)"
+  ], `${label} map controls`);
+  const mapTransform = page.locator(".playerMapTransformContent");
+  const mapMarker = page.locator(".playerMapViewport .playerMapAvatar").first();
+  const initialMarker = await mapMarker.boundingBox();
+  assert(initialMarker && initialMarker.width <= 20.5 && initialMarker.height <= 20.5, `${label}: mobile player marker is still too large: ${JSON.stringify(initialMarker)}`);
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a > 1.4);
+  const zoomedMarker = await mapMarker.boundingBox();
+  assert(zoomedMarker && Math.abs(zoomedMarker.width - initialMarker.width) <= 1, `${label}: player marker grew with the zoom instead of staying anchored: ${JSON.stringify({ initialMarker, zoomedMarker })}`);
+  const beforePan = await mapTransform.evaluate((element) => {
+    const matrix = new DOMMatrix(getComputedStyle(element).transform);
+    return { x: matrix.e, y: matrix.f };
+  });
+  if (label.startsWith("Chromium")) {
+    const frame = await page.locator(".playerMapFrame").boundingBox();
+    assert(frame, `${label}: player map frame is missing`);
+    const duringPan = await page.locator(".playerMapViewport").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const start = { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.6 };
+      const middle = { x: rect.left + rect.width * 0.58, y: rect.top + rect.height * 0.66 };
+      const end = { x: rect.left + rect.width * 0.65, y: rect.top + rect.height * 0.72 };
+      try {
+        const createTouch = ({ x, y }) => new Touch({
+          identifier: 1,
+          target: element,
+          clientX: x,
+          clientY: y,
+          pageX: x + scrollX,
+          pageY: y + scrollY,
+          screenX: x,
+          screenY: y,
+          radiusX: 1,
+          radiusY: 1
+        });
+        const startTouch = createTouch(start);
+        const middleTouch = createTouch(middle);
+        const endTouch = createTouch(end);
+        element.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, cancelable: true, touches: [startTouch], changedTouches: [startTouch] }));
+        element.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, cancelable: true, touches: [middleTouch], changedTouches: [middleTouch] }));
+        element.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, cancelable: true, touches: [endTouch], changedTouches: [endTouch] }));
+        const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
+        element.dispatchEvent(new TouchEvent("touchend", { bubbles: true, cancelable: true, touches: [], changedTouches: [endTouch] }));
+        return { x: matrix.e, y: matrix.f };
+      } catch {
+        element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, buttons: 1, clientX: start.x, clientY: start.y }));
+        window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, buttons: 1, clientX: middle.x, clientY: middle.y }));
+        window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, buttons: 1, clientX: end.x, clientY: end.y }));
+        const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
+        window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, clientX: end.x, clientY: end.y }));
+        return { x: matrix.e, y: matrix.f };
+      }
+    });
+    assert(Math.hypot(duringPan.x - beforePan.x, duringPan.y - beforePan.y) >= 3, `${label}: dragging did not move the zoomed map: ${JSON.stringify({ beforePan, duringPan })}`);
+  }
+  await page.getByRole("button", { name: "Reset map view" }).click();
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a <= 1.01);
+
   const serverCluster = page.locator(".playerMapClusterMarker--server");
   const cluster = await serverCluster.count() ? serverCluster : page.locator(".playerMapClusterMarker").first();
   await cluster.waitFor();
@@ -177,7 +238,9 @@ async function assertPlayerClusterPopupDismisses(page, label) {
 
   // Blank map space is outside the floating panel even though it remains inside the map viewport.
   // This catches the old map-level boundary that left the popup pinned until navigation changed.
-  await page.locator(".playerMapViewport").click({ position: { x: 2, y: 2 } });
+  const mapFrame = await page.locator(".playerMapFrame").boundingBox();
+  assert(mapFrame, `${label}: player map frame disappeared`);
+  await page.mouse.click(mapFrame.x + 2, mapFrame.y + 2);
   await popup.waitFor({ state: "detached" });
   assert(await cluster.getAttribute("aria-expanded") === "false", `${label}: player cluster stayed expanded after an outside click`);
   assert(await cluster.getAttribute("aria-controls") === null, `${label}: dismissed player cluster kept a popup reference`);
