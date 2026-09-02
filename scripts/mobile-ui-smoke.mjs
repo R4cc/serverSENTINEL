@@ -101,6 +101,81 @@ async function assertFloatingSurfaces(page, label) {
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
 }
 
+async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
+  const assertAnchored = async (phase) => {
+    const measurements = await page.locator(".playerMapMarkerWrap").evaluateAll((wrappers) => {
+      const content = document.querySelector(".playerMapTransformContent");
+      if (!(content instanceof HTMLElement)) return [];
+      const contentRect = content.getBoundingClientRect();
+      return wrappers.flatMap((wrapper) => {
+        const marker = wrapper.querySelector(".playerMapMarker");
+        if (!(wrapper instanceof HTMLElement) || !(marker instanceof HTMLElement)) return [];
+        const markerRect = marker.getBoundingClientRect();
+        const left = Number.parseFloat(wrapper.style.left) / 100;
+        const top = Number.parseFloat(wrapper.style.top) / 100;
+        const expected = {
+          x: contentRect.left + contentRect.width * left,
+          y: contentRect.top + contentRect.height * top
+        };
+        const actual = {
+          x: markerRect.left + markerRect.width / 2,
+          y: markerRect.top + markerRect.height / 2
+        };
+        return [{
+          label: marker.getAttribute("aria-label"),
+          delta: Math.hypot(actual.x - expected.x, actual.y - expected.y),
+          expected,
+          actual
+        }];
+      });
+    });
+    assert(measurements.length > 0, `${label} ${phase}: player map markers are missing`);
+    const drifting = measurements.filter(({ delta }) => delta > 1.5);
+    assert(drifting.length === 0, `${label} ${phase}: marker centers drifted from their transformed projected coordinates: ${JSON.stringify(drifting)}`);
+  };
+
+  const zoomIn = page.getByRole("button", { name: "Zoom in" });
+  await assertAnchored("at 100% zoom");
+  await zoomIn.click();
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 1.49);
+  await assertAnchored("at intermediate zoom");
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const currentScale = await page.locator(".playerMapTransformContent").evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).a);
+    if (currentScale >= 3.99) break;
+    const clicked = await zoomIn.evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+      button.click();
+      return true;
+    });
+    if (!clicked) break;
+    await page.waitForFunction((previous) => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a > previous + 0.01, currentScale);
+    await page.waitForTimeout(250);
+  }
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 3.99);
+  await assertAnchored("at 4x zoom");
+
+  const mapTransform = page.locator(".playerMapTransformContent");
+  const beforePan = await mapTransform.evaluate((element) => {
+    const matrix = new DOMMatrix(getComputedStyle(element).transform);
+    return { x: matrix.e, y: matrix.f };
+  });
+  const frame = await page.locator(".playerMapFrame").boundingBox();
+  assert(frame, `${label}: player map frame is missing`);
+  await page.mouse.move(frame.x + frame.width * 0.5, frame.y + frame.height * 0.55);
+  await page.mouse.down();
+  await page.mouse.move(frame.x + frame.width * 0.65, frame.y + frame.height * 0.7, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForFunction(({ x, y }) => {
+    const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
+    return Math.hypot(matrix.e - x, matrix.f - y) >= 3;
+  }, beforePan);
+  await assertAnchored("after panning");
+
+  await page.getByRole("button", { name: "Reset map view" }).click();
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a <= 1.01);
+}
+
 async function assertPlayerClusterPopupDismisses(page, label) {
   await openPage(page, "players");
   const helpTrigger = page.getByRole("button", { name: "About player geography", exact: true });
@@ -167,61 +242,12 @@ async function assertPlayerClusterPopupDismisses(page, label) {
     ".playerMapControlButton:nth-child(2)",
     ".playerMapControlButton:nth-child(3)"
   ], `${label} map controls`);
-  const mapTransform = page.locator(".playerMapTransformContent");
   const mapMarker = page.locator(".playerMapViewport .playerMapAvatar").first();
   const initialMarker = await mapMarker.boundingBox();
   assert(initialMarker && initialMarker.width <= 20.5 && initialMarker.height <= 20.5, `${label}: mobile player marker is still too large: ${JSON.stringify(initialMarker)}`);
-  await page.getByRole("button", { name: "Zoom in" }).click();
-  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a > 1.4);
+  await assertPlayerMarkerAnchorsAcrossTransforms(page, label);
   const zoomedMarker = await mapMarker.boundingBox();
   assert(zoomedMarker && Math.abs(zoomedMarker.width - initialMarker.width) <= 1, `${label}: player marker grew with the zoom instead of staying anchored: ${JSON.stringify({ initialMarker, zoomedMarker })}`);
-  const beforePan = await mapTransform.evaluate((element) => {
-    const matrix = new DOMMatrix(getComputedStyle(element).transform);
-    return { x: matrix.e, y: matrix.f };
-  });
-  if (label.startsWith("Chromium")) {
-    const frame = await page.locator(".playerMapFrame").boundingBox();
-    assert(frame, `${label}: player map frame is missing`);
-    const duringPan = await page.locator(".playerMapViewport").evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      const start = { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.6 };
-      const middle = { x: rect.left + rect.width * 0.58, y: rect.top + rect.height * 0.66 };
-      const end = { x: rect.left + rect.width * 0.65, y: rect.top + rect.height * 0.72 };
-      try {
-        const createTouch = ({ x, y }) => new Touch({
-          identifier: 1,
-          target: element,
-          clientX: x,
-          clientY: y,
-          pageX: x + scrollX,
-          pageY: y + scrollY,
-          screenX: x,
-          screenY: y,
-          radiusX: 1,
-          radiusY: 1
-        });
-        const startTouch = createTouch(start);
-        const middleTouch = createTouch(middle);
-        const endTouch = createTouch(end);
-        element.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, cancelable: true, touches: [startTouch], changedTouches: [startTouch] }));
-        element.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, cancelable: true, touches: [middleTouch], changedTouches: [middleTouch] }));
-        element.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, cancelable: true, touches: [endTouch], changedTouches: [endTouch] }));
-        const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
-        element.dispatchEvent(new TouchEvent("touchend", { bubbles: true, cancelable: true, touches: [], changedTouches: [endTouch] }));
-        return { x: matrix.e, y: matrix.f };
-      } catch {
-        element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, buttons: 1, clientX: start.x, clientY: start.y }));
-        window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, buttons: 1, clientX: middle.x, clientY: middle.y }));
-        window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, buttons: 1, clientX: end.x, clientY: end.y }));
-        const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
-        window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, clientX: end.x, clientY: end.y }));
-        return { x: matrix.e, y: matrix.f };
-      }
-    });
-    assert(Math.hypot(duringPan.x - beforePan.x, duringPan.y - beforePan.y) >= 3, `${label}: dragging did not move the zoomed map: ${JSON.stringify({ beforePan, duringPan })}`);
-  }
-  await page.getByRole("button", { name: "Reset map view" }).click();
-  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a <= 1.01);
 
   const serverCluster = page.locator(".playerMapClusterMarker--server");
   const cluster = await serverCluster.count() ? serverCluster : page.locator(".playerMapClusterMarker").first();
@@ -834,6 +860,86 @@ async function assertConsoleSurvivesTheKeyboard(page, label) {
   assert(dismissed.terminal.height > withKeyboard.terminal.height, `${label}: the console did not take back the space the keyboard had: ${JSON.stringify({ withKeyboard, dismissed })}`);
 }
 
+async function assertPageRestoresOnReload(page, title, storedPage, contentSelector, label) {
+  await openPage(page, title);
+  await page.locator(contentSelector).waitFor();
+  const navigationItem = page.locator(`.sideNav button[title="Open ${title}"]`);
+  assert.equal(await navigationItem.getAttribute("aria-current"), "page", `${label}: sidebar does not mark ${title} active before reload`);
+
+  const readStoredPage = () => page.evaluate(() => {
+    const raw = localStorage.getItem("serversentinel-active-page");
+    return raw ? JSON.parse(raw).value : null;
+  });
+  assert.equal(await readStoredPage(), storedPage, `${label}: ${title} was not persisted before reload`);
+
+  let releaseAppCatalog;
+  let appCatalogRequested;
+  let appCatalogHandled;
+  const appCatalogGate = new Promise((resolve) => { releaseAppCatalog = resolve; });
+  const appCatalogRequest = new Promise((resolve) => { appCatalogRequested = resolve; });
+  const appCatalogCompletion = new Promise((resolve) => { appCatalogHandled = resolve; });
+  const delayAppCatalog = async (route) => {
+    appCatalogRequested();
+    await appCatalogGate;
+    try {
+      await route.continue();
+    } finally {
+      appCatalogHandled();
+    }
+  };
+  await page.route("**/api/app", delayAppCatalog);
+  try {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".appShell").waitFor();
+    await appCatalogRequest;
+    await page.locator(`.workspacePage-${storedPage}`).waitFor();
+    assert.equal(await readStoredPage(), storedPage, `${label}: bootstrap overwrote the stored ${title} page`);
+    if (storedPage === "schedule") {
+      await page.locator(".applicationLoadingSkeleton--schedule").waitFor();
+      assert.equal(await page.locator(".schedulePage").count(), 0, `${label}: schedules rendered before module access resolved`);
+    }
+    releaseAppCatalog();
+    await appCatalogCompletion;
+    await page.locator(contentSelector).waitFor();
+    assert.equal(await navigationItem.getAttribute("aria-current"), "page", `${label}: sidebar lost the active ${title} state after restoration`);
+    assert.equal(await readStoredPage(), storedPage, `${label}: restored ${title} changed its stored page value`);
+  } finally {
+    releaseAppCatalog();
+    await appCatalogCompletion;
+    await page.unroute("**/api/app", delayAppCatalog);
+  }
+}
+
+async function runDesktopMapAndRestorationProfile() {
+  const label = "Chromium desktop 1440x1000";
+  let browser;
+  try {
+    browser = await launchBrowser(chromium);
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      locale: "en-US",
+      timezoneId: "UTC",
+      colorScheme: "light",
+      reducedMotion: "reduce"
+    });
+    const page = await context.newPage();
+    await page.addInitScript(() => localStorage.setItem("serversentinel-theme", "light"));
+    await signInThroughForm(page, baseUrl);
+    await page.locator('.sideNav button[title="Open schedules"]').waitFor({ state: "visible" });
+
+    await assertPageRestoresOnReload(page, "schedules", "schedule", ".schedulePage", `${label} schedules`);
+    await assertPageRestoresOnReload(page, "files", "files", ".filesPage", `${label} files`);
+    await openPage(page, "players");
+    await page.getByRole("group", { name: "Players shown on map" }).getByRole("button", { name: "All time", exact: true }).click();
+    await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`);
+
+    await context.close();
+    console.log(`mobile smoke passed: ${label}`);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
   const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body }) => {
     const backdropElement = document.querySelector(backdrop);
@@ -1027,6 +1133,7 @@ async function runTabletProfile() {
 }
 
 try {
+  await runDesktopMapAndRestorationProfile();
   await runTabletProfile();
   await assertConfiguredPlayerAddressEditor();
   await runProfile(chromium, {

@@ -176,6 +176,7 @@
   position: absolute;
   z-index: 2;
   pointer-events: auto;
+  transform-origin: top left;
 }
 
 .playerMapMarkerScale {

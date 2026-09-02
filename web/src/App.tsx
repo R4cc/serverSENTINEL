@@ -362,6 +362,7 @@ export default function App() {
   const modulesRef = useRef(effectiveAppState.modules);
   modulesRef.current = effectiveAppState.modules;
   const activeModules = useMemo(() => modulesRef.current, [moduleSignature]);
+  const activePageModuleAccessPending = Boolean(moduleForPage(activePage)) && !appStateLoaded;
   const schedulesAvailable = isPageAvailable(activeModules, "schedule");
   const managedContentAvailable = isPageAvailable(activeModules, "mods");
   const canInstallMods = managedContentAvailable && (activeServerIsDemo || hasPermission(permissionUser, "mods.install"));
@@ -413,9 +414,9 @@ export default function App() {
   // off, and one whose permission this account has just lost all have to give way rather than
   // render an empty workspace.
   useEffect(() => {
-    if (!applicationReady) return;
+    if (!appStateLoaded) return;
     setActivePage((current) => resolveAvailablePage(current, activeModules));
-  }, [applicationReady, activeModules]);
+  }, [appStateLoaded, activeModules]);
   const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
     if (!activeServer) throw new Error("Select a server to load its timeline");
     if (demoMode && isDemoServerId(activeServer.id)) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to, activeServer.id);
@@ -824,7 +825,6 @@ export default function App() {
     if (demoMode) {
       setNotice("");
       setActiveServerId(demoServerId);
-      setActivePage("overview");
     } else if (isDemoServerId(activeServerId)) {
       setActiveServerId("");
       setStatus(null);
@@ -1303,7 +1303,6 @@ export default function App() {
       setDemoMode(nextDemoMode);
       if (nextDemoMode) {
         resetDemoState();
-        setActivePage("overview");
       }
       setAuthNotice(null);
       setAuthSession(session);
@@ -2121,7 +2120,7 @@ export default function App() {
           provisioningError={provisioningError}
           provisioningErrorDetails={provisioningErrorDetails}
           notice={notice}
-          showApplicationLoading={!applicationReady && shellVisible && !appLoadError}
+          showApplicationLoading={(!applicationReady || activePageModuleAccessPending) && shellVisible && !appLoadError}
           appLoadError={appLoadError}
           appRefreshing={appRefreshing}
           onRetryAppLoad={() => void refreshApp()}
