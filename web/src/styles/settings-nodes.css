@@ -1541,8 +1541,7 @@
   gap: var(--space-3);
 }
 
-.reviewSummaryCard,
-.reviewInfoCard {
+.reviewSummaryCard {
   display: grid;
   gap: var(--space-3);
   border: var(--border-strong) solid var(--border-muted);
@@ -1558,8 +1557,7 @@
   gap: var(--space-3);
 }
 
-.reviewSummaryHeader > strong,
-.reviewInfoCard > strong {
+.reviewSummaryHeader > strong {
   color: var(--text);
   font-size: 14px;
   font-weight: var(--weight-title);
@@ -1646,39 +1644,6 @@
 
 .runtimeSummaryIcon.node {
   color: var(--accent);
-}
-
-.reviewInfoCallout {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-3);
-  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 24%, var(--border-muted));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 66%, var(--surface));
-  color: var(--text-muted);
-  padding: var(--space-3);
-}
-
-.reviewInfoIcon {
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--swiss-white);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  line-height: 1;
-}
-
-.reviewInfoCallout p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: var(--weight-strong);
-  line-height: 1.55;
 }
 
 .createNodeOverview {

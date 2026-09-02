@@ -91,7 +91,7 @@ export type PlayerInsightsEntry = {
   pingMs?: number;
   firstSeenAt?: string;
   lastSeenAt?: string;
-  /** How many distinct joins this player's stored location was derived from. */
+  /** How many distinct joins have been recorded for this player. */
   observations: number;
 };
 
@@ -116,16 +116,12 @@ export type PlayerLatencyPoint = {
   p95PingMs?: number;
 };
 
-export type PlayerPingMeasurementStatus = "idle" | "available" | "unsupported" | "unavailable";
-
 export type PlayerPingMeasurement = {
   serverId: string;
-  status: PlayerPingMeasurementStatus;
+  status: "idle" | "available" | "unsupported" | "unavailable";
   onlinePlayers: number;
   measuredPlayers: number;
   sampledAt?: string;
-  /** Sanitized operational guidance; never contains a player address or connection endpoint. */
-  message?: string;
 };
 
 /** One hour of the day, averaged over the retained activity history, in the panel's time zone. */
@@ -213,21 +209,6 @@ export function greatCircleDistanceKm(
   const haversine = Math.sin(deltaLatitude / 2) ** 2
     + Math.cos(fromLatitude) * Math.cos(toLatitude) * Math.sin(deltaLongitude / 2) ** 2;
   return 2 * earthRadiusKm * Math.asin(Math.min(1, Math.sqrt(haversine)));
-}
-
-export function medianOf(values: readonly number[]) {
-  if (values.length === 0) return undefined;
-  const sorted = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? Math.round((sorted[middle - 1] + sorted[middle]) / 2) : sorted[middle];
-}
-
-/** The value at or below which `percentile` of the samples fall, by nearest rank. */
-export function percentileOf(values: readonly number[], percentile: number) {
-  if (values.length === 0) return undefined;
-  const sorted = [...values].sort((left, right) => left - right);
-  const rank = Math.ceil((percentile / 100) * sorted.length);
-  return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))];
 }
 
 /**

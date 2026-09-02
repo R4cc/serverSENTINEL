@@ -39,6 +39,7 @@ export function createPlayerInsightsModuleRuntime<
       // workspace still reports who is online and when they play, and says plainly that geography
       // is unavailable. Only an outright throw would leave the module half-built.
       await Promise.resolve(services.geoDatabase.start()).catch((error: unknown) => deps.onError?.(error));
+      if (running !== services) return;
       services.pingCollector?.start();
       services.collector.start();
     },

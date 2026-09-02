@@ -1,3 +1,4 @@
+import { SocketAddress } from "node:net";
 import type { PlayerPingMeasurement, PlayerSnapshot } from "@serversentinel/contracts";
 import type { ManagedServer } from "../types.js";
 import { playerGeoKey } from "../storage/playerGeoRepository.js";
@@ -19,46 +20,12 @@ type PlayerPingCollectorOptions = {
   onError?(error: unknown, server?: ManagedServer): void;
 };
 
-function normalizedIpv4(value: string) {
-  const parts = value.split(".");
-  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return undefined;
-  return parts.map((part) => String(Number(part))).join(".");
-}
-
-function ipv6Words(value: string): number[] | undefined {
-  const address = value.split("%", 1)[0].toLowerCase();
-  const mapped = address.match(/^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/);
-  let source = address;
-  if (mapped) {
-    const ipv4 = normalizedIpv4(mapped[2]);
-    if (!ipv4) return undefined;
-    const octets = ipv4.split(".").map(Number);
-    source = `${mapped[1]}${((octets[0] << 8) | octets[1]).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
-  }
-  if (!source.includes(":")) return undefined;
-  const halves = source.split("::");
-  if (halves.length > 2) return undefined;
-  const left = halves[0] ? halves[0].split(":") : [];
-  const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
-  if (halves.length === 1 && left.length !== 8) return undefined;
-  const missing = 8 - left.length - right.length;
-  if (missing < (halves.length === 2 ? 1 : 0)) return undefined;
-  const words = [...left, ...Array.from({ length: missing }, () => "0"), ...right];
-  if (words.length !== 8 || words.some((word) => !/^[0-9a-f]{1,4}$/.test(word))) return undefined;
-  return words.map((word) => Number.parseInt(word, 16));
-}
-
 /** Canonical comparison form only; this value never leaves the module-owned in-memory tracker. */
 export function normalizeConnectionAddress(value: string) {
-  const trimmed = value.trim().replace(/^\[|\]$/g, "");
-  const ipv4 = normalizedIpv4(trimmed);
-  if (ipv4) return ipv4;
-  const words = ipv6Words(trimmed);
-  if (!words) return undefined;
-  if (words.slice(0, 5).every((word) => word === 0) && words[5] === 0xffff) {
-    return `${words[6] >> 8}.${words[6] & 255}.${words[7] >> 8}.${words[7] & 255}`;
-  }
-  return words.map((word) => word.toString(16).padStart(4, "0")).join(":");
+  const raw = value.trim().replace(/^\[|\]$/g, "");
+  const address = raw.includes(":") ? raw.split("%", 1)[0] : raw;
+  const parsed = SocketAddress.parse(address.includes(":") ? `[${address}]` : address);
+  return parsed?.address.startsWith("::ffff:") ? parsed.address.slice(7) : parsed?.address;
 }
 
 function connectionKey(address: string, port: number) {
@@ -190,15 +157,17 @@ export class PlayerPingCollector {
 
       if (observation.status !== "available") {
         this.pings.delete(server.id);
+        if (observation.status === "idle") {
+          this.endpoints.delete(server.id);
+          this.instances.delete(server.id);
+        }
         const status = observation.status === "unsupported" ? "unsupported" : observation.status === "idle" ? "idle" : "unavailable";
         this.states.set(server.id, {
           serverId: server.id,
           status,
           onlinePlayers: onlineNames.length,
           measuredPlayers: 0,
-          sampledAt: observation.sampledAt,
-          ...(status === "unsupported" ? { message: "Player ping measurement is not supported by this server node." } : {}),
-          ...(status === "unavailable" ? { message: "Player ping is temporarily unavailable." } : {})
+          sampledAt: new Date(this.now()).toISOString()
         });
         return;
       }
@@ -233,8 +202,7 @@ export class PlayerPingCollector {
         status: "unavailable",
         onlinePlayers: onlineNames.length,
         measuredPlayers: 0,
-        sampledAt: new Date(this.now()).toISOString(),
-        message: "Player ping is temporarily unavailable."
+        sampledAt: new Date(this.now()).toISOString()
       });
       this.options.onError?.(new Error("Player ping measurement failed"), server);
     }

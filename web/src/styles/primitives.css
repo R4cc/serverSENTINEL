@@ -1,6 +1,5 @@
 /* Shared component behavior. Feature styles should only add contextual modifiers. */
 .uiButton,
-.dangerTextButton,
 .iconButton,
 .iconOnlyButton {
   min-height: var(--control-height-default);
@@ -902,7 +901,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
 .textLinkButton:hover:not(:disabled),
-.dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled),
 .fileBreadcrumbs button:hover:not(:disabled),
 .modsWorkspaceUpdate button:hover:not(:disabled),
@@ -925,7 +923,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
 .uiButton--ghost:hover:not(:disabled),
 .textLinkButton:hover:not(:disabled),
-.dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled) {
   border-color: transparent;
   box-shadow: none;

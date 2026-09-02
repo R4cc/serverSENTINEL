@@ -59,10 +59,6 @@ export function addressEndpoint(value: string): { address: string; port?: number
   return { address: host, ...(port > 0 && port <= 65_535 ? { port } : {}) };
 }
 
-export function addressWithoutPort(value: string) {
-  return addressEndpoint(value).address;
-}
-
 export function parsePlayerLoginAddress(line: string, referenceDate = new Date()): PlayerLoginAddress | null {
   const parsed = parseLogLine(line, referenceDate);
   if (!parsed || !/logged in\b/i.test(parsed.message)) return null;

@@ -1,8 +1,6 @@
 import {
   geoLite2Attribution,
   greatCircleDistanceKm,
-  medianOf,
-  percentileOf,
   playerContinentNames,
   quietestWindow,
   type PlayerActivityHour,
@@ -64,13 +62,16 @@ function locationDistanceKm(location: PlayerLocation | undefined, reference: Pla
   ));
 }
 
-/**
- * Where a player was at a given moment, as far as the panel recorded.
- *
- * The run that had already begun by then, which is the last observation before that moment. Before
- * the first run there is no answer and none is invented: guessing forward from a later observation
- * is exactly the mistake that let one player moving rewrite a week of history.
- */
+function pingSummary(values: readonly number[]) {
+  if (!values.length) return {};
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return {
+    medianPingMs: sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2),
+    p95PingMs: sorted[Math.ceil(sorted.length * 0.95) - 1]
+  };
+}
+
 export function playerInsightsEntries(input: Pick<PlayerInsightsInput, "servers" | "snapshots" | "geo" | "serverLocations" | "pings">) {
   const serverNames = new Map(input.servers.map((server) => [server.id, server.displayName]));
   const references = new Map(input.serverLocations.map((entry) => [entry.serverId, entry.location]));
@@ -177,8 +178,7 @@ export function playerLatencyHistory(input: {
       at: Math.round(input.from + (span * index) / (input.points - 1)),
       players: samples.reduce((total, sample) => total + (sample.playersOnline ?? 0), 0),
       measuredPlayers: pingMs.length,
-      ...(pingMs.length ? { medianPingMs: medianOf(pingMs) } : {}),
-      ...(pingMs.length ? { p95PingMs: percentileOf(pingMs, 95) } : {})
+      ...pingSummary(pingMs)
     };
   });
 }
@@ -251,15 +251,13 @@ export function buildPlayerInsights(input: PlayerInsightsInput): PlayerInsightsR
   });
   const maintenanceWindow = quietestWindow(activityHours);
   const countries = new Set(entries.map((entry) => entry.location?.countryCode).filter(Boolean));
-  const medianPingMs = medianOf(onlinePings);
-  const p95PingMs = percentileOf(onlinePings, 95);
+  const currentPing = pingSummary(onlinePings);
 
   return {
     generatedAt: new Date(now).toISOString(),
     timeZone: input.timeZone,
     summary: {
-      ...(medianPingMs !== undefined ? { medianPingMs } : {}),
-      ...(p95PingMs !== undefined ? { p95PingMs } : {}),
+      ...currentPing,
       countries: countries.size,
       onlinePlayers: onlineEntries.length,
       locatedPlayers: entries.filter((entry) => entry.location).length,

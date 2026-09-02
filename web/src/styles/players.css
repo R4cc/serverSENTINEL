@@ -913,10 +913,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   image-rendering: pixelated;
 }
 
-.playerHead--placeholder {
-  border: 1px solid var(--border-muted);
-}
-
 .playerLocation {
   position: relative;
   display: inline-flex;
@@ -1012,23 +1008,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 .playerLocationAccuracy:focus-within .playerAccuracyTooltip {
   opacity: 1;
   transform: translateY(0);
-}
-
-.playerRosterFooter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  border-top: 1px solid var(--border-row);
-  padding-top: var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-}
-
-.playerRosterPager {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* Connection quality uses the same ECharts canvas and time-axis primitives as Server Timeline.
@@ -1397,23 +1376,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   .playerGeographyCard .uiPanelHeaderActions,
   .playerRosterCard .uiPanelHeaderActions {
     justify-content: flex-start;
-  }
-
-  .playerRosterFooter {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .playerRosterFooter > span:first-child {
-    text-align: center;
-  }
-
-  .playerRosterPager {
-    justify-content: space-between;
-  }
-
-  .playerRosterPager > span {
-    white-space: nowrap;
   }
 
   .playerRosterTable tbody tr {

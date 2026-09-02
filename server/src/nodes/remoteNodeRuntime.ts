@@ -297,12 +297,11 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   async readPlayerConnections(server: ManagedServer): Promise<PlayerConnectionObservation> {
     const node = await this.lookupNode(server.nodeId);
-    const sampledAt = new Date().toISOString();
     if (!node || !this.connections.isConnected(node.id)) {
-      return { status: "unavailable", sampledAt, connections: [], message: "The server node is offline." };
+      return { status: "unavailable", connections: [] };
     }
     if (!nodeAdvertisesCapability(node, "server.connections.read")) {
-      return { status: "unsupported", sampledAt, connections: [], message: "Update this server node to measure player ping." };
+      return { status: "unsupported", connections: [] };
     }
     return this.command(server, "server.connections.read") as Promise<PlayerConnectionObservation>;
   }

@@ -1787,25 +1787,6 @@ button.overviewCardRow:focus-visible {
   white-space: nowrap;
 }
 
-.serverEventsFooter {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-top: auto;
-  border-top: var(--border-subtle) solid var(--border-row);
-  padding-top: var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-}
-
-.serverEventsPager {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 /* On tall, wide workstations the final dashboard row absorbs unused viewport height. The pager
    stays at the bottom of the card while the table remains at the top, so the page ends cleanly. */
 @media (min-width: 1920px) and (min-height: 1200px) {
@@ -1826,18 +1807,6 @@ button.overviewCardRow:focus-visible {
     flex: 0 0 auto;
   }
 
-  .serverEventsFooter {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .serverEventsFooter > span:first-child {
-    text-align: center;
-  }
-
-  .serverEventsPager {
-    justify-content: space-between;
-  }
 }
 
 @media (max-width: 540px) {

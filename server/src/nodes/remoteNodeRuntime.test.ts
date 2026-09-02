@@ -132,7 +132,6 @@ describe("RemoteNodeRuntime player connection measurement", () => {
     const result = {
       status: "available",
       instanceId: "container-1",
-      sampledAt: "2026-09-02T12:00:00.000Z",
       connections: [{ remoteAddress: "203.0.113.5", remotePort: 50123, rttUs: 42_000 }]
     };
     const { runtime, calls } = runtimeWithRecorder(result);

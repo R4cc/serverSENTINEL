@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PlayerLocation } from "@serversentinel/contracts";
 import { openStorageDatabase, type StorageDatabase } from "./database.js";
-import { maxStintsPerPlayer, PlayerGeoRepository } from "./playerGeoRepository.js";
+import { PlayerGeoRepository } from "./playerGeoRepository.js";
 
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
@@ -28,8 +28,6 @@ const copenhagen: PlayerLocation = {
 };
 
 const sydney: PlayerLocation = { label: "Sydney", city: "Sydney", countryCode: "AU", continentCode: "OC", latitude: -33.87, longitude: 151.21, precision: "city" };
-const tokyo: PlayerLocation = { label: "Tokyo", city: "Tokyo", countryCode: "JP", continentCode: "AS", latitude: 35.68, longitude: 139.69, precision: "city" };
-
 async function createRepository() {
   const root = await mkdtemp(join(tmpdir(), "serversentinel-player-geo-"));
   temporaryDirectories.push(root);
@@ -52,7 +50,6 @@ describe("player geography storage", () => {
     const [entry] = repository.list();
     expect(entry).toMatchObject({ serverId: "server-1", player: "SullyTheSnak", playerKey: "sullythesnak", observations: 1 });
     expect(entry.location).toEqual(copenhagen);
-    expect(entry.stints).toHaveLength(1);
 
     // The privacy promise, checked against the bytes actually on disk rather than the API shape.
     const row = storage.connection.prepare<[], { location_json: string }>("SELECT location_json FROM player_geo_locations").get();
@@ -62,28 +59,25 @@ describe("player geography storage", () => {
     expect(columns).not.toContain("ip_hash");
   });
 
-  it("extends the current run when a player joins from the same place again", async () => {
+  it("updates one current record when a player joins again", async () => {
     const { repository } = await createRepository();
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: copenhagen, at: 1_000 });
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: copenhagen, at: 5_000 });
 
     const [entry] = repository.list();
-    expect(entry.stints).toHaveLength(1);
-    expect(entry.stints[0]).toMatchObject({ firstSeenAt: 1_000, lastSeenAt: 5_000, observations: 2 });
+    expect(entry).toMatchObject({ firstSeenAt: 1_000, lastSeenAt: 5_000, observations: 2 });
+    expect(repository.stats().rows).toBe(1);
   });
 
-  it("keeps where a player used to be when they move, rather than overwriting it", async () => {
+  it("replaces a player's current place without creating unused history", async () => {
     const { repository } = await createRepository();
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: copenhagen, at: 1_000 });
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: sydney, at: 5_000 });
 
     const [entry] = repository.list();
-    expect(entry.stints.map((stint) => stint.location.city)).toEqual(["Copenhagen", "Sydney"]);
-    expect(entry.stints[0]).toMatchObject({ firstSeenAt: 1_000, lastSeenAt: 1_000 });
-    expect(entry.stints[1]).toMatchObject({ firstSeenAt: 5_000, lastSeenAt: 5_000 });
-    // The roster shows where they are now, and the totals span the whole record.
     expect(entry.location.city).toBe("Sydney");
     expect(entry).toMatchObject({ firstSeenAt: 1_000, lastSeenAt: 5_000, observations: 2 });
+    expect(repository.stats().rows).toBe(1);
   });
 
   it("does not count the same login again when the log window is polled a second time", async () => {
@@ -94,38 +88,18 @@ describe("player geography storage", () => {
     const changesAfterReplay = storage.connection.prepare<[], { changes: number }>("SELECT total_changes() AS changes").get()!.changes;
 
     const [entry] = repository.list();
-    expect(entry.stints).toHaveLength(1);
-    expect(entry.stints[0]).toMatchObject({ observations: 1, lastSeenAt: 5_000 });
+    expect(entry).toMatchObject({ observations: 1, lastSeenAt: 5_000 });
     expect(changesAfterReplay).toBe(changesBeforeReplay);
   });
 
-  it("ignores an older observation rather than backdating a place into the history", async () => {
+  it("ignores an older observation rather than replacing the current place", async () => {
     const { repository } = await createRepository();
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: copenhagen, at: 5_000 });
-    // Re-reading a log window that still holds the join before the move must not reopen it.
     repository.record({ serverId: "server-1", player: "SullyTheSnak", location: sydney, at: 5_000 });
-    repository.record({ serverId: "server-1", player: "SullyTheSnak", location: tokyo, at: 1_000 });
+    repository.record({ serverId: "server-1", player: "SullyTheSnak", location: sydney, at: 1_000 });
 
     const [entry] = repository.list();
-    expect(entry.stints).toHaveLength(1);
     expect(entry.location.city).toBe("Copenhagen");
-  });
-
-  it("forgets the oldest place once a wandering player has too many", async () => {
-    const { repository } = await createRepository();
-    for (let index = 0; index < maxStintsPerPlayer + 4; index += 1) {
-      repository.record({
-        serverId: "server-1",
-        player: "Wanderer",
-        location: { ...copenhagen, label: `Place ${index}`, city: `Place ${index}`, latitude: index },
-        at: 1_000 + index * 1_000
-      });
-    }
-
-    const [entry] = repository.list();
-    expect(entry.stints).toHaveLength(maxStintsPerPlayer);
-    expect(entry.stints[0].location.city).toBe("Place 4");
-    expect(entry.stints.at(-1)?.location.city).toBe(`Place ${maxStintsPerPlayer + 3}`);
   });
 
   it("treats the same player written differently as one player", async () => {
@@ -137,17 +111,15 @@ describe("player geography storage", () => {
     expect(repository.find("server-1", "SULLYTHESNAK")?.observations).toBe(2);
   });
 
-  it("prunes runs that stopped describing anyone who plays here", async () => {
+  it("prunes records that stopped describing anyone who plays here", async () => {
     const { repository } = await createRepository();
     repository.record({ serverId: "server-1", player: "Mover", location: copenhagen, at: 1_000 });
     repository.record({ serverId: "server-1", player: "Mover", location: sydney, at: 9_000 });
     repository.record({ serverId: "server-1", player: "Old", location: copenhagen, at: 1_000 });
 
-    expect(repository.prune(5_000)).toBe(2);
-    // The player who is still around keeps their current place; the run they left behind is gone.
+    expect(repository.prune(5_000)).toBe(1);
     const [entry] = repository.list();
     expect(entry.player).toBe("Mover");
-    expect(entry.stints).toHaveLength(1);
     expect(entry.location.city).toBe("Sydney");
     expect(repository.stats()).toEqual({ entries: 1, rows: 1, servers: 1 });
   });

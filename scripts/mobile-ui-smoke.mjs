@@ -246,8 +246,6 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   const initialMarker = await mapMarker.boundingBox();
   assert(initialMarker && initialMarker.width <= 20.5 && initialMarker.height <= 20.5, `${label}: mobile player marker is still too large: ${JSON.stringify(initialMarker)}`);
   await assertPlayerMarkerAnchorsAcrossTransforms(page, label);
-  const zoomedMarker = await mapMarker.boundingBox();
-  assert(zoomedMarker && Math.abs(zoomedMarker.width - initialMarker.width) <= 1, `${label}: player marker grew with the zoom instead of staying anchored: ${JSON.stringify({ initialMarker, zoomedMarker })}`);
 
   const serverCluster = page.locator(".playerMapClusterMarker--server");
   const cluster = await serverCluster.count() ? serverCluster : page.locator(".playerMapClusterMarker").first();
@@ -875,18 +873,12 @@ async function assertPageRestoresOnReload(page, title, storedPage, contentSelect
 
   let releaseAppCatalog;
   let appCatalogRequested;
-  let appCatalogHandled;
   const appCatalogGate = new Promise((resolve) => { releaseAppCatalog = resolve; });
   const appCatalogRequest = new Promise((resolve) => { appCatalogRequested = resolve; });
-  const appCatalogCompletion = new Promise((resolve) => { appCatalogHandled = resolve; });
   const delayAppCatalog = async (route) => {
     appCatalogRequested();
     await appCatalogGate;
-    try {
-      await route.continue();
-    } finally {
-      appCatalogHandled();
-    }
+    await route.continue();
   };
   await page.route("**/api/app", delayAppCatalog);
   try {
@@ -900,13 +892,11 @@ async function assertPageRestoresOnReload(page, title, storedPage, contentSelect
       assert.equal(await page.locator(".schedulePage").count(), 0, `${label}: schedules rendered before module access resolved`);
     }
     releaseAppCatalog();
-    await appCatalogCompletion;
     await page.locator(contentSelector).waitFor();
     assert.equal(await navigationItem.getAttribute("aria-current"), "page", `${label}: sidebar lost the active ${title} state after restoration`);
     assert.equal(await readStoredPage(), storedPage, `${label}: restored ${title} changed its stored page value`);
   } finally {
     releaseAppCatalog();
-    await appCatalogCompletion;
     await page.unroute("**/api/app", delayAppCatalog);
   }
 }

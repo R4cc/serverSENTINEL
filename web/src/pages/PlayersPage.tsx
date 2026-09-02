@@ -518,7 +518,7 @@ export function PlayersPage({
         <Surface className="playerCard playerLatencyCard">
           <PanelHeader
             title="Connection quality"
-            help={<HelpTooltip label="connection quality">Ping is the Linux TCP round-trip time measured on the server host for directly matched, currently connected players. Proxies and unsupported nodes may leave it unavailable. {pingMeasurement?.message ?? "Hover or focus the chart to inspect a moment."}</HelpTooltip>}
+            help={<HelpTooltip label="connection quality">Ping is the Linux TCP round-trip time measured on the server host for directly matched, currently connected players. {pingMeasurement?.status === "unsupported" ? "This server node does not support measurement." : pingMeasurement?.status === "unavailable" ? "Measurement is temporarily unavailable." : "Hover or focus the chart to inspect a moment."}</HelpTooltip>}
             actions={(
               <div className="playerRangeSwitch" role="group" aria-label="Latency history range">
                 {playerInsightsRanges.map((option) => (

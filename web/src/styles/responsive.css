@@ -453,12 +453,10 @@ button:disabled,
   padding: var(--space-4);
 }
 
-.dangerTextButton,
 .iconDangerButton {
   border-color: var(--sentinel-danger);
 }
 
-.dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled) {
   background: var(--sentinel-danger);
   border-color: var(--sentinel-danger);

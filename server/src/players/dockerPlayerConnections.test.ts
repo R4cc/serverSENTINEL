@@ -75,6 +75,7 @@ describe("Docker player connection probe", () => {
   it("copies the probe once, directly execs it with the internal port, and returns bounded data", async () => {
     const instance = server("direct-exec");
     mocks.inspect.mockResolvedValue({ Id: "container-direct", State: { Running: true }, Config: { Labels: {} } });
+    mocks.request.mockResolvedValueOnce({ Running: false, ExitCode: 127 }).mockResolvedValue({ Running: false, ExitCode: 0 });
 
     await expect(readDockerPlayerConnections(instance)).resolves.toMatchObject({
       status: "available",
@@ -100,12 +101,12 @@ describe("Docker player connection probe", () => {
     expect(mocks.request).toHaveBeenCalledWith("GET", "/exec/exec-1/json", 200, undefined, 2_000);
   });
 
-  it("reinstalls once when direct execution fails, then succeeds", async () => {
+  it("installs once when direct execution fails, then succeeds", async () => {
     mocks.inspect.mockResolvedValue({ Id: "container-retry", State: { Running: true }, Config: { Labels: {} } });
     mocks.jsonRequest.mockRejectedValueOnce(new Error("executable missing")).mockResolvedValueOnce({ Id: "exec-2" });
 
     await expect(readDockerPlayerConnections(server("retry"))).resolves.toMatchObject({ status: "available" });
-    expect(mocks.bufferRequest.mock.calls.filter(([method]) => method === "PUT")).toHaveLength(2);
+    expect(mocks.bufferRequest.mock.calls.filter(([method]) => method === "PUT")).toHaveLength(1);
     expect(mocks.jsonRequest).toHaveBeenCalledTimes(2);
   });
 

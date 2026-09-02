@@ -59,7 +59,6 @@ strong {
 
 button,
 .runtimeControlButton,
-.dangerTextButton,
 .fileNameCell,
 .accountLogoutButton {
   font-size: var(--type-button-size);

@@ -14,14 +14,13 @@ export type PlayerTcpConnection = {
 };
 
 export type PlayerConnectionObservation =
-  | { status: "idle"; instanceId?: string; sampledAt: string; connections: [] }
-  | { status: "available"; instanceId: string; sampledAt: string; connections: PlayerTcpConnection[] }
-  | { status: "unsupported" | "unavailable"; instanceId?: string; sampledAt: string; connections: []; message: string };
+  | { status: "idle"; instanceId?: string; connections: [] }
+  | { status: "available"; instanceId: string; connections: PlayerTcpConnection[] }
+  | { status: "unsupported" | "unavailable"; instanceId?: string; connections: [] };
 
 const probeContainerPath = "/tmp/.serversentinel-tcp-rtt";
 const probeHostPath = fileURLToPath(new URL("../../native/tcp-rtt-probe", import.meta.url));
 const probeOutputMaxBytes = 256 * 1024;
-const installedContainers = new Set<string>();
 
 type DockerExecCreated = { Id?: string };
 type DockerExecInspect = { Running?: boolean; ExitCode?: number };
@@ -93,7 +92,6 @@ async function installProbe(containerId: string) {
     200,
     { contentType: "application/x-tar", timeoutMs: 5_000, maxBytes: 16 * 1024 }
   );
-  installedContainers.add(containerId);
 }
 
 async function executeProbe(containerId: string, port: number) {
@@ -142,36 +140,30 @@ function normalizedProbeOutput(value: string): PlayerTcpConnection[] {
 }
 
 export async function readDockerPlayerConnections(server: ManagedServer): Promise<PlayerConnectionObservation> {
-  const sampledAt = new Date().toISOString();
   if (platform() !== "linux") {
-    return { status: "unsupported", sampledAt, connections: [], message: "Player ping measurement requires a Linux Docker host." };
+    return { status: "unsupported", connections: [] };
   }
   const details = await inspectDockerContainer(server);
   if (!details?.State?.Running || !details.Id) {
-    return { status: "idle", instanceId: details?.Id, sampledAt, connections: [] };
+    return { status: "idle", instanceId: details?.Id, connections: [] };
   }
   if (!isManagedContainerFor(details.Config?.Labels, server.id)) {
-    return { status: "unavailable", instanceId: details.Id, sampledAt, connections: [], message: "Player ping is unavailable for an unmanaged container." };
+    return { status: "unavailable", instanceId: details.Id, connections: [] };
   }
   try {
-    if (!installedContainers.has(details.Id)) await installProbe(details.Id);
     let output: string;
     try {
       output = await executeProbe(details.Id, internalMinecraftPort(server));
     } catch {
-      installedContainers.delete(details.Id);
       await installProbe(details.Id);
       output = await executeProbe(details.Id, internalMinecraftPort(server));
     }
-    return { status: "available", instanceId: details.Id, sampledAt, connections: normalizedProbeOutput(output) };
+    return { status: "available", instanceId: details.Id, connections: normalizedProbeOutput(output) };
   } catch {
-    installedContainers.delete(details.Id);
     return {
       status: "unavailable",
       instanceId: details.Id,
-      sampledAt,
-      connections: [],
-      message: "Player TCP round-trip time could not be measured in this container."
+      connections: []
     };
   }
 }

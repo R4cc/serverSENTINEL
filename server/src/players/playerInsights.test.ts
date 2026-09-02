@@ -17,7 +17,7 @@ function location(overrides: Partial<PlayerLocation> = {}): PlayerLocation {
 function stored(player: string, serverId: string, overrides: Partial<PlayerLocation> = {}): StoredPlayerGeo {
   const firstSeenAt = now - 86_400_000;
   const place = location(overrides);
-  return { serverId, player, playerKey: player.toLowerCase(), stints: [{ location: place, firstSeenAt, lastSeenAt: now - 60_000, observations: 3 }], location: place, firstSeenAt, lastSeenAt: now - 60_000, observations: 3 };
+  return { serverId, player, playerKey: player.toLowerCase(), location: place, firstSeenAt, lastSeenAt: now - 60_000, observations: 3 };
 }
 
 function liveSnapshot(names: string[]): PlayerSnapshot {

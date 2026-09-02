@@ -8,12 +8,9 @@ import { isLocatableAddress, locateAddress, type GeoCityReader } from "./geoLoca
 /**
  * Where the panel measures a player's distance from.
  *
- * A latency estimate needs two positions, and the panel knows only one of them for free. A node
- * reaches the panel over an outbound websocket and nothing records the address it came from, and
- * asking the internet for the host's own public address would be exactly the third-party call this
- * feature refuses to make. So the reference point is the one thing the operator already knows: the
- * address players connect to. It is stored as configuration, resolved locally against the same
- * GeoLite2 database everything else uses, and re-resolved whenever the database is replaced.
+ * A node reaches the panel over an outbound websocket and nothing records the address it came
+ * from. The operator therefore supplies the address players connect to; it is stored as
+ * configuration, resolved locally, and re-resolved whenever the GeoLite2 database is replaced.
  *
  * A server with no address configured simply has no distances, and the module says so instead of
  * inventing a reference point.

@@ -16,7 +16,6 @@ async function collectorFixture() {
   let observation: PlayerConnectionObservation = {
     status: "available",
     instanceId: "container-1",
-    sampledAt: "2026-09-02T12:00:00.000Z",
     connections: []
   };
   let enabled = false;
@@ -45,7 +44,7 @@ async function collectorFixture() {
 describe("player ping collection", () => {
   it("normalizes IPv4, IPv6, and IPv4-mapped IPv6 for exact comparison", () => {
     expect(normalizeConnectionAddress("203.000.113.005")).toBe("203.0.113.5");
-    expect(normalizeConnectionAddress("2001:db8::1")).toBe("2001:0db8:0000:0000:0000:0000:0000:0001");
+    expect(normalizeConnectionAddress("2001:db8::1")).toBe("2001:db8::1");
     expect(normalizeConnectionAddress("::ffff:203.0.113.5")).toBe("203.0.113.5");
     expect(normalizeConnectionAddress("not-an-address")).toBeUndefined();
   });
@@ -55,7 +54,7 @@ describe("player ping collection", () => {
     fixture.collector.observeLogin(server, { player: "Alex", address: "203.0.113.5", port: 50001 });
     fixture.collector.observeLogin(server, { player: "Steve", address: "203.0.113.5", port: 50002 });
     fixture.setObservation({
-      status: "available", instanceId: "container-1", sampledAt: "2026-09-02T12:00:00.000Z",
+      status: "available", instanceId: "container-1",
       connections: [
         { remoteAddress: "::ffff:203.0.113.5", remotePort: 50002, rttUs: 81_400 },
         { remoteAddress: "203.0.113.5", remotePort: 50003, rttUs: 10_000 }
@@ -73,7 +72,7 @@ describe("player ping collection", () => {
     const fixture = await collectorFixture();
     fixture.collector.observeLogin(server, { player: "Alex", address: "2001:db8::1", port: 50100 });
     fixture.setObservation({
-      status: "available", instanceId: "container-1", sampledAt: "2026-09-02T12:00:00.000Z",
+      status: "available", instanceId: "container-1",
       connections: [{ remoteAddress: "2001:0db8::1", remotePort: 50100, rttUs: 25_100 }]
     });
     await fixture.collector.collectAll();
@@ -99,20 +98,19 @@ describe("player ping collection", () => {
     const fixture = await collectorFixture();
     fixture.collector.observeLogin(server, { player: "Alex", address: "198.51.100.4", port: 50001 });
     fixture.setObservation({
-      status: "available", instanceId: "container-1", sampledAt: "2026-09-02T12:00:00.000Z",
+      status: "available", instanceId: "container-1",
       connections: [{ remoteAddress: "198.51.100.4", remotePort: 50001, rttUs: 40_000 }]
     });
     await fixture.collector.collectAll();
     fixture.setNow(Date.parse("2026-09-02T12:00:16.000Z"));
     expect(fixture.collector.latest(server.id).size).toBe(0);
 
-    fixture.setObservation({ status: "unsupported", sampledAt: "2026-09-02T12:00:16.000Z", connections: [], message: "secret host detail" });
+    fixture.setObservation({ status: "unsupported", connections: [] });
     await fixture.collector.collectAll();
     expect(fixture.collector.measurements([server.id])[0]).toEqual(expect.objectContaining({ status: "unsupported", measuredPlayers: 0 }));
-    expect(JSON.stringify(fixture.collector.measurements([server.id]))).not.toContain("secret host detail");
 
     fixture.setObservation({
-      status: "available", instanceId: "container-2", sampledAt: "2026-09-02T12:00:17.000Z",
+      status: "available", instanceId: "container-2",
       connections: [{ remoteAddress: "198.51.100.4", remotePort: 50001, rttUs: 9_000 }]
     });
     await fixture.collector.collectAll();
@@ -130,10 +128,7 @@ describe("player ping collection", () => {
     expect(reader).toHaveBeenCalled();
     expect(fixture.errors).toHaveLength(1);
     expect((fixture.errors[0] as Error).message).toBe("Player ping measurement failed");
-    expect(fixture.collector.measurements([server.id])[0]).toEqual(expect.objectContaining({
-      status: "unavailable",
-      message: "Player ping is temporarily unavailable."
-    }));
+    expect(fixture.collector.measurements([server.id])[0]).toEqual(expect.objectContaining({ status: "unavailable" }));
     expect(JSON.stringify(fixture.collector.measurements([server.id]))).not.toContain("203.0.113.9");
     fixture.collector.stop();
     expect(fixture.collector.latest(server.id).size).toBe(0);
