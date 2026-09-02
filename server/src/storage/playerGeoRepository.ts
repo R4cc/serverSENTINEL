@@ -9,28 +9,14 @@ import type { StorageDatabase } from "./database.js";
  * "roughly where in the world do this server's players connect from", which is the whole question
  * the feature exists to answer.
  *
- * What it stores is a short history rather than a single latest place. Estimated latency for a
- * session that happened last Tuesday has to be estimated from where the player was last Tuesday —
- * with one row per player, someone moving across an ocean silently rewrote every past hour of the
- * connection-quality chart. A row is added only when the derived place actually changes, so a
- * player who never moves still costs exactly one row, and this never becomes a time series.
+ * One current derived place is retained per player. Existing installations may still have several
+ * legacy rows; reads collapse those rows while new observations update only the latest one.
  */
-
-/** One run of joins from the same place. */
-export type StoredPlayerGeoStint = {
-  location: PlayerLocation;
-  firstSeenAt: number;
-  lastSeenAt: number;
-  observations: number;
-};
 
 export type StoredPlayerGeo = {
   serverId: string;
   player: string;
   playerKey: string;
-  /** Oldest first. The last entry is where the player is now, as far as the panel knows. */
-  stints: StoredPlayerGeoStint[];
-  /** The most recent place, which is what the roster shows. */
   location: PlayerLocation;
   firstSeenAt: number;
   lastSeenAt: number;
@@ -47,31 +33,8 @@ type PlayerGeoRow = {
   observations: number;
 };
 
-/**
- * How many places one player may be remembered in before the oldest is forgotten.
- *
- * A player on a mobile connection can resolve to a different city every session, and without a
- * ceiling their row count would track their login count. Ten covers any history the panel can
- * actually replay — timeline events are retained for a week — while keeping the table bounded.
- */
-export const maxStintsPerPlayer = 10;
-
 export function playerGeoKey(player: string) {
   return player.trim().toLocaleLowerCase("en-US");
-}
-
-/** Whether two derived places are the same place, field by field rather than by JSON text. */
-export function sameLocation(left: PlayerLocation, right: PlayerLocation) {
-  return left.label === right.label
-    && left.city === right.city
-    && left.subdivision === right.subdivision
-    && left.country === right.country
-    && left.countryCode === right.countryCode
-    && left.continentCode === right.continentCode
-    && left.latitude === right.latitude
-    && left.longitude === right.longitude
-    && left.accuracyRadiusKm === right.accuracyRadiusKm
-    && left.precision === right.precision;
 }
 
 function parseLocation(json: string) {
@@ -89,19 +52,12 @@ function group(rows: PlayerGeoRow[]): StoredPlayerGeo[] {
     const location = parseLocation(row.location_json);
     if (!location) continue;
     const key = `${row.server_id}:${row.player_key}`;
-    const stint: StoredPlayerGeoStint = {
-      location,
-      firstSeenAt: row.first_seen_at,
-      lastSeenAt: row.last_seen_at,
-      observations: row.observations
-    };
     const existing = byPlayer.get(key);
     if (!existing) {
       byPlayer.set(key, {
         serverId: row.server_id,
         player: row.player_name,
         playerKey: row.player_key,
-        stints: [stint],
         location,
         firstSeenAt: row.first_seen_at,
         lastSeenAt: row.last_seen_at,
@@ -111,7 +67,6 @@ function group(rows: PlayerGeoRow[]): StoredPlayerGeo[] {
     }
     // Rows arrive oldest first per player, so the last one seen is the current place and carries
     // the name the player most recently used.
-    existing.stints.push(stint);
     existing.location = location;
     existing.player = row.player_name;
     existing.firstSeenAt = Math.min(existing.firstSeenAt, row.first_seen_at);
@@ -151,9 +106,8 @@ export class PlayerGeoRepository {
    * Records the location one join resolved to.
    *
    * The same login line is read again on every poll of the log window, so this is idempotent: a
-   * join already recorded refreshes nothing and counts nothing. A join from the place the player
-   * was last seen in extends that run; a join from somewhere else starts a new one, which is what
-   * keeps past latency estimated from past locations.
+   * join already recorded refreshes nothing and counts nothing. A newer join updates the player's
+   * latest derived place without retaining the connection address or an unused location history.
    *
    * An observation older than the newest run is ignored rather than backdated. It can only be a
    * line the panel has already read, and inserting it would interleave a stale place into a
@@ -169,46 +123,27 @@ export class PlayerGeoRepository {
         WHERE server_id = ? AND player_key = ?
         ORDER BY first_seen_at DESC LIMIT 1
       `).get(entry.serverId, key);
-      const newestLocation = newest ? parseLocation(newest.location_json) : undefined;
-
-      if (newest && newestLocation && sameLocation(newestLocation, entry.location)) {
-        // The timeline collector republishes the same recent log tail every pass. Once this exact
-        // observation has been recorded, do not turn that idempotent replay into a SQLite write.
+      if (newest) {
         if (entry.at <= newest.last_seen_at) return;
         database.prepare(`
           UPDATE player_geo_locations
-          SET player_name = ?, last_seen_at = ?, observations = observations + 1
+          SET player_name = ?, location_json = ?, last_seen_at = ?, observations = observations + 1
           WHERE server_id = ? AND player_key = ? AND first_seen_at = ?
-        `).run(name, entry.at, entry.serverId, key, newest.first_seen_at);
+        `).run(name, JSON.stringify(entry.location), entry.at, entry.serverId, key, newest.first_seen_at);
         return;
       }
-      if (newest && entry.at <= newest.last_seen_at) return;
 
       database.prepare(`
         INSERT INTO player_geo_locations (server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations)
         VALUES (?, ?, ?, ?, ?, ?, 1)
-        ON CONFLICT(server_id, player_key, first_seen_at) DO UPDATE SET
-          player_name = excluded.player_name,
-          location_json = excluded.location_json,
-          last_seen_at = MAX(player_geo_locations.last_seen_at, excluded.last_seen_at)
       `).run(entry.serverId, key, name, JSON.stringify(entry.location), entry.at, entry.at);
-
-      database.prepare(`
-        DELETE FROM player_geo_locations
-        WHERE server_id = ? AND player_key = ? AND first_seen_at NOT IN (
-          SELECT first_seen_at FROM player_geo_locations
-          WHERE server_id = ? AND player_key = ?
-          ORDER BY first_seen_at DESC LIMIT ?
-        )
-      `).run(entry.serverId, key, entry.serverId, key, maxStintsPerPlayer);
     });
   }
 
   /**
    * Retention: geography that stopped describing anyone who plays here is dropped.
    *
-   * A run is judged by when it ended, so a player still connecting from the same place keeps their
-   * whole record, and a place someone moved away from ages out on its own.
+   * A record is judged by its latest observation, so an active player keeps their derived place.
    */
   prune(cutoff: number) {
     return this.storage.connection.prepare("DELETE FROM player_geo_locations WHERE last_seen_at < ?").run(cutoff).changes;

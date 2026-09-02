@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Keybo
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
-import { Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
+import { Banner, Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
@@ -395,7 +395,6 @@ export function FilesPage({
           <div className="selectionActionBar" aria-label="File selection actions">
             <span className="selectionSummary" role="status" aria-live="polite">{operationLabel || selectionSummary}</span>
             <div className="selectionActions">
-              {selectedEntries.length === 0 && <span className="selectionActionsHint">Select an item to see available actions</span>}
               {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
                 <AppIcon name="edit" />
                 <span className="selectionActionLabel">Open</span>
@@ -553,7 +552,6 @@ export function FilesPage({
         {!selectedEntry && selectedEntries.length === 0 && (
           <div className="fileDetailsEmpty">
             <h2>No file selected</h2>
-            <p>Select a file or folder from the list to view details. Text files will also show a read-only preview here.</p>
           </div>
         )}
         {selectedEntries.length > 1 && (
@@ -775,11 +773,11 @@ export function FileActionModal({
                 {dialog.entries.slice(0, 6).map((entry) => <li key={entry.path}>{entry.path}</li>)}
                 {dialog.entries.length > 6 && <li>…and {dialog.entries.length - 6} more</li>}
               </ul>
-              {folders > 0 && <p className="fileActionWarning">Selected folders and everything inside them will be deleted.</p>}
+              {folders > 0 && <Banner tone="warning" compact title="Folders include their contents" message="Selected folders and everything inside them will be deleted." />}
               <p className="fileActionDanger">This action cannot be undone.</p>
             </>
           )}
-          {error && <p className="fileActionError" id="file-action-error" role="alert">{error}</p>}
+          {error && <Banner tone="error" compact id="file-action-error" title="Could not complete this action" message={error} />}
         </div>
         <footer className="modalFooter">
           <Button variant="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>

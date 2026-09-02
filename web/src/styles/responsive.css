@@ -88,8 +88,7 @@
     margin: 0 !important;
   }
 
-  .workspaceHeader,
-  .systemBanner {
+  .workspaceHeader {
     align-items: stretch;
     flex-direction: column;
   }
@@ -100,10 +99,6 @@
 
   .runtimeControls {
     flex-wrap: wrap;
-  }
-
-  .systemBanner {
-    grid-template-columns: 1fr;
   }
 
 .settingsStatus {
@@ -458,12 +453,10 @@ button:disabled,
   padding: var(--space-4);
 }
 
-.dangerTextButton,
 .iconDangerButton {
   border-color: var(--sentinel-danger);
 }
 
-.dangerTextButton:hover:not(:disabled),
 .iconDangerButton:hover:not(:disabled) {
   background: var(--sentinel-danger);
   border-color: var(--sentinel-danger);
@@ -1080,15 +1073,13 @@ button:disabled,
 }
 
 .panel,
-.modalPanel,
-.systemBanner {
+.modalPanel {
   border-color: var(--glass-edge);
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
 }
 
 .themeDark .panel,
-.themeDark .modalPanel,
-.themeDark .systemBanner {
+.themeDark .modalPanel {
   box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
 }
 
@@ -1180,12 +1171,6 @@ textarea:hover:not(:disabled),
 .eventEmpty,
 .inlineState-empty {
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
-}
-
-.systemBanner.warning,
-.systemBanner.error,
-.systemBanner.accent {
-  background-image: none;
 }
 
 .sideNav button:disabled {

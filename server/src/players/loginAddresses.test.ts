@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addressWithoutPort, parsePlayerLoginAddress, parsePlayerLoginAddresses } from "./loginAddresses.js";
+import { addressEndpoint, parsePlayerLoginAddress, parsePlayerLoginAddresses } from "./loginAddresses.js";
 
 const referenceDate = new Date("2026-08-16T12:00:00.000Z");
 
@@ -9,7 +9,7 @@ describe("Minecraft login address parsing", () => {
       "[11:59:00] [Server thread/INFO]: SullyTheSnak[/203.0.113.5:51234] logged in with entity id 42 at (12.5, 64.0, -8.5)",
       referenceDate
     );
-    expect(login).toMatchObject({ player: "SullyTheSnak", address: "203.0.113.5" });
+    expect(login).toMatchObject({ player: "SullyTheSnak", address: "203.0.113.5", port: 51234 });
     // The instant is whatever the shared line parser resolves the runtime-zone wall time to.
     expect(Number.isFinite(Date.parse(login!.at!))).toBe(true);
   });
@@ -21,6 +21,7 @@ describe("Minecraft login address parsing", () => {
     );
     expect(login?.player).toBe("EnderBobo");
     expect(login?.address).toBe("198.51.100.20");
+    expect(login?.port).toBe(49111);
   });
 
   it("keeps an IPv6 client's address whole", () => {
@@ -29,6 +30,7 @@ describe("Minecraft login address parsing", () => {
       referenceDate
     );
     expect(login?.address).toBe("2001:db8::1a2b");
+    expect(login?.port).toBe(51234);
   });
 
   it("ignores every other line the console produces, including joins and disconnects", () => {
@@ -53,16 +55,13 @@ describe("Minecraft login address parsing", () => {
     expect(parsePlayerLoginAddresses(text, referenceDate).map((login) => login.player)).toEqual(["AlexIsHodde", "NoobMiner"]);
   });
 
-  describe("port stripping", () => {
-    it("keeps the host and drops the port for both address families", () => {
-      expect(addressWithoutPort("/203.0.113.5:51234")).toBe("203.0.113.5");
-      expect(addressWithoutPort("[2001:db8::1]:51234")).toBe("2001:db8::1");
-      expect(addressWithoutPort("203.0.113.5")).toBe("203.0.113.5");
-    });
-
-    it("leaves a bare IPv6 address alone rather than mistaking its last group for a port", () => {
-      expect(addressWithoutPort("2001:db8::1")).toBe("2001:db8::1");
-      expect(addressWithoutPort("2001:db8::1234")).toBe("2001:db8::1234");
+  describe("endpoint parsing", () => {
+    it("returns a source port only when the endpoint syntax is unambiguous", () => {
+      expect(addressEndpoint("/203.0.113.5:51234")).toEqual({ address: "203.0.113.5", port: 51234 });
+      expect(addressEndpoint("[2001:db8::1]:51234")).toEqual({ address: "2001:db8::1", port: 51234 });
+      expect(addressEndpoint("2001:db8::1234")).toEqual({ address: "2001:db8::1234" });
+      expect(addressEndpoint("203.0.113.5:0")).toEqual({ address: "203.0.113.5" });
+      expect(addressEndpoint("203.0.113.5:65536")).toEqual({ address: "203.0.113.5" });
     });
   });
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { chromium, devices, webkit } from "playwright";
-import { launchBrowser, signInThroughForm, startDemoHarness } from "./lib/demo-harness.mjs";
+import { launchBrowser, signInThroughApi, signInThroughForm, startDemoHarness } from "./lib/demo-harness.mjs";
 
 const harness = await startDemoHarness({
   dataDirectoryPrefix: "serversentinel-mobile-smoke-",
@@ -101,8 +101,152 @@ async function assertFloatingSurfaces(page, label) {
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
 }
 
+async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
+  const assertAnchored = async (phase) => {
+    const measurements = await page.locator(".playerMapMarkerWrap").evaluateAll((wrappers) => {
+      const content = document.querySelector(".playerMapTransformContent");
+      if (!(content instanceof HTMLElement)) return [];
+      const contentRect = content.getBoundingClientRect();
+      return wrappers.flatMap((wrapper) => {
+        const marker = wrapper.querySelector(".playerMapMarker");
+        if (!(wrapper instanceof HTMLElement) || !(marker instanceof HTMLElement)) return [];
+        const markerRect = marker.getBoundingClientRect();
+        const left = Number.parseFloat(wrapper.style.left) / 100;
+        const top = Number.parseFloat(wrapper.style.top) / 100;
+        const expected = {
+          x: contentRect.left + contentRect.width * left,
+          y: contentRect.top + contentRect.height * top
+        };
+        const actual = {
+          x: markerRect.left + markerRect.width / 2,
+          y: markerRect.top + markerRect.height / 2
+        };
+        return [{
+          label: marker.getAttribute("aria-label"),
+          delta: Math.hypot(actual.x - expected.x, actual.y - expected.y),
+          expected,
+          actual
+        }];
+      });
+    });
+    assert(measurements.length > 0, `${label} ${phase}: player map markers are missing`);
+    const drifting = measurements.filter(({ delta }) => delta > 1.5);
+    assert(drifting.length === 0, `${label} ${phase}: marker centers drifted from their transformed projected coordinates: ${JSON.stringify(drifting)}`);
+  };
+
+  const zoomIn = page.getByRole("button", { name: "Zoom in" });
+  await assertAnchored("at 100% zoom");
+  await zoomIn.click();
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 1.49);
+  await assertAnchored("at intermediate zoom");
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const currentScale = await page.locator(".playerMapTransformContent").evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).a);
+    if (currentScale >= 3.99) break;
+    const clicked = await zoomIn.evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+      button.click();
+      return true;
+    });
+    if (!clicked) break;
+    await page.waitForFunction((previous) => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a > previous + 0.01, currentScale);
+    await page.waitForTimeout(250);
+  }
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 3.99);
+  await assertAnchored("at 4x zoom");
+
+  const mapTransform = page.locator(".playerMapTransformContent");
+  const beforePan = await mapTransform.evaluate((element) => {
+    const matrix = new DOMMatrix(getComputedStyle(element).transform);
+    return { x: matrix.e, y: matrix.f };
+  });
+  const frame = await page.locator(".playerMapFrame").boundingBox();
+  assert(frame, `${label}: player map frame is missing`);
+  await page.mouse.move(frame.x + frame.width * 0.5, frame.y + frame.height * 0.55);
+  await page.mouse.down();
+  await page.mouse.move(frame.x + frame.width * 0.65, frame.y + frame.height * 0.7, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForFunction(({ x, y }) => {
+    const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
+    return Math.hypot(matrix.e - x, matrix.f - y) >= 3;
+  }, beforePan);
+  await assertAnchored("after panning");
+
+  await page.getByRole("button", { name: "Reset map view" }).click();
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a <= 1.01);
+}
+
 async function assertPlayerClusterPopupDismisses(page, label) {
   await openPage(page, "players");
+  const helpTrigger = page.getByRole("button", { name: "About player geography", exact: true });
+  await helpTrigger.waitFor();
+  const helpTarget = await helpTrigger.getAttribute("aria-controls");
+  assert(helpTarget, `${label}: player geography help is not associated with its tooltip`);
+  const beforeHelp = await page.locator(".playerGeographyCard").evaluate((card) => {
+    const cardRect = card.getBoundingClientRect();
+    const mapRect = card.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    const triggerRect = card.querySelector('.uiHelpTooltipButton[aria-label="About player geography"]')?.getBoundingClientRect();
+    return {
+      cardHeight: cardRect.height,
+      mapOffset: mapRect ? mapRect.top - cardRect.top : 0,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      triggerWidth: triggerRect?.width ?? 0,
+      triggerHeight: triggerRect?.height ?? 0
+    };
+  });
+  assert(beforeHelp.triggerWidth >= 44 && beforeHelp.triggerHeight >= 44, `${label}: player geography help target is smaller than 44px: ${JSON.stringify(beforeHelp)}`);
+  await helpTrigger.tap();
+  const helpTooltip = page.locator(`[id="${helpTarget}"]`);
+  await helpTooltip.waitFor({ state: "visible" });
+  const openHelp = await helpTooltip.evaluate((tooltip) => {
+    const rect = tooltip.getBoundingClientRect();
+    const card = document.querySelector(".playerGeographyCard");
+    const mapRect = card?.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: window.visualViewport?.width ?? innerWidth,
+      viewportHeight: window.visualViewport?.height ?? innerHeight,
+      viewportLeft: window.visualViewport?.offsetLeft ?? 0,
+      viewportTop: window.visualViewport?.offsetTop ?? 0,
+      cardHeight: card?.getBoundingClientRect().height ?? 0,
+      mapOffset: card && mapRect ? mapRect.top - card.getBoundingClientRect().top : 0,
+      documentWidth: document.documentElement.scrollWidth
+    };
+  });
+  assert(openHelp.left >= openHelp.viewportLeft && openHelp.right <= openHelp.viewportLeft + openHelp.viewportWidth && openHelp.top >= openHelp.viewportTop && openHelp.bottom <= openHelp.viewportTop + openHelp.viewportHeight, `${label}: player geography help leaves the visual viewport: ${JSON.stringify(openHelp)}`);
+  assert(Math.abs(openHelp.cardHeight - beforeHelp.cardHeight) <= 1 && Math.abs(openHelp.mapOffset - beforeHelp.mapOffset) <= 1, `${label}: opening help shifts the geography card: ${JSON.stringify({ beforeHelp, openHelp })}`);
+  assert(openHelp.documentWidth <= openHelp.viewportWidth && beforeHelp.documentWidth <= beforeHelp.viewportWidth, `${label}: player geography help causes horizontal overflow: ${JSON.stringify({ beforeHelp, openHelp })}`);
+  await page.locator(".playerMap").tap({ position: { x: 2, y: 2 } });
+  await helpTooltip.waitFor({ state: "hidden" });
+
+  const mapScope = page.getByRole("group", { name: "Players shown on map" });
+  const onlineScope = mapScope.getByRole("button", { name: "Online", exact: true });
+  const allTimeScope = mapScope.getByRole("button", { name: "All time", exact: true });
+  await assertTargets(page, [".playerMapScopeSwitch .uiButton"], `${label} map scope`);
+  assert.equal(await onlineScope.getAttribute("aria-pressed"), "true", `${label}: player map does not default to online players`);
+  const onlineMapLabel = await page.locator(".playerMapCanvas").getAttribute("aria-label");
+  await allTimeScope.click();
+  assert.equal(await allTimeScope.getAttribute("aria-pressed"), "true", `${label}: all-time player map toggle did not activate`);
+  const allTimeMapLabel = await page.locator(".playerMapCanvas").getAttribute("aria-label");
+  const onlinePlayers = Number(onlineMapLabel?.match(/for (\d+) located players/)?.[1] ?? 0);
+  const allTimePlayers = Number(allTimeMapLabel?.match(/for (\d+) located players/)?.[1] ?? 0);
+  assert(allTimePlayers > onlinePlayers, `${label}: all-time map did not add historical players (${onlinePlayers} online, ${allTimePlayers} all time)`);
+  assert.equal(await page.locator(".playerMapAvatar--online, .playerMapAvatar--known, .playerMapMarker--online, .playerMapMarker--known").count(), 0, `${label}: player map still encodes online status in marker styling`);
+
+  await assertTargets(page, [
+    ".playerMapControlButton:nth-child(1)",
+    ".playerMapControlButton:nth-child(2)",
+    ".playerMapControlButton:nth-child(3)"
+  ], `${label} map controls`);
+  const mapMarker = page.locator(".playerMapViewport .playerMapAvatar").first();
+  const initialMarker = await mapMarker.boundingBox();
+  assert(initialMarker && initialMarker.width <= 20.5 && initialMarker.height <= 20.5, `${label}: mobile player marker is still too large: ${JSON.stringify(initialMarker)}`);
+  await assertPlayerMarkerAnchorsAcrossTransforms(page, label);
+
   const serverCluster = page.locator(".playerMapClusterMarker--server");
   const cluster = await serverCluster.count() ? serverCluster : page.locator(".playerMapClusterMarker").first();
   await cluster.waitFor();
@@ -125,9 +269,8 @@ async function assertPlayerClusterPopupDismisses(page, label) {
     const haloRect = halo.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const pings = Array.from(popup.querySelectorAll(".playerMapClusterRow .playerMapPingValue"));
-    const onlineAvatar = document.querySelector(".playerMapAvatar--online");
-    const knownAvatar = document.querySelector(".playerMapAvatar--known");
-    const onlineAvatarRect = onlineAvatar?.getBoundingClientRect();
+    const avatar = document.querySelector(".playerMapAvatar");
+    const avatarRect = avatar?.getBoundingClientRect();
     return {
       missing: false,
       centreDelta: Math.hypot(
@@ -143,10 +286,8 @@ async function assertPlayerClusterPopupDismisses(page, label) {
       popupOverflow: popup.scrollWidth - popup.clientWidth,
       overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length,
       pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right)),
-      avatarIsSquare: onlineAvatarRect ? Math.abs(onlineAvatarRect.width - onlineAvatarRect.height) <= 1 : false,
-      avatarRadius: onlineAvatar instanceof HTMLElement ? Number.parseFloat(getComputedStyle(onlineAvatar).borderRadius) : Number.POSITIVE_INFINITY,
-      onlineBorder: onlineAvatar instanceof HTMLElement ? getComputedStyle(onlineAvatar).borderColor : "",
-      knownBorder: knownAvatar instanceof HTMLElement ? getComputedStyle(knownAvatar).borderColor : "",
+      avatarIsSquare: avatarRect ? Math.abs(avatarRect.width - avatarRect.height) <= 1 : false,
+      avatarRadius: avatar instanceof HTMLElement ? Number.parseFloat(getComputedStyle(avatar).borderRadius) : Number.POSITIVE_INFINITY,
       overflowingMarkerSurfaces: viewportRect
         ? Array.from(document.querySelectorAll(".playerMapMarker, .playerMapClusterCount, .playerMapSharedServer")).filter((surface) => {
           const rect = surface.getBoundingClientRect();
@@ -162,16 +303,101 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
   assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
   assert(geometry.avatarIsSquare && geometry.avatarRadius <= 4, `${label}: player head border does not fit the square avatar`);
-  assert(geometry.onlineBorder && geometry.onlineBorder !== geometry.knownBorder, `${label}: online player head has no distinct status border`);
   assert(geometry.overflowingMarkerSurfaces === 0, `${label}: ${geometry.overflowingMarkerSurfaces} player marker surfaces cross the map frame`);
 
   // Blank map space is outside the floating panel even though it remains inside the map viewport.
   // This catches the old map-level boundary that left the popup pinned until navigation changed.
-  await page.locator(".playerMapViewport").click({ position: { x: 2, y: 2 } });
+  const mapFrame = await page.locator(".playerMapFrame").boundingBox();
+  assert(mapFrame, `${label}: player map frame disappeared`);
+  await page.mouse.click(mapFrame.x + 2, mapFrame.y + 2);
   await popup.waitFor({ state: "detached" });
   assert(await cluster.getAttribute("aria-expanded") === "false", `${label}: player cluster stayed expanded after an outside click`);
   assert(await cluster.getAttribute("aria-controls") === null, `${label}: dismissed player cluster kept a popup reference`);
 
+}
+
+async function assertConfiguredPlayerAddressEditor() {
+  const label = "Chromium Android configured player address";
+  let browser;
+  try {
+    browser = await launchBrowser(chromium);
+    const context = await browser.newContext({
+      ...devices["Pixel 7"],
+      viewport: { width: 390, height: 844 },
+      locale: "en-US",
+      timezoneId: "UTC",
+      colorScheme: "light",
+      reducedMotion: "reduce"
+    });
+    await signInThroughApi(context, baseUrl);
+    const sessionResponse = await context.request.get(`${baseUrl}/api/auth/session`, {
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    });
+    const session = await sessionResponse.json();
+    const now = new Date().toISOString();
+    const server = {
+      id: "browser-test",
+      nodeId: "local",
+      displayName: "Browser Test",
+      directoryLabel: "/browser-test",
+      runtimeProfile: {
+        minecraftVersion: "1.21.4",
+        runtimeType: "fabric",
+        runtimeVersion: "0.16.10",
+        javaMajorVersion: 21,
+        jarProvider: "mcjars",
+        jarArtifact: { filename: "fabric-server-launch.jar" },
+        compatibilityStatus: "compatible",
+        resolvedAt: now
+      },
+      hasDockerContainer: true,
+      createdAt: now,
+      updatedAt: now
+    };
+    const page = await context.newPage();
+    await page.route("**/api/auth/session", (route) => route.fulfill({ json: { ...session, demo: false } }));
+    await page.route("**/api/app", async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      await route.fulfill({ response, json: { ...data, servers: [server], currentUser: session.user } });
+    });
+    await page.route("**/api/players/insights?*", (route) => route.fulfill({ json: {
+      generatedAt: now,
+      timeZone: "UTC",
+      summary: { countries: 0, onlinePlayers: 0, locatedPlayers: 0, knownPlayers: 0 },
+      players: [],
+      regions: [],
+      latency: [],
+      pingMeasurements: [{ serverId: server.id, status: "idle", onlinePlayers: 0, measuredPlayers: 0 }],
+      activityHours: Array.from({ length: 24 }, (_, hour) => ({ hour, averagePlayers: 0, peakPlayers: 0, samples: 0 })),
+      serverLocations: [{ serverId: server.id, address: "play.example.net" }],
+      geoDatabase: { available: false, configured: false, updating: false },
+      attribution: "This product includes GeoLite2 data created by MaxMind, available from https://www.maxmind.com"
+    } }));
+    await page.addInitScript(() => localStorage.setItem("serversentinel-theme", "light"));
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.locator(".appShell").waitFor();
+    await openPage(page, "players");
+
+    const addressToggle = page.locator(".playerLocationDisclosureToggle");
+    await addressToggle.waitFor();
+    assert.equal(await addressToggle.getAttribute("aria-expanded"), "false", `${label}: configured server address editor is not collapsed`);
+    assert.equal(await page.locator("#player-insights-server-address").count(), 0, `${label}: collapsed server address editor still renders its field`);
+    await addressToggle.click();
+    const addressInput = page.locator("#player-insights-server-address");
+    await addressInput.waitFor();
+    const heights = await page.evaluate(() => ({
+      input: document.querySelector("#player-insights-server-address")?.getBoundingClientRect().height ?? 0,
+      save: document.querySelector(".playerLocationForm > .uiButton")?.getBoundingClientRect().height ?? 0
+    }));
+    assert(Math.abs(heights.input - 44) <= 0.5 && Math.abs(heights.save - 44) <= 0.5, `${label}: input and Save button are not matching 44px controls: ${JSON.stringify(heights)}`);
+    await addressToggle.click();
+    await addressInput.waitFor({ state: "detached" });
+    await context.close();
+    console.log(`mobile smoke passed: ${label}`);
+  } finally {
+    if (browser) await browser.close();
+  }
 }
 
 async function assertScheduleActionMenuVisible(page, label) {
@@ -633,6 +859,78 @@ async function assertConsoleSurvivesTheKeyboard(page, label) {
   assert(dismissed.terminal.height > withKeyboard.terminal.height, `${label}: the console did not take back the space the keyboard had: ${JSON.stringify({ withKeyboard, dismissed })}`);
 }
 
+async function assertPageRestoresOnReload(page, title, storedPage, contentSelector, label) {
+  await openPage(page, title);
+  await page.locator(contentSelector).waitFor();
+  const navigationItem = page.locator(`.sideNav button[title="Open ${title}"]`);
+  assert.equal(await navigationItem.getAttribute("aria-current"), "page", `${label}: sidebar does not mark ${title} active before reload`);
+
+  const readStoredPage = () => page.evaluate(() => {
+    const raw = localStorage.getItem("serversentinel-active-page");
+    return raw ? JSON.parse(raw).value : null;
+  });
+  assert.equal(await readStoredPage(), storedPage, `${label}: ${title} was not persisted before reload`);
+
+  let releaseAppCatalog;
+  let appCatalogRequested;
+  const appCatalogGate = new Promise((resolve) => { releaseAppCatalog = resolve; });
+  const appCatalogRequest = new Promise((resolve) => { appCatalogRequested = resolve; });
+  const delayAppCatalog = async (route) => {
+    appCatalogRequested();
+    await appCatalogGate;
+    await route.continue();
+  };
+  await page.route("**/api/app", delayAppCatalog);
+  try {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".appShell").waitFor();
+    await appCatalogRequest;
+    await page.locator(`.workspacePage-${storedPage}`).waitFor();
+    assert.equal(await readStoredPage(), storedPage, `${label}: bootstrap overwrote the stored ${title} page`);
+    if (storedPage === "schedule") {
+      await page.locator(".applicationLoadingSkeleton--schedule").waitFor();
+      assert.equal(await page.locator(".schedulePage").count(), 0, `${label}: schedules rendered before module access resolved`);
+    }
+    releaseAppCatalog();
+    await page.locator(contentSelector).waitFor();
+    assert.equal(await navigationItem.getAttribute("aria-current"), "page", `${label}: sidebar lost the active ${title} state after restoration`);
+    assert.equal(await readStoredPage(), storedPage, `${label}: restored ${title} changed its stored page value`);
+  } finally {
+    releaseAppCatalog();
+    await page.unroute("**/api/app", delayAppCatalog);
+  }
+}
+
+async function runDesktopMapAndRestorationProfile() {
+  const label = "Chromium desktop 1440x1000";
+  let browser;
+  try {
+    browser = await launchBrowser(chromium);
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      locale: "en-US",
+      timezoneId: "UTC",
+      colorScheme: "light",
+      reducedMotion: "reduce"
+    });
+    const page = await context.newPage();
+    await page.addInitScript(() => localStorage.setItem("serversentinel-theme", "light"));
+    await signInThroughForm(page, baseUrl);
+    await page.locator('.sideNav button[title="Open schedules"]').waitFor({ state: "visible" });
+
+    await assertPageRestoresOnReload(page, "schedules", "schedule", ".schedulePage", `${label} schedules`);
+    await assertPageRestoresOnReload(page, "files", "files", ".filesPage", `${label} files`);
+    await openPage(page, "players");
+    await page.getByRole("group", { name: "Players shown on map" }).getByRole("button", { name: "All time", exact: true }).click();
+    await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`);
+
+    await context.close();
+    console.log(`mobile smoke passed: ${label}`);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 async function assertDialogScrollLock(page, backdropSelector, dialogBodySelector, label) {
   const result = await page.evaluate(({ backdropSelector: backdrop, dialogBodySelector: body }) => {
     const backdropElement = document.querySelector(backdrop);
@@ -826,7 +1124,9 @@ async function runTabletProfile() {
 }
 
 try {
+  await runDesktopMapAndRestorationProfile();
   await runTabletProfile();
+  await assertConfiguredPlayerAddressEditor();
   await runProfile(chromium, {
     ...devices["Pixel 7"],
     viewport: { width: 390, height: 844 }

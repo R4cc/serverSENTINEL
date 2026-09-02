@@ -117,7 +117,7 @@ function OverviewCardState({
   ariaLabel
 }: {
   title: ReactNode;
-  message: ReactNode;
+  message?: ReactNode;
   icon: ReactNode;
   tone?: "neutral" | "success";
   onClick?: () => void;
@@ -128,7 +128,7 @@ function OverviewCardState({
       <span className={`overviewCardStateIcon tone-${tone}`}>{icon}</span>
       <span className="overviewCardStateCopy">
         <strong>{title}</strong>
-        <small>{message}</small>
+        {message && <small>{message}</small>}
       </span>
       {onClick && <AppIcon name="chevronRight" />}
     </>
@@ -270,11 +270,11 @@ export function ActivePlayersPanel({
   if (loading && !snapshot) {
     content = <div className="overviewPanelSkeleton" aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="playerNameSkeleton" />)}</div>;
   } else if (!running || snapshot?.state === "stopped") {
-    content = <EmptyState compact title="Server is not running" message="Player activity will appear after the server starts." />;
+    content = <EmptyState compact title="Server is not running" />;
   } else if (!snapshot || snapshot.state === "unavailable") {
     content = <EmptyState compact title="Player query unavailable" message={snapshot?.message ?? "Waiting for the first complete player snapshot."} />;
   } else if (online === 0) {
-    content = <EmptyState compact title="No players online" message="The server is ready for players." />;
+    content = <EmptyState compact title="No players online" />;
   } else {
     const visibleNames = playersExpanded ? snapshot.names : snapshot.names.slice(0, activePlayerPreviewLimit);
     const hiddenPlayerCount = snapshot.names.length - visibleNames.length;
@@ -387,9 +387,6 @@ export function ModHealthPanel({
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
   const visibleUpdates = availableUpdates.slice(0, overviewSupportCardSlotCount);
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
-  const description = updateCount === 0
-    ? "No updates available"
-    : `${updateCount} update${updateCount === 1 ? "" : "s"} available`;
   const actions = (
     <div className="overviewCardHeaderActions">
       <ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} loading={loading} />
@@ -400,7 +397,6 @@ export function ModHealthPanel({
     <OverviewCard
       className={`modsHealthPanel modUpdatesCard${updateCount === 0 ? " modUpdatesCard--healthy" : ""}`}
       title={`${contentSingularTitle} updates`}
-      description={description}
       actions={actions}
       loading={loading}
     >
@@ -409,7 +405,6 @@ export function ModHealthPanel({
         {updateCount === 0 ? (
           <OverviewCardState
             title="Everything is up to date"
-            message={`New ${contentSingular} updates will appear here.`}
             icon={<AppIcon name="check" />}
             tone="success"
             onClick={onOpenMods}
@@ -476,7 +471,6 @@ function ModHealthPanelSkeleton({
     <OverviewCard
       className="modsHealthPanel modUpdatesCard modUpdatesCardSkeleton"
       title={`${contentSingularTitle} updates`}
-      description="Checking for updates"
       actions={<div className="overviewCardHeaderActions">
         <Button variant="secondary" compact iconOnly className="modUpdatesRefreshButton isRefreshing" disabled aria-busy="true" aria-label={`Recheck ${contentPlural} for updates`}><AppIcon name="refresh" /></Button>
       </div>}
@@ -589,29 +583,13 @@ export function SchedulePanel({
   const hiddenScheduleCount = Math.max(0, activeRuns.length - visibleActiveRuns.length)
     + snapshot.remainingInNext24Hours
     + Math.max(0, snapshot.schedules.length - visibleUpcomingSchedules.length);
-  const upcomingCount = snapshot.schedules.length + snapshot.remainingInNext24Hours;
   // A schedule failing or skipping its way through several occurrences says nothing anywhere else,
   // and the next run it advertises here is exactly as reassuring as a working one's.
   const attention = canView ? schedulesNeedingAttention(schedules) : [];
-  const description = !canView
-    ? "Permission required"
-    : activeRuns.length
-      ? `${activeRuns.length} active run${activeRuns.length === 1 ? "" : "s"}`
-      : attention.length
-      ? `${attention.length} schedule${attention.length === 1 ? "" : "s"} needs attention`
-      : schedules.length === 0
-        ? "No schedules configured"
-        : snapshot.schedules.length === 0
-          ? "No upcoming runs"
-          : snapshot.remainingInNext24Hours > 0
-            ? `${upcomingCount} runs in the next 24 hours`
-            : `${upcomingCount} upcoming run${upcomingCount === 1 ? "" : "s"}`;
-
   return (
     <OverviewCard
       className="schedulePanel overviewOperationsPanel"
       title="Schedules"
-      description={description}
     >
       {attention.length > 0 && (
         <div className="scheduleAttentionList">
@@ -642,7 +620,6 @@ export function SchedulePanel({
       ) : activeRuns.length === 0 && snapshot.schedules.length === 0 ? (
         <OverviewCardState
           title="No upcoming schedules"
-          message="Enabled schedules will appear here when their next run is planned."
           icon={<SidebarIcon name="schedule" />}
           onClick={() => onOpenSchedules()}
           ariaLabel="Open Schedules, no upcoming schedules"
@@ -770,11 +747,9 @@ function secondsBetween(first: ServerEvent, second: ServerEvent, now: Date) {
 }
 
 function defaultEventDetails(event: ServerEvent) {
+  if (event.eventType === "server_started") return undefined;
   if (event.details) return event.details;
-  if (event.eventType === "player_joined") return "Connected to the server";
-  if (event.eventType === "player_left") return event.severity === "warning" ? "The connection was lost" : "Disconnected from the server";
-  if (event.eventType === "server_started") return "Ready for players";
-  if (event.eventType === "server_stopped") return "No longer accepting connections";
+  if (event.eventType === "player_left" && event.severity === "warning") return "The connection was lost";
   if (event.eventType === "mod_disabled") return "Review the mod configuration before the next restart";
   if (event.eventType === "server_crashed") return "Open the console or crash reports for the cause";
   return undefined;
@@ -836,7 +811,7 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
         kind: "server_restarted",
         severity: "success",
         title: "Server restarted",
-        details: duration < 2 ? "Stopped and started again" : `Back online after ${Math.round(duration)} seconds`,
+        details: duration < 2 ? "Back online in under 2 seconds" : `Back online after ${Math.round(duration)} seconds`,
         timestamp: event.timestamp,
         events: [event, next]
       });

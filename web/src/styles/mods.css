@@ -91,9 +91,7 @@
 .modsAddSearch { display: grid; gap: var(--space-1); }
 .modsAddSearch label { width: 100%; min-width: 0; }
 .modsSearchActivity { min-height: 1em; text-align: right; }
-.modsSafeSearchNote { display: flex; align-items: center; margin: var(--space-2) 0 var(--space-4); }
-.modsSafeSearchNote svg { width: 15px; color: var(--sentinel-success); }
-.modsSafeSearchNote.warning svg { color: var(--sentinel-warning); }
+.modsSafeSearchAlert { margin: var(--space-2) 0 var(--space-4); }
 .modsCompatibilityToggle { display: flex; align-items: flex-start; gap: var(--space-2); margin: calc(var(--space-2) * -1) 0 var(--space-4); color: var(--text-muted); font-size: .78rem; }
 .modsCompatibilityToggle input { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; }
 .modsCompatibilityToggle span { display: grid; gap: 2px; min-width: 0; }
@@ -200,8 +198,7 @@
 .modsReviewLine span { min-width: 0; color: var(--text-muted); font-size: .82rem; text-align: right; overflow-wrap: anywhere; }
 .modsDependencySummary { padding: var(--space-3); border: 1px solid var(--border); }
 .modsDependencySummary > div { padding: var(--space-2) 0 0 var(--space-4); font-size: .82rem; overflow-wrap: anywhere; }
-.modsReviewWarning { display: grid; gap: var(--space-1); margin-top: var(--space-4); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--sentinel-warning) 30%, var(--border)); }
-.modsReviewWarning span { color: var(--text-muted); font-size: .8rem; }
+.modsReviewAlert { margin-top: var(--space-4); }
 .modsUpdateReview { display: grid; gap: var(--space-2); margin-top: var(--space-4); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--sentinel-accent) 30%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sentinel-accent) 6%, var(--surface-raised)); }
 .modsUpdateReview > p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
 .modsUpdateReview .modsRiskAcknowledgement { margin-top: var(--space-1); }
@@ -405,8 +402,7 @@
 .modsWorkspaceListHeader > div span,
 .modsDrawerHeader p,
 .modsDrawerHeader small,
-.modsSearchActivity,
-.modsSafeSearchNote {
+.modsSearchActivity {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
@@ -429,8 +425,7 @@
 }
 
 .modsWorkspaceSearch .buttonIcon,
-.modsAddSearch .buttonIcon,
-.modsSafeSearchNote .buttonIcon {
+.modsAddSearch .buttonIcon {
   width: var(--control-icon-size);
   height: var(--control-icon-size);
 }
@@ -440,18 +435,6 @@
   min-height: calc(var(--control-height) - 2px);
   font-size: var(--type-body-size);
   font-weight: var(--weight-body);
-}
-
-.modsSafeSearchNote {
-  gap: var(--space-2);
-}
-
-.modsSafeSearchNote .buttonIcon {
-  color: var(--sentinel-success);
-}
-
-.modsSafeSearchNote.warning .buttonIcon {
-  color: var(--sentinel-warning);
 }
 
 .modsWorkspaceRow {
@@ -582,7 +565,6 @@
   background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
 }
 
-.modsReviewWarning,
 .modsRiskAcknowledgement {
   border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
   border-radius: var(--radius-md);

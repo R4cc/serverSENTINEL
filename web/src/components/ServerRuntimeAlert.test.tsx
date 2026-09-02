@@ -12,7 +12,8 @@ describe("ServerRuntimeAlert", () => {
       />
     );
 
-    expect(html).toContain('class="serverRuntimeAlert"');
+    expect(html).toContain("serverRuntimeAlert");
+    expect(html).toContain("uiBanner--error");
     expect(html).toContain('role="alert"');
     expect(html).toContain("Node offline");
     expect(html).toContain("Runtime actions and file access are unavailable until the node reconnects.");
@@ -22,10 +23,11 @@ describe("ServerRuntimeAlert", () => {
   it("renders a compact title-only notice for the server action row", () => {
     const html = renderToStaticMarkup(<ServerRuntimeAlert title="Node offline" compact />);
 
-    expect(html).toContain('class="serverRuntimeAlert compact"');
+    expect(html).toContain("serverRuntimeAlert compact");
+    expect(html).toContain("uiBanner--compact");
     expect(html).toContain('role="alert"');
     expect(html).toContain("Node offline");
-    expect(html).not.toContain("serverRuntimeAlertCopy\"><strong>Node offline</strong><span>");
+    expect(html).not.toContain("uiBannerMessage");
   });
 
   it("can offer a direct remediation action", () => {

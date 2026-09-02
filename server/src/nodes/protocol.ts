@@ -25,6 +25,7 @@ export const nodeCapabilities = [
   "server.stats",
   "server.storage",
   "server.players.read",
+  "server.connections.read",
   "server.logs.recent",
   "server.observe",
   "server.console.send",

@@ -761,14 +761,8 @@ button.overviewCardRow:focus-visible {
   font-size: 11px;
 }
 
-.serverTimelinePlayerStatusNotice {
+.serverTimelinePlayerAlert {
   margin-top: calc(var(--space-3) * -1);
-  padding: var(--space-2) var(--space-3);
-  border: var(--border-subtle) solid color-mix(in srgb, var(--sentinel-warning) 25%, var(--border-muted));
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--surface-muted));
-  color: var(--status-warning-foreground);
-  font-size: 10px;
 }
 
 .serverTimelineMetricBands {
@@ -1292,18 +1286,12 @@ button.overviewCardRow:focus-visible {
   color: var(--text-muted);
 }
 
-.serverTimelineNotice,
 .serverTimelineEmpty {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   background: var(--surface-muted);
   font-size: 12px;
-}
-
-.serverTimelineNotice.tone-warning {
-  color: var(--status-warning-foreground);
-  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-muted));
 }
 
 @media (min-width: 981px) and (max-width: 1180px) {
@@ -1726,7 +1714,7 @@ button.overviewCardRow:focus-visible {
   height: 32px;
 }
 
-.overviewPage .eventsPanel .serverEventIdentity .eventIcon svg {
+.overviewPage .eventsPanel .serverEventIdentity > .eventIcon > svg {
   width: 18px;
   height: 18px;
 }
@@ -1799,25 +1787,6 @@ button.overviewCardRow:focus-visible {
   white-space: nowrap;
 }
 
-.serverEventsFooter {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-top: auto;
-  border-top: var(--border-subtle) solid var(--border-row);
-  padding-top: var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-}
-
-.serverEventsPager {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 /* On tall, wide workstations the final dashboard row absorbs unused viewport height. The pager
    stays at the bottom of the card while the table remains at the top, so the page ends cleanly. */
 @media (min-width: 1920px) and (min-height: 1200px) {
@@ -1838,18 +1807,6 @@ button.overviewCardRow:focus-visible {
     flex: 0 0 auto;
   }
 
-  .serverEventsFooter {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .serverEventsFooter > span:first-child {
-    text-align: center;
-  }
-
-  .serverEventsPager {
-    justify-content: space-between;
-  }
 }
 
 @media (max-width: 540px) {

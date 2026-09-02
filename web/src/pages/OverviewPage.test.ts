@@ -329,6 +329,18 @@ describe("recent event grouping", () => {
     expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Back online after 30 seconds" });
   });
 
+  it("does not show a detail for server start events", () => {
+    const [group] = groupRecentEvents([
+      serverEvent("server_started", "2026-07-11T12:01:00.000Z", {
+        text: "Server started",
+        severity: "success",
+        details: "Ready for players"
+      })
+    ], now);
+
+    expect(recentEventPresentation(group).details).toBeUndefined();
+  });
+
   it("collapses adjacent matching events within ten minutes while keeping unrelated player activity separate", () => {
     const overload = { text: "Server is falling behind", signature: "server_overloaded", severity: "warning" as const, details: "Running 100 ticks behind" };
     const groups = groupRecentEvents([
@@ -461,7 +473,7 @@ describe("mod health", () => {
     expect(loadingHtml).toContain("modUpdatesCardSkeleton");
     expect(loadingHtml).toContain("Loading mod updates");
     expect(loadingHtml).toContain("<h2>Mod updates</h2>");
-    expect(loadingHtml).toContain("Checking for updates");
+    expect(loadingHtml).not.toContain("Checking for updates");
     expect(loadingHtml).not.toContain("modUpdatesTitleSkeleton");
     expect(loadingHtml).not.toContain("modUpdatesWideTitleSkeleton");
     expect(loadingHtml).not.toContain("modUpdatesCompact");
@@ -488,7 +500,7 @@ describe("mod health", () => {
     const healthyHtml = render(updatePlan({ totalInstalled: 4, upToDate: 4 }));
     expect(healthyHtml).toContain("modUpdatesCard--healthy");
     expect(healthyHtml).toContain("<h2>Mod updates</h2>");
-    expect(healthyHtml).toContain("No updates available");
+    expect(healthyHtml).not.toContain("No updates available");
     expect(healthyHtml).toContain("Everything is up to date");
     expect(healthyHtml).toContain("overviewCardStateItem");
     expect(healthyHtml).toContain("overviewCardStateCopy");
@@ -496,7 +508,7 @@ describe("mod health", () => {
     expect(healthyHtml).toContain("Open Mods, no mod updates available");
     const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
     expect(attentionHtml).toContain("modUpdatesCard--healthy");
-    expect(attentionHtml).toContain("No updates available");
+    expect(attentionHtml).not.toContain("No updates available");
     expect(attentionHtml).not.toContain("attention");
     expect(attentionHtml).not.toContain("review");
     expect(attentionHtml).not.toContain("installed");
@@ -512,7 +524,7 @@ describe("mod health", () => {
 
     const html = render(updatePlan({ safeUpdates: 2, reviewUpdates: 1, upToDate: 1 }));
     expect(html).toContain("<h2>Mod updates</h2>");
-    expect(html).toContain("3 updates available");
+    expect(html).not.toContain("3 updates available");
     expect(html).not.toContain(">Open Mods</button>");
     expect(html).not.toContain("modUpdatesCardOpen");
     expect(html).not.toContain("installed");
@@ -674,7 +686,7 @@ describe("upcoming schedule summary", () => {
     }));
 
     expect(html).toContain(">Schedules<");
-    expect(html).toContain("1 active run");
+    expect(html).not.toContain("1 active run");
     expect(html).not.toContain(">Next up<");
     expect((html.match(/overviewSupportListItem scheduleUpcomingItem/g) ?? []).length).toBe(4);
     expect((html.match(/overviewSupportListIcon/g) ?? []).length).toBe(4);

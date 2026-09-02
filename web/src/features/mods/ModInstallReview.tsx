@@ -2,7 +2,7 @@ import type { ModInstallModalState } from "../../app/uiState";
 import type { ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
-import { Button, LoadingLabel } from "../../components/UiPrimitives";
+import { Banner, Button, LoadingLabel } from "../../components/UiPrimitives";
 import { ModInstallVersionSkeleton } from "../../components/ModInstallVersionSkeleton";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
@@ -71,7 +71,6 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
             </section>
             <details className="modsAdvancedOptions" open={state.showOtherVersions} onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open !== state.showOtherVersions) onToggleAdvanced(); }}>
               <summary>Advanced options</summary>
-              <p>Choose a channel or select a version manually. Versions outside the recommended path may require acknowledgement.</p>
               <div className="modsChannelPicker" role="group" aria-label="Release channel">
                 {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant={state.channel === channel ? "primary" : "secondary"} compact aria-pressed={state.channel === channel} onClick={() => onChannelChange(channel)} disabled={locked}>{channel}</Button>)}
               </div>
@@ -98,7 +97,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
             <section className="modsReviewSection"><h3>{switchMode ? "What will change" : "What will be installed"}</h3><div className="modsReviewLine"><strong>{title}</strong><span>{selected.versionNumber}</span></div></section>
             <section className="modsReviewSection"><h3>Server target</h3><div className="modsReviewLine"><strong>{state.data.target.serverName}</strong><span>{state.data.target.loader || terminology.runtimeName} - Minecraft {state.data.target.minecraftVersion}</span></div></section>
             {!switchMode && requiredDependencies.length > 0 && <details className="modsDependencySummary" open><summary>Also installs {requiredDependencies.length} required {requiredDependencies.length === 1 ? "dependency" : "dependencies"}</summary>{requiredDependencies.map((dependency, index) => <div key={`${dependency.projectId}-${index}`}>{dependency.title || dependency.projectId || "Required dependency"}</div>)}</details>}
-            {selectedHealth?.requiresAcknowledgement && <div className="modsReviewWarning"><strong>{selectedHealth.label}</strong><span>{selectedRiskDetail}</span></div>}
+            {selectedHealth?.requiresAcknowledgement && <Banner tone="warning" className="modsReviewAlert" title={selectedHealth.label} message={selectedRiskDetail} />}
             <details className="modsAdvancedOptions"><summary>Installation details</summary><dl className="modsDetailsFacts"><div><dt>Release channel</dt><dd>{selected.releaseChannel}</dd></div><div><dt>Published</dt><dd>{selected.publishedAt ? formatDate(selected.publishedAt) : "Unknown"}</dd></div><div><dt>Filename</dt><dd>{selected.file?.filename || "Unknown"}</dd></div></dl></details>
           </>
         )}

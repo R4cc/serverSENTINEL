@@ -46,7 +46,7 @@ describe("runtimeActionConfirmation", () => {
     expect(runtimeActionConfirmation("restart", "Survival", undefined)).toMatchObject({
       title: "Restart Survival?",
       description: "Survival will be temporarily unavailable while it restarts.",
-      textInput: { label: "Reason for restarting", required: true, maxLength: 500 }
+      textInput: { label: "Reason for restarting (optional)", required: false, maxLength: 500 }
     });
   });
 

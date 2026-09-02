@@ -3,6 +3,7 @@ import type { FileArchiveEntry } from "../downloadArchive.js";
 import type { ZipExtractionPlan, ZipExtractionResult } from "../zipArchive.js";
 import type { ManagedNode, ManagedServer, Permission, PublicServer } from "../types.js";
 import type { PlayerObservation } from "../playerSnapshots.js";
+import type { PlayerConnectionObservation } from "../players/dockerPlayerConnections.js";
 import type { ConsoleUpstream } from "../servers/consoleChannel.js";
 
 export type RuntimeProgressReporter = (progress: number, task: string) => void;
@@ -40,6 +41,7 @@ export type NodeRuntime = {
   streamConsole(server: ManagedServer, upstream: ConsoleUpstream): Promise<() => void>;
   serverLogs(server: ManagedServer, lineLimit?: number): Promise<unknown>;
   readPlayerObservation(server: ManagedServer): Promise<PlayerObservation>;
+  readPlayerConnections(server: ManagedServer): Promise<PlayerConnectionObservation>;
   serverStats(server: ManagedServer): Promise<unknown>;
   serverStorage(server: ManagedServer): Promise<unknown>;
   serverOverview(server: ManagedServer): Promise<unknown>;

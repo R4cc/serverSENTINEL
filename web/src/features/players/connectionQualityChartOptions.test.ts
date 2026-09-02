@@ -9,9 +9,9 @@ import {
 } from "./connectionQualityChartOptions";
 
 const points: PlayerLatencyPoint[] = [
-  { at: Date.parse("2026-08-15T12:00:00.000Z"), medianEstimatedLatencyMs: 40, p95EstimatedLatencyMs: 70, players: 2 },
-  { at: Date.parse("2026-08-15T18:00:00.000Z"), players: 0 },
-  { at: Date.parse("2026-08-16T12:00:00.000Z"), medianEstimatedLatencyMs: 45, p95EstimatedLatencyMs: 150, players: 3 }
+  { at: Date.parse("2026-08-15T12:00:00.000Z"), medianPingMs: 40, p95PingMs: 70, players: 2, measuredPlayers: 2 },
+  { at: Date.parse("2026-08-15T18:00:00.000Z"), players: 0, measuredPlayers: 0 },
+  { at: Date.parse("2026-08-16T12:00:00.000Z"), medianPingMs: 45, p95PingMs: 150, players: 3, measuredPlayers: 3 }
 ];
 
 describe("connection quality chart", () => {
@@ -35,14 +35,14 @@ describe("connection quality chart", () => {
     expect(xAxis).toMatchObject({ type: "time", min: points[0].at, max: points.at(-1)!.at });
     expect(yAxis.splitLine.lineStyle.type).toBe("solid");
     expect(tooltip.axisPointer.lineStyle.type).toBe("solid");
-    expect(series.map((entry) => entry.name)).toEqual(["Median estimate", "95th percentile"]);
+    expect(series.map((entry) => entry.name)).toEqual(["Median ping", "95th percentile"]);
     expect(series.every((entry) => entry.connectNulls === false)).toBe(true);
     expect(series[0].data[1]).toEqual([points[1].at, "-", 0]);
   });
 
   it("writes a safe, useful hover readout", () => {
     const html = connectionQualityTooltipHtml([
-      { axisValue: points[2].at, seriesName: "Median estimate", value: [points[2].at, 45, 3], color: "#2c7a66" },
+      { axisValue: points[2].at, seriesName: "Median ping", value: [points[2].at, 45, 3], color: "#2c7a66" },
       { axisValue: points[2].at, seriesName: "95th < percentile", value: [points[2].at, 150, 3], color: "#4169ff" }
     ], () => "16 Aug, 12:00");
 

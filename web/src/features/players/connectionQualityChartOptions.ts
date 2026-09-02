@@ -17,7 +17,7 @@ export const defaultConnectionQualityPalette: ConnectionQualityPalette = {
 };
 
 export function connectionQualityCeiling(points: readonly PlayerLatencyPoint[]) {
-  const values = points.flatMap((point) => [point.medianEstimatedLatencyMs, point.p95EstimatedLatencyMs]
+  const values = points.flatMap((point) => [point.medianPingMs, point.p95PingMs]
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value)));
   if (!values.length) return 50;
   return Math.max(50, Math.ceil(Math.max(...values) * 1.08 / 25) * 25);
@@ -61,10 +61,10 @@ export function connectionQualityTooltipHtml(value: unknown, formatTime: (value:
     const latency = Number(entry.value[1]);
     if (!Number.isFinite(latency)) return [];
     const color = typeof entry.color === "string" ? entry.color : "currentColor";
-    return [`<div class="playerConnectionTooltipRow"><i style="background:${escapeTimelineHtml(color)}"></i><span>${escapeTimelineHtml(entry.seriesName ?? "Estimate")}</span><strong>${Math.round(latency)} ms</strong></div>`];
+    return [`<div class="playerConnectionTooltipRow"><i style="background:${escapeTimelineHtml(color)}"></i><span>${escapeTimelineHtml(entry.seriesName ?? "Ping")}</span><strong>${Math.round(latency)} ms</strong></div>`];
   });
   return [
-    `<strong class="playerConnectionTooltipTime">${escapeTimelineHtml(Number.isFinite(timestamp) ? formatTime(timestamp) : "Estimated latency")}</strong>`,
+    `<strong class="playerConnectionTooltipTime">${escapeTimelineHtml(Number.isFinite(timestamp) ? formatTime(timestamp) : "Measured ping")}</strong>`,
     ...rows,
     ...(Number.isFinite(players) ? [`<div class="playerConnectionTooltipPlayers">${Math.round(players)} active ${Math.round(players) === 1 ? "player" : "players"}</div>`] : [])
   ].join("");
@@ -98,15 +98,15 @@ export function buildConnectionQualityChartOption({
     automation: palette.accent
   };
   const series = [
-    { id: "connection-median", name: "Median estimate", key: "medianEstimatedLatencyMs" as const, color: palette.median, width: 2.6, type: "solid" as const, area: 0.08 },
-    { id: "connection-p95", name: "95th percentile", key: "p95EstimatedLatencyMs" as const, color: palette.accent, width: 1.8, type: "dashed" as const, area: 0 }
+    { id: "connection-median", name: "Median ping", key: "medianPingMs" as const, color: palette.median, width: 2.6, type: "solid" as const, area: 0.08 },
+    { id: "connection-p95", name: "95th percentile", key: "p95PingMs" as const, color: palette.accent, width: 1.8, type: "dashed" as const, area: 0 }
   ];
 
   return {
     animation: false,
     aria: {
       enabled: true,
-      description: `Estimated connection quality over time with ${points.length} reconstructed samples.`
+      description: `Measured TCP connection quality over time with ${points.length} retained samples.`
     },
     textStyle: { fontFamily: palette.fontFamily },
     grid: {

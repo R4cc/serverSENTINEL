@@ -17,7 +17,7 @@ import {
   versionValue
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, FormField, PanelHeader, Spinner, StatusBadge } from "../components/UiPrimitives";
+import { Banner, Button, FormField, HelpTooltip, PanelHeader, Spinner, StatusBadge } from "../components/UiPrimitives";
 import type { ServerExportArtifact, ServerExportState } from "../features/exports/useExportWorkspace";
 import {
   clampNumber,
@@ -74,7 +74,7 @@ function AdditionalPortBindingsEditor({
 
   return (
     <div className={`portBindingsEditor ${bindings.length > 1 ? "hasExtraBindings" : ""}`}>
-      <span className="fieldLabel">Additional port bindings</span>
+      <span className="fieldLabel fieldLabelWithHelp">Additional port bindings <HelpTooltip label="additional port bindings">Use the host port on the left and the container port and protocol on the right, for example 24454 : 24454/udp.</HelpTooltip></span>
       <input type="hidden" name="dockerPorts" value={serializedBindings} />
       <div className="portBindingRows">
         {bindings.map((binding) => (
@@ -112,7 +112,6 @@ function AdditionalPortBindingsEditor({
         <AppIcon name="plus" />
         <span>Add port binding</span>
       </Button>
-      <span className="fieldHint">Use host port on the left and container port/protocol on the right, for example 24454 : 24454/udp.</span>
     </div>
   );
 }
@@ -148,7 +147,7 @@ function MinecraftPortsSection({
           label="Server port"
           htmlFor="properties-server-port"
           required
-          description={<span id="properties-server-port-hint">TCP port used by Minecraft clients.</span>}
+          help={<HelpTooltip label="server port" id="properties-server-port-hint">TCP port used by Minecraft clients.</HelpTooltip>}
           error={serverPortError && <span id="properties-server-port-error">{serverPortError}</span>}
         >
           <input
@@ -168,7 +167,7 @@ function MinecraftPortsSection({
           label="Query port"
           htmlFor="properties-query-port"
           required
-          description={<span id="properties-query-port-hint">UDP port used by serverSENTINEL for quiet player metrics.</span>}
+          help={<HelpTooltip label="query port" id="properties-query-port-hint">UDP port used by serverSENTINEL for quiet player metrics.</HelpTooltip>}
           error={queryPortError && <span id="properties-query-port-error">{queryPortError}</span>}
         >
           <input
@@ -364,7 +363,7 @@ export function ServerEditForm({
   return (
     <div className="serverPropertiesWorkspace">
       <form id={formId} onSubmit={submitForm} onChange={() => setDirty(true)} className="serverPropertiesForm">
-        {disabled && disabledReason && !saving && <Banner tone="warning" className="propertiesLockBanner" title={disabledReason} />}
+        {disabled && disabledReason && !saving && <Banner tone="warning" title={disabledReason} />}
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
           <section className="propertiesSettingsSurface">
@@ -452,7 +451,7 @@ export function ServerEditForm({
                   <span>Total available: {memoryBounds.max} GB</span>
                 </div>
                 {memoryWarning && (
-                  <span className="propertiesMemoryWarning">Leave some RAM for the host. Using nearly all memory may cause instability.</span>
+                  <Banner tone="warning" compact title="Leave some RAM for the host" message="Using nearly all available memory may cause host instability." />
                 )}
                 <input type="hidden" name="javaArgs" value={javaArgs} />
               </section>
@@ -477,7 +476,6 @@ export function ServerEditForm({
               <summary>
                 <span className="propertiesDisclosureCopy">
                   <strong>Advanced</strong>
-                  <small>Container, Java, and additional port settings.</small>
                 </span>
               </summary>
               <div className="advancedResourceBody propertiesAdvancedBody">
@@ -487,7 +485,7 @@ export function ServerEditForm({
                   <FormField
                     label="Docker runtime image"
                     htmlFor="edit-docker-image"
-                    description={<span id="edit-docker-image-description">Java runtime image used for the server container.</span>}
+                    help={<HelpTooltip label="Docker runtime image" id="edit-docker-image-description">Java runtime image used for the server container.</HelpTooltip>}
                   >
                     <select id="edit-docker-image" name="dockerImage" value={dockerImage} onChange={(event) => {
                       setDockerImage(event.target.value);
@@ -501,7 +499,7 @@ export function ServerEditForm({
                   <FormField
                     label="Server jar filename"
                     htmlFor="edit-server-jar"
-                    description={<span id="edit-server-jar-description">A local .jar filename, not a path.</span>}
+                    help={<HelpTooltip label="server jar filename" id="edit-server-jar-description">Use a local .jar filename, not a path.</HelpTooltip>}
                   >
                     <input id="edit-server-jar" name="serverJar" value={serverJar} onChange={(event) => setServerJar(event.target.value)} pattern={runtimeJarFilenameInputPattern} title="Use a local .jar filename, not a path." aria-describedby="edit-server-jar-description" />
                   </FormField>
@@ -509,7 +507,7 @@ export function ServerEditForm({
                     className="propertiesFieldWide"
                     label="Docker container name"
                     htmlFor="edit-docker-container"
-                    description={<span id="edit-docker-container-description">Letters, numbers, dots, dashes, and underscores.</span>}
+                    help={<HelpTooltip label="Docker container name" id="edit-docker-container-description">Use letters, numbers, dots, dashes, and underscores.</HelpTooltip>}
                   >
                     <input
                       id="edit-docker-container"
@@ -525,7 +523,7 @@ export function ServerEditForm({
                     className="propertiesFieldWide"
                     label="Java arguments"
                     htmlFor="edit-java-args"
-                    description={<span id="edit-java-args-description">Launch flags used by the Minecraft runtime. Memory flags follow the heap sliders above.</span>}
+                    help={<HelpTooltip label="Java arguments" id="edit-java-args-description">Launch flags used by the Minecraft runtime. Memory flags follow the heap sliders above.</HelpTooltip>}
                   >
                     <textarea
                       id="edit-java-args"
@@ -623,10 +621,9 @@ export function ExportServerPanel({
   const retainedIsPrevious = Boolean(artifact && latest && artifact.operationId !== latest.id);
 
   return (
-    <section className="propertiesSideCard exportPanel">
+    <section className="propertiesSideCard exportPanel" aria-label={`Exports for ${server.displayName}`}>
       <PanelHeader
         title="Exports"
-        description={`Download ${server.displayName} as a ZIP archive you can import back into this panel or another one.`}
         actions={<StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>}
       />
       {latest ? (
@@ -642,14 +639,18 @@ export function ExportServerPanel({
             </div>
           )}
           {(latest.status === "failed" || latest.status === "cancelled") && latest.errorMessage && (
-            <p className="exportTaskError">{latest.errorMessage}</p>
+            <Banner tone="error" compact title="Export failed" message={latest.errorMessage} />
           )}
           {active && !latest.canCancel && latest.task !== "Finalizing export" && !latest.startedByRequester && (
             <small>This export was started by another user.</small>
           )}
         </div>
+      ) : loading ? (
+        <p className="exportTaskEmpty">Loading export status…</p>
+      ) : error ? (
+        <Banner tone="error" compact title="Could not load exports" message={error} />
       ) : (
-        <p className="exportTaskEmpty">{loading ? "Loading export status…" : error || "No export has been created yet."}</p>
+        <p className="exportTaskEmpty">No export has been created yet.</p>
       )}
 
       {artifact && (
@@ -688,7 +689,7 @@ export function ExportServerPanel({
         </div>
       )}
 
-      {error && latest && <p className="exportTaskError">{error}</p>}
+      {error && latest && <Banner tone="error" compact title="Could not refresh exports" message={error} />}
       <div className="exportPanelActions">
         <Button variant="secondary" onClick={onExport} disabled={disabled || active}>
           <AppIcon name="download" /> {latest ? "New export" : "Export server"}

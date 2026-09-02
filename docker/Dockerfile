@@ -1,9 +1,16 @@
 # syntax=docker/dockerfile:1
 
-ARG SS_VERSION=26.9.0
+ARG SS_VERSION=26.9.4
 FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
+
+FROM alpine:3.22 AS tcp-rtt-probe-build
+
+RUN apk add --no-cache build-base linux-headers
+COPY server/native/tcp-rtt-probe.c /src/tcp-rtt-probe.c
+RUN cc -static -Os -s -Wall -Wextra -Werror -o /tcp-rtt-probe /src/tcp-rtt-probe.c \
+  && /tcp-rtt-probe --self-test
 
 FROM dependency-base AS production-dependencies
 
@@ -60,6 +67,7 @@ COPY --from=build /app/shared/package.json shared/package.json
 COPY --from=build /app/shared/dist shared/dist
 COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/web/dist web/dist
+COPY --from=tcp-rtt-probe-build /tcp-rtt-probe server/native/tcp-rtt-probe
 
 RUN ["/nodejs/bin/node", "-e", "const fs = require('node:fs'); const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.exec('SELECT 1'); db.close(); new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Vienna' }).format(new Date()); if (typeof fetch !== 'function' || !fs.existsSync(process.env.SSL_CERT_FILE)) process.exit(1)"]
 

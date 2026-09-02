@@ -1,5 +1,22 @@
 # Changelog
 
+## 26.9.4 - 2026-09-02
+
+- Replaced geographic ping estimates with live Linux TCP round-trip measurements matched to connected players without retaining their network endpoints.
+- Kept player markers anchored to their map coordinates while zooming and panning, and preserved the active workspace across page refreshes.
+
+## 26.9.3 - 2026-09-02
+
+- Decluttered routine screens by removing repeated guidance and moving useful caveats into consistent, accessible question-mark help.
+
+## 26.9.2 - 2026-09-02
+
+- Made the Players world map easier to use on phones with smaller location markers, pinch and scroll zooming, drag-to-pan navigation, and dedicated zoom controls across screen sizes.
+
+## 26.9.1 - 2026-08-28
+
+- Unified page-level warnings and errors as liquid-glass alert cards with consistent severity colors, icons, actions, details, and responsive behavior.
+
 ## 26.9.0 - 2026-08-28
 
 - Standardized the Integrations settings rows with consistent field labels, control heights, action widths, alignment, and responsive padding.

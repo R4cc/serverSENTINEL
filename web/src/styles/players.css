@@ -68,20 +68,48 @@
   z-index: 2;
 }
 
+.playerMapFrame {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-md);
+  aspect-ratio: 2 / 1;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
 .playerMapViewport {
   position: relative;
   z-index: 1;
   width: 100%;
+  height: 100%;
   min-width: 0;
-  isolation: isolate;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.playerMapViewport:active {
+  cursor: grabbing;
+}
+
+.playerMapTransformContent,
+.playerMapScene {
+  width: 100%;
+  height: 100%;
+}
+
+.playerMapScene {
+  position: relative;
+  flex: 0 0 100%;
 }
 
 .playerMapCanvas {
   display: block;
   width: 100%;
-  height: auto;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-muted);
+  height: 100%;
 }
 
 .playerMapOcean {
@@ -147,9 +175,14 @@
 .playerMapMarkerWrap {
   position: absolute;
   z-index: 2;
+  pointer-events: auto;
+  transform-origin: top left;
+}
+
+.playerMapMarkerScale {
+  position: relative;
   display: inline-flex;
   transform: translate(-50%, -50%);
-  pointer-events: auto;
 }
 
 .playerMapMarkerWrap--active {
@@ -180,11 +213,6 @@ button.playerMapMarker {
   cursor: pointer;
 }
 
-.playerMapAvatar--known {
-  filter: saturate(0.58);
-  opacity: 0.78;
-}
-
 .playerMapMarkerWrap--active .playerMapMarker,
 button.playerMapMarker:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 66%, var(--surface));
@@ -197,6 +225,60 @@ button.playerMapMarker:hover:not(:disabled) {
 .playerMapMarker:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 3px;
+}
+
+.playerMapControls {
+  position: absolute;
+  z-index: 10;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
+}
+
+.playerMapControlButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.playerMapControlButton + .playerMapControlButton {
+  border-top: 1px solid var(--border-row);
+}
+
+.playerMapControlButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.playerMapControlButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+.playerMapControlButton:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.playerMapControlButton > svg {
+  width: 17px;
+  height: 17px;
 }
 
 .playerMapAvatar {
@@ -215,10 +297,6 @@ button.playerMapMarker:hover:not(:disabled) {
   font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
   line-height: 1;
-}
-
-.playerMapAvatar--online {
-  border-color: var(--sentinel-success);
 }
 
 .playerMapAvatar--compact {
@@ -383,6 +461,91 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   line-height: 1;
 }
 
+@media (max-width: 560px) {
+  .playerMapControls {
+    position: static;
+    grid-auto-flow: column;
+    width: max-content;
+    margin: var(--space-2) 0 0 auto;
+  }
+
+  .playerMapControlButton {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .playerMapControlButton + .playerMapControlButton {
+    border-top: 0;
+    border-left: 1px solid var(--border-row);
+  }
+
+  .playerMapClusterMarker,
+  .playerMapClusterMarker--server {
+    width: 32px;
+    min-width: 32px;
+    height: 30px;
+  }
+
+  .playerMapClusterHeads,
+  .playerMapClusterHeads--server {
+    width: 28px;
+    height: 22px;
+  }
+
+  .playerMapClusterHeads .playerMapAvatar {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .playerMapClusterHeads .playerMapAvatar:nth-child(2) {
+    left: 5px;
+  }
+
+  .playerMapClusterHeads .playerMapAvatar:nth-child(3) {
+    left: 10px;
+  }
+
+  .playerMapPlayerMarker {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+  }
+
+  .playerMapPlayerMarker .playerMapAvatar {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+  }
+
+  .playerMapClusterCount {
+    right: -4px;
+    bottom: -4px;
+    min-width: 16px;
+    height: 14px;
+    padding-inline: 3px;
+    font-size: 9px;
+  }
+
+  .playerMapSharedServer {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .playerMapSharedServerIcon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .playerMapClusterHeads--server .playerMapSharedServer,
+  .playerMapPlayerMarker--server .playerMapSharedServer {
+    top: -23px;
+  }
+}
+
 .playerMapClusterPopup {
   position: absolute;
   z-index: 8;
@@ -474,9 +637,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.playerMapPlayerPopup .playerMapPlayerStatus--online { color: var(--sentinel-success); }
-.playerMapPlayerPopup .playerMapPlayerStatus--known { color: var(--text-muted); }
-
 .playerMapSinglePlayerList {
   padding-inline-end: 0;
   overflow: visible;
@@ -555,123 +715,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   vector-effect: non-scaling-stroke;
 }
 
-.playerMapLegend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-}
-
-.playerMapLegend li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.playerMapLegendMark {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--text-muted);
-}
-
-.playerMapLegendMark--server {
-  position: relative;
-  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--surface));
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-}
-
-.playerMapLegendMark--server::before,
-.playerMapLegendMark--server::after {
-  content: "";
-  position: absolute;
-  right: 2px;
-  left: 2px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--accent);
-}
-
-.playerMapLegendMark--server::before { top: 2px; }
-.playerMapLegendMark--server::after { bottom: 2px; }
-
-.playerMapLegendPlayer {
-  display: inline-flex;
-  border: 1px solid color-mix(in srgb, var(--text-muted) 32%, var(--surface));
-  border-radius: var(--radius-xs);
-  padding: 1px;
-  background: var(--surface-raised);
-}
-
-.playerMapLegendPlayer--online {
-  border-color: color-mix(in srgb, var(--sentinel-success) 38%, var(--surface));
-}
-
-.playerMapLegendPlayer--known {
-  filter: saturate(0.5);
-  opacity: 0.72;
-}
-
-.playerMapLegendHead {
-  display: block;
-  width: 12px;
-  height: 12px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 62%, var(--surface)), color-mix(in srgb, var(--sentinel-warning) 38%, var(--surface)));
-}
-
-.playerMapLegendHead img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  image-rendering: pixelated;
-}
-
-.playerMapLegendCluster {
-  position: relative;
-  display: inline-flex;
-  width: 25px;
-  height: 16px;
-}
-
-.playerMapLegendCluster .playerMapLegendHead {
-  position: absolute;
-  top: 1px;
-  border: 1px solid var(--surface);
-}
-
-.playerMapLegendCluster .playerMapLegendHead:first-child { left: 0; }
-.playerMapLegendCluster .playerMapLegendHead:nth-child(2) { left: 5px; }
-.playerMapLegendCluster .playerMapLegendHead:nth-child(3) { left: 10px; }
-
-.playerMapLegendCluster b {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 12px;
-  height: 12px;
-  border: 1px solid var(--border-panel);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--text);
-  font-size: 7px;
-  line-height: 1;
-}
-
-.playerMapLegendMark--accuracy {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
 .playerLocationForm {
   display: flex;
   align-items: flex-end;
@@ -684,6 +727,73 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 .playerLocationForm .uiFormField {
   flex: 1 1 260px;
   min-width: 0;
+}
+
+.playerLocationForm > .uiButton {
+  height: 44px;
+  min-height: 44px;
+}
+
+.playerLocationDisclosure {
+  border-top: 1px solid var(--border-muted);
+  padding-top: var(--space-3);
+}
+
+.playerLocationDisclosureToggle.uiButton {
+  width: 100%;
+  min-height: 52px;
+  justify-content: space-between;
+  border-color: var(--border-row);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--glass-tint-soft));
+  color: var(--text);
+  text-align: left;
+}
+
+.playerLocationDisclosureToggle.uiButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-muted));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-raised));
+  color: var(--text);
+}
+
+.playerLocationDisclosureCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.playerLocationDisclosureCopy strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.playerLocationDisclosureCopy small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerLocationDisclosureToggle > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.playerLocationDisclosureToggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.playerLocationDisclosureBody {
+  padding-top: var(--space-3);
+}
+
+.playerLocationDisclosureBody .playerLocationForm {
+  border-top: 0;
+  padding-top: 0;
 }
 
 /* Sorting changes which eight rows are visible. Fixed layout keeps those row contents from
@@ -803,10 +913,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   image-rendering: pixelated;
 }
 
-.playerHead--placeholder {
-  border: 1px solid var(--border-muted);
-}
-
 .playerLocation {
   position: relative;
   display: inline-flex;
@@ -902,23 +1008,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 .playerLocationAccuracy:focus-within .playerAccuracyTooltip {
   opacity: 1;
   transform: translateY(0);
-}
-
-.playerRosterFooter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  border-top: 1px solid var(--border-row);
-  padding-top: var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-}
-
-.playerRosterPager {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* Connection quality uses the same ECharts canvas and time-axis primitives as Server Timeline.
@@ -1041,9 +1130,14 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 6px);
 }
 
+.playerMapScopeSwitch,
 .playerRangeSwitch {
   display: inline-flex;
   gap: var(--space-1);
+}
+
+.playerMapScopeSwitch .uiButton {
+  min-width: 78px;
 }
 
 .playerActivityHours {
@@ -1179,6 +1273,10 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 }
 
 .playerAttribution {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
   color: var(--text-soft);
   font-size: var(--type-meta-size);
 }
@@ -1269,30 +1367,15 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 }
 
 @media (max-width: 560px) {
+  .playerGeographyCard .uiPanelHeader,
   .playerRosterCard .uiPanelHeader {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .playerGeographyCard .uiPanelHeaderActions,
   .playerRosterCard .uiPanelHeaderActions {
     justify-content: flex-start;
-  }
-
-  .playerRosterFooter {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .playerRosterFooter > span:first-child {
-    text-align: center;
-  }
-
-  .playerRosterPager {
-    justify-content: space-between;
-  }
-
-  .playerRosterPager > span {
-    white-space: nowrap;
   }
 
   .playerRosterTable tbody tr {
@@ -1371,7 +1454,8 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   .playerAccuracyTooltip,
   .playerActivityBar,
   .playerActivityBarFill,
-  .playerActivityHourLabel {
+  .playerActivityHourLabel,
+  .playerLocationDisclosureToggle > svg {
     transition: none;
   }
 

@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { AppIcon } from "../../components/FileTypeIcon";
-import { Banner, Button, FormField } from "../../components/UiPrimitives";
+import { Banner, Button, FormField, HelpTooltip } from "../../components/UiPrimitives";
 import { DialogSurface } from "../../components/DialogSurface";
 import { formatBytes } from "../../utils/format";
 import type { ContextNode } from "../../types";
@@ -70,7 +70,7 @@ export function ImportModal({
         <FormField
           label="Target node"
           htmlFor={nodeId}
-          description="Imports are restored onto the panel's own node. Move the server to another node afterwards."
+          help={<HelpTooltip label="import target node">Imports are restored onto the panel's own node. Move the server afterwards if needed.</HelpTooltip>}
         >
           <select
             id={nodeId}

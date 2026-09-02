@@ -14,6 +14,7 @@ function insights(overrides: Partial<PlayerInsightsResponse> = {}): PlayerInsigh
     players: [],
     regions: [],
     latency: [],
+    pingMeasurements: [{ serverId: "server-1", status: "idle", onlinePlayers: 0, measuredPlayers: 0 }],
     activityHours: Array.from({ length: 24 }, (_, hour) => ({ hour, averagePlayers: 0, peakPlayers: 0, samples: 0 })),
     serverLocations: [{ serverId: "server-1" }],
     geoDatabase: { available: false, configured: false, updating: false },
@@ -47,6 +48,10 @@ function render(overrides: Partial<Parameters<typeof PlayersPage>[0]> = {}) {
   );
 }
 
+function mapMarkup(html: string) {
+  return html.match(/<figure class="playerMap">[\s\S]*?<\/figure>/)?.[0] ?? "";
+}
+
 describe("the Players workspace before it knows anything", () => {
   it("says geography is not configured, and how to configure it", () => {
     const html = render();
@@ -58,18 +63,22 @@ describe("the Players workspace before it knows anything", () => {
 
   it("shows an em dash for every figure it could not derive, never a zero standing in for unknown", () => {
     const html = render();
-    expect(html).toContain("Median est. ping");
+    expect(html).toContain("Median ping");
+    expect(html).toContain("Linux TCP round-trip time measured on the server host");
     expect(html).toContain("Needs a full day of history");
     expect(html).toContain("No region resolved yet");
     expect(html).not.toContain("0 ms");
+    expect(html).not.toMatch(/estimated (?:ping|latency)/i);
   });
 
-  it("explains each empty card rather than drawing an empty chart", () => {
+  it("names each empty card without tutorial copy", () => {
     const html = render();
     expect(html).toContain("Not enough history yet");
     expect(html).toContain("No activity recorded yet");
     expect(html).toContain("No regions yet");
     expect(html).toContain("No players recorded yet");
+    expect(html).not.toContain("Players appear here once they join");
+    expect(html).not.toContain("It fills in as players come and go");
   });
 
   it("carries the GeoLite2 attribution its licence requires", () => {
@@ -109,9 +118,9 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).toContain("No location resolved");
   });
 
-  it("never claims a latency when the server has no address to measure from", () => {
+  it("never claims a ping when no live socket measurement is available", () => {
     const html = render({ insights: partial });
-    expect(html).toContain("Set the server address to measure distance and estimate latency");
+    expect(html).toContain("Set the server address for distance estimates.");
     expect(html).not.toContain(" ms<");
   });
 
@@ -133,7 +142,7 @@ describe("the Players workspace with partial knowledge", () => {
 
   it("offers the shared table sorting control on every roster heading", () => {
     const html = render({ insights: partial });
-    for (const heading of ["Player", "Location", "Distance", "Est. ping", "Last seen"]) {
+    for (const heading of ["Player", "Location", "Distance", "Ping", "Last seen"]) {
       expect(html).toContain(`title="Sort by ${heading}"`);
     }
     expect(html.match(/aria-sort="none"/g)).toHaveLength(5);
@@ -153,17 +162,62 @@ describe("the Players workspace with partial knowledge", () => {
     expect(readOnly).toContain("player insights management permission");
   });
 
+  it("collapses the address editor after an address has been configured", () => {
+    const html = render({
+      insights: insights({
+        serverLocations: [{ serverId: "server-1", address: "play.example.net" }]
+      })
+    });
+
+    expect(html).toContain('class="uiButton uiButton--ghost playerLocationDisclosureToggle"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("play.example.net");
+    expect(html).not.toContain("player-insights-server-address");
+  });
+
   it("does not draw empty avatar boxes when player heads are disabled", () => {
     expect(render({ insights: partial })).not.toContain("playerHead");
     expect(render({ insights: partial, playerHeadsEnabled: true })).toContain("playerHead");
   });
 
-  it("marks online map heads directly and makes individual markers hoverable controls", () => {
+  it("shows only online players by default and uses one neutral marker style", () => {
     const html = render({ insights: partial, playerHeadsEnabled: true });
-    expect(html).toContain("playerMapAvatar--online");
-    expect(html).toContain("playerMapPlayerMarker");
-    expect(html).toContain("playerMapMarker--online");
-    expect(html).toContain("<button");
+    const map = mapMarkup(html);
+    expect(html).toContain('role="group" aria-label="Players shown on map"');
+    expect(html).toContain('aria-pressed="true" type="button" class="uiButton uiButton--secondary uiButton--compact">Online</button>');
+    expect(map).toContain('aria-label="Interactive player world map. Pinch or scroll to zoom and drag to move."');
+    expect(map).toContain('aria-label="Zoom in"');
+    expect(map).toContain('aria-label="Zoom out"');
+    expect(map).toContain('aria-label="Reset map view"');
+    expect(map).toContain("SullyTheSnak");
+    expect(map).toContain("playerMapPlayerMarker");
+    expect(map).not.toContain("playerMapAvatar--online");
+    expect(map).not.toContain("playerMapAvatar--known");
+    expect(map).not.toContain("playerMapMarker--online");
+    expect(map).not.toContain("Online now");
+    expect(map).not.toContain("Played before");
+    expect(html).not.toContain("Online player");
+  });
+
+  it("keeps historical players off the map until all time is selected", () => {
+    const html = render({
+      insights: insights({
+        players: [
+          ...partial.players,
+          {
+            player: "HistoryOnly",
+            serverId: "server-1",
+            serverName: "Survival",
+            online: false,
+            location: { label: "Berlin", city: "Berlin", country: "Germany", countryCode: "DE", continentCode: "EU", continent: "Europe", latitude: 52.52, longitude: 13.41, accuracyRadiusKm: 20, precision: "city" },
+            observations: 2
+          }
+        ]
+      })
+    });
+
+    expect(html).toContain("HistoryOnly");
+    expect(mapMarkup(html)).not.toContain("HistoryOnly");
   });
 
   it("marks the server origin with a generic server rack instead of the app cube", () => {
@@ -199,8 +253,8 @@ describe("the Players workspace with partial knowledge", () => {
       playerHeadsEnabled: true,
       insights: insights({
         players: [
-          { player: "PlayerOne", serverId: "server-1", serverName: "Survival", online: true, location: sharedLocation, estimatedLatencyMs: 10, observations: 2 },
-          { player: "PlayerTwo", serverId: "server-1", serverName: "Survival", online: true, location: sharedLocation, estimatedLatencyMs: 12, observations: 2 }
+          { player: "PlayerOne", serverId: "server-1", serverName: "Survival", online: true, location: sharedLocation, pingMs: 10, observations: 2 },
+          { player: "PlayerTwo", serverId: "server-1", serverName: "Survival", online: true, location: sharedLocation, pingMs: 12, observations: 2 }
         ],
         serverLocations: [{ serverId: "server-1", address: "play.example.net", location: sharedLocation }]
       })
@@ -219,16 +273,16 @@ describe("the Players workspace with partial knowledge", () => {
         serverName: "Survival",
         online: true,
         location: { label: "New York", city: "New York", country: "United States", countryCode: "US", continentCode: "NA", continent: "North America", latitude: 40.71, longitude: -74.01, accuracyRadiusKm: 20, precision: "city" },
-        estimatedLatencyMs: 80,
+        pingMs: 80,
         observations: 3
       },
       {
         player: "SlowPlayer",
         serverId: "server-1",
         serverName: "Survival",
-        online: false,
+        online: true,
         location: { label: "Newark", city: "Newark", country: "United States", countryCode: "US", continentCode: "NA", continent: "North America", latitude: 40.74, longitude: -74.17, accuracyRadiusKm: 30, precision: "city" },
-        estimatedLatencyMs: 120,
+        pingMs: 120,
         observations: 2
       }
     ];
@@ -244,13 +298,13 @@ describe("the Players workspace with partial knowledge", () => {
       })
     });
     expect(html).toContain("playerMapClusterMarker");
-    expect(html).toContain("playerMapLegendHead");
-    expect(html).toContain("playerMapLegendCluster");
+    expect(html).not.toContain("playerMapLegendHead");
+    expect(html).not.toContain("playerMapLegendCluster");
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toMatch(/playerMapClusterMarker[^>]+aria-controls=/);
     expect(html).toContain('data-player-count="2"');
-    expect(html).toContain('data-estimated-ping="100"');
+    expect(html).toContain('data-ping="100"');
     expect(html).toContain("playerMapRoute--info");
     expect(html).toContain("/api/servers/server-1/player-head/FastPlayer");
     expect(html).not.toContain("playerMapDot");
@@ -264,19 +318,19 @@ describe("the Players workspace with partial knowledge", () => {
         serverLocations: [{ serverId: "server-1", address: "play.example.net", error: "GeoLite2 has no location for play.example.net." }]
       })
     });
-    expect(html).toContain("play.example.net could not be placed");
+    expect(html).toContain("play.example.net could not be placed; distances are unavailable.");
     expect(html).not.toContain("Set the server address to measure distance");
   });
 
   it("renders connection quality through the shared chart canvas with a readable latest snapshot", () => {
     const latency = [
-      { at: Date.parse("2026-08-16T11:00:00.000Z"), medianEstimatedLatencyMs: 40, p95EstimatedLatencyMs: 150, players: 2 },
-      { at: Date.parse("2026-08-16T12:00:00.000Z"), medianEstimatedLatencyMs: 45, p95EstimatedLatencyMs: 150, players: 3 }
+      { at: Date.parse("2026-08-16T11:00:00.000Z"), medianPingMs: 40, p95PingMs: 150, players: 2, measuredPlayers: 2 },
+      { at: Date.parse("2026-08-16T12:00:00.000Z"), medianPingMs: 45, p95PingMs: 150, players: 3, measuredPlayers: 3 }
     ];
     const html = render({ insights: insights({ latency }) });
 
     expect(html).toContain('class="playerConnectionEChart" role="img"');
-    expect(html).toContain("Latest connection quality estimate");
+    expect(html).toContain("Latest measured connection quality");
     expect(html).toContain("Median</dt><dd>45 ms");
     expect(html).toContain("95th percentile</dt><dd>150 ms");
     expect(html).toContain("Active players</dt><dd>3");

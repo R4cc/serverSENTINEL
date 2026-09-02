@@ -98,10 +98,10 @@ describe("AddModsWorkflow", () => {
     expect(html).toContain('title="Close add mods"');
   });
 
-  it("renders the explicit incompatible toggle and safe default copy", () => {
+  it("renders the explicit incompatible toggle without restating the safe default", () => {
     const html = renderAddWorkflow();
     expect(html).toContain("Show incompatible mods");
-    expect(html).toContain("Showing compatible Fabric server mods for this server.");
+    expect(html).not.toContain("Showing compatible Fabric server mods for this server.");
   });
 
   it("renders incompatible search results with a visible risk state", () => {

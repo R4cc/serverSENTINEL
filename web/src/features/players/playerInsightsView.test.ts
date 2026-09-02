@@ -5,7 +5,7 @@ import {
   clampPlayerMapPoint,
   countryFlag,
   formatDistance,
-  formatEstimatedLatency,
+  formatPing,
   formatLocation,
   formatMaintenanceWindow,
   latencyTone,
@@ -53,7 +53,6 @@ describe("map marks", () => {
     expect(marks).toHaveLength(2);
     const copenhagen = marks.find((mark) => mark.players.includes("A"));
     expect(copenhagen?.players).toEqual(["A", "B"]);
-    expect(copenhagen?.online).toBe(1);
   });
 
   it("keeps the widest accuracy radius of everyone at a place", () => {
@@ -75,13 +74,12 @@ describe("map marks", () => {
 
   it("retains every member and averages only the cluster pings it knows", () => {
     const marks = playerMapMarks([
-      entry("Slow", { estimatedLatencyMs: 180 }),
-      entry("Unknown", { estimatedLatencyMs: undefined }),
-      entry("Fast", { online: true, estimatedLatencyMs: 20 })
+      entry("Slow", { pingMs: 180 }),
+      entry("Unknown", { pingMs: undefined }),
+      entry("Fast", { online: true, pingMs: 20 })
     ]);
     expect(marks[0].entries.map((member) => member.player)).toEqual(["Fast", "Slow", "Unknown"]);
-    expect(marks[0].estimatedLatencyMs).toBe(100);
-    expect(marks[0].online).toBe(1);
+    expect(marks[0].pingMs).toBe(100);
   });
 
   it("leaves out players who could not be placed", () => {
@@ -138,7 +136,7 @@ describe("map marks", () => {
 
 describe("how figures are written", () => {
   it("says nothing rather than zero when a value could not be derived", () => {
-    expect(formatEstimatedLatency(undefined)).toBe(unknownValue);
+    expect(formatPing(undefined)).toBe(unknownValue);
     expect(formatDistance(undefined, String)).toBe(unknownValue);
     expect(formatLocation(undefined)).toBe(unknownValue);
     expect(formatMaintenanceWindow(undefined, "UTC")).toBe(unknownValue);

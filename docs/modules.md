@@ -12,7 +12,7 @@ Three modules ship today:
 | --- | --- | --- |
 | `schedules` | The Schedules workspace, the schedule API, and the poll that decides what is due | `schedules.view` |
 | `managedContent` | The Mods/Plugins workspace, the mod and Modrinth API, and the hourly update check | `mods.view` |
-| `playerInsights` | The Players workspace, the insights API, the GeoLite2 database, and the lookup that turns a login into a location | `players.view` |
+| `playerInsights` | The Players workspace, insights API, GeoLite2 lookup, and live TCP ping measurement | `players.view` |
 
 ## The two gates
 
@@ -73,7 +73,7 @@ A feature is a good module candidate when it owns a distinct workspace page, has
 
 ## When switching off is a promise, not a preference
 
-`playerInsights` is the first module whose switch means something stronger than "hide this feature". It is the only part of serverSENTINEL that ever *reads* a player's IP address: the Minecraft server logs one at login, the module resolves it against a GeoLite2 database the panel holds, and it is dropped — nothing writes it, hashes it, or sends it to a geolocation service. The stored table holds a city, a country, a continent, an approximate latitude and longitude, and the accuracy radius that goes with them.
+`playerInsights` is the first module whose switch means something stronger than "hide this feature". It is the only part of serverSENTINEL that ever *reads* a player's IP address: the Minecraft server logs one at login, the module resolves it against a GeoLite2 database and keeps the normalized endpoint only while matching the connected player to a live TCP socket. Nothing writes or hashes the endpoint, sends it to a geolocation service, includes it in the player API, or puts it in retained statistics. The stored geography table holds only a city, country, continent, approximate coordinates, and accuracy radius; resource history holds anonymous RTT arrays.
 
 Be precise about the scope of that promise. Player Insights does not store an address, and no address is sent to MaxMind or any other third party — MaxMind is asked for a database file, never about a player. It is *not* a claim that the address never leaves the machine the Minecraft server runs on: a server on a remote node streams its console output to the panel over the node protocol, addresses and all, and did so before this module existed. Copy that says otherwise is wrong, so the wording in the UI, the changelog, and the contract all state the guarantee the code actually makes.
 
@@ -89,6 +89,4 @@ Two things follow from that:
 - **The credential is core, the use is not.** MaxMind's account ID and license key live in `app_settings` beside the Modrinth key, and the Modules settings hides the row when the module is off — exactly as it does for Modrinth. The credential authorizes a *download*; it is never used for a lookup.
 - **Nothing is bundled.** The image ships no GeoLite2 copy. A database baked into a container image is stale the week after it is built, and GeoLite2's licence expects installations to keep theirs current. An installation with no credentials has no geography, and the workspace says so instead of guessing.
 
-The one figure the module cannot observe is latency: no protocol the panel speaks reports a player's own round-trip time. It is estimated from the distance between two approximate positions, using the model written down in `shared/src/playerInsights.ts`, and every field it feeds is named `estimated`. Where either position is unknown the field is absent rather than filled in — which is why the workspace has as many empty states as it does.
-
-Because that estimate is also drawn for the past, geography is stored as a short history rather than a latest place: one row per run of joins from the same location, added only when the derived place changes. A session that happened last Tuesday is estimated from where the player was last Tuesday. With a single row per player, one person moving between continents silently rewrote every hour of the connection-quality chart. Sessions older than the first location the panel recorded contribute to the player count and to nothing else, because nobody recorded where that player was then.
+Player ping is the Linux host's TCP round-trip time, read from `tcp_info` inside the Minecraft container's network namespace. Matching requires the exact normalized remote address and source port from the player's login line; there is deliberately no address-only fallback for players behind NAT or proxies. Non-Linux hosts, older nodes without the optional capability, inaccessible sockets, proxies without usable source ports, and failed matches report ping as unavailable rather than substituting a geographic estimate.

@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
-import { Button, EmptyState, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
+import { Banner, Button, EmptyState, HelpTooltip, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
 import { ActionMenu } from './ActionMenu';
 import { TableSortButton } from './TableControls';
@@ -99,20 +99,9 @@ export function UserManagement({
               <td data-label="Role">
                 <div className="roleCell">
                   <StatusBadge className={`roleBadge ${displayedRolePreset(user)}`}>{rolePresetLabel(displayedRolePreset(user))}</StatusBadge>
-                  <span className="roleInfoWrap">
-                    <Button
-                      variant="ghost"
-                      iconOnly
-                      className="roleInfoButton"
-                      aria-label={`${rolePresetLabel(displayedRolePreset(user))} preset details`}
-                      aria-describedby={`role-tip-${user.id}`}
-                    >
-                      i
-                    </Button>
-                    <span id={`role-tip-${user.id}`} role="tooltip" className="roleTooltip">
-                      Roles are presets. Actual access is controlled by permissions.
-                    </span>
-                  </span>
+                  <HelpTooltip label={`${rolePresetLabel(displayedRolePreset(user))} role`} id={`role-tip-${user.id}`}>
+                    Roles are presets. Actual access is controlled by permissions.
+                  </HelpTooltip>
                 </div>
               </td>
               <td data-label="Actions">
@@ -295,9 +284,12 @@ function UserPermissionModal({
           </div>
 
           {unknownPermissions.length > 0 && (
-            <div className="permissionWarning" role="status">
-              This user has unknown permissions from the backend: {unknownPermissions.join(", ")}.
-            </div>
+            <Banner
+              tone="warning"
+              compact
+              title="Unknown permissions"
+              message={`This user has permissions not recognized by this panel: ${unknownPermissions.join(", ")}.`}
+            />
           )}
 
           <div className="permissionsSection">

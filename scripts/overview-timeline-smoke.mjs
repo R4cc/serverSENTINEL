@@ -86,12 +86,72 @@ async function assertScenarioData(page) {
   assert(ariaDescription?.includes("Player session timeline") && ariaDescription.includes("Online now"), `Player timeline accessibility description is incomplete: ${ariaDescription}`);
   for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
 
-  const eventsText = await page.locator(".eventsPanel").innerText();
+  const eventsPanel = page.locator(".eventsPanel");
+  let eventsText = await eventsPanel.innerText();
+  if (!eventsText.includes("Reconnected")) {
+    const next = eventsPanel.getByRole("button", { name: "Next", exact: true });
+    if (await next.isEnabled()) {
+      await next.click();
+      eventsText += `\n${await eventsPanel.innerText()}`;
+      await eventsPanel.getByRole("button", { name: "Previous", exact: true }).click();
+    }
+  }
   assert(eventsText.includes("Reconnected") && eventsText.includes("Offline for 7 seconds"), `The reconnect event is not summarized correctly: ${eventsText}`);
   const joinedSubjects = await page.locator(".eventsPanel .eventKind--player_joined .eventSubject").allTextContents();
   const leftSubjects = await page.locator(".eventsPanel .eventKind--player_left .eventSubject").allTextContents();
   assert(joinedSubjects.some((subject) => leftSubjects.includes(subject)), "The instant join/leave events do not share a generated player identity");
+  assert(!eventsText.includes("Ready for players"), `Server start events still show the removed detail: ${eventsText}`);
+  const playerEventBadges = page.locator(".eventsPanel .eventKind--player_joined .eventPlayerIconBadge, .eventsPanel .eventKind--player_left .eventPlayerIconBadge");
+  await playerEventBadges.first().waitFor();
+  const badgeGeometry = await playerEventBadges.evaluateAll((badges) => badges.map((badge) => {
+    const glyph = badge.querySelector("svg");
+    const badgeBox = badge.getBoundingClientRect();
+    const glyphBox = glyph?.getBoundingClientRect();
+    return {
+      contained: Boolean(glyphBox
+        && glyphBox.left >= badgeBox.left
+        && glyphBox.right <= badgeBox.right
+        && glyphBox.top >= badgeBox.top
+        && glyphBox.bottom <= badgeBox.bottom),
+      centerOffset: glyphBox
+        ? Math.hypot(
+          glyphBox.left + glyphBox.width / 2 - (badgeBox.left + badgeBox.width / 2),
+          glyphBox.top + glyphBox.height / 2 - (badgeBox.top + badgeBox.height / 2)
+        )
+        : Number.POSITIVE_INFINITY
+    };
+  }));
+  assert(badgeGeometry.length >= 2, `Join/leave player-head badges are missing: ${JSON.stringify(badgeGeometry)}`);
+  for (const geometry of badgeGeometry) {
+    assert(geometry.contained && geometry.centerOffset <= 0.5, `A join/leave glyph is not centered inside its badge: ${JSON.stringify(geometry)}`);
+  }
   assert(!eventsText.toLowerCase().includes("alex"), `A removed fixed identity is still rendered in recent events: ${eventsText}`);
+}
+
+async function assertTimelineHelpTooltip(page) {
+  const trigger = page.getByRole("button", { name: "About server timeline", exact: true });
+  const targetId = await trigger.getAttribute("aria-controls");
+  assert(targetId, "Timeline help is not associated with its tooltip");
+  const panelBefore = await page.locator(".serverTimelinePanel").boundingBox();
+
+  await trigger.hover();
+  const tooltip = page.locator(`[id="${targetId}"]`);
+  await tooltip.waitFor({ state: "visible" });
+  const geometry = await tooltip.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: innerWidth, height: innerHeight };
+  });
+  assert(geometry.left >= 0 && geometry.right <= geometry.width && geometry.top >= 0 && geometry.bottom <= geometry.height, `Timeline help leaves the desktop viewport: ${JSON.stringify(geometry)}`);
+  const panelAfter = await page.locator(".serverTimelinePanel").boundingBox();
+  assert(panelBefore && panelAfter && Math.abs(panelBefore.height - panelAfter.height) <= 1, `Timeline help shifts the panel layout: ${JSON.stringify({ panelBefore, panelAfter })}`);
+
+  await page.mouse.move(0, 0);
+  await tooltip.waitFor({ state: "hidden" });
+  await trigger.focus();
+  await tooltip.waitFor({ state: "visible" });
+  await page.keyboard.press("Escape");
+  await tooltip.waitFor({ state: "hidden" });
+  assert(await trigger.evaluate((element) => element === document.activeElement), "Escape did not return focus to the timeline help trigger");
 }
 
 async function playerSessionSegments(page) {
@@ -141,6 +201,8 @@ async function assertPlayerSessionStateColors(page) {
     const panel = document.querySelector(".serverTimelinePanel");
     return Number(players?.getAttribute("data-viewport-to")) < now && panel?.getAttribute("aria-busy") === "false";
   }, fixedNow.getTime());
+  await page.waitForFunction(() => ![...document.querySelectorAll(".serverTimelinePlayerChart svg text")]
+    .some((label) => label.textContent?.trim() === "Now"));
 
   const historicalSegments = await playerSessionSegments(page);
   const nowLabels = await page.locator(".serverTimelinePlayerChart svg text").allTextContents();
@@ -407,6 +469,7 @@ async function assertTimelineNavigation(page) {
 async function assertDesktop(page) {
   const panel = await waitForTimeline(page);
   assert.equal(await panel.getAttribute("aria-busy"), "false");
+  await assertTimelineHelpTooltip(page);
   await assertScenarioData(page);
   await assertPlayerSessionStateColors(page);
   await assertPlayerSectionDisclosure(page);
@@ -416,13 +479,18 @@ async function assertDesktop(page) {
   const playerChart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
   const playerChartBox = await playerChart.boundingBox();
   assert(playerChartBox, "Player timeline disappeared in the seven-day range");
-  await page.mouse.move(playerChartBox.x + playerChartBox.width / 2, playerChartBox.y + playerChartBox.height / 2);
-  for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
+  await playerChart.hover();
+  for (let index = 0; index < 60; index += 1) {
+    await page.mouse.wheel(0, -600);
+    if (index % 10 === 9) await page.waitForTimeout(20);
+  }
+  await page.waitForTimeout(180);
   const retainedRangeLabels = new Set();
-  for (let index = 0; index < 100; index += 1) {
+  for (let index = 0; index < 240; index += 1) {
     for (const label of await playerChart.locator("svg text").allTextContents()) retainedRangeLabels.add(label.trim());
     if (retainedRangeLabels.has("25h 0m")) break;
     await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(15);
   }
   assert(retainedRangeLabels.has("25h 0m"), "Marathon session disappeared in the seven-day range");
 
@@ -548,6 +616,15 @@ async function assertAllPlayersOfflineTransition(page) {
   assert.equal(await section.locator(".serverTimelinePlayerCount.tone-online").count(), 0, "Stopped demo still reports online players");
 }
 
+async function assertRestartReasonOptional(page) {
+  await page.getByRole("button", { name: "Restart", exact: true }).click();
+  const reason = page.getByLabel("Reason for restarting (optional)");
+  await reason.waitFor();
+  assert.equal(await reason.getAttribute("required"), null, "The restart reason is still required");
+  await page.getByRole("button", { name: "Keep running", exact: true }).click();
+  await reason.waitFor({ state: "detached" });
+}
+
 async function assertTimelineResponsiveGeometry(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport);
   try {
@@ -665,6 +742,8 @@ async function assertLiquidGlassAndEditorScrollbar(context) {
 async function assertSupportCardGeometry(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport, "?mods-fixture=updates");
   try {
+    await page.waitForFunction(() => document.querySelectorAll(".modUpdatesCard:not(.modUpdatesCardSkeleton) .modUpdatesListItem").length === 4);
+    await page.locator(".schedulePanel").waitFor();
     const metrics = await page.evaluate(() => {
       const mods = document.querySelector(".modUpdatesCard");
       const schedule = document.querySelector(".schedulePanel");
@@ -727,6 +806,7 @@ async function assertActiveSchedulePresentation(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport, "?schedule-fixture=active");
   try {
     if (viewport.width >= 721) await waitForTimeline(page);
+    await page.locator(".scheduleActiveItem").waitFor();
     const metrics = await page.evaluate(() => {
       const rail = document.querySelector(".serverTimelineEventRail");
       const track = document.querySelector(".serverTimelineEventRailTrack");
@@ -805,6 +885,7 @@ try {
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart .serverTimelineEChart").count(), 1, "Light-theme switch replaced the unified player chart");
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart svg").count(), 1, "Light-theme player chart did not retain SVG rendering");
   await assertSchedulePopoverIconContrast(desktop.page);
+  await assertRestartReasonOptional(desktop.page);
   await assertAllPlayersOfflineTransition(desktop.page);
   assert.deepEqual(desktop.browserErrors, [], `Desktop browser errors: ${desktop.browserErrors.join("\n")}`);
   await desktop.page.close();

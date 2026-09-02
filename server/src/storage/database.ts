@@ -266,9 +266,8 @@ function createCurrentSchema(database: Database.Database) {
     --
     -- One row per run of joins from the same place, not one per player: first_seen_at is part of
     -- the key so a player who moves gains a row instead of overwriting where they used to be.
-    -- Latency shown for last Tuesday is estimated from where they were last Tuesday, and a row is
-    -- only added when the derived place actually changes, so this stays a handful of rows per
-    -- player rather than a sample per login.
+    -- A row is only added when the derived place actually changes, so this stays a handful of rows
+    -- per player rather than a sample per login.
     CREATE TABLE player_geo_locations (
       server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
       player_key TEXT NOT NULL,

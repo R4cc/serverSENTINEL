@@ -12,13 +12,16 @@ import { parseLogLine } from "../servers/logEvents.js";
  *
  *   ...GameProfile{id=..., name=Steve} (/203.0.113.5:51234) logged in with entity id 42
  *
- * The address leaves this module in memory only. Nothing downstream stores it: it is resolved to a
- * location and dropped, which is why the parsed shape below is deliberately short-lived.
+ * The address leaves this parser only for module-owned in-memory geography and TCP matching.
+ * Nothing downstream persists or publicly exposes it, which is why this shape stays private to
+ * the collectors rather than entering the shared contract.
  */
 export type PlayerLoginAddress = {
   player: string;
   /** The client address exactly as the server logged it, without the port. Never persisted. */
   address: string;
+  /** The TCP source port, retained in memory only so connections sharing one address stay distinct. */
+  port?: number;
   /** When the server logged the join, when the line carried a timestamp. */
   at?: string;
 };
@@ -35,17 +38,25 @@ const profileLogin = /name=(?<player>[^,}\]\s]{1,64})[^)]*\(\/?(?<address>[^)]+?
  * bare form, so the last colon is only treated as a port separator when what follows it is a port
  * and what precedes it is not itself a multi-colon address.
  */
-export function addressWithoutPort(value: string) {
+export function addressEndpoint(value: string): { address: string; port?: number } {
   const trimmed = value.trim().replace(/^\//, "");
-  if (!trimmed) return "";
-  const bracketed = trimmed.match(/^\[(?<host>[^\]]+)\](?::\d{1,5})?$/);
-  if (bracketed) return bracketed.groups!.host;
+  if (!trimmed) return { address: "" };
+  const bracketed = trimmed.match(/^\[(?<host>[^\]]+)\](?::(?<port>\d{1,5}))?$/);
+  if (bracketed) {
+    const portText = bracketed.groups!.port;
+    const port = portText && /^\d{1,5}$/.test(portText) ? Number(portText) : undefined;
+    return {
+      address: bracketed.groups!.host,
+      ...(port && port <= 65_535 ? { port } : {})
+    };
+  }
   const lastColon = trimmed.lastIndexOf(":");
-  if (lastColon <= 0) return trimmed;
+  if (lastColon <= 0) return { address: trimmed };
   const host = trimmed.slice(0, lastColon);
-  const port = trimmed.slice(lastColon + 1);
-  if (!/^\d{1,5}$/.test(port)) return trimmed;
-  return host.includes(":") ? trimmed : host;
+  const portText = trimmed.slice(lastColon + 1);
+  if (!/^\d{1,5}$/.test(portText) || host.includes(":")) return { address: trimmed };
+  const port = Number(portText);
+  return { address: host, ...(port > 0 && port <= 65_535 ? { port } : {}) };
 }
 
 export function parsePlayerLoginAddress(line: string, referenceDate = new Date()): PlayerLoginAddress | null {
@@ -54,9 +65,9 @@ export function parsePlayerLoginAddress(line: string, referenceDate = new Date()
   const match = parsed.message.match(bracketedLogin) ?? parsed.message.match(profileLogin);
   if (!match?.groups) return null;
   const player = match.groups.player.trim();
-  const address = addressWithoutPort(match.groups.address);
-  if (!player || !address) return null;
-  return { player, address, at: parsed.timestamp };
+  const endpoint = addressEndpoint(match.groups.address);
+  if (!player || !endpoint.address) return null;
+  return { player, ...endpoint, at: parsed.timestamp };
 }
 
 /**

@@ -236,7 +236,7 @@ app.post<{ Params: { id: string }; Body: { reason?: unknown } }>("/api/servers/:
 app.post<{ Params: { id: string }; Body: { reason?: unknown } }>("/api/servers/:id/restart", runtimeActionRateLimit, async (request) => {
   const user = await requireRequestPermission(request, "servers.control");
   const server = await getServer(request.params.id);
-  const reason = validateRuntimeActionReason(request.body?.reason);
+  const reason = validateRuntimeActionReason(request.body?.reason, { required: false });
   requireNoActiveModMutation(server.id);
   return recordOperation({
     type: "server.restart",

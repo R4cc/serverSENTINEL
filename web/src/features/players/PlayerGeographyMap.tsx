@@ -1,12 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Server as ServerIcon } from "lucide-react";
+import { Minus, Plus, RotateCcw, Server as ServerIcon } from "lucide-react";
+import { KeepScale, TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { usePlayerHead } from "../../components/PlayerHead";
 import type { PlayerInsightsEntry, PlayerLocation } from "../../types";
 import { playerHeadVersion } from "../../utils/playerHeads";
 import {
   accuracyRadiusToMapUnits,
   clampPlayerMapPoint,
-  formatEstimatedLatency,
+  formatPing,
   formatLocation,
   latencyTone,
   playerMapArc,
@@ -28,9 +29,10 @@ import { worldLandRings } from "./worldOutline";
 
 const mapWidth = 720;
 const mapHeight = 360;
-const markerCollisionPx = 34;
+const desktopMarkerCollisionPx = 34;
+const mobileMarkerCollisionPx = 24;
 const serverMergeDistancePx = 42;
-const clusterMarkerSizePx = 44;
+const desktopClusterMarkerSizePx = 44;
 const clusterPopupHeightPx = 240;
 const playerTooltipHeightPx = 96;
 const clusterHoverCloseDelayMs = 160;
@@ -54,7 +56,7 @@ const landPath = buildLandPath();
 function markTitle(mark: PlayerMapMark) {
   const players = mark.players.length === 1 ? mark.players[0] : `${mark.players.length} players`;
   const accuracy = mark.accuracyRadiusKm ? `, accurate to about ${mark.accuracyRadiusKm} km` : "";
-  const latency = mark.estimatedLatencyMs === undefined ? "" : ` · ~${mark.estimatedLatencyMs} ms estimated`;
+  const latency = mark.pingMs === undefined ? "" : ` · ${mark.pingMs} ms ping`;
   return `${players} near ${mark.label}${accuracy}${latency}`;
 }
 
@@ -80,7 +82,7 @@ function MapPlayerAvatar({
   compact?: boolean;
 }) {
   const { source, showHead, onHeadError } = usePlayerHead(entry.serverId, entry.player, version, enabled);
-  const classes = `playerMapAvatar ${compact ? "playerMapAvatar--compact" : ""} ${entry.online ? "playerMapAvatar--online" : "playerMapAvatar--known"}`.trim();
+  const classes = `playerMapAvatar ${compact ? "playerMapAvatar--compact" : ""}`.trim();
   return (
     <span className={`${classes} ${showHead ? "" : "playerMapAvatar--fallback"}`.trim()} aria-hidden="true">
       {showHead
@@ -103,9 +105,10 @@ export function PlayerGeographyMap({
   serverRunning: boolean;
   playerHeadsEnabled: boolean;
 }) {
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | undefined>(undefined);
   const [renderedWidth, setRenderedWidth] = useState(mapWidth);
+  const [zoomScale, setZoomScale] = useState(1);
   const [hoveredMarkId, setHoveredMarkId] = useState<string>();
   const popupPrefix = useId().replace(/:/g, "");
   const headVersion = useMemo(() => playerHeadVersion(), []);
@@ -131,7 +134,7 @@ export function PlayerGeographyMap({
   }, []);
 
   useEffect(() => {
-    const viewport = viewportRef.current;
+    const viewport = frameRef.current;
     if (!viewport) return;
     const update = () => {
       const width = viewport.getBoundingClientRect().width;
@@ -148,8 +151,14 @@ export function PlayerGeographyMap({
   }, []);
 
   const marks = useMemo(
-    () => playerMapMarks(players, mapWidth, mapHeight, renderedWidth, markerCollisionPx),
-    [players, renderedWidth]
+    () => playerMapMarks(
+      players,
+      mapWidth,
+      mapHeight,
+      renderedWidth * zoomScale,
+      renderedWidth < 560 ? mobileMarkerCollisionPx : desktopMarkerCollisionPx
+    ),
+    [players, renderedWidth, zoomScale]
   );
   useEffect(() => {
     const validIds = new Set(marks.map((mark) => mark.id));
@@ -159,7 +168,7 @@ export function PlayerGeographyMap({
   useEffect(() => {
     if (!hoveredMarkId) return;
     const closeOutsidePopup = (event: PointerEvent) => {
-      const activeMarker = viewportRef.current?.querySelector(".playerMapMarkerWrap--active");
+      const activeMarker = frameRef.current?.querySelector(".playerMapMarkerWrap--active");
       if (event.target instanceof Node && !activeMarker?.contains(event.target)) {
         if (closeTimerRef.current !== undefined) window.clearTimeout(closeTimerRef.current);
         closeTimerRef.current = undefined;
@@ -171,6 +180,7 @@ export function PlayerGeographyMap({
   }, [hoveredMarkId]);
 
   const scale = renderedWidth > 0 ? renderedWidth / mapWidth : 1;
+  const clusterMarkerSizePx = renderedWidth < 560 ? 32 : desktopClusterMarkerSizePx;
   const renderedHeight = renderedWidth * (mapHeight / mapWidth);
   const server = serverLocation?.latitude !== undefined && serverLocation.longitude !== undefined
     ? projectToMap(serverLocation.longitude, serverLocation.latitude, mapWidth, mapHeight)
@@ -214,7 +224,7 @@ export function PlayerGeographyMap({
         return {
           ...plotted,
           arc: playerMapArc(server, plotted.point),
-          tone: latencyTone(plotted.mark.estimatedLatencyMs),
+          tone: latencyTone(plotted.mark.pingMs),
           label: {
             x: Math.min(mapWidth - horizontalLabelInset, Math.max(horizontalLabelInset, label.x)),
             y: label.y
@@ -224,7 +234,7 @@ export function PlayerGeographyMap({
     : [];
   const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 4 : renderedWidth < 900 ? 10 : 14;
   const routeLabels = routes
-    .filter((route) => route.mark.estimatedLatencyMs !== undefined && route.arc.distance * scale >= 56)
+    .filter((route) => route.mark.pingMs !== undefined && route.arc.distance * scale >= 56)
     .sort((left, right) => right.arc.distance - left.arc.distance)
     .reduce<typeof routes>((accepted, route) => {
       if (accepted.length >= labelLimit) return accepted;
@@ -243,15 +253,43 @@ export function PlayerGeographyMap({
 
   return (
     <figure className="playerMap">
-      <div className="playerMapViewport" ref={viewportRef}>
-        <svg
+      <TransformWrapper
+        initialScale={1}
+        minScale={1}
+        maxScale={4}
+        centerOnInit
+        centerZoomedOut
+        limitToBounds
+        wheel={{ step: 0.12, excluded: ["playerMapControlButton", "playerMapMarker", "playerMapClusterPopup"] }}
+        panning={{ velocityDisabled: true, excluded: ["playerMapControlButton", "playerMapMarker", "playerMapClusterPopup"] }}
+        pinch={{ step: 4, excluded: ["playerMapControlButton", "playerMapClusterPopup"] }}
+        doubleClick={{ mode: "zoomIn", step: 0.7, excluded: ["playerMapControlButton", "playerMapMarker", "playerMapClusterPopup"] }}
+        onTransform={(_, state) => {
+          setZoomScale((current) => Math.abs(current - state.scale) < 0.01 ? current : state.scale);
+        }}
+      >
+        {({ zoomIn, zoomOut, resetTransform, state }) => (
+          <>
+            <div className="playerMapFrame" ref={frameRef}>
+              <TransformComponent
+                wrapperClass="playerMapViewport"
+                contentClass="playerMapTransformContent"
+                wrapperStyle={{ width: "100%", height: "100%" }}
+                contentStyle={{ width: "100%", height: "100%" }}
+                wrapperProps={{
+                  role: "region",
+                  "aria-label": "Interactive player world map. Pinch or scroll to zoom and drag to move."
+                }}
+              >
+                <div className="playerMapScene">
+                  <svg
           viewBox={`0 0 ${mapWidth} ${mapHeight}`}
           className="playerMapCanvas"
           role="img"
           aria-label={marks.length
             ? `World map showing ${marks.length} player ${marks.length === 1 ? "marker" : "markers"} for ${marks.reduce((total, mark) => total + mark.players.length, 0)} located players`
             : "World map with no located players yet"}
-        >
+                  >
           <rect className="playerMapOcean" x="0" y="0" width={mapWidth} height={mapHeight} />
           <path className="playerMapLand" d={landPath} />
           {plottedMarks.map(({ mark, point, accuracy }) => accuracy >= 2 && (
@@ -269,7 +307,7 @@ export function PlayerGeographyMap({
               className={`playerMapRoute playerMapRoute--${tone} ${hoveredMarkId === mark.id ? "playerMapRoute--active" : ""}`.trim()}
               d={arc.path}
               data-player-count={mark.entries.length}
-              data-estimated-ping={mark.estimatedLatencyMs}
+              data-ping={mark.pingMs}
             />
           ))}
           {server && !serverMarkId && (
@@ -298,7 +336,7 @@ export function PlayerGeographyMap({
               style={{ left: `${(label.x / mapWidth) * 100}%`, top: `${(label.y / mapHeight) * 100}%` }}
               aria-hidden="true"
             >
-              {formatEstimatedLatency(mark.estimatedLatencyMs)}
+              {formatPing(mark.pingMs)}
             </span>
           ))}
 
@@ -328,10 +366,10 @@ export function PlayerGeographyMap({
               top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
             };
             const markerLabel = clustered
-              ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average estimated ping ${formatEstimatedLatency(mark.estimatedLatencyMs)}.`
-              : `${markTitle(mark)}. ${mark.entries[0].online ? "Online now" : "Played before"}.`;
+              ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average ping ${formatPing(mark.pingMs)}.`
+              : markTitle(mark);
             return (
-              <span
+              <KeepScale
                 key={mark.id}
                 className={`playerMapMarkerWrap ${active ? "playerMapMarkerWrap--active" : ""} ${sharesServer ? "playerMapMarkerWrap--server" : ""}`.trim()}
                 style={{ left: `${(point.x / mapWidth) * 100}%`, top: `${(point.y / mapHeight) * 100}%` }}
@@ -344,10 +382,11 @@ export function PlayerGeographyMap({
                   }
                 }}
               >
+                <span className="playerMapMarkerScale">
                 {clustered ? (
                   <button
                     type="button"
-                    className={`playerMapMarker playerMapClusterMarker ${sharesServer ? "playerMapClusterMarker--server" : ""} ${mark.online ? "playerMapMarker--online" : "playerMapMarker--known"}`.trim()}
+                    className={`playerMapMarker playerMapClusterMarker ${sharesServer ? "playerMapClusterMarker--server" : ""}`.trim()}
                     aria-label={markerLabel}
                     aria-haspopup="dialog"
                     aria-expanded={active}
@@ -368,7 +407,7 @@ export function PlayerGeographyMap({
                 ) : (
                   <button
                     type="button"
-                    className={`playerMapMarker playerMapPlayerMarker ${sharesServer ? "playerMapPlayerMarker--server" : ""} ${mark.online ? "playerMapMarker--online" : "playerMapMarker--known"}`.trim()}
+                    className={`playerMapMarker playerMapPlayerMarker ${sharesServer ? "playerMapPlayerMarker--server" : ""}`.trim()}
                     aria-label={markerLabel}
                     aria-describedby={active ? popupId : undefined}
                   >
@@ -401,7 +440,7 @@ export function PlayerGeographyMap({
                   >
                     <span className="playerMapClusterPopupHeader">
                       <strong>{mark.label}</strong>
-                      <span>{mark.entries.length} players · <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.estimatedLatencyMs)} avg.</b></span>
+                      <span>{mark.entries.length} players · <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.pingMs)}`}>{formatPing(mark.pingMs)} avg.</b></span>
                     </span>
                     <span className="playerMapClusterList">
                       {mark.entries.map((entry) => (
@@ -409,7 +448,7 @@ export function PlayerGeographyMap({
                           <MapPlayerAvatar entry={entry} version={headVersion} enabled={playerHeadsEnabled} compact />
                           <strong>{entry.player}</strong>
                           <span>{formatLocation(entry.location)}</span>
-                          <b className={`playerMapPingValue playerMapPingValue--${latencyTone(entry.estimatedLatencyMs)}`}>{formatEstimatedLatency(entry.estimatedLatencyMs)}</b>
+                          <b className={`playerMapPingValue playerMapPingValue--${latencyTone(entry.pingMs)}`}>{formatPing(entry.pingMs)}</b>
                         </span>
                       ))}
                     </span>
@@ -427,22 +466,60 @@ export function PlayerGeographyMap({
                   >
                     <span className="playerMapClusterPopupHeader">
                       <strong>{mark.entries[0].player}</strong>
-                      <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
                     </span>
                     <span className="playerMapClusterList playerMapSinglePlayerList">
                       <span className="playerMapClusterRow playerMapSinglePlayerRow">
                         <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} compact />
                         <span>{formatLocation(mark.entries[0].location)}</span>
-                        <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].estimatedLatencyMs)}`}>{formatEstimatedLatency(mark.entries[0].estimatedLatencyMs)}</b>
+                        <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].pingMs)}`}>{formatPing(mark.entries[0].pingMs)}</b>
                       </span>
                     </span>
                   </span>
                 )}
-              </span>
+                </span>
+              </KeepScale>
             );
           })}
-        </div>
-      </div>
+                  </div>
+                </div>
+              </TransformComponent>
+            </div>
+            <div className="playerMapControls" aria-label="Map zoom controls">
+                <button
+                  type="button"
+                  className="playerMapControlButton"
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                  disabled={state.scale >= 4}
+                  onClick={() => zoomIn(0.5)}
+                >
+                  <Plus aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="playerMapControlButton"
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                  disabled={state.scale <= 1}
+                  onClick={() => zoomOut(0.5)}
+                >
+                  <Minus aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="playerMapControlButton"
+                  aria-label="Reset map view"
+                  title="Reset map view"
+                  disabled={state.scale <= 1}
+                  onClick={() => resetTransform()}
+                >
+                  <RotateCcw aria-hidden="true" />
+                </button>
+            </div>
+            <span className="visuallyHidden" role="status" aria-live="polite">Map zoom {Math.round(state.scale * 100)}%</span>
+          </>
+        )}
+      </TransformWrapper>
     </figure>
   );
 }

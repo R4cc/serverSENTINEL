@@ -135,7 +135,7 @@ describe("SettingsPage", () => {
     expect(html).toContain("MCHeads");
     expect(html).toContain("cached heads refresh on a rolling daily schedule");
     expect(html).not.toContain("12 hours");
-    expect((html.match(/class="roleInfoWrap settingsHubIntegrationInfo"/g) ?? [])).toHaveLength(3);
+    expect((html.match(/class="uiHelpTooltip"/g) ?? [])).toHaveLength(3);
     expect((html.match(/role="tooltip"/g) ?? [])).toHaveLength(3);
     expect(html).toContain('aria-label="About Modrinth API key"');
     expect(html).toContain('aria-label="About MaxMind GeoLite2"');
@@ -251,7 +251,8 @@ describe("SettingsPage", () => {
     })} />);
     expect(html).toContain("Remote-node mode");
     expect(html).toContain("Not required (remote-node mode)");
-    expect(html).toContain("Privacy-safe diagnostics");
+    expect(html).toContain('aria-label="About copied diagnostics"');
+    expect(html).toContain("Usernames, credentials, commands, server and node names, and filesystem paths are excluded.");
     expect(html).toContain("Clear UI cache");
   });
 

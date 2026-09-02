@@ -20,9 +20,14 @@ describe("validateRuntimeActionReason", () => {
     expect(validateRuntimeActionReason("  Applying a critical configuration change.  ")).toBe("Applying a critical configuration change.");
   });
 
-  it("requires a non-empty reason", () => {
-    expect(() => validateRuntimeActionReason(undefined)).toThrow("A reason is required to stop or restart a server");
-    expect(() => validateRuntimeActionReason("   ")).toThrow("A reason is required to stop or restart a server");
+  it("requires a non-empty stop reason", () => {
+    expect(() => validateRuntimeActionReason(undefined)).toThrow("A reason is required to stop a server");
+    expect(() => validateRuntimeActionReason("   ")).toThrow("A reason is required to stop a server");
+  });
+
+  it("allows an omitted or blank optional restart reason", () => {
+    expect(validateRuntimeActionReason(undefined, { required: false })).toBeUndefined();
+    expect(validateRuntimeActionReason("   ", { required: false })).toBeUndefined();
   });
 
   it("limits reasons to 500 safe characters", () => {

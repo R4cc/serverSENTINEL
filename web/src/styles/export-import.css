@@ -28,14 +28,22 @@
 
 .exportCategoryOption {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: start;
   gap: var(--space-3);
   border: var(--border-strong) solid var(--border-panel);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
-  cursor: pointer;
   transition: background var(--control-transition), border-color var(--control-transition);
+}
+
+.exportCategoryChoice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  cursor: pointer;
 }
 
 /* Hover, keyboard focus, and the checked state are the same affordance seen
@@ -51,15 +59,14 @@
 }
 
 .exportCategoryOption:has(input:disabled) {
-  cursor: not-allowed;
   opacity: 0.6;
 }
 
-.exportCategoryOption input {
+.exportCategoryChoice input {
   margin-block-start: 3px;
 }
 
-.exportCategoryOption input:disabled {
+.exportCategoryChoice input:disabled {
   cursor: not-allowed;
 }
 
@@ -165,10 +172,10 @@
   }
 
   .exportCategoryOption {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .exportCategorySize {
-    grid-column: 2;
+    grid-column: 1;
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AppIcon } from "./FileTypeIcon";
-import { Button } from "./UiPrimitives";
+import { Banner, Button } from "./UiPrimitives";
 import { DialogSurface } from "./DialogSurface";
 
 export type ConfirmationOptions = {
@@ -109,7 +109,14 @@ export function ConfirmationModal({
         <div className="modalBody confirmContent">
           <p id={descriptionId}>{options.description}</p>
           {options.details ? <blockquote>{options.details}</blockquote> : null}
-          {options.warning ? <p id={warningId} className={`confirmationWarning confirmationWarning--${options.warningTone ?? (options.variant === "primary" ? "warning" : "danger")}`}>{options.warning}</p> : null}
+          {options.warning ? (
+            <Banner
+              id={warningId}
+              tone={(options.warningTone ?? (options.variant === "primary" ? "warning" : "danger")) === "danger" ? "error" : "warning"}
+              compact
+              title={options.warning}
+            />
+          ) : null}
           {options.textInput ? (
             <label className="confirmationTextField" htmlFor={textInputId}>
               <span className="fieldLabel">{options.textInput.label}</span>

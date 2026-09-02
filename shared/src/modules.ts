@@ -50,7 +50,7 @@ export const MODULE_DESCRIPTORS = [
   {
     id: "playerInsights",
     label: "Player insights",
-    summary: "Where players connect from: local GeoLite2 lookups, regional spread, estimated latency, and quiet maintenance hours.",
+    summary: "Where players connect from: local GeoLite2 lookups, regional spread, measured ping, and quiet maintenance hours.",
     disabledEffect: "The Players workspace, its API, the GeoLite2 database refresh, and the lookup that turns a join into a location all stop. The geography already derived is kept, and analytics resume from it when this is switched back on. No player address is stored either way.",
     accessPermission: "players.view",
     permissions: ["players.view", "players.manage"]

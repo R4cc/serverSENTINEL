@@ -53,6 +53,8 @@ import { createManagedContentModuleRuntime, modUpdateCheckIntervalMs } from "./m
 import { createPlayerInsightsModuleRuntime } from "./modules/playerInsightsModule.js";
 import { GeoDatabase } from "./players/geoDatabase.js";
 import { PlayerGeoCollector } from "./players/playerGeoCollector.js";
+import { readDockerPlayerConnections } from "./players/dockerPlayerConnections.js";
+import { PlayerPingCollector } from "./players/playerPingCollector.js";
 import { buildPlayerInsights } from "./players/playerInsights.js";
 import { resolveServerLocation, ServerLocationStore } from "./players/serverLocations.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
@@ -490,7 +492,9 @@ async function playerInsightsSnapshot(options: { serverId?: string; windowMs?: n
       ? services.playerGeoRepository.listForServer(options.serverId)
       : services.playerGeoRepository.list(),
     serverLocations: services.playerInsightsServerLocations.list(servers.map((server) => server.id)),
-    timelineEvents: Object.fromEntries(servers.map((server) => [server.id, services.timelineEventsRepository.list(server.id, activityFrom, now)])),
+    pings: Object.fromEntries(servers.map((server) => [server.id, services.playerPingCollector?.latest(server.id) ?? new Map()])),
+    pingMeasurements: services.playerPingCollector?.measurements(servers.map((server) => server.id))
+      ?? servers.map((server) => ({ serverId: server.id, status: "unsupported" as const, onlinePlayers: 0, measuredPlayers: 0 })),
     resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.list(server.id, activityFrom)])),
     geoDatabase: geoDatabase?.state() ?? {
       available: false,
@@ -558,6 +562,7 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   streamConsole: localStreamConsole,
   serverLogs: localServerLogs,
   readPlayerObservation: readLocalPlayerObservation,
+  readPlayerConnections: readDockerPlayerConnections,
   serverStats: dockerResourceStats,
   serverStorage: localServerStorage,
   serverOverview: serverOverviewData,
@@ -701,6 +706,8 @@ services.resourceStatsCollector = new ResourceStatsCollector({
     if (playerSnapshot?.state === "live" || playerSnapshot?.state === "stale" || playerSnapshot?.state === "stopped") {
       sample.playersOnline = playerSnapshot.online ?? undefined;
     }
+    const playerPings = [...(services.playerPingCollector?.latest(server.id).values() ?? [])];
+    if (playerPings.length) sample.playerPingMs = playerPings;
     return sample;
   }
 });
@@ -727,13 +734,22 @@ services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsMo
       onInfo: logInfo,
       onWarn: logWarn
     });
+    const pingCollector = new PlayerPingCollector({
+      readServers: listManagedServers,
+      snapshot: (serverId) => services.playerSnapshotCoordinator?.latest(serverId),
+      readConnections: (server) => runtimeForServer(server).readPlayerConnections(server),
+      onError: (error, server) => {
+        logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "player_ping" }, "Player ping collection deferred");
+      }
+    });
     return {
       geoDatabase,
+      pingCollector,
       collector: new PlayerGeoCollector({
-        // Registered after the timeline collector above precisely because it reads that collector's
-        // output: Player Insights adds no node request of its own, it reads the console text the
-        // panel already fetched. A missing collector is a wiring mistake, and failing the module's
-        // start is how the registry reports one — quietly collecting nothing would not.
+        // Registered after the timeline collector above precisely because geography and connection
+        // matching share the console text the panel already fetched. A missing collector is a wiring
+        // mistake, and failing the module's start is how the registry reports one — quietly
+        // collecting nothing would not.
         observeLogs: (observer) => {
           const collector = services.timelineEventCollector;
           if (!collector) throw new Error("Player Insights needs the timeline event collector to read console output");
@@ -742,6 +758,7 @@ services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsMo
         readServers: listManagedServers,
         repository: services.playerGeoRepository,
         cityReader: () => geoDatabase.cityReader,
+        observeLogin: (server, login) => pingCollector.observeLogin(server, login),
         retainServers: (serverIds) => services.playerInsightsServerLocations.retain(serverIds),
         onError: (error, server) => {
           logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "player_insights" }, "Player geography collection deferred");
@@ -752,6 +769,7 @@ services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsMo
   publish: (runtime) => {
     services.playerGeoDatabase = runtime?.geoDatabase;
     services.playerGeoCollector = runtime?.collector;
+    services.playerPingCollector = runtime?.pingCollector;
   },
   onError: (error) => {
     logWarn({ ...errorLogFields(error), category: "player_insights" }, "GeoLite2 database could not be prepared; player geography is unavailable until it is");

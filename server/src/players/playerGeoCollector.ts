@@ -2,16 +2,17 @@ import type { ManagedServer } from "../types.js";
 import type { PlayerGeoRepository } from "../storage/playerGeoRepository.js";
 import { isLocatableAddress, locateAddress, type GeoCityReader } from "./geoLocation.js";
 import { parsePlayerLoginAddresses } from "./loginAddresses.js";
+import type { PlayerLoginAddress } from "./loginAddresses.js";
 
 /**
  * The only code that ever looks at a player's address.
  *
  * It does not fetch anything. The panel already reads each server's recent console output once a
  * pass, for the timeline, and this subscribes to that same text rather than asking the node for it
- * a second time. What it adds is the reading of login lines: each address is resolved against the
- * local GeoLite2 database, the place is written, and the address is dropped. It exists as a local
- * variable for the length of one lookup and is never handed to anything that stores, logs, or
- * transmits it.
+ * a second time. What it adds is one parsing pass over login lines: each address is resolved against
+ * the local GeoLite2 database and the same ephemeral endpoint is offered to the module's TCP ping
+ * collector. Only the derived place is written; the ping collector keeps the endpoint in memory
+ * only while that player is connected, and neither collector logs or publicly exposes it.
  *
  * Subscribing is therefore the whole of the module's gate. With Player Insights switched off the
  * subscription is gone, so no login line is parsed, no address is resolved, and nothing is written
@@ -34,6 +35,8 @@ type PlayerGeoCollectorOptions = {
   repository: PlayerGeoRepository;
   /** Undefined while no database is loaded, in which case nothing is resolved and nothing stored. */
   cityReader(): GeoCityReader | undefined;
+  /** Receives the same ephemeral login once so another Player Insights collector need not reparse logs. */
+  observeLogin?(server: ManagedServer, login: PlayerLoginAddress): void;
   /** The servers this installation still has, read from local storage rather than from a node. */
   readServers?(): Promise<ManagedServer[]>;
   retainServers?(serverIds: string[]): void;
@@ -67,13 +70,13 @@ export class PlayerGeoCollector {
   /** One pass over one server's console output. Public so tests can drive it directly. */
   async observe({ server, text }: ObservedLogs) {
     if (this.stopped || !text) return;
-    // No database means no lookups, and therefore no reason to read the text at all.
     const reader = this.options.cityReader();
-    if (!reader) return;
     try {
       const referenceDate = new Date(this.now());
       for (const login of parsePlayerLoginAddresses(text, referenceDate)) {
         if (this.stopped) return;
+        this.options.observeLogin?.(server, login);
+        if (!reader) continue;
         if (!isLocatableAddress(login.address)) continue;
         const location = locateAddress(reader, login.address);
         if (!location) continue;
