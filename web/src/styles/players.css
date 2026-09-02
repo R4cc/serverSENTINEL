@@ -180,11 +180,6 @@ button.playerMapMarker {
   cursor: pointer;
 }
 
-.playerMapAvatar--known {
-  filter: saturate(0.58);
-  opacity: 0.78;
-}
-
 .playerMapMarkerWrap--active .playerMapMarker,
 button.playerMapMarker:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 66%, var(--surface));
@@ -215,10 +210,6 @@ button.playerMapMarker:hover:not(:disabled) {
   font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
   line-height: 1;
-}
-
-.playerMapAvatar--online {
-  border-color: var(--sentinel-success);
 }
 
 .playerMapAvatar--compact {
@@ -474,9 +465,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.playerMapPlayerPopup .playerMapPlayerStatus--online { color: var(--sentinel-success); }
-.playerMapPlayerPopup .playerMapPlayerStatus--known { color: var(--text-muted); }
-
 .playerMapSinglePlayerList {
   padding-inline-end: 0;
   overflow: visible;
@@ -606,15 +594,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   border-radius: var(--radius-xs);
   padding: 1px;
   background: var(--surface-raised);
-}
-
-.playerMapLegendPlayer--online {
-  border-color: color-mix(in srgb, var(--sentinel-success) 38%, var(--surface));
-}
-
-.playerMapLegendPlayer--known {
-  filter: saturate(0.5);
-  opacity: 0.72;
 }
 
 .playerMapLegendHead {
@@ -1108,9 +1087,14 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 6px);
 }
 
+.playerMapScopeSwitch,
 .playerRangeSwitch {
   display: inline-flex;
   gap: var(--space-1);
+}
+
+.playerMapScopeSwitch .uiButton {
+  min-width: 78px;
 }
 
 .playerActivityHours {
@@ -1336,11 +1320,13 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 }
 
 @media (max-width: 560px) {
+  .playerGeographyCard .uiPanelHeader,
   .playerRosterCard .uiPanelHeader {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .playerGeographyCard .uiPanelHeaderActions,
   .playerRosterCard .uiPanelHeaderActions {
     justify-content: flex-start;
   }

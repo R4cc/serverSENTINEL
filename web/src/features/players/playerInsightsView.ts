@@ -37,7 +37,6 @@ export type PlayerMapMark = {
   latitude: number;
   players: string[];
   entries: PlayerInsightsEntry[];
-  online: number;
   accuracyRadiusKm?: number;
   label: string;
   estimatedLatencyMs?: number;
@@ -96,7 +95,7 @@ export function playerMapMarks(
     );
     const members = group
       .map(({ entry }) => entry)
-      .sort((left, right) => Number(right.online) - Number(left.online) || left.player.localeCompare(right.player));
+      .sort((left, right) => left.player.localeCompare(right.player));
     const latencies = members.flatMap((entry) => entry.estimatedLatencyMs === undefined ? [] : [entry.estimatedLatencyMs]);
     const labels = [...new Set(members.map((entry) => entry.location?.label).filter((label): label is string => Boolean(label)))];
     const accuracyRadii = members.flatMap((entry) => entry.location?.accuracyRadiusKm === undefined ? [] : [entry.location.accuracyRadiusKm]);
@@ -107,7 +106,6 @@ export function playerMapMarks(
       latitude: centre.latitude / group.length,
       players: members.map((entry) => entry.player),
       entries: members,
-      online: members.filter((entry) => entry.online).length,
       ...(accuracyRadii.length ? { accuracyRadiusKm: Math.max(...accuracyRadii) } : {}),
       label: labels.length === 1 ? labels[0] : `${labels[0] ?? "Nearby locations"} area`,
       ...(latencies.length

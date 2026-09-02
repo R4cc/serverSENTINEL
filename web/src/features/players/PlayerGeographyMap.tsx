@@ -80,7 +80,7 @@ function MapPlayerAvatar({
   compact?: boolean;
 }) {
   const { source, showHead, onHeadError } = usePlayerHead(entry.serverId, entry.player, version, enabled);
-  const classes = `playerMapAvatar ${compact ? "playerMapAvatar--compact" : ""} ${entry.online ? "playerMapAvatar--online" : "playerMapAvatar--known"}`.trim();
+  const classes = `playerMapAvatar ${compact ? "playerMapAvatar--compact" : ""}`.trim();
   return (
     <span className={`${classes} ${showHead ? "" : "playerMapAvatar--fallback"}`.trim()} aria-hidden="true">
       {showHead
@@ -329,7 +329,7 @@ export function PlayerGeographyMap({
             };
             const markerLabel = clustered
               ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average estimated ping ${formatEstimatedLatency(mark.estimatedLatencyMs)}.`
-              : `${markTitle(mark)}. ${mark.entries[0].online ? "Online now" : "Played before"}.`;
+              : markTitle(mark);
             return (
               <span
                 key={mark.id}
@@ -347,7 +347,7 @@ export function PlayerGeographyMap({
                 {clustered ? (
                   <button
                     type="button"
-                    className={`playerMapMarker playerMapClusterMarker ${sharesServer ? "playerMapClusterMarker--server" : ""} ${mark.online ? "playerMapMarker--online" : "playerMapMarker--known"}`.trim()}
+                    className={`playerMapMarker playerMapClusterMarker ${sharesServer ? "playerMapClusterMarker--server" : ""}`.trim()}
                     aria-label={markerLabel}
                     aria-haspopup="dialog"
                     aria-expanded={active}
@@ -368,7 +368,7 @@ export function PlayerGeographyMap({
                 ) : (
                   <button
                     type="button"
-                    className={`playerMapMarker playerMapPlayerMarker ${sharesServer ? "playerMapPlayerMarker--server" : ""} ${mark.online ? "playerMapMarker--online" : "playerMapMarker--known"}`.trim()}
+                    className={`playerMapMarker playerMapPlayerMarker ${sharesServer ? "playerMapPlayerMarker--server" : ""}`.trim()}
                     aria-label={markerLabel}
                     aria-describedby={active ? popupId : undefined}
                   >
@@ -427,7 +427,6 @@ export function PlayerGeographyMap({
                   >
                     <span className="playerMapClusterPopupHeader">
                       <strong>{mark.entries[0].player}</strong>
-                      <span className={mark.entries[0].online ? "playerMapPlayerStatus--online" : "playerMapPlayerStatus--known"}>{mark.entries[0].online ? "Online" : "Played before"}</span>
                     </span>
                     <span className="playerMapClusterList playerMapSinglePlayerList">
                       <span className="playerMapClusterRow playerMapSinglePlayerRow">

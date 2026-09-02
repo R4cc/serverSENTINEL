@@ -47,6 +47,10 @@ function render(overrides: Partial<Parameters<typeof PlayersPage>[0]> = {}) {
   );
 }
 
+function mapMarkup(html: string) {
+  return html.match(/<figure class="playerMap">[\s\S]*?<\/figure>/)?.[0] ?? "";
+}
+
 describe("the Players workspace before it knows anything", () => {
   it("says geography is not configured, and how to configure it", () => {
     const html = render();
@@ -171,12 +175,40 @@ describe("the Players workspace with partial knowledge", () => {
     expect(render({ insights: partial, playerHeadsEnabled: true })).toContain("playerHead");
   });
 
-  it("marks online map heads directly and makes individual markers hoverable controls", () => {
+  it("shows only online players by default and uses one neutral marker style", () => {
     const html = render({ insights: partial, playerHeadsEnabled: true });
-    expect(html).toContain("playerMapAvatar--online");
-    expect(html).toContain("playerMapPlayerMarker");
-    expect(html).toContain("playerMapMarker--online");
-    expect(html).toContain("<button");
+    const map = mapMarkup(html);
+    expect(html).toContain('role="group" aria-label="Players shown on map"');
+    expect(html).toContain('aria-pressed="true" type="button" class="uiButton uiButton--secondary uiButton--compact">Online</button>');
+    expect(map).toContain("SullyTheSnak");
+    expect(map).toContain("playerMapPlayerMarker");
+    expect(map).not.toContain("playerMapAvatar--online");
+    expect(map).not.toContain("playerMapAvatar--known");
+    expect(map).not.toContain("playerMapMarker--online");
+    expect(map).not.toContain("Online now");
+    expect(map).not.toContain("Played before");
+    expect(html).not.toContain("Online player");
+  });
+
+  it("keeps historical players off the map until all time is selected", () => {
+    const html = render({
+      insights: insights({
+        players: [
+          ...partial.players,
+          {
+            player: "HistoryOnly",
+            serverId: "server-1",
+            serverName: "Survival",
+            online: false,
+            location: { label: "Berlin", city: "Berlin", country: "Germany", countryCode: "DE", continentCode: "EU", continent: "Europe", latitude: 52.52, longitude: 13.41, accuracyRadiusKm: 20, precision: "city" },
+            observations: 2
+          }
+        ]
+      })
+    });
+
+    expect(html).toContain("HistoryOnly");
+    expect(mapMarkup(html)).not.toContain("HistoryOnly");
   });
 
   it("marks the server origin with a generic server rack instead of the app cube", () => {
@@ -239,7 +271,7 @@ describe("the Players workspace with partial knowledge", () => {
         player: "SlowPlayer",
         serverId: "server-1",
         serverName: "Survival",
-        online: false,
+        online: true,
         location: { label: "Newark", city: "Newark", country: "United States", countryCode: "US", continentCode: "NA", continent: "North America", latitude: 40.74, longitude: -74.17, accuracyRadiusKm: 30, precision: "city" },
         estimatedLatencyMs: 120,
         observations: 2

@@ -42,6 +42,7 @@ import {
  */
 
 const rosterPageSize = 8;
+type PlayerMapScope = "online" | "all";
 
 function LocationAccuracyBadge({ location }: { location: NonNullable<PlayerInsightsEntry["location"]> }) {
   const tooltipId = useId();
@@ -396,6 +397,7 @@ export function PlayersPage({
   formatDate: (value: string | number | Date) => string;
   formatNumber: (value: number) => string;
 }) {
+  const [mapScope, setMapScope] = useState<PlayerMapScope>("online");
   if (!active) return null;
   if (loading) {
     return (
@@ -412,12 +414,14 @@ export function PlayersPage({
   const serverLocation = insights?.serverLocations.find((entry) => entry.serverId === server.id);
   const geoDatabase = insights?.geoDatabase;
   const summary = insights?.summary;
-  const locatedPlayers = insights?.players.filter((entry) => (
+  const mapPlayers = mapScope === "online"
+    ? insights?.players.filter((entry) => entry.online) ?? []
+    : insights?.players ?? [];
+  const locatedMapPlayers = mapPlayers.filter((entry) => (
     entry.location?.latitude !== undefined && entry.location.longitude !== undefined
-  )) ?? [];
-  const legendOnlinePlayer = locatedPlayers.find((entry) => entry.online) ?? locatedPlayers[0];
-  const legendKnownPlayer = locatedPlayers.find((entry) => !entry.online) ?? locatedPlayers.at(-1);
-  const legendClusterPlayers = locatedPlayers.slice(0, 3);
+  ));
+  const legendPlayer = locatedMapPlayers[0];
+  const legendClusterPlayers = locatedMapPlayers.slice(0, 3);
   const legendHeadVersion = playerHeadVersion();
 
   return (
@@ -493,9 +497,29 @@ export function PlayersPage({
                 // here would be telling the operator to do what they have already done.
                 ? `Approximate player locations. ${serverLocation.address} could not be placed, so distances are unavailable.`
                 : "Approximate player locations. Set the server address to measure distance and estimate latency."}
+            actions={(
+              <div className="playerMapScopeSwitch" role="group" aria-label="Players shown on map">
+                <Button
+                  variant={mapScope === "online" ? "secondary" : "ghost"}
+                  compact
+                  aria-pressed={mapScope === "online"}
+                  onClick={() => setMapScope("online")}
+                >
+                  Online
+                </Button>
+                <Button
+                  variant={mapScope === "all" ? "secondary" : "ghost"}
+                  compact
+                  aria-pressed={mapScope === "all"}
+                  onClick={() => setMapScope("all")}
+                >
+                  All time
+                </Button>
+              </div>
+            )}
           />
           <PlayerGeographyMap
-            players={insights?.players ?? []}
+            players={mapPlayers}
             serverLocation={serverLocation?.location}
             serverName={server.displayName}
             serverRunning={serverRunning}
@@ -504,16 +528,10 @@ export function PlayersPage({
           <ul className="playerMapLegend">
             <li><span className="playerMapLegendMark playerMapLegendMark--server" aria-hidden="true" />This server</li>
             <li>
-              <span className="playerMapLegendPlayer playerMapLegendPlayer--online" aria-hidden="true">
-                <PlayerMapLegendHead entry={legendOnlinePlayer} version={legendHeadVersion} enabled={playerHeadsEnabled} />
+              <span className="playerMapLegendPlayer" aria-hidden="true">
+                <PlayerMapLegendHead entry={legendPlayer} version={legendHeadVersion} enabled={playerHeadsEnabled} />
               </span>
-              Online player
-            </li>
-            <li>
-              <span className="playerMapLegendPlayer playerMapLegendPlayer--known" aria-hidden="true">
-                <PlayerMapLegendHead entry={legendKnownPlayer} version={legendHeadVersion} enabled={playerHeadsEnabled} />
-              </span>
-              Played before
+              Player
             </li>
             <li>
               <span className="playerMapLegendCluster" aria-hidden="true">

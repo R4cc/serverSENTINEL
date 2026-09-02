@@ -103,6 +103,20 @@ async function assertFloatingSurfaces(page, label) {
 
 async function assertPlayerClusterPopupDismisses(page, label) {
   await openPage(page, "players");
+  const mapScope = page.getByRole("group", { name: "Players shown on map" });
+  const onlineScope = mapScope.getByRole("button", { name: "Online", exact: true });
+  const allTimeScope = mapScope.getByRole("button", { name: "All time", exact: true });
+  await assertTargets(page, [".playerMapScopeSwitch .uiButton"], `${label} map scope`);
+  assert.equal(await onlineScope.getAttribute("aria-pressed"), "true", `${label}: player map does not default to online players`);
+  const onlineMapLabel = await page.locator(".playerMapCanvas").getAttribute("aria-label");
+  await allTimeScope.click();
+  assert.equal(await allTimeScope.getAttribute("aria-pressed"), "true", `${label}: all-time player map toggle did not activate`);
+  const allTimeMapLabel = await page.locator(".playerMapCanvas").getAttribute("aria-label");
+  const onlinePlayers = Number(onlineMapLabel?.match(/for (\d+) located players/)?.[1] ?? 0);
+  const allTimePlayers = Number(allTimeMapLabel?.match(/for (\d+) located players/)?.[1] ?? 0);
+  assert(allTimePlayers > onlinePlayers, `${label}: all-time map did not add historical players (${onlinePlayers} online, ${allTimePlayers} all time)`);
+  assert.equal(await page.locator(".playerMapAvatar--online, .playerMapAvatar--known, .playerMapMarker--online, .playerMapMarker--known").count(), 0, `${label}: player map still encodes online status in marker styling`);
+
   const serverCluster = page.locator(".playerMapClusterMarker--server");
   const cluster = await serverCluster.count() ? serverCluster : page.locator(".playerMapClusterMarker").first();
   await cluster.waitFor();
@@ -125,9 +139,8 @@ async function assertPlayerClusterPopupDismisses(page, label) {
     const haloRect = halo.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const pings = Array.from(popup.querySelectorAll(".playerMapClusterRow .playerMapPingValue"));
-    const onlineAvatar = document.querySelector(".playerMapAvatar--online");
-    const knownAvatar = document.querySelector(".playerMapAvatar--known");
-    const onlineAvatarRect = onlineAvatar?.getBoundingClientRect();
+    const avatar = document.querySelector(".playerMapAvatar");
+    const avatarRect = avatar?.getBoundingClientRect();
     return {
       missing: false,
       centreDelta: Math.hypot(
@@ -143,10 +156,8 @@ async function assertPlayerClusterPopupDismisses(page, label) {
       popupOverflow: popup.scrollWidth - popup.clientWidth,
       overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length,
       pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right)),
-      avatarIsSquare: onlineAvatarRect ? Math.abs(onlineAvatarRect.width - onlineAvatarRect.height) <= 1 : false,
-      avatarRadius: onlineAvatar instanceof HTMLElement ? Number.parseFloat(getComputedStyle(onlineAvatar).borderRadius) : Number.POSITIVE_INFINITY,
-      onlineBorder: onlineAvatar instanceof HTMLElement ? getComputedStyle(onlineAvatar).borderColor : "",
-      knownBorder: knownAvatar instanceof HTMLElement ? getComputedStyle(knownAvatar).borderColor : "",
+      avatarIsSquare: avatarRect ? Math.abs(avatarRect.width - avatarRect.height) <= 1 : false,
+      avatarRadius: avatar instanceof HTMLElement ? Number.parseFloat(getComputedStyle(avatar).borderRadius) : Number.POSITIVE_INFINITY,
       overflowingMarkerSurfaces: viewportRect
         ? Array.from(document.querySelectorAll(".playerMapMarker, .playerMapClusterCount, .playerMapSharedServer")).filter((surface) => {
           const rect = surface.getBoundingClientRect();
@@ -162,7 +173,6 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
   assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
   assert(geometry.avatarIsSquare && geometry.avatarRadius <= 4, `${label}: player head border does not fit the square avatar`);
-  assert(geometry.onlineBorder && geometry.onlineBorder !== geometry.knownBorder, `${label}: online player head has no distinct status border`);
   assert(geometry.overflowingMarkerSurfaces === 0, `${label}: ${geometry.overflowingMarkerSurfaces} player marker surfaces cross the map frame`);
 
   // Blank map space is outside the floating panel even though it remains inside the map viewport.

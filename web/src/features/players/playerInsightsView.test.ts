@@ -53,7 +53,6 @@ describe("map marks", () => {
     expect(marks).toHaveLength(2);
     const copenhagen = marks.find((mark) => mark.players.includes("A"));
     expect(copenhagen?.players).toEqual(["A", "B"]);
-    expect(copenhagen?.online).toBe(1);
   });
 
   it("keeps the widest accuracy radius of everyone at a place", () => {
@@ -81,7 +80,6 @@ describe("map marks", () => {
     ]);
     expect(marks[0].entries.map((member) => member.player)).toEqual(["Fast", "Slow", "Unknown"]);
     expect(marks[0].estimatedLatencyMs).toBe(100);
-    expect(marks[0].online).toBe(1);
   });
 
   it("leaves out players who could not be placed", () => {
