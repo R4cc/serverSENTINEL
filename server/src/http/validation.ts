@@ -134,10 +134,18 @@ export function optionalBoundedInteger(value: unknown, fieldName: string, min: n
   return parsed;
 }
 
-export function validateRuntimeActionReason(reason: unknown) {
-  if (typeof reason !== "string") badRequest("A reason is required to stop or restart a server");
+export function validateRuntimeActionReason(reason: unknown, options: { required?: boolean } = {}) {
+  const required = options.required ?? true;
+  if (reason === undefined || reason === null) {
+    if (required) badRequest("A reason is required to stop a server");
+    return undefined;
+  }
+  if (typeof reason !== "string") badRequest("The server action reason must be text");
   const value = reason.trim();
-  if (!value) badRequest("A reason is required to stop or restart a server");
+  if (!value) {
+    if (required) badRequest("A reason is required to stop a server");
+    return undefined;
+  }
   if (value.length > 500) badRequest("The stop or restart reason cannot exceed 500 characters");
   if (/[\u0000\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
     badRequest("The stop or restart reason contains unsupported control characters");

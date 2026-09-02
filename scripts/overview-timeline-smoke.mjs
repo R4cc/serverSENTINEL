@@ -91,6 +91,31 @@ async function assertScenarioData(page) {
   const joinedSubjects = await page.locator(".eventsPanel .eventKind--player_joined .eventSubject").allTextContents();
   const leftSubjects = await page.locator(".eventsPanel .eventKind--player_left .eventSubject").allTextContents();
   assert(joinedSubjects.some((subject) => leftSubjects.includes(subject)), "The instant join/leave events do not share a generated player identity");
+  assert(!eventsText.includes("Ready for players"), `Server start events still show the removed detail: ${eventsText}`);
+  const playerEventBadges = page.locator(".eventsPanel .eventKind--player_joined .eventPlayerIconBadge, .eventsPanel .eventKind--player_left .eventPlayerIconBadge");
+  await playerEventBadges.first().waitFor();
+  const badgeGeometry = await playerEventBadges.evaluateAll((badges) => badges.map((badge) => {
+    const glyph = badge.querySelector("svg");
+    const badgeBox = badge.getBoundingClientRect();
+    const glyphBox = glyph?.getBoundingClientRect();
+    return {
+      contained: Boolean(glyphBox
+        && glyphBox.left >= badgeBox.left
+        && glyphBox.right <= badgeBox.right
+        && glyphBox.top >= badgeBox.top
+        && glyphBox.bottom <= badgeBox.bottom),
+      centerOffset: glyphBox
+        ? Math.hypot(
+          glyphBox.left + glyphBox.width / 2 - (badgeBox.left + badgeBox.width / 2),
+          glyphBox.top + glyphBox.height / 2 - (badgeBox.top + badgeBox.height / 2)
+        )
+        : Number.POSITIVE_INFINITY
+    };
+  }));
+  assert(badgeGeometry.length >= 2, `Join/leave player-head badges are missing: ${JSON.stringify(badgeGeometry)}`);
+  for (const geometry of badgeGeometry) {
+    assert(geometry.contained && geometry.centerOffset <= 0.5, `A join/leave glyph is not centered inside its badge: ${JSON.stringify(geometry)}`);
+  }
   assert(!eventsText.toLowerCase().includes("alex"), `A removed fixed identity is still rendered in recent events: ${eventsText}`);
 }
 
@@ -548,6 +573,15 @@ async function assertAllPlayersOfflineTransition(page) {
   assert.equal(await section.locator(".serverTimelinePlayerCount.tone-online").count(), 0, "Stopped demo still reports online players");
 }
 
+async function assertRestartReasonOptional(page) {
+  await page.getByRole("button", { name: "Restart", exact: true }).click();
+  const reason = page.getByLabel("Reason for restarting (optional)");
+  await reason.waitFor();
+  assert.equal(await reason.getAttribute("required"), null, "The restart reason is still required");
+  await page.getByRole("button", { name: "Keep running", exact: true }).click();
+  await reason.waitFor({ state: "detached" });
+}
+
 async function assertTimelineResponsiveGeometry(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport);
   try {
@@ -805,6 +839,7 @@ try {
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart .serverTimelineEChart").count(), 1, "Light-theme switch replaced the unified player chart");
   assert.equal(await desktop.page.locator(".serverTimelinePlayerChart svg").count(), 1, "Light-theme player chart did not retain SVG rendering");
   await assertSchedulePopoverIconContrast(desktop.page);
+  await assertRestartReasonOptional(desktop.page);
   await assertAllPlayersOfflineTransition(desktop.page);
   assert.deepEqual(desktop.browserErrors, [], `Desktop browser errors: ${desktop.browserErrors.join("\n")}`);
   await desktop.page.close();

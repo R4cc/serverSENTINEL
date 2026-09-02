@@ -770,10 +770,10 @@ function secondsBetween(first: ServerEvent, second: ServerEvent, now: Date) {
 }
 
 function defaultEventDetails(event: ServerEvent) {
+  if (event.eventType === "server_started") return undefined;
   if (event.details) return event.details;
   if (event.eventType === "player_joined") return "Connected to the server";
   if (event.eventType === "player_left") return event.severity === "warning" ? "The connection was lost" : "Disconnected from the server";
-  if (event.eventType === "server_started") return "Ready for players";
   if (event.eventType === "server_stopped") return "No longer accepting connections";
   if (event.eventType === "mod_disabled") return "Review the mod configuration before the next restart";
   if (event.eventType === "server_crashed") return "Open the console or crash reports for the cause";

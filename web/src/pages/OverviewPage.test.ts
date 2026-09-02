@@ -329,6 +329,18 @@ describe("recent event grouping", () => {
     expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Back online after 30 seconds" });
   });
 
+  it("does not show a detail for server start events", () => {
+    const [group] = groupRecentEvents([
+      serverEvent("server_started", "2026-07-11T12:01:00.000Z", {
+        text: "Server started",
+        severity: "success",
+        details: "Ready for players"
+      })
+    ], now);
+
+    expect(recentEventPresentation(group).details).toBeUndefined();
+  });
+
   it("collapses adjacent matching events within ten minutes while keeping unrelated player activity separate", () => {
     const overload = { text: "Server is falling behind", signature: "server_overloaded", severity: "warning" as const, details: "Running 100 ticks behind" };
     const groups = groupRecentEvents([

@@ -46,10 +46,10 @@ export function runtimeActionConfirmation(
         : "Everyone online is disconnected immediately and can only rejoin once the server finishes starting."
       : undefined,
     textInput: {
-      label: stopping ? "Reason for stopping" : "Reason for restarting",
+      label: stopping ? "Reason for stopping" : "Reason for restarting (optional)",
       description: "Saved with the server operation so administrators can trace why this action was taken.",
       placeholder: stopping ? "Why is this server being stopped?" : "Why is this server being restarted?",
-      required: true,
+      required: stopping,
       maxLength: 500,
       rows: 3
     },

@@ -1714,7 +1714,7 @@ button.overviewCardRow:focus-visible {
   height: 32px;
 }
 
-.overviewPage .eventsPanel .serverEventIdentity .eventIcon svg {
+.overviewPage .eventsPanel .serverEventIdentity > .eventIcon > svg {
   width: 18px;
   height: 18px;
 }

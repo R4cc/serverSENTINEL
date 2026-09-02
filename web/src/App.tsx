@@ -1830,7 +1830,7 @@ export default function App() {
     if (runtimeConfirmation?.textInput) {
       const enteredReason = await requestTextConfirmation({ ...runtimeConfirmation, textInput: runtimeConfirmation.textInput });
       if (enteredReason === null) return;
-      reason = enteredReason;
+      reason = enteredReason || undefined;
     } else if (runtimeConfirmation && !(await requestConfirmation(runtimeConfirmation))) {
       return;
     }
