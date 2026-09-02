@@ -686,6 +686,73 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   min-width: 0;
 }
 
+.playerLocationForm > .uiButton {
+  height: 44px;
+  min-height: 44px;
+}
+
+.playerLocationDisclosure {
+  border-top: 1px solid var(--border-muted);
+  padding-top: var(--space-3);
+}
+
+.playerLocationDisclosureToggle.uiButton {
+  width: 100%;
+  min-height: 52px;
+  justify-content: space-between;
+  border-color: var(--border-row);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--glass-tint-soft));
+  color: var(--text);
+  text-align: left;
+}
+
+.playerLocationDisclosureToggle.uiButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-muted));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-raised));
+  color: var(--text);
+}
+
+.playerLocationDisclosureCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.playerLocationDisclosureCopy strong {
+  font-size: var(--type-row-title-size);
+  font-weight: var(--weight-strong);
+}
+
+.playerLocationDisclosureCopy small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerLocationDisclosureToggle > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.playerLocationDisclosureToggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.playerLocationDisclosureBody {
+  padding-top: var(--space-3);
+}
+
+.playerLocationDisclosureBody .playerLocationForm {
+  border-top: 0;
+  padding-top: 0;
+}
+
 /* Sorting changes which eight rows are visible. Fixed layout keeps those row contents from
    renegotiating the five column widths every time a heading is pressed. */
 .playerRosterTable {
@@ -1371,7 +1438,8 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   .playerAccuracyTooltip,
   .playerActivityBar,
   .playerActivityBarFill,
-  .playerActivityHourLabel {
+  .playerActivityHourLabel,
+  .playerLocationDisclosureToggle > svg {
     transition: none;
   }
 

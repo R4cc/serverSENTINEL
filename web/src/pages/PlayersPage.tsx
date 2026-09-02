@@ -7,7 +7,7 @@ import {
   type ColumnDef,
   type SortingState
 } from "@tanstack/react-table";
-import { Activity, Globe, MapPin, Wrench } from "lucide-react";
+import { Activity, ChevronDown, Globe, MapPin, Wrench } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerRegionSummary } from "../types";
 import { InlineState } from "../components/InlineState";
 import { PlayerHead } from "../components/PlayerHead";
@@ -300,11 +300,16 @@ function ServerLocationForm({
   onSave: (address: string) => void;
 }) {
   const [draft, setDraft] = useState(address);
-  useEffect(() => setDraft(address), [address]);
+  const [expanded, setExpanded] = useState(!address);
+  const disclosureId = useId();
+  useEffect(() => {
+    setDraft(address);
+    setExpanded(!address);
+  }, [address]);
   if (!canManage) {
     return <p className="playerCardNote">Distances are measured from {address || "a server address that has not been set"}. Configuring it needs the player insights management permission.</p>;
   }
-  return (
+  const form = (
     <form
       className="playerLocationForm"
       onSubmit={(event: FormEvent) => {
@@ -330,6 +335,26 @@ function ServerLocationForm({
       </FormField>
       <Button type="submit" variant="secondary" compact disabled={busy || draft.trim() === address}>Save</Button>
     </form>
+  );
+
+  if (!address) return form;
+  return (
+    <div className="playerLocationDisclosure">
+      <Button
+        variant="ghost"
+        className="playerLocationDisclosureToggle"
+        aria-expanded={expanded}
+        aria-controls={disclosureId}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span className="playerLocationDisclosureCopy">
+          <strong>Server address</strong>
+          <small>{address}</small>
+        </span>
+        <ChevronDown aria-hidden="true" />
+      </Button>
+      {expanded && <div className="playerLocationDisclosureBody" id={disclosureId}>{form}</div>}
+    </div>
   );
 }
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { chromium, devices, webkit } from "playwright";
-import { launchBrowser, signInThroughForm, startDemoHarness } from "./lib/demo-harness.mjs";
+import { launchBrowser, signInThroughApi, signInThroughForm, startDemoHarness } from "./lib/demo-harness.mjs";
 
 const harness = await startDemoHarness({
   dataDirectoryPrefix: "serversentinel-mobile-smoke-",
@@ -172,6 +172,89 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(await cluster.getAttribute("aria-expanded") === "false", `${label}: player cluster stayed expanded after an outside click`);
   assert(await cluster.getAttribute("aria-controls") === null, `${label}: dismissed player cluster kept a popup reference`);
 
+}
+
+async function assertConfiguredPlayerAddressEditor() {
+  const label = "Chromium Android configured player address";
+  let browser;
+  try {
+    browser = await launchBrowser(chromium);
+    const context = await browser.newContext({
+      ...devices["Pixel 7"],
+      viewport: { width: 390, height: 844 },
+      locale: "en-US",
+      timezoneId: "UTC",
+      colorScheme: "light",
+      reducedMotion: "reduce"
+    });
+    await signInThroughApi(context, baseUrl);
+    const sessionResponse = await context.request.get(`${baseUrl}/api/auth/session`, {
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    });
+    const session = await sessionResponse.json();
+    const now = new Date().toISOString();
+    const server = {
+      id: "browser-test",
+      nodeId: "local",
+      displayName: "Browser Test",
+      directoryLabel: "/browser-test",
+      runtimeProfile: {
+        minecraftVersion: "1.21.4",
+        runtimeType: "fabric",
+        runtimeVersion: "0.16.10",
+        javaMajorVersion: 21,
+        jarProvider: "mcjars",
+        jarArtifact: { filename: "fabric-server-launch.jar" },
+        compatibilityStatus: "compatible",
+        resolvedAt: now
+      },
+      hasDockerContainer: true,
+      createdAt: now,
+      updatedAt: now
+    };
+    const page = await context.newPage();
+    await page.route("**/api/auth/session", (route) => route.fulfill({ json: { ...session, demo: false } }));
+    await page.route("**/api/app", async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      await route.fulfill({ response, json: { ...data, servers: [server], currentUser: session.user } });
+    });
+    await page.route("**/api/players/insights?*", (route) => route.fulfill({ json: {
+      generatedAt: now,
+      timeZone: "UTC",
+      summary: { countries: 0, onlinePlayers: 0, locatedPlayers: 0, knownPlayers: 0 },
+      players: [],
+      regions: [],
+      latency: [],
+      activityHours: Array.from({ length: 24 }, (_, hour) => ({ hour, averagePlayers: 0, peakPlayers: 0, samples: 0 })),
+      serverLocations: [{ serverId: server.id, address: "play.example.net" }],
+      geoDatabase: { available: false, configured: false, updating: false },
+      attribution: "This product includes GeoLite2 data created by MaxMind, available from https://www.maxmind.com"
+    } }));
+    await page.addInitScript(() => localStorage.setItem("serversentinel-theme", "light"));
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.locator(".appShell").waitFor();
+    await openPage(page, "players");
+
+    const addressToggle = page.locator(".playerLocationDisclosureToggle");
+    await addressToggle.waitFor();
+    assert.equal(await addressToggle.getAttribute("aria-expanded"), "false", `${label}: configured server address editor is not collapsed`);
+    assert.equal(await page.locator("#player-insights-server-address").count(), 0, `${label}: collapsed server address editor still renders its field`);
+    await addressToggle.click();
+    const addressInput = page.locator("#player-insights-server-address");
+    await addressInput.waitFor();
+    const heights = await page.evaluate(() => ({
+      input: document.querySelector("#player-insights-server-address")?.getBoundingClientRect().height ?? 0,
+      save: document.querySelector(".playerLocationForm > .uiButton")?.getBoundingClientRect().height ?? 0
+    }));
+    assert(Math.abs(heights.input - 44) <= 0.5 && Math.abs(heights.save - 44) <= 0.5, `${label}: input and Save button are not matching 44px controls: ${JSON.stringify(heights)}`);
+    await addressToggle.click();
+    await addressInput.waitFor({ state: "detached" });
+    await context.close();
+    console.log(`mobile smoke passed: ${label}`);
+  } finally {
+    if (browser) await browser.close();
+  }
 }
 
 async function assertScheduleActionMenuVisible(page, label) {
@@ -827,6 +910,7 @@ async function runTabletProfile() {
 
 try {
   await runTabletProfile();
+  await assertConfiguredPlayerAddressEditor();
   await runProfile(chromium, {
     ...devices["Pixel 7"],
     viewport: { width: 390, height: 844 }

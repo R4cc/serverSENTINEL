@@ -153,6 +153,19 @@ describe("the Players workspace with partial knowledge", () => {
     expect(readOnly).toContain("player insights management permission");
   });
 
+  it("collapses the address editor after an address has been configured", () => {
+    const html = render({
+      insights: insights({
+        serverLocations: [{ serverId: "server-1", address: "play.example.net" }]
+      })
+    });
+
+    expect(html).toContain('class="uiButton uiButton--ghost playerLocationDisclosureToggle"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("play.example.net");
+    expect(html).not.toContain("player-insights-server-address");
+  });
+
   it("does not draw empty avatar boxes when player heads are disabled", () => {
     expect(render({ insights: partial })).not.toContain("playerHead");
     expect(render({ insights: partial, playerHeadsEnabled: true })).toContain("playerHead");
