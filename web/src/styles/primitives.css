@@ -153,6 +153,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiPanelHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
 .uiPanelHeader--compact { gap: var(--space-2); }
 .uiPanelHeaderCopy { display: grid; gap: var(--space-1); min-width: 0; }
+.uiPanelHeaderTitle { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .uiPanelHeader h2,
 .uiPanelHeader h3,
 .uiPanelHeaderCopy h2,
@@ -163,6 +164,77 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiPanelHeaderCopy p { margin: 0; color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
 .uiPanelHeaderActions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
 
+.uiHelpTooltip {
+  position: relative;
+  z-index: 40;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.uiHelpTooltipButton {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: help;
+}
+
+.uiHelpTooltipButton:hover,
+.uiHelpTooltipButton:focus-visible,
+.uiHelpTooltip--open .uiHelpTooltipButton {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.uiHelpTooltipButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.uiHelpTooltipButton svg { width: 16px; height: 16px; }
+
+.uiHelpTooltipContent {
+  position: fixed;
+  z-index: 220;
+  width: min(320px, calc(100vw - 16px));
+  max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
+  overflow: auto;
+  visibility: hidden;
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--glass-tint-menu);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter-floating);
+  backdrop-filter: var(--glass-filter-floating);
+  color: var(--text);
+  font-size: var(--type-helper-size);
+  font-weight: var(--weight-body);
+  line-height: 1.45;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms linear;
+}
+
+.uiHelpTooltipContent--open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.uiHelpTooltipContent a { color: var(--accent); }
+
 .uiToolbar { min-height: var(--toolbar-min-height); display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); }
 .uiToolbarPrimary,
 .uiToolbarSecondary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
@@ -170,7 +242,8 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiToolbarMeta { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); white-space: nowrap; }
 
 .uiFormField { min-width: 0; display: grid; align-content: start; gap: var(--space-2); }
-.uiFormFieldLabel { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); color: var(--text); font-size: var(--type-form-label-size); font-weight: var(--weight-strong); }
+.uiFormFieldLabelRow { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.uiFormFieldLabel { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; color: var(--text); font-size: var(--type-form-label-size); font-weight: var(--weight-strong); }
 .uiFormFieldRequired { color: var(--text-soft); font-size: var(--type-badge-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-badge); text-transform: uppercase; }
 .uiFormFieldDescription,
 .uiFormFieldError { color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.45; }
@@ -329,8 +402,24 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiTablePager { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 .uiTablePager > span { min-width: 7ch; color: var(--text); text-align: center; }
 @media (max-width: 560px) {
+  .uiHelpTooltipButton {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
   .uiTablePagination { align-items: stretch; flex-direction: column; }
   .uiTablePager { justify-content: space-between; }
+}
+
+@media (pointer: coarse) {
+  .uiHelpTooltipButton {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
 }
 
 .buttonIcon,

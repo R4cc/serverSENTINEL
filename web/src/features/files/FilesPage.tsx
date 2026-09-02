@@ -395,7 +395,6 @@ export function FilesPage({
           <div className="selectionActionBar" aria-label="File selection actions">
             <span className="selectionSummary" role="status" aria-live="polite">{operationLabel || selectionSummary}</span>
             <div className="selectionActions">
-              {selectedEntries.length === 0 && <span className="selectionActionsHint">Select an item to see available actions</span>}
               {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
                 <AppIcon name="edit" />
                 <span className="selectionActionLabel">Open</span>
@@ -553,7 +552,6 @@ export function FilesPage({
         {!selectedEntry && selectedEntries.length === 0 && (
           <div className="fileDetailsEmpty">
             <h2>No file selected</h2>
-            <p>Select a file or folder from the list to view details. Text files will also show a read-only preview here.</p>
           </div>
         )}
         {selectedEntries.length > 1 && (

@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.3 - 2026-09-02
+
+- Decluttered routine screens by removing repeated guidance and moving useful caveats into consistent, accessible question-mark help.
+
 ## 26.9.2 - 2026-09-02
 
 - Made the Players world map easier to use on phones with smaller location markers, pinch and scroll zooming, drag-to-pan navigation, and dedicated zoom controls across screen sizes.

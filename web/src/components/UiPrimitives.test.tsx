@@ -1,7 +1,7 @@
 import { createRef, type ReactElement, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { Banner, Button, FormField, MetricTile, PanelHeader, Surface, Toolbar } from "./UiPrimitives";
+import { Banner, Button, FormField, HelpTooltip, MetricTile, PanelHeader, Surface, Toolbar } from "./UiPrimitives";
 
 describe("UI primitives", () => {
   it("renders surfaces with semantic element, density, and tone contracts", () => {
@@ -31,6 +31,27 @@ describe("UI primitives", () => {
     const html = renderToStaticMarkup(<PanelHeader title="Installed mods" description="Five total" headingLevel={3} compact />);
     expect(html).toContain("uiPanelHeader--compact");
     expect(html).toContain("<h3>Installed mods</h3>");
+  });
+
+  it("associates accessible help with its question-mark trigger", () => {
+    const html = renderToStaticMarkup(<HelpTooltip id="retention-help" label="retained output">Higher values use more memory.</HelpTooltip>);
+
+    expect(html).toContain('aria-label="About retained output"');
+    expect(html).toContain('aria-describedby="retention-help"');
+    expect(html).toContain('aria-controls="retention-help"');
+    expect(html).toContain('id="retention-help" role="tooltip"');
+  });
+
+  it("hosts help in panel headers and form labels without nesting a button inside a label", () => {
+    const panel = renderToStaticMarkup(<PanelHeader title="Players" help={<HelpTooltip id="players-help" label="players">Approximate locations.</HelpTooltip>} />);
+    const field = renderToStaticMarkup(<FormField htmlFor="address" label="Address" help={<HelpTooltip id="address-help" label="address">Public host name.</HelpTooltip>}><input id="address" /></FormField>);
+
+    expect(panel).toContain("uiPanelHeaderTitle");
+    expect(panel).toContain('aria-describedby="players-help"');
+    expect(field).toContain("uiFormFieldLabelRow");
+    expect(field).toContain('for="address"');
+    expect(field).toContain('aria-describedby="address-help"');
+    expect(field).not.toMatch(/<label[^>]*>(?:(?!<\/label>)[\s\S])*<button/);
   });
 
   it("groups toolbar content without changing action semantics", () => {

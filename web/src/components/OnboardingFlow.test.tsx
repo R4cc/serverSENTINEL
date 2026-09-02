@@ -56,7 +56,8 @@ describe("onboarding flow", () => {
     expect(html).toContain("Where should the first server run?");
     expect(html).toContain("This machine");
     expect(html).toContain("Another machine");
-    expect(html).toContain("Additional nodes remain available");
+    expect(html).toContain("Add remote node");
+    expect(html).not.toContain("Additional nodes remain available");
   });
 
   it("resumes at optional setup after the first server is running", () => {

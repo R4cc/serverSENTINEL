@@ -71,7 +71,6 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
             </section>
             <details className="modsAdvancedOptions" open={state.showOtherVersions} onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open !== state.showOtherVersions) onToggleAdvanced(); }}>
               <summary>Advanced options</summary>
-              <p>Choose a channel or select a version manually. Versions outside the recommended path may require acknowledgement.</p>
               <div className="modsChannelPicker" role="group" aria-label="Release channel">
                 {(["release", "beta", "alpha"] as ReleaseChannel[]).map((channel) => <Button key={channel} variant={state.channel === channel ? "primary" : "secondary"} compact aria-pressed={state.channel === channel} onClick={() => onChannelChange(channel)} disabled={locked}>{channel}</Button>)}
               </div>

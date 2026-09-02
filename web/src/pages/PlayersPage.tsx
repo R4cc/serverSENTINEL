@@ -12,7 +12,7 @@ import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsi
 import { InlineState } from "../components/InlineState";
 import { PlayerHead } from "../components/PlayerHead";
 import { SortHeaderButton, TablePagination, headerAriaSort } from "../components/TableControls";
-import { Banner, Button, EmptyState, FormField, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from "../components/UiPrimitives";
+import { Banner, Button, EmptyState, FormField, HelpTooltip, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from "../components/UiPrimitives";
 import { playerHeadVersion } from "../utils/playerHeads";
 import { PlayerGeographyMap } from "../features/players/PlayerGeographyMap";
 import { ConnectionQualityChart } from "../features/players/ConnectionQualityChart";
@@ -76,32 +76,11 @@ function PlayerLocationDisplay({ location }: { location: PlayerInsightsEntry["lo
   );
 }
 
-function PlayerMapLegendHead({
-  entry,
-  version,
-  enabled
-}: {
-  entry: PlayerInsightsEntry | undefined;
-  version: number;
-  enabled: boolean;
-}) {
-  if (!entry) return <span className="playerMapLegendHead playerMapLegendHead--placeholder" aria-hidden="true" />;
-  return (
-    <PlayerHead
-      serverId={entry.serverId}
-      playerName={entry.player}
-      version={version}
-      enabled={enabled}
-      className="playerMapLegendHead"
-    />
-  );
-}
-
 function ActivityHours({ hours, timeZone }: { hours: readonly PlayerActivityHour[]; timeZone: string }) {
   const peak = peakActivity(hours);
   const observed = observedActivityHours(hours);
   if (observed === 0) {
-    return <EmptyState compact title="No activity recorded yet" message="Hourly activity is read from the player counts the panel samples alongside CPU and memory." />;
+    return <EmptyState compact title="No activity recorded yet" />;
   }
   return (
     <div className="playerActivityHours">
@@ -144,7 +123,7 @@ function ActivityHours({ hours, timeZone }: { hours: readonly PlayerActivityHour
 
 function RegionTable({ regions }: { regions: readonly PlayerRegionSummary[] }) {
   if (regions.length === 0) {
-    return <EmptyState compact title="No regions yet" message="A region appears once a player has joined from an address GeoLite2 can place." />;
+    return <EmptyState compact title="No regions yet" />;
   }
   return (
     <table className="playerRegionTable uiDataTable" aria-label="Player regions">
@@ -220,7 +199,7 @@ function PlayerRoster({
     getSortedRowModel: getSortedRowModel()
   });
   if (players.length === 0) {
-    return <EmptyState compact title="No players recorded yet" message="Players appear here once they join, whether or not their location can be resolved." />;
+    return <EmptyState compact title="No players recorded yet" />;
   }
   const rows = table.getRowModel().rows;
   const pages = Math.max(1, Math.ceil(rows.length / rosterPageSize));
@@ -301,12 +280,12 @@ function ServerLocationForm({
   onSave: (address: string) => void;
 }) {
   const [draft, setDraft] = useState(address);
-  const [expanded, setExpanded] = useState(!address);
+  const [expanded, setExpanded] = useState(!address || Boolean(error));
   const disclosureId = useId();
   useEffect(() => {
     setDraft(address);
-    setExpanded(!address);
-  }, [address]);
+    setExpanded(!address || Boolean(error));
+  }, [address, error]);
   if (!canManage) {
     return <p className="playerCardNote">Distances are measured from {address || "a server address that has not been set"}. Configuring it needs the player insights management permission.</p>;
   }
@@ -321,7 +300,7 @@ function ServerLocationForm({
       <FormField
         label="Server address"
         htmlFor="player-insights-server-address"
-        description="The public hostname or IP players connect to. Resolved locally against the GeoLite2 database to give distances something to measure from."
+        help={<HelpTooltip label="server address">Use the public hostname or IP players connect to. It is resolved locally through GeoLite2 and provides the starting point for distance estimates.</HelpTooltip>}
         error={error}
       >
         <input
@@ -417,13 +396,6 @@ export function PlayersPage({
   const mapPlayers = mapScope === "online"
     ? insights?.players.filter((entry) => entry.online) ?? []
     : insights?.players ?? [];
-  const locatedMapPlayers = mapPlayers.filter((entry) => (
-    entry.location?.latitude !== undefined && entry.location.longitude !== undefined
-  ));
-  const legendPlayer = locatedMapPlayers[0];
-  const legendClusterPlayers = locatedMapPlayers.slice(0, 3);
-  const legendHeadVersion = playerHeadVersion();
-
   return (
     <section className="tabPage playersPage layoutWide">
       {error && (
@@ -491,12 +463,11 @@ export function PlayersPage({
           <PanelHeader
             title="Player geography"
             description={serverLocation?.location
-              ? `Approximate player locations, measured from ${serverLocation.location.label}.`
+              ? `Measured from ${serverLocation.location.label}`
               : serverLocation?.address
-                // An address is configured but could not be placed. Saying "set the server address"
-                // here would be telling the operator to do what they have already done.
-                ? `Approximate player locations. ${serverLocation.address} could not be placed, so distances are unavailable.`
-                : "Approximate player locations. Set the server address to measure distance and estimate latency."}
+                ? `${serverLocation.address} could not be placed; distances are unavailable.`
+                : "Set the server address for distance estimates."}
+            help={<HelpTooltip label="player geography">Locations are approximate. Player heads mark locations, stacked heads are clusters, the server badge marks the host, and rings show GeoLite2 accuracy. Zooming separates nearby clusters.</HelpTooltip>}
             actions={(
               <div className="playerMapScopeSwitch" role="group" aria-label="Players shown on map">
                 <Button
@@ -525,30 +496,6 @@ export function PlayersPage({
             serverRunning={serverRunning}
             playerHeadsEnabled={playerHeadsEnabled}
           />
-          <ul className="playerMapLegend">
-            <li><span className="playerMapLegendMark playerMapLegendMark--server" aria-hidden="true" />This server</li>
-            <li>
-              <span className="playerMapLegendPlayer" aria-hidden="true">
-                <PlayerMapLegendHead entry={legendPlayer} version={legendHeadVersion} enabled={playerHeadsEnabled} />
-              </span>
-              Player
-            </li>
-            <li>
-              <span className="playerMapLegendCluster" aria-hidden="true">
-                {Array.from({ length: 3 }, (_, index) => (
-                  <PlayerMapLegendHead
-                    key={legendClusterPlayers[index]?.player ?? `placeholder-${index}`}
-                    entry={legendClusterPlayers[index]}
-                    version={legendHeadVersion}
-                    enabled={playerHeadsEnabled}
-                  />
-                ))}
-                <b>3</b>
-              </span>
-              Player cluster
-            </li>
-            <li><span className="playerMapLegendMark playerMapLegendMark--accuracy" aria-hidden="true" />GeoLite2 accuracy radius</li>
-          </ul>
           <ServerLocationForm
             address={serverLocation?.address ?? ""}
             error={serverLocation?.error}
@@ -559,7 +506,7 @@ export function PlayersPage({
         </Surface>
 
         <Surface className="playerCard playerRegionCard">
-          <PanelHeader title="Region overview" description="Where this server's players have connected from, and what that distance implies for latency." />
+          <PanelHeader title="Region overview" />
           <RegionTable regions={insights?.regions ?? []} />
         </Surface>
       </div>
@@ -568,7 +515,7 @@ export function PlayersPage({
         <Surface className="playerCard playerLatencyCard">
           <PanelHeader
             title="Connection quality"
-            description="Distance-based latency estimates reconstructed from player sessions. Hover the chart to inspect a moment."
+            help={<HelpTooltip label="connection quality">Latency is estimated from player distance and session history; it is not measured. Hover or focus the chart to inspect a moment.</HelpTooltip>}
             actions={(
               <div className="playerRangeSwitch" role="group" aria-label="Latency history range">
                 {playerInsightsRanges.map((option) => (
@@ -589,7 +536,7 @@ export function PlayersPage({
         </Surface>
 
         <Surface className="playerCard playerActivityCard">
-          <PanelHeader title="Activity by hour" description={`Average players per hour of the day, ${insights?.timeZone ?? "UTC"}.`} />
+          <PanelHeader title="Activity by hour" help={<HelpTooltip label="activity by hour">Average players for each hour of the day in {insights?.timeZone ?? "UTC"}.</HelpTooltip>} />
           <ActivityHours hours={insights?.activityHours ?? []} timeZone={insights?.timeZone ?? "UTC"} />
         </Surface>
       </div>
@@ -597,7 +544,7 @@ export function PlayersPage({
       <Surface className="playerCard playerRosterCard">
         <PanelHeader
           title="Players"
-          description="Everyone this server has seen, online first. Locations are approximate and latency is estimated from distance, never measured."
+          help={<HelpTooltip label="player data">Locations are approximate and latency is estimated from distance rather than measured.</HelpTooltip>}
           actions={summary && (
             <StatusBadge tone={summary.onlinePlayers ? "success" : "neutral"}>
               {summary.onlinePlayers} online · {summary.knownPlayers} known
@@ -615,7 +562,7 @@ export function PlayersPage({
 
       <footer className="playerAttribution">
         <p>{insights?.attribution}</p>
-        {geoDatabase?.buildDate && <p>Database built {formatDate(geoDatabase.buildDate)}. Addresses are looked up against this local database and are not stored; none is sent to MaxMind or any other geolocation service.</p>}
+        {geoDatabase?.buildDate && <HelpTooltip label="player location privacy">Database built {formatDate(geoDatabase.buildDate)}. Addresses are looked up locally, are not stored, and are not sent to MaxMind or another geolocation service.</HelpTooltip>}
       </footer>
     </section>
   );

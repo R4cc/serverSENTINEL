@@ -93,7 +93,8 @@ describe("ServerEditForm", () => {
     expect(html).toContain("propertiesExportZone");
     expect(html).toContain("propertiesSideCards--paired");
     expect(html).toContain("Export server");
-    expect(html).toContain(`Download ${server.displayName} as a ZIP archive`);
+    expect(html).toContain(`aria-label="Exports for ${server.displayName}"`);
+    expect(html).not.toContain(`Download ${server.displayName} as a ZIP archive`);
     expect(formEnd).toBeGreaterThan(-1);
     expect(html.indexOf("propertiesExportZone")).toBeGreaterThan(formEnd);
   });

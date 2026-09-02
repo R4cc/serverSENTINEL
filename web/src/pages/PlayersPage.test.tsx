@@ -68,12 +68,14 @@ describe("the Players workspace before it knows anything", () => {
     expect(html).not.toContain("0 ms");
   });
 
-  it("explains each empty card rather than drawing an empty chart", () => {
+  it("names each empty card without tutorial copy", () => {
     const html = render();
     expect(html).toContain("Not enough history yet");
     expect(html).toContain("No activity recorded yet");
     expect(html).toContain("No regions yet");
     expect(html).toContain("No players recorded yet");
+    expect(html).not.toContain("Players appear here once they join");
+    expect(html).not.toContain("It fills in as players come and go");
   });
 
   it("carries the GeoLite2 attribution its licence requires", () => {
@@ -115,7 +117,7 @@ describe("the Players workspace with partial knowledge", () => {
 
   it("never claims a latency when the server has no address to measure from", () => {
     const html = render({ insights: partial });
-    expect(html).toContain("Set the server address to measure distance and estimate latency");
+    expect(html).toContain("Set the server address for distance estimates.");
     expect(html).not.toContain(" ms<");
   });
 
@@ -293,8 +295,8 @@ describe("the Players workspace with partial knowledge", () => {
       })
     });
     expect(html).toContain("playerMapClusterMarker");
-    expect(html).toContain("playerMapLegendHead");
-    expect(html).toContain("playerMapLegendCluster");
+    expect(html).not.toContain("playerMapLegendHead");
+    expect(html).not.toContain("playerMapLegendCluster");
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toMatch(/playerMapClusterMarker[^>]+aria-controls=/);
@@ -313,7 +315,7 @@ describe("the Players workspace with partial knowledge", () => {
         serverLocations: [{ serverId: "server-1", address: "play.example.net", error: "GeoLite2 has no location for play.example.net." }]
       })
     });
-    expect(html).toContain("play.example.net could not be placed");
+    expect(html).toContain("play.example.net could not be placed; distances are unavailable.");
     expect(html).not.toContain("Set the server address to measure distance");
   });
 

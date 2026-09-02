@@ -17,7 +17,7 @@ import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, Schedu
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton, headerAriaSort } from '../components/TableControls';
-import { Button, EmptyState, PanelHeader, Toolbar } from '../components/UiPrimitives';
+import { Button, EmptyState, HelpTooltip, PanelHeader, Toolbar } from '../components/UiPrimitives';
 import { DialogSurface } from '../components/DialogSurface';
 import { ActionMenu } from '../components/ActionMenu';
 import { clientId } from '../utils/files';
@@ -123,7 +123,10 @@ function stepDraftFromStep(step: ScheduleStep): StepDraft {
 export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Pick<ScheduledExecution, "onlyWhenNoPlayers" | "waitForPlayersToLeave"> }) {
   return (
     <div className="schedulePlayerPolicy" role="radiogroup" aria-labelledby="schedule-player-policy-label">
-      <strong id="schedule-player-policy-label">Players online at start</strong>
+      <span className="schedulePlayerPolicyLabel">
+        <strong id="schedule-player-policy-label">Players online at start</strong>
+        <HelpTooltip label="wait until empty">Wait until empty creates one cancellable run with no timeout; later matches do not stack.</HelpTooltip>
+      </span>
       <div className="schedulePlayerPolicyChoices">
         <label className="scheduleOptionToggle">
           <input name="playerOnlinePolicy" value="run" type="radio" defaultChecked={!schedule?.onlyWhenNoPlayers} />
@@ -138,7 +141,6 @@ export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Pick<Sche
           <span className="scheduleOptionCopy"><strong>Wait until empty</strong></span>
         </label>
       </div>
-      <small className="schedulePlayerPolicyNote">Wait until empty creates one cancellable run with no timeout; later matches do not stack.</small>
     </div>
   );
 }
@@ -540,7 +542,7 @@ export function SchedulePage({
               {initialLoading ? (
                 <div className="scheduleNoRowsRow" role="row">
                   <div role="cell">
-                    <InlineState tone="loading" title="Loading schedules" message="Reading configured automation and recent runs." />
+                    <InlineState tone="loading" title="Loading schedules" />
                   </div>
                 </div>
               ) : scheduleRows.length ? scheduleRows.map((row) => {
@@ -751,7 +753,7 @@ export function SchedulePage({
               ))}
             </div>
           ) : (
-            <EmptyState compact className="scheduledRunsEmpty" title="No runs yet" message="Recent scheduled executions will appear here after schedules run." />
+            <EmptyState compact className="scheduledRunsEmpty" title="No runs yet" />
           )}
         </aside>
       </div>
@@ -880,7 +882,7 @@ export function SchedulePage({
 
                   {schedulePlan.mode === "advanced" && (
                     <label className="scheduleCronField">
-                      <span>Cron expression</span>
+                      <span className="scheduleFieldLabelWithHelp">Cron expression <HelpTooltip label="cron expression">Use five fields in {scheduleTimeZone}: minute, hour, day, month, and weekday.</HelpTooltip></span>
                       <input
                         value={cronValue}
                         onChange={(event) => setCronValue(event.target.value)}
@@ -898,7 +900,7 @@ export function SchedulePage({
                     expression parses, so the section never changes height as it is edited. */}
                 {cronError
                   ? <span id="schedule-cron-error" className="fieldErrorBubble scheduleCronFeedback" role="tooltip">{cronError}</span>
-                  : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription || "Five fields: minute hour day month weekday."}</span>}
+                  : <span id="schedule-cron-description" className="scheduleCronFeedback valid">{cronDescription}</span>}
               </section>
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
@@ -980,7 +982,6 @@ export function SchedulePage({
                           ) : (
                             <div className="scheduleStepValue scheduleStepProcedure">
                               <AppIcon name="server" />
-                              <p>{scheduleProcedureDescription[draft.procedure]}</p>
                               <strong>Final step</strong>
                             </div>
                           )}
@@ -1123,7 +1124,7 @@ export function ScheduleRunHistoryDialog({
             ))}
           </div>
         ) : (
-          <EmptyState compact title="No runs recorded" message="Runs appear here once this schedule has executed." />
+          <EmptyState compact title="No runs recorded" />
         )}
       </div>
       <div className="userModalFooter scheduleRunModalFooter">

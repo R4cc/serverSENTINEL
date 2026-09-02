@@ -103,6 +103,51 @@ async function assertFloatingSurfaces(page, label) {
 
 async function assertPlayerClusterPopupDismisses(page, label) {
   await openPage(page, "players");
+  const helpTrigger = page.getByRole("button", { name: "About player geography", exact: true });
+  await helpTrigger.waitFor();
+  const helpTarget = await helpTrigger.getAttribute("aria-controls");
+  assert(helpTarget, `${label}: player geography help is not associated with its tooltip`);
+  const beforeHelp = await page.locator(".playerGeographyCard").evaluate((card) => {
+    const cardRect = card.getBoundingClientRect();
+    const mapRect = card.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    const triggerRect = card.querySelector('.uiHelpTooltipButton[aria-label="About player geography"]')?.getBoundingClientRect();
+    return {
+      cardHeight: cardRect.height,
+      mapOffset: mapRect ? mapRect.top - cardRect.top : 0,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      triggerWidth: triggerRect?.width ?? 0,
+      triggerHeight: triggerRect?.height ?? 0
+    };
+  });
+  assert(beforeHelp.triggerWidth >= 44 && beforeHelp.triggerHeight >= 44, `${label}: player geography help target is smaller than 44px: ${JSON.stringify(beforeHelp)}`);
+  await helpTrigger.tap();
+  const helpTooltip = page.locator(`[id="${helpTarget}"]`);
+  await helpTooltip.waitFor({ state: "visible" });
+  const openHelp = await helpTooltip.evaluate((tooltip) => {
+    const rect = tooltip.getBoundingClientRect();
+    const card = document.querySelector(".playerGeographyCard");
+    const mapRect = card?.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: window.visualViewport?.width ?? innerWidth,
+      viewportHeight: window.visualViewport?.height ?? innerHeight,
+      viewportLeft: window.visualViewport?.offsetLeft ?? 0,
+      viewportTop: window.visualViewport?.offsetTop ?? 0,
+      cardHeight: card?.getBoundingClientRect().height ?? 0,
+      mapOffset: card && mapRect ? mapRect.top - card.getBoundingClientRect().top : 0,
+      documentWidth: document.documentElement.scrollWidth
+    };
+  });
+  assert(openHelp.left >= openHelp.viewportLeft && openHelp.right <= openHelp.viewportLeft + openHelp.viewportWidth && openHelp.top >= openHelp.viewportTop && openHelp.bottom <= openHelp.viewportTop + openHelp.viewportHeight, `${label}: player geography help leaves the visual viewport: ${JSON.stringify(openHelp)}`);
+  assert(Math.abs(openHelp.cardHeight - beforeHelp.cardHeight) <= 1 && Math.abs(openHelp.mapOffset - beforeHelp.mapOffset) <= 1, `${label}: opening help shifts the geography card: ${JSON.stringify({ beforeHelp, openHelp })}`);
+  assert(openHelp.documentWidth <= openHelp.viewportWidth && beforeHelp.documentWidth <= beforeHelp.viewportWidth, `${label}: player geography help causes horizontal overflow: ${JSON.stringify({ beforeHelp, openHelp })}`);
+  await page.locator(".playerMap").tap({ position: { x: 2, y: 2 } });
+  await helpTooltip.waitFor({ state: "hidden" });
+
   const mapScope = page.getByRole("group", { name: "Players shown on map" });
   const onlineScope = mapScope.getByRole("button", { name: "Online", exact: true });
   const allTimeScope = mapScope.getByRole("button", { name: "All time", exact: true });

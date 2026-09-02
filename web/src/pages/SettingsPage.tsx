@@ -1,5 +1,5 @@
-import { FormEvent, KeyboardEvent, ReactNode, useId, useMemo, useState } from "react";
-import { Blocks, CalendarDays, Check, Copy, Info, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
+import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
+import { Blocks, CalendarDays, Check, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
 import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";
 import type { DisplayTimeZonePreference, ModuleAccessState, ModuleId, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
@@ -9,7 +9,7 @@ import { themeOptions } from "../features/settings/themePreferences";
 import { IntegrationControlField, MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
-import { Button, StatusBadge } from "../components/UiPrimitives";
+import { Button, HelpTooltip, StatusBadge } from "../components/UiPrimitives";
 import { resolveRegionalFormatLocale } from "../utils/format";
 
 type SettingsCategory = "appearance" | "console" | "integrations" | "modules" | "users" | "system";
@@ -80,13 +80,13 @@ export type SettingsPageProps = {
   exitDemoDisabled: boolean;
 };
 
-const categoryDetails: Record<SettingsCategory, { label: string; description: string }> = {
-  appearance: { label: "Appearance", description: "Theme, timestamps, and regional formats" },
-  console: { label: "Console", description: "History, text size, and retained output" },
-  integrations: { label: "Integrations", description: "External services and credentials" },
-  modules: { label: "Modules", description: "Optional features this installation runs" },
-  users: { label: "Users", description: "Accounts, roles, and permissions" },
-  system: { label: "System", description: "Panel health, runtime, and diagnostics" }
+const categoryDetails: Record<SettingsCategory, { label: string }> = {
+  appearance: { label: "Appearance" },
+  console: { label: "Console" },
+  integrations: { label: "Integrations" },
+  modules: { label: "Modules" },
+  users: { label: "Users" },
+  system: { label: "System" }
 };
 
 const regionalFormatExampleInstant = new Date("2026-07-20T14:30:00.000Z");
@@ -123,35 +123,16 @@ function ModuleGlyph({ id }: { id: ModuleId }) {
   return <Icon strokeWidth={1.8} aria-hidden="true" />;
 }
 
-function PreferenceDescriptionTooltip({ title, children }: { title: string; children: ReactNode }) {
-  const tooltipId = useId();
-  return (
-    <span className="roleInfoWrap settingsHubIntegrationInfo">
-      <Button
-        type="button"
-        variant="ghost"
-        iconOnly
-        className="roleInfoButton"
-        aria-label={`About ${title}`}
-        aria-describedby={tooltipId}
-      >
-        <Info className="buttonIcon" aria-hidden="true" />
-      </Button>
-      <span id={tooltipId} role="tooltip" className="roleTooltip fieldTooltip settingsHubIntegrationTooltip">{children}</span>
-    </span>
-  );
-}
-
-function PreferenceRow({ title, description, children, className = "", descriptionTooltip = false, optional = false }: { title: string; description: ReactNode; children: ReactNode; className?: string; descriptionTooltip?: boolean; optional?: boolean }) {
+function PreferenceRow({ title, description, children, className = "", descriptionTooltip = false, optional = false }: { title: string; description?: ReactNode; children: ReactNode; className?: string; descriptionTooltip?: boolean; optional?: boolean }) {
   return (
     <div className={`settingsHubRow ${className}`.trim()}>
       <div className="settingsHubRowCopy">
         <span className="settingsHubRowTitle">
           <strong>{title}</strong>
           {optional && <StatusBadge tone="neutral">Optional</StatusBadge>}
-          {descriptionTooltip && <PreferenceDescriptionTooltip title={title}>{description}</PreferenceDescriptionTooltip>}
+          {descriptionTooltip && description && <HelpTooltip label={title}>{description}</HelpTooltip>}
         </span>
-        {!descriptionTooltip && <span>{description}</span>}
+        {!descriptionTooltip && description && <span>{description}</span>}
       </div>
       <div className="settingsHubControl">{children}</div>
     </div>
@@ -236,15 +217,15 @@ export function SettingsPage(props: SettingsPageProps) {
       <>
         <CategoryHeader category="appearance" actions={<StatusBadge tone="neutral">This browser</StatusBadge>} />
         <div className="settingsHubRows">
-          <PreferenceRow title="Theme" description="Saved in this browser.">
+          <PreferenceRow title="Theme">
             <select aria-label="Theme" value={props.themePreference} onChange={(event) => props.onThemeChange(event.target.value as ThemePreference)}>
               {themeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </PreferenceRow>
-          <PreferenceRow title="Relative timestamps" description="Show times as “2 hours ago” instead of the full date and time.">
+          <PreferenceRow title="Relative timestamps">
             <Toggle checked={props.relativeTimestamps} onChange={props.onRelativeTimestampsChange} label="Use relative timestamps" stateLabel={props.relativeTimestamps ? "Relative" : "Full date and time"} />
           </PreferenceRow>
-          <PreferenceRow title="Regional format" description="Use one regional convention for dates, times, and numbers.">
+          <PreferenceRow title="Regional format">
             <div className="settingsHubControlStack">
               <select aria-label="Regional format" value={props.regionalFormatPreference} onChange={(event) => props.onRegionalFormatChange(event.target.value as RegionalFormatPreference)}>
                 <option value="user">Browser default</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="de-DE">Deutsch (Deutschland)</option><option value="fr-FR">Français (France)</option><option value="ja-JP">日本語 (日本)</option>
@@ -252,7 +233,7 @@ export function SettingsPage(props: SettingsPageProps) {
               <span className="settingsHubPreferenceExample" aria-live="polite">Example: {regionalFormatExample}</span>
             </div>
           </PreferenceRow>
-          <PreferenceRow title="Time zone" description={<>Choose which time zone timestamps use. Schedules continue to use {props.panelTimeZone}.</>}>
+          <PreferenceRow title="Time zone" description={<>Changes displayed timestamps only. Schedules continue to use {props.panelTimeZone}.</>} descriptionTooltip>
             <div className="settingsHubControlStack">
               <select aria-label="Time zone" value={props.displayTimeZonePreference} onChange={(event) => props.onDisplayTimeZoneChange(event.target.value as DisplayTimeZonePreference)}>
                 <option value="panel">Panel time — {props.panelTimeZone}</option><option value="browser">This device — {props.browserTimeZone}</option><option value="utc">UTC</option>
@@ -267,15 +248,15 @@ export function SettingsPage(props: SettingsPageProps) {
       <>
         <CategoryHeader category="console" actions={<StatusBadge tone="neutral">This browser</StatusBadge>} />
         <div className="settingsHubRows">
-          <PreferenceRow title="Remember command history" description="Keep the last 50 commands in this browser for faster recall between visits.">
+          <PreferenceRow title="Remember command history">
             <Toggle checked={props.rememberConsoleHistory} onChange={props.onRememberConsoleHistoryChange} label="Remember console command history" stateLabel={props.rememberConsoleHistory ? "Remembering" : "Session only"} />
           </PreferenceRow>
-          <PreferenceRow title="Terminal font size" description="Change the console text size without changing the rest of the interface.">
+          <PreferenceRow title="Terminal font size">
             <select aria-label="Terminal font size" value={props.consoleFontSize} onChange={(event) => props.onConsoleFontSizeChange(Number(event.target.value) as ConsoleFontSize)}>
               {consoleFontSizes.map((size) => <option key={size} value={size}>{size}px{size === 14 ? " (default)" : ""}</option>)}
             </select>
           </PreferenceRow>
-          <PreferenceRow title="Retained output" description="Choose how many console lines can be scrolled back through. Higher values use more browser memory.">
+          <PreferenceRow title="Retained output" description="Higher values use more browser memory." descriptionTooltip>
             <select aria-label="Console retained output" value={props.consoleScrollback} onChange={(event) => props.onConsoleScrollbackChange(Number(event.target.value) as ConsoleScrollback)}>
               {consoleScrollbackSizes.map((size) => <option key={size} value={size}>{size.toLocaleString()} lines{size === 5_000 ? " (default)" : ""}</option>)}
             </select>
@@ -412,7 +393,7 @@ export function SettingsPage(props: SettingsPageProps) {
     ),
     system: (
       <>
-        <CategoryHeader category="system" actions={<div className="settingsHubSystemActions"><Button variant="secondary" onClick={props.onRefreshSystemInfo} disabled={props.refreshingSystemInfo} reserveLabel="Refreshing"><SettingsGlyph name="refresh" />{props.refreshingSystemInfo ? "Refreshing" : "Refresh"}</Button><Button onClick={() => props.onCopyDiagnostics(buildSystemDiagnostics(props.systemInfo))}><SettingsGlyph name="copy" />Copy diagnostics</Button></div>} />
+        <CategoryHeader category="system" actions={<div className="settingsHubSystemActions"><Button variant="secondary" onClick={props.onRefreshSystemInfo} disabled={props.refreshingSystemInfo} reserveLabel="Refreshing"><SettingsGlyph name="refresh" />{props.refreshingSystemInfo ? "Refreshing" : "Refresh"}</Button><Button onClick={() => props.onCopyDiagnostics(buildSystemDiagnostics(props.systemInfo))}><SettingsGlyph name="copy" />Copy diagnostics</Button><HelpTooltip label="copied diagnostics">Diagnostics include aggregate runtime information only. Usernames, credentials, commands, server and node names, and filesystem paths are excluded.</HelpTooltip></div>} />
         <div className="settingsHubSystemOverview">
           <div className={`settingsHubHealth ${props.systemInfo.panelOnlyMode || props.systemInfo.dockerSocketMounted || props.systemInfo.demoMode ? "ready" : "limited"}`}>
             <span className="settingsHubHealthDot" aria-hidden="true" />
@@ -420,12 +401,12 @@ export function SettingsPage(props: SettingsPageProps) {
           </div>
           <dl className="settingsHubFacts">
             <div><dt>Panel release</dt><dd><strong>v{props.systemInfo.panelVersion}</strong><span>{props.systemInfo.buildId ? `Build ${props.systemInfo.buildId.slice(0, 12)}` : "Build unavailable"}</span></dd></div>
-            <div><dt>Runtime mode</dt><dd><strong>{props.systemInfo.runtimeMode || "Unknown"}</strong><span>Panel deployment role</span></dd></div>
+            <div><dt>Runtime mode</dt><dd><strong>{props.systemInfo.runtimeMode || "Unknown"}</strong></dd></div>
             <div><dt>Docker control</dt><dd><strong>{systemSummary.dockerStatus}</strong><span>Local container access</span></dd></div>
-            <div><dt>Managed servers</dt><dd><strong>{props.systemInfo.serverCount}</strong><span>Configured across all nodes</span></dd></div>
+            <div><dt>Managed servers</dt><dd><strong>{props.systemInfo.serverCount}</strong></dd></div>
             <div><dt>Connected nodes</dt><dd><strong>{systemSummary.onlineNodeCount} / {systemSummary.nodeCount} online</strong><span>{systemSummary.nodeCount - systemSummary.onlineNodeCount} currently unavailable</span></dd></div>
             <div><dt>Detected memory</dt><dd><strong>{systemSummary.memory}</strong><span>Panel host capacity</span></dd></div>
-            <div><dt>Modrinth</dt><dd><StatusBadge tone={props.systemInfo.modrinthConfigured ? "success" : "neutral"}>{props.systemInfo.modrinthConfigured ? "Configured" : "Not configured"}</StatusBadge><span>Mod discovery integration</span></dd></div>
+            <div><dt>Modrinth</dt><dd><StatusBadge tone={props.systemInfo.modrinthConfigured ? "success" : "neutral"}>{props.systemInfo.modrinthConfigured ? "Configured" : "Not configured"}</StatusBadge></dd></div>
           </dl>
           <div className="settingsHubTechnical">
             <div><strong>Time zones</strong><span>Panel: {props.systemInfo.panelTimeZone}</span><span>Display: {props.systemInfo.displayTimeZone}</span></div>
@@ -433,7 +414,7 @@ export function SettingsPage(props: SettingsPageProps) {
             <div><strong>Protocol versions</strong><code>{systemSummary.protocolVersions}</code></div>
           </div>
           <div className="settingsHubRows">
-            <PreferenceRow title="UI cache" description="Remove cached panel files and browser data from this device, sign out, and reload the application.">
+            <PreferenceRow title="UI cache" description="Removes cached panel files and browser data from this device, signs out, and reloads the application." descriptionTooltip>
               <Button
                 variant="critical"
                 onClick={props.onClearUiCache}
@@ -446,8 +427,7 @@ export function SettingsPage(props: SettingsPageProps) {
               </Button>
             </PreferenceRow>
           </div>
-          <div className="settingsHubPrivacyNote"><strong>Privacy-safe diagnostics</strong><span>Copied diagnostics include aggregate runtime information only. Usernames, credentials, commands, server and node names, and filesystem paths are excluded.</span></div>
-          {props.systemInfo.demoMode && <div className="settingsHubDemoCallout"><div><strong>Demo mode</strong><span>Leave the sample workspace and return to sign-in.</span></div><Button variant="secondary" onClick={props.onExitDemo} disabled={props.exitDemoDisabled}>Exit demo mode</Button></div>}
+          {props.systemInfo.demoMode && <div className="settingsHubDemoCallout"><div><strong>Demo mode</strong></div><Button variant="secondary" onClick={props.onExitDemo} disabled={props.exitDemoDisabled}>Exit demo mode</Button></div>}
         </div>
       </>
     )
@@ -460,7 +440,7 @@ export function SettingsPage(props: SettingsPageProps) {
           {categories.map((category, index) => {
             const details = categoryDetails[category];
             const selected = selectedCategory === category;
-            return <button key={category} id={`settings-tab-${category}`} type="button" role="tab" aria-selected={selected} aria-controls={`settings-panel-${category}`} tabIndex={selected ? 0 : -1} className={selected ? "active" : ""} onClick={() => setActiveCategory(category)} onKeyDown={(event) => handleCategoryKeyDown(event, index)}><span className="settingsHubCategoryIcon"><SettingsGlyph name={category} /></span><span><strong>{details.label}</strong><small>{details.description}</small></span></button>;
+            return <button key={category} id={`settings-tab-${category}`} type="button" role="tab" aria-selected={selected} aria-controls={`settings-panel-${category}`} tabIndex={selected ? 0 : -1} className={selected ? "active" : ""} onClick={() => setActiveCategory(category)} onKeyDown={(event) => handleCategoryKeyDown(event, index)}><span className="settingsHubCategoryIcon"><SettingsGlyph name={category} /></span><strong>{details.label}</strong></button>;
           })}
         </nav>
         <section className="settingsHubContent" id={`settings-panel-${selectedCategory}`} role="tabpanel" aria-labelledby={`settings-tab-${selectedCategory}`} tabIndex={0}>

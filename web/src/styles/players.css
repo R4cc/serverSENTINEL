@@ -714,114 +714,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   vector-effect: non-scaling-stroke;
 }
 
-.playerMapLegend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-}
-
-.playerMapLegend li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.playerMapLegendMark {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--text-muted);
-}
-
-.playerMapLegendMark--server {
-  position: relative;
-  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--surface));
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-}
-
-.playerMapLegendMark--server::before,
-.playerMapLegendMark--server::after {
-  content: "";
-  position: absolute;
-  right: 2px;
-  left: 2px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--accent);
-}
-
-.playerMapLegendMark--server::before { top: 2px; }
-.playerMapLegendMark--server::after { bottom: 2px; }
-
-.playerMapLegendPlayer {
-  display: inline-flex;
-  border: 1px solid color-mix(in srgb, var(--text-muted) 32%, var(--surface));
-  border-radius: var(--radius-xs);
-  padding: 1px;
-  background: var(--surface-raised);
-}
-
-.playerMapLegendHead {
-  display: block;
-  width: 12px;
-  height: 12px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 62%, var(--surface)), color-mix(in srgb, var(--sentinel-warning) 38%, var(--surface)));
-}
-
-.playerMapLegendHead img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  image-rendering: pixelated;
-}
-
-.playerMapLegendCluster {
-  position: relative;
-  display: inline-flex;
-  width: 25px;
-  height: 16px;
-}
-
-.playerMapLegendCluster .playerMapLegendHead {
-  position: absolute;
-  top: 1px;
-  border: 1px solid var(--surface);
-}
-
-.playerMapLegendCluster .playerMapLegendHead:first-child { left: 0; }
-.playerMapLegendCluster .playerMapLegendHead:nth-child(2) { left: 5px; }
-.playerMapLegendCluster .playerMapLegendHead:nth-child(3) { left: 10px; }
-
-.playerMapLegendCluster b {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 12px;
-  height: 12px;
-  border: 1px solid var(--border-panel);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  color: var(--text);
-  font-size: 7px;
-  line-height: 1;
-}
-
-.playerMapLegendMark--accuracy {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
 .playerLocationForm {
   display: flex;
   align-items: flex-end;
@@ -1401,6 +1293,10 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 }
 
 .playerAttribution {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
   color: var(--text-soft);
   font-size: var(--type-meta-size);
 }

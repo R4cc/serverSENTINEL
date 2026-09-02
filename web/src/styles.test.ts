@@ -91,7 +91,7 @@ describe("stylesheet ownership", () => {
       "export-import.css": /(?:\.export|\.import)/,
       "auth.css": /\.auth/,
       "onboarding.css": /\.onboarding/,
-      "layout.css": /(?:\.user|\.users|\.role|\.permission|\.restartRequirementTooltip|\.fieldTooltip)/
+      "layout.css": /(?:\.user|\.users|\.role|\.permission|\.restartRequirementTooltip)/
     };
     const selectors = [...responsiveStyles
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -112,6 +112,7 @@ describe("stylesheet ownership", () => {
     expect(primitiveStyles).toContain(".uiFormField");
     expect(primitiveStyles).toContain(".uiBanner");
     expect(primitiveStyles).toContain(".uiMetricTile");
+    expect(primitiveStyles).toContain(".uiHelpTooltip");
     expect(primitiveStyles).toContain(".uiGlassSurface");
     expect(primitiveStyles).toContain(".uiSurface--solid");
     expect(primitiveStyles).toContain("prefers-reduced-transparency");

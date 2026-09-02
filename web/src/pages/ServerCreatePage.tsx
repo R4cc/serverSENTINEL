@@ -13,7 +13,7 @@ import {
 } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button } from "../components/UiPrimitives";
+import { Banner, Button, HelpTooltip } from "../components/UiPrimitives";
 import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from "../utils/validation";
 import {
   clampNumber,
@@ -36,8 +36,6 @@ import {
   type CreateWizardPortBinding
 } from "./serverSettingsHelpers";
 import { MemoryNumberInput, MemoryRangeControl } from "./ServerSettingsShared";
-
-export const createServerReviewSummary = "serverSENTINEL will download the required files and prepare the server. It will remain stopped until you start it from the panel. This process may take a few minutes.";
 
 export function ManagedServerForm({
   nodes = [],
@@ -746,7 +744,6 @@ export function RuntimeWizardStep({
           </span>
           <span>
             <strong>Show snapshot versions</strong>
-            <small>Include snapshot and development builds.</small>
           </span>
         </label>
 
@@ -1045,14 +1042,12 @@ function ResourcesNetworkWizardStep({
             </span>
             <span>
               <strong>Advanced settings <em>(optional)</em></strong>
-              <small>Java arguments, Docker container name, and other advanced options.</small>
             </span>
           </summary>
           <div className="advancedResourceBody">
             <div className="advancedResourceGrid">
               <label className="advancedResourceField" htmlFor="create-java-args">
                 <span>Java arguments</span>
-                <small>Customize the launch flags used by the Minecraft runtime.</small>
                 <textarea
                   id="create-java-args"
                   className="javaArgsInput"
@@ -1067,7 +1062,6 @@ function ResourcesNetworkWizardStep({
 
               <label className="advancedResourceField" htmlFor="create-docker-image">
                 <span>Docker runtime image</span>
-                <small>Choose the Java runtime image used for the server container.</small>
                 <select
                   id="create-docker-image"
                   value={dockerImage}
@@ -1081,7 +1075,6 @@ function ResourcesNetworkWizardStep({
 
               <label className="advancedResourceField" htmlFor="create-server-jar">
                 <span>Server jar filename</span>
-                <small>The resolved runtime artifact will be saved with this local filename.</small>
                 <input
                   id="create-server-jar"
                   type="text"
@@ -1095,7 +1088,6 @@ function ResourcesNetworkWizardStep({
 
               <label className="advancedResourceField" htmlFor="create-docker-container">
                 <span>Docker container name</span>
-                <small>Leave blank to generate a stable name from the server ID.</small>
                 <input
                   id="create-docker-container"
                   type="text"
@@ -1137,9 +1129,8 @@ function ProtocolInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="protocolInputField" htmlFor={id}>
-      <span>{label}</span>
-      <small>{helper}</small>
+    <div className="protocolInputField">
+      <span className="protocolInputLabel"><label htmlFor={id}>{label}</label><HelpTooltip label={label}>{helper}</HelpTooltip></span>
       <span className="protocolInputWrap">
         <input
           id={id}
@@ -1155,7 +1146,7 @@ function ProtocolInput({
         <strong>{protocol}</strong>
       </span>
       {error && <span className="fieldErrorBubble" role="tooltip">{error}</span>}
-    </label>
+    </div>
   );
 }
 
@@ -1181,7 +1172,6 @@ function AdditionalPortBindingsPanel({
       <button type="button" className="resourceDisclosureSummary" onClick={() => onOpenChange(!open)} aria-expanded={open}>
         <span>
           <strong id="additional-ports-title">Additional port bindings <em>(optional)</em></strong>
-          <small>Expose additional ports to the server, for example for mods or plugins.</small>
         </span>
         <AppIcon name={open ? "chevronUp" : "chevronDown"} />
       </button>
@@ -1256,7 +1246,6 @@ function AdditionalPortBindingsPanel({
             <AppIcon name="plus" />
             <span>Add port binding</span>
           </Button>
-          <p className="fieldHint">Use a host port that is not already assigned to the server port, Query port, or another binding.</p>
           <input
             type="hidden"
             name="additionalPortBindings"
@@ -1340,13 +1329,6 @@ function ReviewCreateWizardStep({
           <ReviewSummaryItem label="EULA" value={acceptEula ? "Accepted" : "Not accepted"} tone={acceptEula ? "ok" : "warning"} />
         </ReviewSummaryCard>
 
-        <section className="reviewInfoCard" aria-labelledby="review-summary-title">
-          <strong id="review-summary-title">Summary</strong>
-          <div className="reviewInfoCallout">
-            <span className="reviewInfoIcon" aria-hidden="true">i</span>
-            <p>{createServerReviewSummary}</p>
-          </div>
-        </section>
       </div>
     </>
   );
@@ -1473,7 +1455,6 @@ export function NodeOverviewCard({ node, fallbackMemory }: { node?: ContextNode;
           <strong>{memory}</strong>
         </div>
       </div>
-      <p>Resources shown are for the selected node.</p>
     </section>
   );
 }

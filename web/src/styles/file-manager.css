@@ -104,13 +104,6 @@
   justify-content: flex-end;
 }
 
-.filesPage .selectionActionsHint {
-  color: var(--text-soft);
-  font-size: 12px;
-  line-height: 1.4;
-  text-align: right;
-}
-
 .filesPage .selectionActions .uiButton--critical {
   margin-left: var(--space-1);
 }
@@ -439,9 +432,6 @@
     justify-content: flex-start;
   }
 
-  .filesPage .selectionActionsHint {
-    text-align: left;
-  }
 }
 
 @media (max-width: 720px) {

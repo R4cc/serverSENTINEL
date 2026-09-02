@@ -1052,67 +1052,6 @@ button .buttonIcon {
   color: var(--sentinel-warning);
 }
 
-.roleInfoWrap {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  z-index: 30;
-}
-
-.roleInfoButton {
-  width: 28px;
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0;
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: var(--weight-title);
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.roleTooltip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  z-index: 40;
-  width: 220px;
-  transform: translateX(-50%);
-  border: var(--border-subtle) solid var(--glass-edge);
-  border-radius: var(--radius-md);
-  background: var(--glass-tint-menu);
-  color: var(--text);
-  padding: var(--space-2) var(--space-3);
-  font-size: 12px;
-  font-weight: var(--weight-strong);
-  line-height: 1.35;
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  -webkit-backdrop-filter: var(--glass-filter-floating);
-  backdrop-filter: var(--glass-filter-floating);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms linear;
-}
-
-.roleInfoWrap:hover .roleTooltip,
-.roleInfoWrap:focus-within .roleTooltip {
-  opacity: 1;
-}
-
-.fieldLabelWithInfo {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.fieldTooltip {
-  width: 280px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
 .userActions {
   display: flex;
   gap: var(--space-2);
@@ -1853,10 +1792,6 @@ button .buttonIcon {
   }
 }
 
-.roleInfoButton {
-  flex: 0 0 auto;
-}
-
 .usersTable td,
 .usersTable th {
   overflow: hidden;
@@ -1971,9 +1906,7 @@ button .buttonIcon {
     -webkit-overflow-scrolling: touch;
   }
 
-  .restartRequirementTooltip,
-  .roleTooltip,
-  .fieldTooltip {
+  .restartRequirementTooltip {
     max-width: calc(100vw - 16px);
     max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
     overflow: auto;
@@ -1995,10 +1928,6 @@ button .buttonIcon {
 }
 
 .usersSettings { border-color: var(--border-panel); }
-
-.roleInfoButton {
-  border-color: var(--border-muted);
-}
 
 .roleBadge {
   border-color: color-mix(in srgb, currentColor 34%, transparent);

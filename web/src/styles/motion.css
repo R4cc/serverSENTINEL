@@ -46,17 +46,12 @@
   transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
 }
 
-.restartRequirementTooltip,
-.roleTooltip {
+.restartRequirementTooltip {
   transform-origin: top center;
   transition:
     opacity var(--motion-duration-fast) var(--motion-ease-standard),
     transform var(--motion-duration-base) var(--motion-ease-spring);
 }
-
-.roleTooltip { transform: translateX(-50%) scale(0.94); }
-.roleInfoWrap:hover .roleTooltip,
-.roleInfoWrap:focus-within .roleTooltip { transform: translateX(-50%) scale(1); }
 
 @keyframes sentinelGlassEmerge {
   from { opacity: 0; transform: scale(0.94); }
@@ -320,13 +315,8 @@
   .uiButton--secondary,
   .iconButton,
   .restartRequirementTooltip,
-  .roleTooltip {
+  .uiHelpTooltipContent {
     transition: none;
   }
 
-  .roleTooltip,
-  .roleInfoWrap:hover .roleTooltip,
-  .roleInfoWrap:focus-within .roleTooltip {
-    transform: translateX(-50%);
-  }
 }

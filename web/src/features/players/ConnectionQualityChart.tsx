@@ -59,13 +59,7 @@ export function ConnectionQualityChart({
   }), [compact, measured.length, palette, points, timeZone]);
 
   if (measured.length < 2) {
-    return (
-      <EmptyState
-        compact
-        title="Not enough history yet"
-        message="The estimate is drawn from the joins and leaves the panel has recorded. It fills in as players come and go."
-      />
-    );
+    return <EmptyState compact title="Not enough history yet" />;
   }
 
   const latest = measured.at(-1)!;

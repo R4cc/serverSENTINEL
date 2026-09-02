@@ -335,7 +335,6 @@ export function NodeDetailsDrawer({
           <label className="nodeUpdateNotificationSetting">
             <span>
               <strong>Node update notifications</strong>
-              <small>Show a notification on page visits when an update is available for this node.</small>
             </span>
             <span className="switch">
               <input

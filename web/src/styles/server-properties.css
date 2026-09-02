@@ -86,7 +86,7 @@
   row-gap: var(--space-2);
 }
 
-.propertiesFieldGrid.three > .uiFormField > .uiFormFieldLabel {
+.propertiesFieldGrid.three > .uiFormField > .uiFormFieldLabelRow {
   grid-row: 1;
 }
 
@@ -155,7 +155,7 @@
   row-gap: var(--space-2);
 }
 
-.propertiesSection .minecraftPortsGrid > .uiFormField > .uiFormFieldLabel {
+.propertiesSection .minecraftPortsGrid > .uiFormField > .uiFormFieldLabelRow {
   grid-row: 1;
 }
 
@@ -170,6 +170,12 @@
 
 .propertiesSection .minecraftPortsGrid > .uiFormField > .uiFormFieldError {
   grid-row: 4;
+}
+
+.fieldLabelWithHelp {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .serverPropertiesForm fieldset:disabled input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),

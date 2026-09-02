@@ -10,7 +10,7 @@ export function InlineState({
 }: {
   tone?: "info" | "loading" | "error" | "warning" | "empty";
   title: string;
-  message: string;
+  message?: string;
   actionLabel?: string;
   onAction?: () => void;
   busy?: boolean;
@@ -32,7 +32,7 @@ export function InlineState({
       {tone === "loading" && <Spinner size="md" className="inlineStateSpinner" />}
       <div>
         <strong>{title}</strong>
-        <span>{message}</span>
+        {message && <span>{message}</span>}
       </div>
       {action}
     </div>

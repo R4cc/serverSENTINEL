@@ -119,6 +119,32 @@ async function assertScenarioData(page) {
   assert(!eventsText.toLowerCase().includes("alex"), `A removed fixed identity is still rendered in recent events: ${eventsText}`);
 }
 
+async function assertTimelineHelpTooltip(page) {
+  const trigger = page.getByRole("button", { name: "About server timeline", exact: true });
+  const targetId = await trigger.getAttribute("aria-controls");
+  assert(targetId, "Timeline help is not associated with its tooltip");
+  const panelBefore = await page.locator(".serverTimelinePanel").boundingBox();
+
+  await trigger.hover();
+  const tooltip = page.locator(`[id="${targetId}"]`);
+  await tooltip.waitFor({ state: "visible" });
+  const geometry = await tooltip.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: innerWidth, height: innerHeight };
+  });
+  assert(geometry.left >= 0 && geometry.right <= geometry.width && geometry.top >= 0 && geometry.bottom <= geometry.height, `Timeline help leaves the desktop viewport: ${JSON.stringify(geometry)}`);
+  const panelAfter = await page.locator(".serverTimelinePanel").boundingBox();
+  assert(panelBefore && panelAfter && Math.abs(panelBefore.height - panelAfter.height) <= 1, `Timeline help shifts the panel layout: ${JSON.stringify({ panelBefore, panelAfter })}`);
+
+  await page.mouse.move(0, 0);
+  await tooltip.waitFor({ state: "hidden" });
+  await trigger.focus();
+  await tooltip.waitFor({ state: "visible" });
+  await page.keyboard.press("Escape");
+  await tooltip.waitFor({ state: "hidden" });
+  assert(await trigger.evaluate((element) => element === document.activeElement), "Escape did not return focus to the timeline help trigger");
+}
+
 async function playerSessionSegments(page) {
   return page.evaluate(() => {
     const panel = document.querySelector(".serverTimelinePanel");
@@ -166,6 +192,8 @@ async function assertPlayerSessionStateColors(page) {
     const panel = document.querySelector(".serverTimelinePanel");
     return Number(players?.getAttribute("data-viewport-to")) < now && panel?.getAttribute("aria-busy") === "false";
   }, fixedNow.getTime());
+  await page.waitForFunction(() => ![...document.querySelectorAll(".serverTimelinePlayerChart svg text")]
+    .some((label) => label.textContent?.trim() === "Now"));
 
   const historicalSegments = await playerSessionSegments(page);
   const nowLabels = await page.locator(".serverTimelinePlayerChart svg text").allTextContents();
@@ -432,6 +460,7 @@ async function assertTimelineNavigation(page) {
 async function assertDesktop(page) {
   const panel = await waitForTimeline(page);
   assert.equal(await panel.getAttribute("aria-busy"), "false");
+  await assertTimelineHelpTooltip(page);
   await assertScenarioData(page);
   await assertPlayerSessionStateColors(page);
   await assertPlayerSectionDisclosure(page);
@@ -444,10 +473,11 @@ async function assertDesktop(page) {
   await page.mouse.move(playerChartBox.x + playerChartBox.width / 2, playerChartBox.y + playerChartBox.height / 2);
   for (let index = 0; index < 60; index += 1) await page.mouse.wheel(0, -600);
   const retainedRangeLabels = new Set();
-  for (let index = 0; index < 100; index += 1) {
+  for (let index = 0; index < 240; index += 1) {
     for (const label of await playerChart.locator("svg text").allTextContents()) retainedRangeLabels.add(label.trim());
     if (retainedRangeLabels.has("25h 0m")) break;
     await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(15);
   }
   assert(retainedRangeLabels.has("25h 0m"), "Marathon session disappeared in the seven-day range");
 
@@ -699,6 +729,8 @@ async function assertLiquidGlassAndEditorScrollbar(context) {
 async function assertSupportCardGeometry(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport, "?mods-fixture=updates");
   try {
+    await page.waitForFunction(() => document.querySelectorAll(".modUpdatesCard:not(.modUpdatesCardSkeleton) .modUpdatesListItem").length === 4);
+    await page.locator(".schedulePanel").waitFor();
     const metrics = await page.evaluate(() => {
       const mods = document.querySelector(".modUpdatesCard");
       const schedule = document.querySelector(".schedulePanel");
@@ -761,6 +793,7 @@ async function assertActiveSchedulePresentation(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport, "?schedule-fixture=active");
   try {
     if (viewport.width >= 721) await waitForTimeline(page);
+    await page.locator(".scheduleActiveItem").waitFor();
     const metrics = await page.evaluate(() => {
       const rail = document.querySelector(".serverTimelineEventRail");
       const track = document.querySelector(".serverTimelineEventRailTrack");

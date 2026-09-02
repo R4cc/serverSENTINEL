@@ -3,7 +3,7 @@ import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import type { ContextNode, ManagedServer } from "../types";
 import { AppIcon } from "./FileTypeIcon";
 import { DialogSurface } from "./DialogSurface";
-import { Banner, Button, StatusBadge, Surface } from "./UiPrimitives";
+import { Banner, Button, HelpTooltip, StatusBadge, Surface } from "./UiPrimitives";
 
 const onboardingSteps = ["Host", "Server", "Start", "Finish"] as const;
 
@@ -203,7 +203,6 @@ export function OnboardingFlow({
             <div className="onboardingStageHeading">
               <span>Step 1</span>
               <h3 id="onboarding-host-title">Where should the first server run?</h3>
-              <p>This choice is only the initial placement. Additional nodes remain available from the Nodes page.</p>
             </div>
 
             <div className="onboardingChoiceGrid">
@@ -239,17 +238,17 @@ export function OnboardingFlow({
             <div className="onboardingStageHeading">
               <span>Step 2</span>
               <h3 id="onboarding-server-title">Create or restore your first server</h3>
-              <p>{selectedNode ? `${selectedNode.isInternal ? "This machine" : selectedNode.name} is ready.` : "Choose a ready host before continuing."} Recommended runtime, memory, and ports are filled automatically.</p>
+              <p>{selectedNode ? "Recommended settings are filled automatically." : "Choose a ready host before continuing."}</p>
             </div>
             <div className="onboardingActionGrid">
               <Surface as="article" material="solid" className="onboardingActionCard">
                 <span className="onboardingActionIcon" aria-hidden="true"><AppIcon name="server" /></span>
-                <div><strong>Create a new server</strong><p>Choose Fabric or Paper, a Minecraft version, and a name. Advanced Docker and network controls remain available.</p></div>
+                <div><strong>Create a new server</strong></div>
                 <Button onClick={() => selectedNode && onCreateServer(selectedNode.id)} disabled={!selectedNode || !canCreateServers}>Create server</Button>
               </Surface>
               <Surface as="article" material="solid" className="onboardingActionCard">
                 <span className="onboardingActionIcon" aria-hidden="true"><AppIcon name="extract" /></span>
-                <div><strong>Restore an export</strong><p>Import a serverSENTINEL ZIP as a new server on the selected host.</p></div>
+                <div><strong>Restore an export</strong></div>
                 <Button variant="secondary" onClick={() => selectedNode && onImportServer(selectedNode.id)} disabled={!selectedNode || !canCreateServers}>Import export</Button>
               </Surface>
             </div>
@@ -268,7 +267,7 @@ export function OnboardingFlow({
               <Surface as="article" material="solid" className="onboardingServerReadyCard">
                 <div className="onboardingServerReadyCopy">
                   <span className="onboardingServerReadyIcon" aria-hidden="true"><AppIcon name="server" /></span>
-                  <div><span>First managed server</span><strong>{firstServer.displayName}</strong><small>{serverRunning ? "Runtime is running" : "Ready for its first start"}</small></div>
+                  <div><span>First managed server</span><strong>{firstServer.displayName}</strong></div>
                 </div>
                 <StatusBadge tone={serverRunning ? "success" : "accent"}>{serverRunning ? "Running" : "Stopped"}</StatusBadge>
                 <div className="onboardingServerReadyActions">
@@ -285,7 +284,6 @@ export function OnboardingFlow({
             <div className="onboardingStageHeading">
               <span>Step 4</span>
               <h3 id="onboarding-finish-title">Make the panel yours</h3>
-              <p>These choices are optional. Everything remains editable from Settings and Nodes.</p>
             </div>
 
             <div className="onboardingFinishGrid">
@@ -299,22 +297,19 @@ export function OnboardingFlow({
               </Surface>
               <Surface as="article" material="solid" className="onboardingFinishCard">
                 <div><strong>Modrinth</strong><StatusBadge tone={modrinthConfigured ? "success" : "neutral"}>{modrinthConfigured ? "Configured" : "Optional"}</StatusBadge></div>
-                <p>Add an API key for managed mod and plugin discovery, compatibility checks, and installs.</p>
                 <Button variant="secondary" compact onClick={onOpenSettings}>Open integrations</Button>
               </Surface>
               <Surface as="article" material="solid" className="onboardingFinishCard">
-                <div><strong>Scheduling time zone</strong><StatusBadge tone="accent">{panelTimeZone}</StatusBadge></div>
-                <p>Schedules use this panel time zone. Display formatting can be customized independently in Settings.</p>
+                <div><strong>Scheduling time zone</strong><HelpTooltip label="scheduling time zone">Schedules use the panel time zone. Display formatting can be customized independently.</HelpTooltip><StatusBadge tone="accent">{panelTimeZone}</StatusBadge></div>
                 <Button variant="secondary" compact onClick={onOpenSettings}>Open appearance</Button>
               </Surface>
               <Surface as="article" material="solid" className="onboardingFinishCard">
-                <div><strong>Grow later</strong><StatusBadge tone="neutral">Always available</StatusBadge></div>
-                <p>Add more nodes, create users, or restore additional servers whenever the fleet grows.</p>
-                <Button variant="secondary" compact onClick={onAddNode} disabled={!canManageNodes}>Add another node</Button>
+                <div><strong>Nodes</strong><StatusBadge tone="neutral">Optional</StatusBadge></div>
+                <Button variant="secondary" compact onClick={onAddNode} disabled={!canManageNodes}>Add node</Button>
               </Surface>
             </div>
             <div className="onboardingCompletion">
-              <div><strong>Setup is ready</strong><span>The guide will disappear after completion and can be replaced by the normal Overview.</span></div>
+              <div><strong>Setup is ready</strong></div>
               <Button onClick={() => void finish()} disabled={finishing || playerHeadsBusy} reserveLabel="Finish setup">{finishing ? "Saving…" : "Finish setup"}<AppIcon name="chevronRight" /></Button>
             </div>
           </section>

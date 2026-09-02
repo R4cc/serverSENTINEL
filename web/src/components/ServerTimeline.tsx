@@ -39,7 +39,7 @@ import {
   timelineRetentionMs,
   type TimelinePalette
 } from "./serverTimelineChart";
-import { Banner, Button, LoadingLabel, PanelHeader } from "./UiPrimitives";
+import { Banner, Button, HelpTooltip, LoadingLabel, PanelHeader } from "./UiPrimitives";
 import { playerHeadSource, playerHeadVersion } from "../utils/playerHeads";
 
 const timelineRanges = [
@@ -1269,7 +1269,7 @@ export function ServerTimeline({
       <PanelHeader
         compact
         title="Server Timeline"
-        description="Correlate resource usage with player activity, server events, and schedules. Drag or scroll horizontally to pan; use Ctrl or Command with the wheel to zoom."
+        help={<HelpTooltip label="server timeline">Compare resource use with players, events, and schedules. Drag or scroll horizontally to pan; hold Ctrl or Command while scrolling to zoom.</HelpTooltip>}
         actions={<div className="serverTimelineHeaderControls">
           <span className={`serverTimelineMode tone-${live ? "live" : "history"}`} aria-live="polite"><i aria-hidden="true" />{live ? "Live" : "Historical"}</span>
           <div className="serverTimelineRangeControls" role="group" aria-label="Timeline range">

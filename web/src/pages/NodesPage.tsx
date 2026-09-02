@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, EmptyState, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
+import { Banner, Button, EmptyState, FormField, HelpTooltip, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
@@ -18,10 +18,6 @@ type AddNodeInput = {
 /* Keep dense fleets scannable without hiding the servers that matter most. The
    list uses two columns on wide screens, so six servers fill three compact rows. */
 const collapsedServerLimit = 6;
-
-function countLabel(count: number, singular: string) {
-  return `${count} ${count === 1 ? singular : `${singular}s`}`;
-}
 
 function onlinePlayers(snapshot?: PlayerSnapshot) {
   return !snapshot || snapshot.state === "unavailable" ? 0 : snapshot.online;
@@ -230,8 +226,6 @@ function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowStat
         <span className="addNodeStatusIcon" aria-hidden="true">✓</span>
         <div>
           <h3>Node added successfully</h3>
-          <p>{nodeName} is now connected to this panel and ready to host servers.</p>
-          <p>You can close this dialog and manage the node from the Nodes page.</p>
         </div>
       </div>
     );
@@ -343,11 +337,9 @@ export function AddNodeModal({
         <form className="appForm nodeModalBody" onSubmit={submit}>
           <fieldset disabled={busy}>
             {formError && <InlineState tone="error" title="Check node details" message={formError} />}
-            <label>
-              Node name
-              <input name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="MC-NODE-01" maxLength={80} required />
-              <span className="fieldHint">A friendly name for the computer that will run your Minecraft servers.</span>
-            </label>
+            <FormField label="Node name" htmlFor="add-node-name" required>
+              <input id="add-node-name" name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="MC-NODE-01" maxLength={80} required />
+            </FormField>
             <section className="nodeConnectionSetup" aria-labelledby="node-connection-title">
               <div className="nodeConnectionIntro">
                 <div className="nodeConnectionDirection" aria-label="The node computer connects to this panel">
@@ -355,13 +347,14 @@ export function AddNodeModal({
                   <b aria-hidden="true">→</b>
                   <span>This panel</span>
                 </div>
-                <div>
-                  <h3 id="node-connection-title">How the node connects</h3>
-                  <p>The node opens a connection to this panel so you can manage servers on that computer. It needs an address for this panel that works from the node computer.</p>
-                </div>
+                <div className="nodeConnectionTitle"><h3 id="node-connection-title">How the node connects</h3><HelpTooltip label="node connection">The node opens an outbound connection to this panel. Enter a panel address that is reachable from the node computer.</HelpTooltip></div>
               </div>
-              <label htmlFor="node-panel-address">
-                Panel address for this node
+              <FormField
+                label="Panel address for this node"
+                htmlFor="node-panel-address"
+                help={<HelpTooltip label="panel address" id="node-panel-address-hint">This is the panel's address, not the node's. Include the port when the panel uses one.</HelpTooltip>}
+                required
+              >
                 <input
                   id="node-panel-address"
                   name="panelUrl"
@@ -371,14 +364,12 @@ export function AddNodeModal({
                   aria-describedby="node-panel-address-hint"
                   required
                 />
-                <span className="fieldHint" id="node-panel-address-hint">This is the panel's address, not the new node's address. Include the port when your panel uses one.</span>
-              </label>
+              </FormField>
               {browserAddressUsable ? (
                 <div className="panelAddressSuggestion">
                   <div>
                     <span className="panelAddressSuggestionLabel">Address used by this browser</span>
                     <code>{browserPanelUrl}</code>
-                    <p>This may work if the node computer can open the same address.</p>
                   </div>
                   <Button type="button" variant="secondary" compact onClick={() => setPanelUrl(browserPanelUrl)}>Use this address</Button>
                 </div>
@@ -391,18 +382,9 @@ export function AddNodeModal({
                 />
               )}
             </section>
-            <label>
-              <span className="fieldLabelWithInfo">
-                Data folder on node
-                <span className="roleInfoWrap">
-                  <Button variant="ghost" iconOnly className="roleInfoButton" aria-label="About the node data folder" aria-describedby="node-data-folder-tip">i</Button>
-                  <span id="node-data-folder-tip" role="tooltip" className="roleTooltip fieldTooltip">
-                    Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts this folder into the node container.
-                  </span>
-                </span>
-              </span>
+            <FormField label="Data folder on node" help={<HelpTooltip label="node data folder" id="node-data-folder-tip">Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts it into the node container.</HelpTooltip>}>
               <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
-            </label>
+            </FormField>
             <div className="nodeModalFooter inline">
               <Button type="submit" reserveLabel="Create install command">{busy ? "Creating..." : "Create install command"}</Button>
               <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
@@ -711,7 +693,6 @@ export function NodesPage({
                   <header className="nodeServersHeader">
                     <div>
                       <strong>Servers</strong>
-                      <span>{countLabel(node.servers.length, "server")} on this node</span>
                     </div>
                     <Button variant="ghost" compact onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
                       <AppIcon name="plus" /> Add server
@@ -804,7 +785,6 @@ export function NodesPage({
           <header className="nodeModalHeader">
             <div>
               <h2 id="install-node-title">Node Install</h2>
-              <p>Use this on the host that should run the node agent.</p>
             </div>
             <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></Button>
           </header>

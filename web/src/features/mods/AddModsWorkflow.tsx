@@ -58,7 +58,7 @@ export function AddModsWorkflow(props: Props) {
   return (
     <div className="modsAddWorkflow">
       <div className="modsDrawerHeader">
-        <div><small>Add {terminology.plural}</small><h2>Find a {terminology.runtimeName} {terminology.singular}</h2><p>Results are matched to this server automatically.</p></div>
+        <div><small>Add {terminology.plural}</small><h2>Find a {terminology.runtimeName} {terminology.singular}</h2></div>
         <Button variant="secondary" iconOnly className="iconButton" onClick={props.onClose} aria-label={`Close add ${terminology.plural}`} title={`Close add ${terminology.plural}`}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
@@ -74,20 +74,15 @@ export function AddModsWorkflow(props: Props) {
             title={`Showing incompatible ${terminology.plural}`}
             message={`These ${terminology.plural} may fail to load or crash the server. Install only if you know the ${terminology.singular} works anyway.`}
           />
-        ) : (
-          <div className="modsSafeSearchNote">
-            <AppIcon name="shield" />
-            <span>Showing compatible {terminology.runtimeName} server {terminology.plural} for this server.</span>
-          </div>
-        )}
+        ) : null}
         <label className="modsCompatibilityToggle">
           <input type="checkbox" checked={props.showIncompatibleResults} onChange={(event) => props.onShowIncompatibleResultsChange(event.target.checked)} disabled={!props.configured || props.versionsUnknown} />
-          <span><strong>Show incompatible {terminology.plural}</strong><small>Includes {terminology.plural} that are not marked compatible with this server version.</small></span>
+          <span><strong>Show incompatible {terminology.plural}</strong></span>
         </label>
         {!props.configured && <InlineState tone="error" title="Modrinth is not configured" message={`Add a Modrinth API key in Settings to search and install ${terminology.plural}.`} />}
         {props.versionsUnknown && <InlineState tone="error" title="Server version unknown" message={props.contextMessage} />}
         {props.error && <InlineState tone="error" title="Search failed" message={props.error} actionLabel="Refresh" onAction={props.onRetrySearch} busy={props.searching} />}
-        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="What would you like to add?" message="Search Modrinth and serverSENTINEL will recommend the safest release." />}
+        {!props.searching && props.configured && !props.versionsUnknown && !props.query.trim() && <EmptyState compact className="modsWorkspaceEmpty" title="Search Modrinth" />}
         {!props.searching && props.query.trim() && !props.error && props.results.length === 0 && (
           <EmptyState
             compact

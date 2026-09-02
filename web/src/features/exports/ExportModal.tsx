@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { EXPORT_CATEGORY_DESCRIPTORS, type ExportCategory } from "@serversentinel/contracts";
 import { AppIcon } from "../../components/FileTypeIcon";
-import { Banner, Button, Spinner } from "../../components/UiPrimitives";
+import { Banner, Button, HelpTooltip, Spinner } from "../../components/UiPrimitives";
 import { DialogSurface } from "../../components/DialogSurface";
 import { formatAdaptiveBytes } from "../../utils/format";
 import type { ManagedServer } from "../../types";
@@ -32,7 +32,6 @@ export function ExportModal({
   server: ManagedServer;
 }) {
   const titleId = useId();
-  const descriptionId = useId();
   const running = workspace.estimate?.servers.some((entry) => entry.running) ?? false;
   const contentSelected = workspace.categories.includes("content");
   const worldSelected = workspace.categories.includes("world");
@@ -49,7 +48,6 @@ export function ExportModal({
       backdrop
       className="modalPanel exportModalPanel"
       labelledBy={titleId}
-      describedBy={descriptionId}
       onClose={workspace.closeExport}
       dismissible={!workspace.exportBusy}
     >
@@ -69,10 +67,6 @@ export function ExportModal({
       </header>
 
       <div className="modalBody exportModalBody">
-        <p id={descriptionId} className="uiFormFieldDescription">
-          The ZIP archive can be imported back into this panel or another one.
-        </p>
-
         {running && (
           <Banner
             tone="warning"
@@ -86,21 +80,21 @@ export function ExportModal({
           {EXPORT_CATEGORY_DESCRIPTORS.map((descriptor) => {
             const bytes = categoryBytes(workspace, descriptor.key);
             return (
-              <label key={descriptor.key} className="exportCategoryOption">
-                <input
-                  type="checkbox"
-                  checked={workspace.categories.includes(descriptor.key)}
-                  disabled={workspace.exportBusy}
-                  onChange={() => workspace.toggleCategory(descriptor.key)}
-                />
-                <span className="exportCategoryCopy">
-                  <strong>{descriptor.label}</strong>
-                  <small>{descriptor.description}</small>
-                </span>
+              <div key={descriptor.key} className="exportCategoryOption">
+                <label className="exportCategoryChoice">
+                  <input
+                    type="checkbox"
+                    checked={workspace.categories.includes(descriptor.key)}
+                    disabled={workspace.exportBusy}
+                    onChange={() => workspace.toggleCategory(descriptor.key)}
+                  />
+                  <span className="exportCategoryCopy"><strong>{descriptor.label}</strong></span>
+                </label>
+                <HelpTooltip label={`${descriptor.label} export`}>{descriptor.description}</HelpTooltip>
                 {workspace.categories.includes(descriptor.key) && bytes !== undefined
                   ? <ExportSize className="exportCategorySize" bytes={bytes} />
                   : <span className="exportCategorySize" />}
-              </label>
+              </div>
             );
           })}
           {nothingSelected && (
@@ -111,32 +105,14 @@ export function ExportModal({
         {contentSelected && (
           <fieldset className="exportStrategy">
             <legend className="uiFormFieldLabel"><span>Mods and plugins</span></legend>
-            <label className="exportCategoryOption">
-              <input
-                type="radio"
-                name="contentStrategy"
-                checked={workspace.contentStrategy === "lockfile"}
-                disabled={workspace.exportBusy}
-                onChange={() => workspace.setContentStrategy("lockfile")}
-              />
-              <span className="exportCategoryCopy">
-                <strong>Re-download from Modrinth</strong>
-                <small>Records the exact versions instead of the files. Much smaller, but needs Modrinth when importing.</small>
-              </span>
-            </label>
-            <label className="exportCategoryOption">
-              <input
-                type="radio"
-                name="contentStrategy"
-                checked={workspace.contentStrategy === "jars"}
-                disabled={workspace.exportBusy}
-                onChange={() => workspace.setContentStrategy("jars")}
-              />
-              <span className="exportCategoryCopy">
-                <strong>Include the files</strong>
-                <small>Carries every jar. Larger, but restores without Modrinth and keeps custom builds.</small>
-              </span>
-            </label>
+            <div className="exportCategoryOption">
+              <label className="exportCategoryChoice"><input type="radio" name="contentStrategy" checked={workspace.contentStrategy === "lockfile"} disabled={workspace.exportBusy} onChange={() => workspace.setContentStrategy("lockfile")} /><span className="exportCategoryCopy"><strong>Re-download from Modrinth</strong></span></label>
+              <HelpTooltip label="re-download from Modrinth">Records exact versions instead of files. It is much smaller, but importing requires Modrinth.</HelpTooltip>
+            </div>
+            <div className="exportCategoryOption">
+              <label className="exportCategoryChoice"><input type="radio" name="contentStrategy" checked={workspace.contentStrategy === "jars"} disabled={workspace.exportBusy} onChange={() => workspace.setContentStrategy("jars")} /><span className="exportCategoryCopy"><strong>Include the files</strong></span></label>
+              <HelpTooltip label="include mod and plugin files">Carries every jar. It is larger, but restores without Modrinth and preserves custom builds.</HelpTooltip>
+            </div>
           </fieldset>
         )}
 
@@ -152,7 +128,7 @@ export function ExportModal({
             </span>
           ) : null}
           {worldSelected && (
-            <small>Worlds are usually most of the archive. Datapacks are inside the world folder and travel with it.</small>
+            <HelpTooltip label="world export size">Worlds are usually most of the archive. Datapacks are inside the world folder and are included with it.</HelpTooltip>
           )}
         </div>
 

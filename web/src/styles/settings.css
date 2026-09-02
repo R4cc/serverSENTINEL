@@ -88,25 +88,10 @@
   height: 19px;
 }
 
-.settingsHubCategories button > span:last-child {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-1);
-}
-
 .settingsHubCategories strong {
   color: inherit;
   font-size: var(--type-helper-size);
   font-weight: var(--weight-title);
-}
-
-.settingsHubCategories small {
-  overflow: hidden;
-  color: var(--text-soft);
-  font-size: 10.5px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .settingsHubContent {
@@ -475,44 +460,6 @@
   color: var(--accent);
 }
 
-.settingsHubIntegrationInfo {
-  position: static;
-}
-
-.settingsHubIntegrationInfo .roleInfoButton {
-  width: 24px;
-  min-width: 24px;
-  min-height: 24px;
-  border-color: transparent;
-  background: transparent;
-}
-
-.settingsHubIntegrationInfo .roleInfoButton svg {
-  width: 14px;
-  height: 14px;
-}
-
-.settingsHubIntegrationTooltip {
-  left: 0;
-  width: min(340px, calc(100vw - 32px));
-  text-align: left;
-}
-
-.settingsHubRowCopy .settingsHubIntegrationInfo .settingsHubIntegrationTooltip {
-  transform: scale(0.94);
-  transform-origin: bottom left;
-}
-
-.settingsHubIntegrationInfo:hover .settingsHubIntegrationTooltip,
-.settingsHubIntegrationInfo:focus-within .settingsHubIntegrationTooltip {
-  pointer-events: auto;
-}
-
-.settingsHubRowCopy .settingsHubIntegrationInfo:hover .settingsHubIntegrationTooltip,
-.settingsHubRowCopy .settingsHubIntegrationInfo:focus-within .settingsHubIntegrationTooltip {
-  transform: scale(1);
-}
-
 .settingsHubIntegrationRow .settingsHubControl {
   width: 100%;
 }
@@ -680,21 +627,18 @@
 .settingsHubHealth div,
 .settingsHubFacts dd,
 .settingsHubTechnical > div,
-.settingsHubPrivacyNote,
 .settingsHubDemoCallout > div {
   display: grid;
   gap: 4px;
 }
 
 .settingsHubHealth strong,
-.settingsHubPrivacyNote strong,
 .settingsHubDemoCallout strong {
   color: var(--text);
   font-size: var(--type-helper-size);
 }
 
 .settingsHubHealth span,
-.settingsHubPrivacyNote span,
 .settingsHubDemoCallout span {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
@@ -784,7 +728,6 @@
   font-family: var(--font-mono);
 }
 
-.settingsHubPrivacyNote,
 .settingsHubDemoCallout {
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-row));
   border-radius: var(--radius-md);
@@ -848,10 +791,6 @@
   .settingsHubCategoryIcon {
     width: 32px;
     height: 32px;
-  }
-
-  .settingsHubCategories small {
-    display: none;
   }
 
   .settingsHubTechnical {
@@ -978,10 +917,6 @@
 
   .settingsHubIntegrationRow .settingsHubRowCopy {
     padding-top: 0;
-  }
-
-  .settingsHubIntegrationTooltip {
-    width: 100%;
   }
 
   .settingsHubUsers,
