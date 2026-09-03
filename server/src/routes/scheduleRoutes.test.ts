@@ -210,7 +210,7 @@ describe("schedule routes", () => {
       .toBeLessThan(harness.deleteSchedule.mock.invocationCallOrder[0]);
   });
 
-  it("refuses to delete a schedule whose Restart step has already started", async () => {
+  it("refuses to delete a schedule whose lifecycle step has already started", async () => {
     const harness = testApp({ cancelRunsForScheduleResult: false });
 
     const response = await harness.app.inject({ method: "DELETE", url: `/api/servers/${serverId}/schedules/${scheduleId}` });
@@ -261,7 +261,7 @@ describe("schedule routes", () => {
     const blockedResponse = await blocked.app.inject({ method: "POST", url: `/api/servers/${serverId}/schedules/${scheduleId}/runs/${runId}/cancel` });
     expect(blockedResponse.statusCode).toBe(409);
     expect(blockedResponse.json()).toEqual({
-      error: { code: "SCHEDULE_RUN_NOT_CANCELLABLE", message: "The Restart step has started and must finish before this run can end", details: {} }
+      error: { code: "SCHEDULE_RUN_NOT_CANCELLABLE", message: "A lifecycle step has started and must finish before this run can end", details: {} }
     });
 
     const missing = testApp({ cancelResult: false });

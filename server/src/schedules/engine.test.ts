@@ -25,7 +25,7 @@ vi.mock("../appServices.js", () => ({
   runtimeForServer: () => ({ serverStatus, sendConsoleCommand, serverLogs: async () => ({ text: "" }) })
 }));
 
-const { executeMatchedSchedule, resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, scheduleRequiresRunningServer, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
+const { executeMatchedSchedule, resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, scheduleRequiresRunningServer, scheduleStartupWasValidated, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
 const { activeScheduleExecutions, cancelActiveScheduleRunsForSchedule, runningSchedules } = await import("./activeRuns.js");
 
 const server = { id: "server-1", nodeId: "local", displayName: "Survival" } as ManagedServer;
@@ -297,19 +297,29 @@ describe("scheduled run bookkeeping", () => {
     expect(cancelActiveScheduleRunsForSchedule(server.id, "schedule-none")).toBe(true);
   });
 
-  // A schedule whose only action is Start exists precisely for a stopped server, so the guard that
-  // skips a run against one has to let it through.
-  it("runs a start-only schedule against a stopped server, and skips every other kind", () => {
+  // A leading Start can make every later step reachable from a stopped server.
+  it("runs schedules beginning with Start against a stopped server, and skips every other kind", () => {
     const stepsFor = (steps: ScheduledExecution["steps"]) => ({ steps });
 
     expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "start", delaySeconds: 0 }]))).toBe(false);
     expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "stop", delaySeconds: 0 }]))).toBe(true);
     expect(scheduleRequiresRunningServer(stepsFor([{ type: "action", procedure: "restart", delaySeconds: 0 }]))).toBe(true);
+    expect(scheduleRequiresRunningServer(stepsFor([
+      { type: "action", procedure: "start", delaySeconds: 0 },
+      { type: "command", command: "say online", delaySeconds: 0 }
+    ]))).toBe(false);
     // A command cannot reach a stopped server even when a Start follows it.
     expect(scheduleRequiresRunningServer(stepsFor([
       { type: "command", command: "save-all", delaySeconds: 0 },
       { type: "action", procedure: "start", delaySeconds: 0 }
     ]))).toBe(true);
+  });
+
+  it("recognizes only a new Minecraft startup completion line", () => {
+    const before = '[03:00:00] [Server thread/INFO]: Done (4.2s)! For help, type "help"';
+    expect(scheduleStartupWasValidated(before, before)).toBe(false);
+    expect(scheduleStartupWasValidated(before, `${before}\n[03:05:00] [Server thread/INFO]: Done (5.1s)! For help, type "help"`)).toBe(true);
+    expect(scheduleStartupWasValidated(before, `${before}\n[03:05:00] [Server thread/INFO]: Preparing spawn area: 100%`)).toBe(false);
   });
 
   it("does not stack another occurrence while one is waiting", async () => {

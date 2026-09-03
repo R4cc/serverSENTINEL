@@ -222,15 +222,20 @@ describe("schedule steps", () => {
     ]);
   });
 
-  it("accepts one final Restart action and rejects unsafe action layouts", () => {
+  it("allows follow-up steps after startup actions and only permits Stop before Start", () => {
     expect(sanitizeScheduleSteps([
-      { type: "command", command: "say restarting", delaySeconds: 0 },
-      { type: "action", procedure: "restart", delaySeconds: 300 }
-    ])).toHaveLength(2);
-    expect(() => sanitizeScheduleSteps([
       { type: "action", procedure: "restart", delaySeconds: 0 },
       { type: "command", command: "say online", delaySeconds: 0 }
-    ])).toThrow(/final schedule step/);
+    ])).toHaveLength(2);
+    expect(sanitizeScheduleSteps([
+      { type: "action", procedure: "stop", delaySeconds: 0 },
+      { type: "action", procedure: "start", delaySeconds: 0 },
+      { type: "command", command: "say online", delaySeconds: 0 }
+    ])).toHaveLength(3);
+    expect(() => sanitizeScheduleSteps([
+      { type: "action", procedure: "stop", delaySeconds: 0 },
+      { type: "command", command: "say offline", delaySeconds: 0 }
+    ])).toThrow(/followed immediately by Start/);
     expect(() => sanitizeScheduleSteps([{ type: "action", procedure: "reload", delaySeconds: 0 }])).toThrow(/Unsupported/);
   });
 

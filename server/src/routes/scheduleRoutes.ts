@@ -75,7 +75,7 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     // Deleting the schedule takes away the only control that could have stopped its active run, so
     // the run is cancelled first and the delete is refused outright when it cannot be.
     if (!context.cancelActiveScheduleRunsForSchedule(server.id, scheduleId)) {
-      return reply.code(409).send(apiErrorResponse("SCHEDULE_RUN_NOT_CANCELLABLE", "The Restart step has started and must finish before this schedule can be deleted"));
+      return reply.code(409).send(apiErrorResponse("SCHEDULE_RUN_NOT_CANCELLABLE", "A lifecycle step has started and must finish before this schedule can be deleted"));
     }
     await withServerMutation(server.id, async () => { context.deleteSchedule(server.id, scheduleId, new Date().toISOString()); });
     context.logInfo({ ...context.serverLogFields(server), scheduleId, action: "delete_schedule" }, "Schedule deleted");
@@ -120,7 +120,7 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
     const runId = validateOperationId(request.params.runId);
     const cancelled = context.cancelActiveScheduleRun(server.id, scheduleId, runId);
     if (cancelled === null) {
-      return reply.code(409).send(apiErrorResponse("SCHEDULE_RUN_NOT_CANCELLABLE", "The Restart step has started and must finish before this run can end"));
+      return reply.code(409).send(apiErrorResponse("SCHEDULE_RUN_NOT_CANCELLABLE", "A lifecycle step has started and must finish before this run can end"));
     }
     if (!cancelled) {
       return reply.code(404).send(apiErrorResponse("SCHEDULE_RUN_NOT_FOUND", "Active schedule run not found"));

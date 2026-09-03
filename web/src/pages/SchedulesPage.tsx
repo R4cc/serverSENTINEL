@@ -63,9 +63,9 @@ function scheduleProcedureName(procedure: ScheduleProcedure | undefined) {
 }
 
 const scheduleProcedureDescription: Record<ScheduleProcedure, string> = {
-  restart: "Gracefully restarts the Minecraft server.",
+  restart: "Gracefully restarts the Minecraft server. Later steps wait until startup completes.",
   stop: "Gracefully stops the Minecraft server, leaving it stopped.",
-  start: "Starts the Minecraft server. This is the one action that runs against a stopped server."
+  start: "Starts the Minecraft server. Later steps wait until startup completes."
 };
 
 const weekdayChoices = [
@@ -145,42 +145,15 @@ export function SchedulePlayerPolicyOptions({ schedule }: { schedule?: Pick<Sche
   );
 }
 
-/**
- * A schedule may hold one Restart, and it has to be last. Both rules were enforced only when the
- * form was submitted, so the Type control happily offered Action on step 1 of 3 and then rejected
- * the save. Reporting the state per step lets the control say so while the schedule is built.
- */
-export function scheduleStepTypeAvailability(steps: readonly { id: string; type: StepDraft["type"] }[], stepId: string) {
-  const actionIndex = steps.findIndex((step) => step.type === "action");
-  const index = steps.findIndex((step) => step.id === stepId);
-  const isAction = actionIndex === index && actionIndex >= 0;
-  const isLast = index === steps.length - 1;
-  return {
-    // Only the final step may become a lifecycle action, and only when no other step already is one.
-    canBecomeRestart: isAction || (isLast && actionIndex < 0),
-    reason: isAction || isLast ? "" : "A lifecycle action has to be the last step."
-  };
-}
-
-/**
- * Restart must stay last, so a move that would put another step after it is refused rather than
- * silently reordered into a schedule the server will reject.
- */
-export function scheduleStepMoveBlocked(steps: readonly { type: StepDraft["type"] }[], from: number, to: number) {
-  const restartIndex = steps.findIndex((step) => step.type === "action");
-  if (restartIndex < 0) return false;
-  if (from === restartIndex) return to !== steps.length - 1;
-  return to >= restartIndex;
-}
-
-/**
- * Adds a step without stranding the lifecycle action. Appending after one left the schedule invalid
- * in a way nothing showed until it was saved, and a step added to a schedule that ends in Restart is
- * meant to happen before the restart, not after it.
- */
-export function appendScheduleStep<T extends { type: StepDraft["type"] }>(steps: readonly T[], added: T): T[] {
-  const last = steps.at(-1);
-  return last?.type === "action" ? [...steps.slice(0, -1), added, last] : [...steps, added];
+export function scheduleLifecycleValidationMessage(steps: readonly ScheduleStep[]) {
+  for (const [index, step] of steps.entries()) {
+    if (step.type !== "action" || step.procedure !== "stop" || index === steps.length - 1) continue;
+    const next = steps[index + 1];
+    if (next.type !== "action" || next.procedure !== "start") {
+      return `Step ${index + 1} stops the server. Add Start directly after it before any later steps.`;
+    }
+  }
+  return "";
 }
 
 export function reorderScheduleSteps<T extends { id: string }>(steps: readonly T[], movedId: string, targetId: string): T[] {
@@ -379,14 +352,12 @@ export function SchedulePage({
 
   function validatePatch(patch: SchedulePatch) {
     const commands = patch.steps.filter((step) => step.type === "command").map((step) => step.command);
-    const restartIndexes = patch.steps.flatMap((step, index) => step.type === "action" ? [index] : []);
     return !patch.name
       ? "Schedule name is required."
       : validateCronExpression(patch.cron)
         || (!patch.steps.length ? "At least one schedule step is required." : "")
         || (commands.length ? validateCommandList(commands) : "")
-        || (restartIndexes.length > 1 ? "A schedule can contain at most one lifecycle action." : "")
-        || (restartIndexes.length === 1 && restartIndexes[0] !== patch.steps.length - 1 ? "A lifecycle action must be the final schedule step." : "")
+        || scheduleLifecycleValidationMessage(patch.steps)
         || (patch.steps.some((step) => !Number.isInteger(step.delaySeconds) || step.delaySeconds < 0 || step.delaySeconds > 604_800)
           ? "Step delays must be whole values no longer than 7 days."
           : "");
@@ -412,13 +383,8 @@ export function SchedulePage({
   }
 
   function moveStep(movedId: string, targetId: string) {
-    const movedIndex = stepDrafts.findIndex((step) => step.id === movedId);
     const targetIndex = stepDrafts.findIndex((step) => step.id === targetId);
     if (targetIndex < 0 || movedId === targetId) return;
-    if (scheduleStepMoveBlocked(stepDrafts, movedIndex, targetIndex)) {
-      setStepReorderMessage("Restart has to be the last step, so this move was not made.");
-      return;
-    }
     setStepDrafts((steps) => {
       const reordered = reorderScheduleSteps(steps, movedId, targetId);
       return reordered;
@@ -446,7 +412,6 @@ export function SchedulePage({
 
   const stepOffsets = scheduleStepOffsets(stepDrafts.map((draft) => scheduleDelayToSeconds(draft.delayValue, draft.delayUnit)));
   const totalStepSeconds = stepOffsets.at(-1) ?? 0;
-  const stepTypeAvailability = stepDrafts.map((draft) => scheduleStepTypeAvailability(stepDrafts, draft.id));
   // Followed through the polled list rather than held as a snapshot, so a run finishing while the
   // dialog is open appears in it. Falls back to the captured schedule if it has been deleted.
   const liveHistorySchedule = historySchedule ? schedules.find((candidate) => candidate.id === historySchedule.id) : undefined;
@@ -926,7 +891,7 @@ export function SchedulePage({
                               compact
                               className="scheduleStepMove"
                               onClick={() => nudgeStep(draft.id, -1)}
-                              disabled={index === 0 || scheduleStepMoveBlocked(stepDrafts, index, index - 1)}
+                              disabled={index === 0}
                               aria-label={`Move step ${index + 1} up`}
                               title={`Move step ${index + 1} up`}
                             >
@@ -938,7 +903,7 @@ export function SchedulePage({
                               compact
                               className="scheduleStepMove"
                               onClick={() => nudgeStep(draft.id, 1)}
-                              disabled={index === stepDrafts.length - 1 || scheduleStepMoveBlocked(stepDrafts, index, index + 1)}
+                              disabled={index === stepDrafts.length - 1}
                               aria-label={`Move step ${index + 1} down`}
                               title={`Move step ${index + 1} down`}
                             >
@@ -962,15 +927,10 @@ export function SchedulePage({
                                   : { ...step, type: "action", procedure: event.target.value as ScheduleProcedure }
                                 : step))}
                               aria-label={`Type for step ${index + 1}`}
-                              title={stepTypeAvailability[index].reason || undefined}
                             >
                               <option value="command">Command</option>
-                              {/* Offered only where a lifecycle action could legally go, so the rule
-                                  is visible while the schedule is built rather than at save time. */}
                               {scheduleProcedureOptions.map((option) => (
-                                <option key={option.value} value={option.value} disabled={!stepTypeAvailability[index].canBecomeRestart}>
-                                  {option.label}{stepTypeAvailability[index].canBecomeRestart ? "" : " (last step only)"}
-                                </option>
+                                <option key={option.value} value={option.value}>{option.label}</option>
                               ))}
                             </select>
                           </label>
@@ -982,7 +942,9 @@ export function SchedulePage({
                           ) : (
                             <div className="scheduleStepValue scheduleStepProcedure">
                               <AppIcon name="server" />
-                              <strong>Final step</strong>
+                              <strong>{draft.procedure === "stop"
+                                ? stepDrafts[index + 1]?.type === "action" && stepDrafts[index + 1].procedure === "start" ? "Continues with Start" : "Leaves server stopped"
+                                : index < stepDrafts.length - 1 ? "Waits for startup" : "Lifecycle action"}</strong>
                             </div>
                           )}
                           <label className="scheduleCommandDelay">
@@ -1000,10 +962,13 @@ export function SchedulePage({
                       </div>
                     ))}
                   </div>
-                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => appendScheduleStep(steps, emptyStepDraft()))}>
+                  <Button variant="secondary" compact className="scheduleCommandAdd" onClick={() => setStepDrafts((steps) => [...steps, emptyStepDraft()])}>
                     <AppIcon name="plus" />
                     <span>Add step</span>
                   </Button>
+                  <small className="scheduleStepTotal">
+                    Commands after Restart or Start wait until Minecraft reports that startup completed. A Stop with later steps must be followed immediately by Start.
+                  </small>
                   {totalStepSeconds > 0 && (
                     <small className="scheduleStepTotal">
                       The last step runs {formatScheduleOffset(totalStepSeconds)} after the scheduled time.

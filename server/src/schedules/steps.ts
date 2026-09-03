@@ -41,12 +41,13 @@ export function sanitizeScheduleSteps(steps: unknown): ScheduleStep[] {
     }
     throw new Error(`Step ${index + 1} type must be command or action`);
   });
-  // One lifecycle action, last. Every procedure leaves the server in a state the steps after it were
-  // not written against -- a command cannot reach a stopped server, and a second action would fight
-  // the first -- so the rule that used to name Restart alone now covers all of them.
-  const actionIndexes = normalized.flatMap((step, index) => step.type === "action" ? [index] : []);
-  if (actionIndexes.length > 1) throw new Error("A schedule can contain at most one lifecycle action");
-  if (actionIndexes.length === 1 && actionIndexes[0] !== normalized.length - 1) throw new Error("A lifecycle action must be the final schedule step");
+  for (const [index, step] of normalized.entries()) {
+    if (step.type !== "action" || step.procedure !== "stop" || index === normalized.length - 1) continue;
+    const next = normalized[index + 1];
+    if (next.type !== "action" || next.procedure !== "start") {
+      throw new Error(`Step ${index + 1} stops the server. A non-final Stop must be followed immediately by Start`);
+    }
+  }
   return normalized;
 }
 
