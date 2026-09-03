@@ -203,9 +203,9 @@ export function OverviewSummary({
         icon={<Activity />}
         iconPlacement="leading"
         tone={summaryMetricTone(status, dockerSocketMounted)}
-        value={<span className="summaryStatusText">{loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : state}</span>}
+        value={<span className="summaryStatusText">{state}</span>}
       />
-      <MetricTile className="summaryTile" label="Minecraft" icon={<Blocks />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : versionValue(minecraftVersion)} />
+      <MetricTile className="summaryTile" label="Minecraft" icon={<Blocks />} iconPlacement="leading" value={versionValue(minecraftVersion)} />
       <MetricTile className="summaryTile" label="Uptime" icon={<Clock />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
       <MetricTile
         className="summaryTile"
@@ -213,7 +213,7 @@ export function OverviewSummary({
         icon={<Globe />}
         iconPlacement="leading"
         value={worldSizeBytes === null
-          ? loading || storageLoading
+          ? storageLoading
             ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
             : "Unavailable"
           : <span className="summaryByteValue" title={`${worldSizeBytes.toLocaleString()} bytes`}>{formatAdaptiveBytes(worldSizeBytes)}</span>}
@@ -225,7 +225,7 @@ export function OverviewSummary({
         iconPlacement="leading"
         tone={storageLow ? "warning" : "neutral"}
         value={storageAvailableBytes === null
-          ? loading || storageLoading
+          ? storageLoading
             ? <SkeletonBlock className="overviewSummaryValueSkeleton" />
             : "Unavailable"
           : (
@@ -239,8 +239,8 @@ export function OverviewSummary({
               </span>
             )}
       />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" icon={<Cpu />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : cpu} />
-      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" icon={<MemoryStick />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : memory} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="CPU" icon={<Cpu />} iconPlacement="leading" value={cpu} />
+      <MetricTile className="summaryTile overviewWideSummaryTile" label="Memory" icon={<MemoryStick />} iconPlacement="leading" value={memory} />
     </section>
   );
 }

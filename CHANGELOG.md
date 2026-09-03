@@ -7,6 +7,7 @@
 - Used the text cursor over player details while keeping the surrounding map draggable.
 - Showed offline players' clearly labeled last-session ping average, refreshed from a rolling minute of measurements whenever they play again.
 - Allowed schedules to continue after Start or Restart once Minecraft finishes starting, while requiring any non-final Stop to be followed immediately by Start.
+- Refreshed Overview statistics immediately after returning to the page and prioritized the selected server over background node polling, avoiding long waits for player, version, CPU, memory, and storage data.
 
 ## 26.9.4 - 2026-09-02
 

@@ -22,6 +22,8 @@ The panel coordinator polls status and resource stats every five seconds and add
 
 `overviewFiles` is demand-driven because the overview endpoint is event-driven rather than polled. A server joins the slow tick's `overviewFiles` set when an overview consumer asks for the section and ages out two minutes after the last request, so the first overview read pays for its own fetch and later refreshes come from the shared cache.
 
+Foreground reads for the selected server do not wait behind a fleet-wide background batch. They use their own bounded observation request, while sequence-aware cache writes ensure an older background response cannot replace a newer foreground result.
+
 File logs use a cursor containing source, file identity, and byte offset. Append-only reads return deltas. Rotation, truncation, identity changes, or deltas larger than 128 KiB reset the cursor to the bounded 128 KiB tail. If `logs/latest.log` is unavailable, the existing bounded Docker log tail remains the fallback.
 
 ## Optional player connection measurement

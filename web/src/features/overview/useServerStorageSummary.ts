@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ServerStorageSummary } from "../../types";
+import { subscribeToPageReactivation } from "../../app/pageReactivation";
 import { clearCachedStorageSummary, readCachedStorageSummary, writeCachedStorageSummary } from "./storageSummaryCache";
 
 type StorageSummaryState = {
@@ -34,26 +35,35 @@ export function useServerStorageSummary(
   useEffect(() => {
     if (!active || !serverId) return;
     let cancelled = false;
-    // A reload drops the figures held in memory. Seeding from the cache lets the tiles show the
-    // last known sizes while the measurement runs, rather than sitting on a skeleton.
-    setState((current) => current.serverId === serverId
-      ? { ...current, loading: true }
-      : { serverId, summary: cachedSummary, loading: true });
+    let requestId = 0;
 
-    void loadStorageSummary(serverId)
-      .then((summary) => {
-        writeCachedStorageSummary(serverId, summary);
-        if (!cancelled) setState({ serverId, summary, loading: false });
-      })
-      .catch(() => {
-        // A failed read must not leave a stale number standing in for a measurement that no
-        // longer succeeds, so the cache goes with it and the tiles fall back to "Unavailable".
-        clearCachedStorageSummary(serverId);
-        if (!cancelled) setState({ serverId, summary: unavailableStorageSummary, loading: false });
-      });
+    const load = () => {
+      const currentRequestId = ++requestId;
+      // A reload drops the figures held in memory. Seeding from the cache lets the tiles show the
+      // last known sizes while the measurement runs, rather than sitting on a skeleton.
+      setState((current) => current.serverId === serverId
+        ? { ...current, loading: true }
+        : { serverId, summary: cachedSummary, loading: true });
+      void loadStorageSummary(serverId)
+        .then((summary) => {
+          writeCachedStorageSummary(serverId, summary);
+          if (!cancelled && currentRequestId === requestId) setState({ serverId, summary, loading: false });
+        })
+        .catch(() => {
+          if (cancelled || currentRequestId !== requestId) return;
+          // A failed read must not leave a stale number standing in for a measurement that no
+          // longer succeeds, so the cache goes with it and the tiles fall back to "Unavailable".
+          clearCachedStorageSummary(serverId);
+          setState({ serverId, summary: unavailableStorageSummary, loading: false });
+        });
+    };
+
+    load();
+    const unsubscribe = subscribeToPageReactivation(load);
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [active, cachedSummary, loadStorageSummary, serverId]);
 

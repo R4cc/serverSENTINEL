@@ -129,7 +129,7 @@ export function ServerOverviewTab({
           <ActivePlayersPanel
             snapshot={playerSnapshot}
             running={Boolean(status?.docker.running)}
-            loading={overviewInitialLoading}
+            loading={!playerSnapshot && overviewInitialLoading}
             serverId={server.id}
             playerHeadsEnabled={playerHeadsEnabled}
           />

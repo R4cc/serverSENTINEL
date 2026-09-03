@@ -198,7 +198,7 @@ export default function App() {
   const onboardingAutoOpenedRef = useRef(false);
   const provisionSubmitLockRef = useRef(false);
   const appRefreshInFlightRef = useRef(false);
-  const statusRefreshInFlightRef = useRef<Set<string>>(new Set());
+  const statusRefreshInFlightRef = useRef<Map<string, AbortController>>(new Map());
   const nodeRefreshInFlightRef = useRef(false);
   const consoleReconnectTimeoutRef = useRef<number | null>(null);
   const consoleReconnectNoticeTimeoutRef = useRef<number | null>(null);
@@ -246,7 +246,7 @@ export default function App() {
     }, 900);
   }
 
-  const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean } = {}) => {
+  const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean; signal?: AbortSignal } = {}) => {
     if (demoMode && isDemoServerId(serverId)) {
       setOverviewData(demoFixtures().demoOverviewData(demoRunning, serverId));
       setOverviewError("");
@@ -256,12 +256,13 @@ export default function App() {
     if (options.showLoading) setOverviewLoading(true);
     setOverviewError("");
     try {
-      const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`);
+      const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`, { timeoutMs: 15_000, signal: options.signal });
       if (activeServerIdRef.current === serverId) {
         setOverviewData(data);
         setOverviewError("");
       }
     } catch (error) {
+      if (options.signal?.aborted) return;
       if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
         setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
@@ -420,7 +421,7 @@ export default function App() {
   const loadActiveTimeline = useCallback(async (from: number, to: number, maxPoints: number) => {
     if (!activeServer) throw new Error("Select a server to load its timeline");
     if (demoMode && isDemoServerId(activeServer.id)) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to, activeServer.id);
-    return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`);
+    return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`, { timeoutMs: 15_000 });
   }, [activeServer?.id, demoMode, demoRunning, demoSchedules, demoSessionVersion]);
   const loadActiveStorageSummary = useCallback(async (serverId: string) => {
     if (demoMode && isDemoServerId(serverId)) {
@@ -430,7 +431,7 @@ export default function App() {
         availableBytes: 8 * 1024 ** 3
       };
     }
-    return api<ServerStorageSummary>(`/api/servers/${serverId}/storage`);
+    return api<ServerStorageSummary>(`/api/servers/${serverId}/storage`, { timeoutMs: 15_000 });
   }, [demoMode]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
@@ -774,26 +775,32 @@ export default function App() {
     if (!authSession?.authenticated) return;
 
     let cancelled = false;
-    let inFlight = false;
-    async function loadPlayerSnapshots() {
-      if (inFlight || document.hidden) return;
-      inFlight = true;
+    let controller: AbortController | undefined;
+    async function loadPlayerSnapshots(replace = false) {
+      if (document.hidden || (controller && !replace)) return;
+      controller?.abort();
+      const requestController = new AbortController();
+      controller = requestController;
       try {
-        const data = await api<PlayerSnapshotsResponse>("/api/player-snapshots");
+        const data = await api<PlayerSnapshotsResponse>("/api/player-snapshots", { timeoutMs: 15_000, signal: requestController.signal });
         if (cancelled) return;
         setPlayerSnapshots(data.snapshots);
       } catch (error) {
+        if (requestController.signal.aborted) return;
         if (handleStaleSession(error)) return;
       } finally {
-        inFlight = false;
+        if (controller === requestController) controller = undefined;
       }
     }
 
     void loadPlayerSnapshots();
     const interval = window.setInterval(() => void loadPlayerSnapshots(), 10_000);
+    const unsubscribe = subscribeToPageReactivation(() => void loadPlayerSnapshots(true));
     return () => {
       cancelled = true;
+      controller?.abort();
       window.clearInterval(interval);
+      unsubscribe();
     };
   }, [activePage, authSession?.authenticated, demoMode, demoRunning, demoSessionVersion]);
 
@@ -1112,12 +1119,12 @@ export default function App() {
   useEffect(() => {
     if (!activeServer || demoMode || activeNodeRuntimeBlocked) return;
     const serverId = activeServer.id;
-    const refreshWhenActive = () => {
+    const refreshWhenActive = (replace = false) => {
       if (document.hidden) return;
-      void refreshStatus(serverId);
+      void refreshStatus(serverId, { replace });
     };
-    const interval = window.setInterval(refreshWhenActive, serverStatusPollMs);
-    const unsubscribe = subscribeToPageReactivation(refreshWhenActive);
+    const interval = window.setInterval(() => refreshWhenActive(), serverStatusPollMs);
+    const unsubscribe = subscribeToPageReactivation(() => refreshWhenActive(true));
     return () => {
       window.clearInterval(interval);
       unsubscribe();
@@ -1143,22 +1150,22 @@ export default function App() {
       return;
     }
     const serverId = activeServer.id;
-    let cancelled = false;
-    let inFlight = false;
+    let controller: AbortController | undefined;
     setOverviewLoading(!overviewData.events.length && Object.keys(overviewData.activity).length === 0);
     setOverviewError("");
-    async function loadOverviewData() {
-      if (inFlight || document.hidden) return;
-      inFlight = true;
-      await refreshOverviewData(serverId);
-      inFlight = false;
-      if (cancelled) setOverviewLoading(false);
+    async function loadOverviewData(replace = false) {
+      if (document.hidden || (controller && !replace)) return;
+      controller?.abort();
+      const requestController = new AbortController();
+      controller = requestController;
+      await refreshOverviewData(serverId, { signal: requestController.signal });
+      if (controller === requestController) controller = undefined;
     }
     void loadOverviewData();
     const interval = window.setInterval(() => void loadOverviewData(), 30_000);
-    const unsubscribe = subscribeToPageReactivation(() => void loadOverviewData());
+    const unsubscribe = subscribeToPageReactivation(() => void loadOverviewData(true));
     return () => {
-      cancelled = true;
+      controller?.abort();
       window.clearInterval(interval);
       unsubscribe();
     };
@@ -1250,6 +1257,7 @@ export default function App() {
 
   function resetSessionRequestGuards() {
     appRefreshInFlightRef.current = false;
+    for (const controller of statusRefreshInFlightRef.current.values()) controller.abort();
     statusRefreshInFlightRef.current.clear();
     if (overviewRefreshTimeoutRef.current !== null) {
       window.clearTimeout(overviewRefreshTimeoutRef.current);
@@ -1474,7 +1482,7 @@ export default function App() {
     }
   }
 
-  async function refreshStatus(serverId = activeServer?.id) {
+  async function refreshStatus(serverId = activeServer?.id, options: { replace?: boolean } = {}) {
     if (isProvisioning) return;
     if (!serverId) return;
     if (demoMode && isDemoServerId(serverId)) {
@@ -1485,15 +1493,19 @@ export default function App() {
       }
       return;
     }
-    if (statusRefreshInFlightRef.current.has(serverId)) return;
-    statusRefreshInFlightRef.current.add(serverId);
+    const existing = statusRefreshInFlightRef.current.get(serverId);
+    if (existing && !options.replace) return;
+    existing?.abort();
+    const controller = new AbortController();
+    statusRefreshInFlightRef.current.set(serverId, controller);
     try {
-      const nextStatus = await api<ServerStatus>(`/api/servers/${serverId}/status`, { timeoutMs: 15_000 });
+      const nextStatus = await api<ServerStatus>(`/api/servers/${serverId}/status`, { timeoutMs: 15_000, signal: controller.signal });
       if (activeServerIdRef.current === serverId) {
         setStatus(nextStatus);
         setStatusError("");
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
         setStatusError(errorMessage(error, "Could not refresh server status. Existing status is preserved."));
@@ -1503,7 +1515,7 @@ export default function App() {
         }
       }
     } finally {
-      statusRefreshInFlightRef.current.delete(serverId);
+      if (statusRefreshInFlightRef.current.get(serverId) === controller) statusRefreshInFlightRef.current.delete(serverId);
     }
   }
 

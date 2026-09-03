@@ -125,7 +125,7 @@ describe("overview summary", () => {
     expect(html).not.toContain("Server Activity &amp; Health");
   });
 
-  it("exposes accessible loading state for every summary value", () => {
+  it("keeps known summary values visible while activity is loading", () => {
     const server = demoServer();
     const html = renderToStaticMarkup(createElement(OverviewSummary, {
       server,
@@ -135,9 +135,12 @@ describe("overview summary", () => {
       loading: true
     }));
 
-    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(7);
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(1);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("Loading server summary");
+    expect(html).toContain("Running");
+    expect(html).toContain("1.21.4");
+    expect(html).toContain("Collecting");
   });
 
   it("shows cached storage sizes while the measurement is still running", () => {
@@ -154,8 +157,8 @@ describe("overview summary", () => {
       loading: true
     }));
 
-    // Only the five tiles without a cached figure may fall back to a skeleton.
-    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(5);
+    // Activity is still pending, but independently known summary figures stay visible.
+    expect((html.match(/overviewSummaryValueSkeleton/g) ?? []).length).toBe(1);
     expect(html).toContain("7.39 GiB");
     expect(html).toContain("8 GiB");
   });

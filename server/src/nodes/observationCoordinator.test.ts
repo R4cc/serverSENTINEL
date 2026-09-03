@@ -161,6 +161,40 @@ describe("RemoteObservationCoordinator", () => {
     coordinator.stop();
   });
 
+  it("prioritizes a foreground read over a slow fleet observation", async () => {
+    const servers = [server(0), server(1)];
+    let issued = 0;
+    let releaseBackground!: () => void;
+    const backgroundBlocked = new Promise<void>((resolve) => { releaseBackground = resolve; });
+    const connections = {
+      isConnected: () => true,
+      request: async (_node: ManagedNode, _command: string, payload: { items: Array<{ server: ManagedServer }> }) => {
+        const attempt = issued;
+        issued += 1;
+        if (attempt === 0) await backgroundBlocked;
+        return {
+          observedAt: new Date().toISOString(),
+          items: payload.items.map(({ server: observed }) => ({
+            serverId: observed.id,
+            status: { docker: { running: attempt > 0 } }
+          }))
+        };
+      }
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => servers, lookupNode: async () => node(), connections, pollMs: 60_000 });
+
+    const background = coordinator.refreshNode("node-1");
+    for (let attempt = 0; attempt < 20 && issued === 0; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 1));
+
+    await expect(coordinator.read(servers[0], "status", 60_000)).resolves.toEqual({ docker: { running: true } });
+    expect(issued).toBe(2);
+
+    releaseBackground();
+    await background;
+    await expect(coordinator.read(servers[0], "status", 60_000)).resolves.toEqual({ docker: { running: true } });
+    coordinator.stop();
+  });
+
   it("rejects a failed section instead of returning an old confirmed value", async () => {
     const observedServer = server(0);
     let requestCount = 0;
