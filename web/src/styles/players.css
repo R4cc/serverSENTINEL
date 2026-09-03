@@ -554,7 +554,9 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   position: absolute;
   z-index: 8;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-2);
+  overflow: hidden;
   border: var(--border-subtle) solid var(--border-panel);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
@@ -564,10 +566,6 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   backdrop-filter: none;
   color: var(--text);
   text-align: left;
-}
-
-.playerMapFloatingPanel--above {
-  transform: translateY(-100%);
 }
 
 .playerMapClusterPopup:focus-visible {
@@ -603,6 +601,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 
 .playerMapClusterList {
   display: grid;
+  min-height: 0;
   max-height: 176px;
   padding-inline-end: var(--space-3);
   overflow-y: auto;
@@ -643,7 +642,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 
 .playerMapSinglePlayerList {
   padding-inline-end: 0;
-  overflow: visible;
+  overflow: auto;
   scrollbar-gutter: auto;
 }
 

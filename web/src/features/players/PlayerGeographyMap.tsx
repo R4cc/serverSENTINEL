@@ -1,4 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Minus, Plus, RotateCcw, Server as ServerIcon } from "lucide-react";
 import { TransformComponent, TransformWrapper, useTransformContext } from "react-zoom-pan-pinch";
 import { usePlayerHead } from "../../components/PlayerHead";
@@ -33,8 +34,6 @@ const desktopMarkerCollisionPx = 34;
 const mobileMarkerCollisionPx = 24;
 const serverMergeDistancePx = 42;
 const desktopClusterMarkerSizePx = 44;
-const clusterPopupHeightPx = 240;
-const playerTooltipHeightPx = 96;
 const clusterHoverCloseDelayMs = 160;
 
 type MapPoint = { x: number; y: number };
@@ -108,6 +107,77 @@ function MapKeepScale(props: HTMLAttributes<HTMLDivElement>) {
   }, [transform]);
 
   return <div {...props} ref={elementRef} />;
+}
+
+function ContainedMapPopup({
+  frameRef,
+  style,
+  ...props
+}: HTMLAttributes<HTMLSpanElement> & { frameRef: RefObject<HTMLDivElement | null> }) {
+  const panelRef = useRef<HTMLSpanElement>(null);
+  const transform = useTransformContext();
+
+  useLayoutEffect(() => {
+    let disposed = false;
+    let positionQueued = false;
+    const positionPanel = () => {
+      positionQueued = false;
+      const panel = panelRef.current;
+      const frame = frameRef.current;
+      const marker = frame?.querySelector<HTMLElement>(".playerMapMarkerWrap--active .playerMapMarker");
+      if (disposed || !panel || !frame || !marker) return;
+
+      panel.style.visibility = "hidden";
+      panel.style.left = "0px";
+      panel.style.top = "0px";
+      panel.style.removeProperty("max-width");
+      panel.style.removeProperty("max-height");
+
+      const frameRect = frame.getBoundingClientRect();
+      const markerRect = marker.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const placement = playerMapPopupPlacement({
+        marker: {
+          left: markerRect.left - frameRect.left,
+          right: markerRect.right - frameRect.left,
+          top: markerRect.top - frameRect.top,
+          bottom: markerRect.bottom - frameRect.top
+        },
+        panel: { width: panelRect.width, height: panelRect.height },
+        viewport: { width: frameRect.width, height: frameRect.height }
+      });
+
+      panel.style.maxWidth = `${placement.maxWidth}px`;
+      panel.style.maxHeight = `${placement.maxHeight}px`;
+      panel.style.left = `${placement.left}px`;
+      panel.style.top = `${placement.top}px`;
+      panel.dataset.placement = placement.placement;
+      panel.style.visibility = "visible";
+    };
+    const queuePosition = () => {
+      if (disposed || positionQueued) return;
+      positionQueued = true;
+      // MapKeepScale also reacts to the transform stream. Waiting for the current task's
+      // microtask checkpoint guarantees its inverse scale is current before measuring.
+      queueMicrotask(positionPanel);
+    };
+
+    queuePosition();
+    const unsubscribe = transform.onChange(queuePosition);
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(queuePosition);
+    if (frameRef.current) observer?.observe(frameRef.current);
+    if (!observer) window.addEventListener("resize", queuePosition);
+    return () => {
+      disposed = true;
+      unsubscribe();
+      observer?.disconnect();
+      if (!observer) window.removeEventListener("resize", queuePosition);
+    };
+  }, [frameRef, transform]);
+
+  return frameRef.current
+    ? createPortal(<span {...props} ref={panelRef} style={style} />, frameRef.current)
+    : null;
 }
 
 export function PlayerGeographyMap({
@@ -187,7 +257,8 @@ export function PlayerGeographyMap({
     if (!hoveredMarkId) return;
     const closeOutsidePopup = (event: PointerEvent) => {
       const activeMarker = frameRef.current?.querySelector(".playerMapMarkerWrap--active");
-      if (event.target instanceof Node && !activeMarker?.contains(event.target)) {
+      const activePopup = frameRef.current?.querySelector(".playerMapClusterPopup");
+      if (event.target instanceof Node && !activeMarker?.contains(event.target) && !activePopup?.contains(event.target)) {
         if (closeTimerRef.current !== undefined) window.clearTimeout(closeTimerRef.current);
         closeTimerRef.current = undefined;
         setHoveredMarkId(undefined);
@@ -199,7 +270,6 @@ export function PlayerGeographyMap({
 
   const scale = renderedWidth > 0 ? renderedWidth / mapWidth : 1;
   const clusterMarkerSizePx = renderedWidth < 560 ? 32 : desktopClusterMarkerSizePx;
-  const renderedHeight = renderedWidth * (mapHeight / mapWidth);
   const server = serverLocation?.latitude !== undefined && serverLocation.longitude !== undefined
     ? projectToMap(serverLocation.longitude, serverLocation.latitude, mapWidth, mapHeight)
     : undefined;
@@ -231,7 +301,6 @@ export function PlayerGeographyMap({
       mark,
       point,
       sharesServer,
-      markerExtents,
       accuracy: clusterAccuracyRadius(mark, point)
     };
   });
@@ -360,31 +429,13 @@ export function PlayerGeographyMap({
             </MapKeepScale>
           ))}
 
-          {plottedMarks.map(({ mark, point, sharesServer, markerExtents }, index) => {
+          {plottedMarks.map(({ mark, point, sharesServer }, index) => {
             const clustered = mark.entries.length > 1;
             const active = hoveredMarkId === mark.id;
             const popupId = `${popupPrefix}-player-map-${clustered ? "cluster" : "player"}-${index}`;
             const panelWidth = clustered
               ? Math.min(310, Math.max(180, renderedWidth - 16))
               : Math.min(220, Math.max(170, renderedWidth - 16));
-            const pointX = point.x * scale;
-            const pointY = point.y * scale;
-            const popupScreenLeft = Math.min(
-              Math.max(8, renderedWidth - panelWidth - 8),
-              Math.max(8, pointX - panelWidth / 2)
-            );
-            const panelPlacement = playerMapPopupPlacement({
-              pointY,
-              renderedHeight,
-              markerTopExtent: markerExtents.top - 4,
-              markerBottomExtent: markerExtents.bottom - 4,
-              panelMaxHeight: clustered ? clusterPopupHeightPx : playerTooltipHeightPx
-            });
-            const popupStyle = {
-              width: panelWidth,
-              left: popupScreenLeft - pointX + clusterMarkerSizePx / 2,
-              top: panelPlacement.anchorY - pointY + clusterMarkerSizePx / 2
-            };
             const markerLabel = clustered
               ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average ping ${formatPing(mark.pingMs)}.`
               : markTitle(mark);
@@ -441,19 +492,21 @@ export function PlayerGeographyMap({
                 )}
 
                 {active && clustered && (
-                  <span
+                  <ContainedMapPopup
                     id={popupId}
-                    className={`playerMapClusterPopup playerMapFloatingPanel--${panelPlacement.placement}`}
-                    style={popupStyle}
+                    className="playerMapClusterPopup"
+                    style={{ width: panelWidth }}
+                    frameRef={frameRef}
                     role="dialog"
                     aria-label={`Players near ${mark.label}`}
                     tabIndex={0}
                     onMouseEnter={cancelScheduledClose}
                     onMouseLeave={() => scheduleMarkClose(mark.id)}
+                    onFocus={cancelScheduledClose}
                     onKeyDown={(event) => {
                       if (event.key === "Escape") {
                         cancelScheduledClose();
-                        event.currentTarget.parentElement?.querySelector<HTMLButtonElement>("button")?.focus();
+                        frameRef.current?.querySelector<HTMLButtonElement>(".playerMapMarkerWrap--active .playerMapMarker")?.focus();
                         setHoveredMarkId(undefined);
                       }
                     }}
@@ -472,17 +525,19 @@ export function PlayerGeographyMap({
                         </span>
                       ))}
                     </span>
-                  </span>
+                  </ContainedMapPopup>
                 )}
 
                 {active && !clustered && (
-                  <span
+                  <ContainedMapPopup
                     id={popupId}
-                    className={`playerMapClusterPopup playerMapPlayerPopup playerMapFloatingPanel--${panelPlacement.placement}`}
-                    style={popupStyle}
+                    className="playerMapClusterPopup playerMapPlayerPopup"
+                    style={{ width: panelWidth }}
+                    frameRef={frameRef}
                     role="tooltip"
                     onMouseEnter={cancelScheduledClose}
                     onMouseLeave={() => scheduleMarkClose(mark.id)}
+                    onFocus={cancelScheduledClose}
                   >
                     <span className="playerMapClusterPopupHeader">
                       <strong>{mark.entries[0].player}</strong>
@@ -494,7 +549,7 @@ export function PlayerGeographyMap({
                         <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].pingMs)}`}>{formatPing(mark.entries[0].pingMs)}</b>
                       </span>
                     </span>
-                  </span>
+                  </ContainedMapPopup>
                 )}
                 </span>
               </MapKeepScale>

@@ -101,6 +101,51 @@ async function assertFloatingSurfaces(page, label) {
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
 }
 
+async function assertNearestVisibleMapPopupContained(page, label) {
+  const markerIndex = await page.evaluate(() => {
+    const frame = document.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    if (!frame) return -1;
+    const candidates = Array.from(document.querySelectorAll(".playerMapMarker")).map((marker, index) => {
+      const rect = marker.getBoundingClientRect();
+      const centreX = rect.left + rect.width / 2;
+      const centreY = rect.top + rect.height / 2;
+      const visible = centreX >= frame.left && centreX <= frame.right && centreY >= frame.top && centreY <= frame.bottom;
+      const edgeDistance = Math.min(centreX - frame.left, frame.right - centreX, centreY - frame.top, frame.bottom - centreY);
+      return { index, visible, edgeDistance };
+    }).filter(({ visible }) => visible).sort((left, right) => left.edgeDistance - right.edgeDistance);
+    return candidates[0]?.index ?? -1;
+  });
+  assert(markerIndex >= 0, `${label}: no visible player marker was available for edge-popup verification`);
+
+  const marker = page.locator(".playerMapMarker").nth(markerIndex);
+  await marker.hover();
+  const popup = page.locator(".playerMapClusterPopup");
+  await popup.waitFor();
+  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.getAttribute("data-placement"));
+  const geometry = await page.evaluate(() => {
+    const frame = document.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    const marker = document.querySelector(".playerMapMarkerWrap--active .playerMapMarker")?.getBoundingClientRect();
+    const popup = document.querySelector(".playerMapClusterPopup")?.getBoundingClientRect();
+    if (!frame || !marker || !popup) return { missing: true };
+    return {
+      missing: false,
+      left: popup.left - frame.left,
+      right: frame.right - popup.right,
+      top: popup.top - frame.top,
+      bottom: frame.bottom - popup.bottom,
+      separated: popup.bottom <= marker.top - 8 || popup.top >= marker.bottom + 8
+    };
+  });
+  assert(!geometry.missing, `${label}: the edge marker or popup disappeared`);
+  for (const edge of ["left", "right", "top", "bottom"]) {
+    assert(geometry[edge] >= 7, `${label}: popup crossed the map's ${edge} inset: ${JSON.stringify(geometry)}`);
+  }
+  assert(geometry.separated, `${label}: constrained popup covered its player marker: ${JSON.stringify(geometry)}`);
+
+  await page.getByRole("button", { name: "Reset map view" }).hover();
+  await popup.waitFor({ state: "detached" });
+}
+
 async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
   requirePingLabels = false,
   exerciseScopeSwitch = false
@@ -166,6 +211,7 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
   await assertAnchored("at 100% zoom");
   await zoomIn.click();
   await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 1.49);
+  await page.waitForTimeout(100);
   await assertAnchored("at intermediate zoom");
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -181,6 +227,7 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
     await page.waitForTimeout(250);
   }
   await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 3.99);
+  await page.waitForTimeout(100);
   await assertAnchored("at 4x zoom");
 
   if (exerciseScopeSwitch) {
@@ -191,6 +238,7 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
       await page.waitForFunction((name) => document.querySelector(`[aria-label="Players shown on map"] button[aria-pressed="true"]`)?.textContent?.trim() === name, scope);
       await assertAnchored(`after switching to ${scope.toLowerCase()} at 4x zoom`);
     }
+    await assertNearestVisibleMapPopupContained(page, `${label} after scope switching at 4x zoom`);
   }
 
   const mapTransform = page.locator(".playerMapTransformContent");
@@ -209,6 +257,9 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
     return Math.hypot(matrix.e - x, matrix.f - y) >= 3;
   }, beforePan);
   await assertAnchored("after panning");
+  if (exerciseScopeSwitch) {
+    await assertNearestVisibleMapPopupContained(page, `${label} after panning at 4x zoom`);
+  }
 
   await page.getByRole("button", { name: "Reset map view" }).click();
   await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a <= 1.01);
@@ -305,6 +356,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
     const markerRect = marker.getBoundingClientRect();
     const viewportRect = document.querySelector(".playerMapViewport")?.getBoundingClientRect();
     const haloRect = halo.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const pings = Array.from(popup.querySelectorAll(".playerMapClusterRow .playerMapPingValue"));
     const avatar = document.querySelector(".playerMapAvatar");
@@ -322,6 +374,9 @@ async function assertPlayerClusterPopupDismisses(page, label) {
         ? serverBadge.getBoundingClientRect().bottom <= serverMarker.getBoundingClientRect().top + 3
         : standaloneServer instanceof SVGGraphicsElement,
       popupOverflow: popup.scrollWidth - popup.clientWidth,
+      popupFrameInset: viewportRect
+        ? Math.min(popupRect.left - viewportRect.left, viewportRect.right - popupRect.right, popupRect.top - viewportRect.top, viewportRect.bottom - popupRect.bottom)
+        : Number.NEGATIVE_INFINITY,
       overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length,
       pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right)),
       avatarIsSquare: avatarRect ? Math.abs(avatarRect.width - avatarRect.height) <= 1 : false,
@@ -339,6 +394,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(geometry.standaloneServerMarkers + geometry.sharedServerIcons === 1, `${label}: server marker representation is missing or duplicated`);
   assert(geometry.runningServerMarkers === 1 && geometry.serverBadgeAbovePlayers, `${label}: running server marker is not visually distinct`);
   assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
+  assert(geometry.popupFrameInset >= 6, `${label}: cluster popup crosses the visible map frame (${geometry.popupFrameInset}px inset)`);
   assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
   assert(geometry.avatarIsSquare && geometry.avatarRadius <= 4, `${label}: player head border does not fit the square avatar`);
   assert(geometry.overflowingMarkerSurfaces === 0, `${label}: ${geometry.overflowingMarkerSurfaces} player marker surfaces cross the map frame`);

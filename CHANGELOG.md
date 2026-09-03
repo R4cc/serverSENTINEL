@@ -3,6 +3,7 @@
 ## 26.9.5 - 2026-09-03
 
 - Kept player heads and map ping labels at a consistent screen size while zooming, including after switching between online and all-time players.
+- Kept player and cluster details inside the visible map when markers are opened near an edge while zoomed or panned.
 
 ## 26.9.4 - 2026-09-02
 
