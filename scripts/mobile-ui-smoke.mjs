@@ -122,6 +122,19 @@ async function assertNearestVisibleMapPopupContained(page, label) {
   const popup = page.locator(".playerMapClusterPopup");
   await popup.waitFor();
   await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.getAttribute("data-placement"));
+  const cursors = await popup.evaluate((element) => ({
+    panel: getComputedStyle(element).cursor,
+    text: Array.from(element.querySelectorAll([
+      ".playerMapClusterPopupHeader strong",
+      ".playerMapClusterPopupHeader > span",
+      ".playerMapClusterRow > strong",
+      ".playerMapClusterRow > span:not(.playerMapAvatar)",
+      ".playerMapPingValue"
+    ].join(","))).map((textElement) => getComputedStyle(textElement).cursor)
+  }));
+  assert.equal(cursors.panel, "default", `${label}: player popup surface retained the map drag cursor`);
+  assert(cursors.text.length > 0, `${label}: player popup has no text cursor targets`);
+  assert(cursors.text.every((cursor) => cursor === "text"), `${label}: player popup text retained a non-text cursor: ${JSON.stringify(cursors.text)}`);
   const geometry = await page.evaluate(() => {
     const frame = document.querySelector(".playerMapFrame")?.getBoundingClientRect();
     const marker = document.querySelector(".playerMapMarkerWrap--active .playerMapMarker")?.getBoundingClientRect();
@@ -248,9 +261,21 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
   });
   const frame = await page.locator(".playerMapFrame").boundingBox();
   assert(frame, `${label}: player map frame is missing`);
+  const visibleMarker = await page.evaluate(() => {
+    const frameRect = document.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    if (!frameRect) return undefined;
+    return Array.from(document.querySelectorAll(".playerMapMarker")).map((marker) => {
+      const rect = marker.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }).find(({ x, y }) => x >= frameRect.left && x <= frameRect.right && y >= frameRect.top && y <= frameRect.bottom);
+  });
+  assert(visibleMarker, `${label}: no visible player marker was available before panning`);
+  let panX = Math.sign(frame.x + frame.width / 2 - visibleMarker.x) * Math.min(40, frame.width * 0.04);
+  const panY = Math.sign(frame.y + frame.height / 2 - visibleMarker.y) * Math.min(32, frame.height * 0.06);
+  if (panX === 0 && panY === 0) panX = Math.min(32, frame.width * 0.04);
   await page.mouse.move(frame.x + frame.width * 0.5, frame.y + frame.height * 0.55);
   await page.mouse.down();
-  await page.mouse.move(frame.x + frame.width * 0.65, frame.y + frame.height * 0.7, { steps: 5 });
+  await page.mouse.move(frame.x + frame.width * 0.5 + panX, frame.y + frame.height * 0.55 + panY, { steps: 5 });
   await page.mouse.up();
   await page.waitForFunction(({ x, y }) => {
     const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
@@ -343,6 +368,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
 
   const popup = page.locator(".playerMapClusterPopup");
   await popup.waitFor();
+  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.getAttribute("data-placement"));
   assert(await cluster.getAttribute("aria-expanded") === "true", `${label}: player cluster did not expand`);
   const geometry = await page.evaluate(() => {
     const marker = document.querySelector('.playerMapClusterMarker[aria-expanded="true"]');

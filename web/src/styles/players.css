@@ -566,6 +566,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   backdrop-filter: none;
   color: var(--text);
   text-align: left;
+  cursor: default;
 }
 
 .playerMapClusterPopup:focus-visible {
@@ -589,6 +590,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   font-size: var(--type-body-size);
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapClusterPopupHeader > span {
@@ -597,6 +599,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapClusterList {
@@ -627,6 +630,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapClusterRow > span:not(.playerMapAvatar) {
@@ -638,6 +642,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   font-weight: var(--weight-strong);
   justify-self: end;
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapSinglePlayerList {

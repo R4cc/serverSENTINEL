@@ -4,6 +4,7 @@
 
 - Kept player heads and map ping labels at a consistent screen size while zooming, including after switching between online and all-time players.
 - Kept player and cluster details inside the visible map when markers are opened near an edge while zoomed or panned.
+- Used the text cursor over player details while keeping the surrounding map draggable.
 
 ## 26.9.4 - 2026-09-02
 
