@@ -148,8 +148,12 @@
   pointer-events: none;
 }
 
-.playerMapPingLabel {
+.playerMapPingLabelWrap {
   position: absolute;
+  transform-origin: top left;
+}
+
+.playerMapPingLabel {
   display: inline-flex;
   transform: translate(-50%, -50%);
   border-radius: var(--radius-xs);

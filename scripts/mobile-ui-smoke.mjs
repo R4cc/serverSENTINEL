@@ -101,7 +101,34 @@ async function assertFloatingSurfaces(page, label) {
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
 }
 
-async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
+async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
+  requirePingLabels = false,
+  exerciseScopeSwitch = false
+} = {}) {
+  const assertScreenSized = async (phase) => {
+    const measurements = await page.evaluate(() => {
+      const visualScale = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          label: element.textContent?.trim() || element.getAttribute("class"),
+          x: rect.width / element.offsetWidth,
+          y: rect.height / element.offsetHeight
+        };
+      };
+      return {
+        avatars: Array.from(document.querySelectorAll(".playerMapMarker .playerMapAvatar")).map(visualScale),
+        pingLabels: Array.from(document.querySelectorAll(".playerMapPingLabel")).map(visualScale)
+      };
+    });
+    assert(measurements.avatars.length > 0, `${label} ${phase}: fixed-size player heads are missing`);
+    if (requirePingLabels) {
+      assert(measurements.pingLabels.length > 0, `${label} ${phase}: fixed-size map ping labels are missing`);
+    }
+    const drifting = [...measurements.avatars, ...measurements.pingLabels]
+      .filter(({ x, y }) => Math.abs(x - 1) > 0.04 || Math.abs(y - 1) > 0.04);
+    assert(drifting.length === 0, `${label} ${phase}: map annotations inherited the map zoom: ${JSON.stringify(drifting)}`);
+  };
+
   const assertAnchored = async (phase) => {
     const measurements = await page.locator(".playerMapMarkerWrap").evaluateAll((wrappers) => {
       const content = document.querySelector(".playerMapTransformContent");
@@ -132,6 +159,7 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
     assert(measurements.length > 0, `${label} ${phase}: player map markers are missing`);
     const drifting = measurements.filter(({ delta }) => delta > 1.5);
     assert(drifting.length === 0, `${label} ${phase}: marker centers drifted from their transformed projected coordinates: ${JSON.stringify(drifting)}`);
+    await assertScreenSized(phase);
   };
 
   const zoomIn = page.getByRole("button", { name: "Zoom in" });
@@ -154,6 +182,16 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
   }
   await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 3.99);
   await assertAnchored("at 4x zoom");
+
+  if (exerciseScopeSwitch) {
+    const mapScope = page.getByRole("group", { name: "Players shown on map" });
+    for (const scope of ["Online", "All time"]) {
+      const button = mapScope.getByRole("button", { name: scope, exact: true });
+      await button.click();
+      await page.waitForFunction((name) => document.querySelector(`[aria-label="Players shown on map"] button[aria-pressed="true"]`)?.textContent?.trim() === name, scope);
+      await assertAnchored(`after switching to ${scope.toLowerCase()} at 4x zoom`);
+    }
+  }
 
   const mapTransform = page.locator(".playerMapTransformContent");
   const beforePan = await mapTransform.evaluate((element) => {
@@ -922,7 +960,10 @@ async function runDesktopMapAndRestorationProfile() {
     await assertPageRestoresOnReload(page, "files", "files", ".filesPage", `${label} files`);
     await openPage(page, "players");
     await page.getByRole("group", { name: "Players shown on map" }).getByRole("button", { name: "All time", exact: true }).click();
-    await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`);
+    await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`, {
+      requirePingLabels: true,
+      exerciseScopeSwitch: true
+    });
 
     await context.close();
     console.log(`mobile smoke passed: ${label}`);

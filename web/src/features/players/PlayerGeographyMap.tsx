@@ -1,6 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import { Minus, Plus, RotateCcw, Server as ServerIcon } from "lucide-react";
-import { KeepScale, TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import { TransformComponent, TransformWrapper, useTransformContext } from "react-zoom-pan-pinch";
 import { usePlayerHead } from "../../components/PlayerHead";
 import type { PlayerInsightsEntry, PlayerLocation } from "../../types";
 import { playerHeadVersion } from "../../utils/playerHeads";
@@ -90,6 +90,24 @@ function MapPlayerAvatar({
         : entry.player.trim().slice(0, 1).toLocaleUpperCase()}
     </span>
   );
+}
+
+function MapKeepScale(props: HTMLAttributes<HTMLDivElement>) {
+  const elementRef = useRef<HTMLDivElement>(null);
+  const transform = useTransformContext();
+
+  useLayoutEffect(() => {
+    const syncScale = (scale: number) => {
+      if (!elementRef.current) return;
+      elementRef.current.style.transform = transform.handleTransformStyles(0, 0, 1 / scale);
+    };
+    // Unlike the library's KeepScale helper, initialize before paint as well as on later map
+    // transforms. Scope changes can mount a new marker while the map is already zoomed.
+    syncScale(transform.state.scale);
+    return transform.onChange((context) => syncScale(context.instance.state.scale));
+  }, [transform]);
+
+  return <div {...props} ref={elementRef} />;
 }
 
 export function PlayerGeographyMap({
@@ -330,14 +348,16 @@ export function PlayerGeographyMap({
 
         <div className="playerMapOverlay">
           {routeLabels.map(({ mark, label, tone }) => (
-            <span
+            <MapKeepScale
               key={`label-${mark.id}`}
-              className={`playerMapPingLabel playerMapPingLabel--${tone}`}
+              className="playerMapPingLabelWrap"
               style={{ left: `${(label.x / mapWidth) * 100}%`, top: `${(label.y / mapHeight) * 100}%` }}
               aria-hidden="true"
             >
-              {formatPing(mark.pingMs)}
-            </span>
+              <span className={`playerMapPingLabel playerMapPingLabel--${tone}`}>
+                {formatPing(mark.pingMs)}
+              </span>
+            </MapKeepScale>
           ))}
 
           {plottedMarks.map(({ mark, point, sharesServer, markerExtents }, index) => {
@@ -369,7 +389,7 @@ export function PlayerGeographyMap({
               ? `${sharesServer ? `${serverName} server and ` : ""}${mark.entries.length} players near ${mark.label}. Average ping ${formatPing(mark.pingMs)}.`
               : markTitle(mark);
             return (
-              <KeepScale
+              <MapKeepScale
                 key={mark.id}
                 className={`playerMapMarkerWrap ${active ? "playerMapMarkerWrap--active" : ""} ${sharesServer ? "playerMapMarkerWrap--server" : ""}`.trim()}
                 style={{ left: `${(point.x / mapWidth) * 100}%`, top: `${(point.y / mapHeight) * 100}%` }}
@@ -477,7 +497,7 @@ export function PlayerGeographyMap({
                   </span>
                 )}
                 </span>
-              </KeepScale>
+              </MapKeepScale>
             );
           })}
                   </div>
