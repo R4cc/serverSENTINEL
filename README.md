@@ -55,56 +55,22 @@ The screenshots below show the default dark theme. Light mode is also available 
       <p align="center">Browse and manage server files.</p>
     </td>
     <td valign="top" width="50%">
-      <p align="center"><strong>File Editor</strong></p>
-      <a href="docs/screenshots/file-editor.png">
-        <img width="1440" height="1000" alt="serverSENTINEL file editor" src="docs/screenshots/file-editor.png" style="max-width: 100%;" />
-      </a>
-      <p align="center">Edit server configuration and text files safely.</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
       <p align="center"><strong>Mod Management</strong></p>
       <a href="docs/screenshots/mods.png">
         <img width="1440" height="1000" alt="serverSENTINEL mod management" src="docs/screenshots/mods.png" style="max-width: 100%;" />
       </a>
       <p align="center">Manage server mods and updates.</p>
     </td>
-    <td valign="top" width="50%">
-      <p align="center"><strong>Schedules</strong></p>
-      <a href="docs/screenshots/schedules.png">
-        <img width="1440" height="1000" alt="serverSENTINEL schedules" src="docs/screenshots/schedules.png" style="max-width: 100%;" />
-      </a>
-      <p align="center">Create and edit scheduled server actions.</p>
-    </td>
   </tr>
   <tr>
     <td valign="top" width="50%">
-      <p align="center"><strong>Server Properties</strong></p>
-      <a href="docs/screenshots/properties.png">
-        <img width="1440" height="1000" alt="serverSENTINEL server properties" src="docs/screenshots/properties.png" style="max-width: 100%;" />
-      </a>
-      <p align="center">Review and update server configuration.</p>
-    </td>
-    <td valign="top" width="50%">
-      <p align="center"><strong>Settings</strong></p>
-      <a href="docs/screenshots/settings.png">
-        <img width="1440" height="1000" alt="serverSENTINEL settings" src="docs/screenshots/settings.png" style="max-width: 100%;" />
-      </a>
-      <p align="center">Configure panel settings.</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" colspan="2">
       <p align="center"><strong>Players</strong></p>
       <a href="docs/screenshots/players.png">
         <img width="1440" height="1000" alt="serverSENTINEL player insights and activity" src="docs/screenshots/players.png" style="max-width: 100%;" />
       </a>
       <p align="center">Explore player geography, connection quality, activity patterns, and history.</p>
     </td>
-  </tr>
-  <tr>
-    <td valign="top" colspan="2">
+    <td valign="top" width="50%">
       <p align="center"><strong>Light Mode</strong></p>
       <a href="docs/screenshots/overview-light.png">
         <img width="1440" height="1000" alt="serverSENTINEL server overview in light mode" src="docs/screenshots/overview-light.png" style="max-width: 100%;" />
