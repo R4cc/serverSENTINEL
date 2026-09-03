@@ -180,6 +180,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const demoFixture = readModsDemoFixture();
 
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
+  const [installedModsServerId, setInstalledModsServerId] = useState("");
   const [modsLoading, setModsLoading] = useState(false);
   const [modsError, setModsError] = useState("");
   const [installedQuery, setInstalledQuery] = useState("");
@@ -203,24 +204,31 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [batchUpdateRunning, setBatchUpdateRunning] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const activeServerIdRef = useRef("");
+  const workspaceServerIdRef = useRef("");
   const loadMoreInFlightRef = useRef(false);
   const refreshUpdatesInFlightRef = useRef(new Set<string>());
   const installVersionsRequestRef = useRef(0);
   const installReviewOpenRef = useRef(false);
   const searchAbortControllerRef = useRef<AbortController | null>(null);
+  const searchQueryRef = useRef("");
+  const showIncompatibleResultsRef = useRef(false);
   const toggleQueueRef = useRef<Record<string, { targetEnabled: boolean; inFlightEnabled: boolean | null }>>({});
 
   useEffect(() => {
     activeServerIdRef.current = activeServer?.id ?? "";
   }, [activeServer?.id]);
   installReviewOpenRef.current = Boolean(installState);
+  searchQueryRef.current = query.trim();
+  showIncompatibleResultsRef.current = showIncompatibleResults;
 
-  const detailsMod = useMemo(() => installedMods.find((mod) => installedModKey(mod) === detailsModKey) ?? null, [detailsModKey, installedMods]);
+  const currentInstalledMods = installedModsServerId === activeServer?.id ? installedMods : [];
+  const currentUpdatePlan = updatePlan?.serverId === activeServer?.id ? updatePlan : null;
+  const detailsMod = useMemo(() => currentInstalledMods.find((mod) => installedModKey(mod) === detailsModKey) ?? null, [detailsModKey, currentInstalledMods]);
   const selectedVersion = useMemo(() => {
     if (!installState?.data || !installState.selectedVersionId) return null;
     return [...installState.data.compatibleVersions, ...installState.data.otherVersions].find((version) => version.id === installState.selectedVersionId) ?? null;
   }, [installState?.data, installState?.selectedVersionId]);
-  const pendingDependencies = useMemo(() => pendingRequiredDependencies(selectedVersion, installedMods), [installedMods, selectedVersion]);
+  const pendingDependencies = useMemo(() => pendingRequiredDependencies(selectedVersion, currentInstalledMods), [currentInstalledMods, selectedVersion]);
   const effectivePendingDependencies = installState?.mode === "switch" ? [] : pendingDependencies;
   const canContinueInstall = Boolean(
     selectedVersion
@@ -239,7 +247,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setModsLoading(true);
     setModsError("");
     if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
-      if (activeServerIdRef.current === serverId) setInstalledMods(demoInstalledMods);
+      if (activeServerIdRef.current === serverId) {
+        setInstalledMods(demoInstalledMods);
+        setInstalledModsServerId(serverId);
+      }
       setModsLoading(false);
       return;
     }
@@ -247,6 +258,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods${options.forceRefresh ? "?forceRefresh=true" : ""}`);
       if (activeServerIdRef.current === serverId) {
         setInstalledMods((current) => mergeStableModMetadata(current, result.mods));
+        setInstalledModsServerId(serverId);
         setModsError("");
       }
     } catch (error) {
@@ -266,7 +278,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function loadUpdatePlan(serverId = activeServer?.id, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
     if (!serverId || isProvisioning) return null;
-    const showLoading = options.forceRefresh === true;
+    const showLoading = options.forceRefresh === true || (activePage === "mods" && updatePlan?.serverId !== serverId);
     if (showLoading) {
       setUpdatePlanLoading(true);
       setUpdatePlanError("");
@@ -334,6 +346,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   function resetPageState() {
     installVersionsRequestRef.current += 1;
     searchAbortControllerRef.current?.abort();
+    searchQueryRef.current = "";
+    showIncompatibleResultsRef.current = false;
     setAddOpen(false);
     setQuery("");
     setDebouncedQuery("");
@@ -352,11 +366,24 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     loadMoreInFlightRef.current = false;
   }
 
+  function updateSearchQuery(value: string) {
+    searchQueryRef.current = value.trim();
+    setQuery(value);
+  }
+
   useEffect(() => {
     resetPageState();
     toggleQueueRef.current = {};
+    const serverId = activeServer?.id ?? "";
+    if (workspaceServerIdRef.current !== serverId) {
+      workspaceServerIdRef.current = serverId;
+      setInstalledMods([]);
+      setInstalledModsServerId("");
+      setUpdatePlan(null);
+    }
     if (!activeServer) {
       setInstalledMods([]);
+      setInstalledModsServerId("");
       setUpdatePlan(null);
       setUpdatePlanError("");
       setModsError("");
@@ -367,6 +394,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setModsError(activeNodeBlockMessage);
       setModsLoading(false);
       setInstalledMods([]);
+      setInstalledModsServerId("");
       setUpdatePlan(null);
       setUpdatePlanError(activeNodeBlockMessage);
       return;
@@ -395,6 +423,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   useEffect(() => {
     if (activeServerIsDemo) {
       setInstalledMods(demoInstalledMods);
+      setInstalledModsServerId(activeServer?.id ?? "");
       if (activeServer) setUpdatePlan(createDemoUpdatePlan(activeServer.id, demoInstalledMods));
     }
   }, [activeServerIsDemo, demoInstalledMods]);
@@ -428,6 +457,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, query, Boolean(installState)]);
 
   function updateShowIncompatibleResults(value: boolean) {
+    showIncompatibleResultsRef.current = value;
     setShowIncompatibleResults(value);
     setSearchResults([]);
     setSearchTotal(0);
@@ -499,9 +529,19 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (!searchHasMore) return;
     loadMoreInFlightRef.current = true;
     setLoadingMore(true);
-    const searchQuery = query.trim();
+    const searchQuery = debouncedQuery.trim();
+    if (!searchQuery || query.trim() !== searchQuery) {
+      loadMoreInFlightRef.current = false;
+      setLoadingMore(false);
+      return;
+    }
     if (activeServerIsDemo) {
       window.setTimeout(() => {
+        if (activeServerIdRef.current !== activeServer.id || searchQueryRef.current !== searchQuery || showIncompatibleResultsRef.current !== showIncompatibleResults || installReviewOpenRef.current) {
+          loadMoreInFlightRef.current = false;
+          setLoadingMore(false);
+          return;
+        }
         const results = demoSearchPage(searchQuery, showIncompatibleResults);
         setSearchResults((current) => [...current, ...results.slice(offset, offset + 20)]);
         const nextOffset = Math.min(offset + 20, results.length);
@@ -516,7 +556,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       const serverId = activeServer.id;
       const compatibility = showIncompatibleResults;
       const result = await api<ModrinthSearchPage>(buildModrinthSearchPath({ query: searchQuery, serverId, showIncompatibleResults: compatibility, offset, limit: 20 }));
-      if (activeServerIdRef.current === serverId && query.trim() === searchQuery && showIncompatibleResults === compatibility && !installReviewOpenRef.current) {
+      if (activeServerIdRef.current === serverId && searchQueryRef.current === searchQuery && showIncompatibleResultsRef.current === compatibility && !installReviewOpenRef.current) {
         setSearchResults((current) => {
           const seen = new Set(current.map((hit) => hit.project_id));
           return [...current, ...result.hits.filter((hit) => !seen.has(hit.project_id))];
@@ -641,7 +681,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function uploadModFile(file: File) {
     if (modsLocked || !canManage || !activeServer) return;
-    const selection = validateModUploadSelection(file, installedMods, terminology);
+    const selection = validateModUploadSelection(file, currentInstalledMods, terminology);
     if (selection.kind === "cancelled") return;
     if (selection.kind === "error") { notify("error", selection.message); return; }
     setNotice("");
@@ -806,7 +846,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setNotice("");
     const title = mod.displayName;
     const oldFilename = mod.filename;
-    const plannedChannel = updatePlan?.updates.find((entry) => entry.filename === mod.filename)?.channel;
+    const plannedChannel = currentUpdatePlan?.updates.find((entry) => entry.filename === mod.filename)?.channel;
     const jobId = `update-${mod.modrinth.projectId}-${Date.now()}`;
     setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: `Updating ${terminology.singular}`, subject: title, progress: 10, task: "Checking compatibility", dismissible: false }]);
     if (activeServerIsDemo) {
@@ -845,7 +885,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function updateAllSafe() {
     if (modsLocked || !canManage || !activeServer || batchUpdateRunning) return;
-    const plan = updatePlan ?? await loadUpdatePlan(activeServer.id, { forceRefresh: true });
+    const plan = currentUpdatePlan ?? await loadUpdatePlan(activeServer.id, { forceRefresh: true });
     const safeEntries = plan?.updates.filter((entry) => entry.status === "safe_update" && entry.safeBatchEligible) ?? [];
     if (!safeEntries.length) {
       notify("info", `No safe ${terminology.singular} updates are available.`);
@@ -1014,14 +1054,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   }
 
   return {
-    data: { installedMods, searchResults, searchTotal, updatePlan },
+    data: { installedMods: currentInstalledMods, searchResults, searchTotal, updatePlan: currentUpdatePlan },
     state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
     derived: { selectedVersion, pendingDependencies: effectivePendingDependencies, canContinueInstall },
     refs: { sentinelRef },
     actions: {
-      setInstalledQuery, setDetailsMod: (mod: InstalledMod | null) => setDetailsModKey(mod ? installedModKey(mod) : ""), setQuery, setInstallState,
+      setInstalledQuery, setDetailsMod: (mod: InstalledMod | null) => setDetailsModKey(mod ? installedModKey(mod) : ""), setQuery: updateSearchQuery, setInstallState,
       openAdd: () => { setDetailsModKey(""); setAddOpen(true); },
-      closeAdd: () => { installVersionsRequestRef.current += 1; searchAbortControllerRef.current?.abort(); installReviewOpenRef.current = false; setInstallState(null); setQuery(""); setDebouncedQuery(""); setShowIncompatibleResults(false); setSearchResults([]); setSearchTotal(0); setSearchError(""); setLoadingMore(false); loadMoreInFlightRef.current = false; setAddOpen(false); },
+      closeAdd: () => { installVersionsRequestRef.current += 1; searchAbortControllerRef.current?.abort(); installReviewOpenRef.current = false; searchQueryRef.current = ""; showIncompatibleResultsRef.current = false; setInstallState(null); setQuery(""); setDebouncedQuery(""); setShowIncompatibleResults(false); setSearchResults([]); setSearchTotal(0); setSearchError(""); setLoadingMore(false); loadMoreInFlightRef.current = false; setAddOpen(false); },
       refresh: refreshUpdates,
       retry: () => loadInstalledMods(activeServer?.id),
       retrySearch: () => setSearchRequestVersion((current) => current + 1),

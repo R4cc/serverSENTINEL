@@ -19,6 +19,10 @@ describe("liquid glass capability gating", () => {
     expect(supportsLiquidGlass({ ...supportedEnvironment, backdropFilter: false })).toBe(false);
     expect(supportsLiquidGlass({ ...supportedEnvironment, reducedMotion: true })).toBe(false);
     expect(supportsLiquidGlass({ ...supportedEnvironment, reducedTransparency: true })).toBe(false);
+    expect(supportsLiquidGlass({
+      ...supportedEnvironment,
+      userAgent: "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/140.0.0.0 Mobile Safari/537.36"
+    })).toBe(false);
   });
 });
 

@@ -14,7 +14,7 @@ import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./app/navigationStorage";
-import { networkInformation, pagePrefetchAllowed, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
+import { networkInformation, pagePrefetchAllowed, pagePrefetchDelayMs, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
 import { isPageAvailable, moduleAccessSignature, moduleForPage, ModsModule, PlayersModule, resolveAvailablePage, SchedulesModule } from "./app/moduleRegistry";
@@ -147,6 +147,10 @@ export default function App() {
   // mutation is in flight, and the two actions the shell triggers on the module's behalf. Null
   // whenever the module is not mounted, which is also how the shell knows not to offer them.
   const [modsBridge, setModsBridge] = useState<ModsModuleBridge | null>(null);
+  // Players, Console, and Properties do not consume managed-content state. Remember the current
+  // server only after a page that does consume it opens, then keep the module mounted so Overview,
+  // Mods, and Files continue sharing one list instead of loading it on every server page up front.
+  const modsModuleServerIdRef = useRef("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const phoneLayout = useMobileViewport();
   const overviewTimelineVisible = useOverviewTimelineVisibility();
@@ -660,6 +664,10 @@ export default function App() {
   // every visit blocks the main thread for longer than the rest of the page costs in total.
   if (activePage === "overview" && activeServer) overviewTabServerIdRef.current = activeServer.id;
   const overviewTabMounted = Boolean(activeServer) && overviewTabServerIdRef.current === activeServer?.id;
+  if ((activePage === "overview" || activePage === "mods" || activePage === "files") && activeServer) {
+    modsModuleServerIdRef.current = activeServer.id;
+  }
+  const modsModuleMounted = Boolean(activeServer) && modsModuleServerIdRef.current === activeServer?.id;
 
   useEffect(() => {
     void refreshAuth();
@@ -671,15 +679,17 @@ export default function App() {
     void preloadActivePage(activePage, activeModules);
   }, [activePage, activeModules, authSession?.authenticated, overviewTimelineVisible]);
 
-  // The effect above only starts a page's chunk once that page is already open, so it arrives no
-  // sooner than React asks for it. Walk the rest of the pages while the browser is idle, once the
-  // shell has what it needs, so opening one is not a download. Imports deduplicate, so a page that
-  // was hovered, opened, or already queued costs nothing here.
+  // The effect above only starts a page's chunk once that page is already open. Pointer/focus
+  // intent warms a destination sooner, while this fallback walks the rest only after the initial
+  // render and first-interaction window. Starting xterm, ECharts, and every optional module in the
+  // first idle callback made the Overview itself compete with speculative parsing on slower phones.
+  // Imports deduplicate, so a page that was hovered, opened, or already queued costs nothing here.
   useEffect(() => {
     if (!applicationReady || !pagePrefetchAllowed(networkInformation())) return;
     const queue = pagePrefetchOrder.filter((page) => isPageAvailable(activeModules, page));
     let cancelled = false;
     let cancelIdle: (() => void) | null = null;
+    let delayHandle: number | null = null;
 
     const step = () => {
       cancelIdle = null;
@@ -695,9 +705,10 @@ export default function App() {
       cancelIdle = whenIdle(step);
     };
 
-    schedule();
+    delayHandle = window.setTimeout(schedule, pagePrefetchDelayMs);
     return () => {
       cancelled = true;
+      if (delayHandle !== null) window.clearTimeout(delayHandle);
       cancelIdle?.();
     };
   }, [applicationReady, activeModules]);
@@ -2263,7 +2274,11 @@ export default function App() {
           />
         )}
 
-        {isServerWorkspacePage(activePage) && activeServer && (
+        {/* An optional page can restore before `/api/app` has answered which modules are available.
+            Its loading surface already includes a server-strip skeleton; mounting the real strip
+            underneath that full-height skeleton puts it at the viewport bottom, then makes it jump
+            to the top when module access resolves. Keep exactly one strip in the layout. */}
+        {isServerWorkspacePage(activePage) && activeServer && !activePageModuleAccessPending && (
           <Fragment key={`server-workspace-${activeServer.id}`}>
             <ActiveServerStrip
               server={activeServer}
@@ -2452,14 +2467,16 @@ export default function App() {
         )}
 
         {/*
-          Outside the workspace fragment on purpose, and outside its per-server key. The overview's
+          Outside the workspace fragment on purpose, and outside its per-server key. Once loaded,
+          the overview's
           content-health card reads the same installed list and update plan as the page, so the
           module has to outlive its own page: mounting it inside would throw the loaded list away
           every time Settings or Nodes was visited, and re-fetch it on the way back. It renders
-          nothing until its page is open, so the fallback is a skeleton only when that page is the
-          one waiting, and the page still lands after the server strip in the document.
+          nothing until its page is open. A cold Players/Console/Properties restore does not mount
+          it at all because those pages consume none of its state; Overview, Mods, or Files mounts
+          it on demand, and the page still lands after the server strip in the document.
         */}
-        {managedContentAvailable && supportsManagedMods && (
+        {managedContentAvailable && supportsManagedMods && modsModuleMounted && (
           <Suspense fallback={activePage === "mods" ? <FeaturePageLoadingSkeleton label={`Loading ${managedContent.plural}`} page="mods" /> : null}>
             <ModsModule
               active={activePage === "mods"}

@@ -21,6 +21,13 @@ export const pagePrefetchOrder: ActivePage[] = [
   "settings"
 ];
 
+/**
+ * Keep speculative module evaluation out of the initial render and its first interactions. Ten
+ * seconds still warms an unattended workspace quickly, while a visitor who moves sooner triggers
+ * the destination's targeted pointer/focus preload instead of paying for every other page first.
+ */
+export const pagePrefetchDelayMs = 10_000;
+
 type NetworkInformation = {
   saveData?: boolean;
   effectiveType?: string;

@@ -69,15 +69,29 @@ export function playerMapMarks(
     if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
   };
   const scale = renderedWidth > 0 ? renderedWidth / width : 1;
-  const collisionDistanceSquared = (collisionDistancePx / scale) ** 2;
-  for (let left = 0; left < placed.length; left += 1) {
-    for (let right = left + 1; right < placed.length; right += 1) {
-      if (find(left) === find(right)) continue;
-      const deltaX = placed[left].point.x - placed[right].point.x;
-      const deltaY = placed[left].point.y - placed[right].point.y;
-      if (deltaX * deltaX + deltaY * deltaY <= collisionDistanceSquared) join(left, right);
+  const collisionDistance = Math.max(collisionDistancePx / scale, Number.EPSILON);
+  const collisionDistanceSquared = collisionDistance ** 2;
+  // Only marks in the same or an adjacent collision-sized cell can overlap. Keeping those small
+  // neighbourhoods avoids comparing every historical player with every other player as the map
+  // grows, while the union step retains the exact transitive clustering behaviour.
+  const cells = new Map<string, number[]>();
+  placed.forEach((candidate, index) => {
+    const cellX = Math.floor(candidate.point.x / collisionDistance);
+    const cellY = Math.floor(candidate.point.y / collisionDistance);
+    for (let x = cellX - 1; x <= cellX + 1; x += 1) {
+      for (let y = cellY - 1; y <= cellY + 1; y += 1) {
+        for (const otherIndex of cells.get(`${x}:${y}`) ?? []) {
+          const deltaX = candidate.point.x - placed[otherIndex].point.x;
+          const deltaY = candidate.point.y - placed[otherIndex].point.y;
+          if (deltaX * deltaX + deltaY * deltaY <= collisionDistanceSquared) join(index, otherIndex);
+        }
+      }
     }
-  }
+    const key = `${cellX}:${cellY}`;
+    const cell = cells.get(key);
+    if (cell) cell.push(index);
+    else cells.set(key, [index]);
+  });
 
   const groups = new Map<number, typeof placed>();
   placed.forEach((candidate, index) => {

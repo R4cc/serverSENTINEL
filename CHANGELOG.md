@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.9.6 - 2026-09-03
+
+- Prevented slow Players and Mods requests from showing data from a previous server, range, or search after the operator moves on.
+- Removed the large optional-module layout jump when a saved Players, Mods, or Schedules workspace is restored on mobile.
+- Kept initial dashboards responsive by deferring speculative page work, avoiding the Players-only flag font and decorative refraction on mobile, and reducing frontend build compression time.
+- Coalesced duplicate Overview storage measurements, kept schedule times current, and paused hidden Overview timers.
+- Made large mod lists and player maps cheaper to filter, cluster, and interact with while preserving accessible mobile targets.
+
 ## 26.9.5 - 2026-09-03
 
 - Kept player heads and map ping labels at a consistent screen size while zooming, including after switching between online and all-time players.

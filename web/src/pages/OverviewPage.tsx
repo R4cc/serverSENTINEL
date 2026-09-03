@@ -572,12 +572,14 @@ function activeScheduleStatus(run: ScheduledActiveRun) {
 
 export function SchedulePanel({
   schedules,
+  active = true,
   canView = true,
   formatDate,
   relativeTimestamps = true,
   onOpenSchedules
 }: {
   schedules: ScheduledExecution[];
+  active?: boolean;
   canView?: boolean;
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
@@ -591,10 +593,16 @@ export function SchedulePanel({
       || left.run.id.localeCompare(right.run.id)
   )), [schedules]);
   useEffect(() => {
-    if (!activeRuns.length) return undefined;
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    if (!active) return undefined;
+    // Upcoming rows carry relative times and move through the 24-hour window even when no run is
+    // active. Keep their snapshot current while Overview is visible, then stop all work off-page.
+    const updateNow = () => {
+      if (!document.hidden) setNow(Date.now());
+    };
+    updateNow();
+    const timer = window.setInterval(updateNow, 30_000);
     return () => window.clearInterval(timer);
-  }, [activeRuns.length]);
+  }, [active]);
 
   const snapshot = buildUpcomingScheduleSnapshot(schedules, new Date(now));
   const visibleActiveRuns = activeRuns.slice(0, overviewSupportCardSlotCount);
@@ -933,6 +941,7 @@ function RelatedEventsTooltip({
 export function RecentEventsPanel({
   events,
   eventsStatus = "ok",
+  active = true,
   formatDate,
   relativeTimestamps = true,
   serverId = "",
@@ -942,6 +951,7 @@ export function RecentEventsPanel({
 }: {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
+  active?: boolean;
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
   serverId?: string;
@@ -1006,9 +1016,14 @@ export function RecentEventsPanel({
   }, { player: 0, server: 0, automation: 0 }), [groupedEvents]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    if (!active) return undefined;
+    const updateNow = () => {
+      if (!document.hidden) setNow(new Date());
+    };
+    updateNow();
+    const timer = window.setInterval(updateNow, 30_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [active]);
 
   useEffect(() => setPage(0), [filter, serverId]);
 
