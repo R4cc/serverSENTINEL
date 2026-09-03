@@ -109,12 +109,14 @@ export function HelpTooltip({
   label,
   children,
   id,
-  className
+  className,
+  trigger
 }: {
   label: string;
   children: ReactNode;
   id?: string;
   className?: string;
+  trigger?: ReactNode;
 }) {
   const generatedId = useId();
   const tooltipId = id ?? `ui-help-${generatedId.replace(/:/g, "")}`;
@@ -217,7 +219,7 @@ export function HelpTooltip({
           setOpen(true);
         }}
       >
-        <CircleHelp aria-hidden="true" />
+        {trigger ?? <CircleHelp aria-hidden="true" />}
       </button>
       {typeof document === "undefined"
         ? <span ref={contentRef} id={tooltipId} role="tooltip" className={classes("uiHelpTooltipContent", open && "uiHelpTooltipContent--open")} style={style}>{children}</span>

@@ -325,11 +325,29 @@ describe("recent event grouping", () => {
   it("combines adjacent stop/start lifecycle events into a restart", () => {
     const groups = groupRecentEvents([
       serverEvent("server_started", "2026-07-11T12:01:00.000Z", { text: "Server started", severity: "success" }),
-      serverEvent("server_stopped", "2026-07-11T12:00:30.000Z", { text: "Server stopped" })
+      serverEvent("server_stopped", "2026-07-11T12:00:30.000Z", { text: "Server stopped", details: "Purpose: Apply configuration" })
     ], now);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Back online after 30 seconds" });
+    expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Purpose: Apply configuration · Back online after 30 seconds" });
+  });
+
+  it("shows the events behind a restart through an accessible related-events tooltip", () => {
+    const html = renderToStaticMarkup(createElement(RecentEventsPanel, {
+      events: [
+        serverEvent("server_started", "2026-07-11T12:02:30.000Z", { text: "Server started", severity: "success" }),
+        serverEvent("server_stopped", "2026-07-11T12:00:30.000Z", { text: "Server stopped", details: "Purpose: Apply configuration" })
+      ],
+      formatDate: (value) => new Date(value).toISOString(),
+      onOpenConsole: () => undefined
+    }));
+
+    expect(html).toContain("eventKind--server_restarted");
+    expect(html).toContain("Server restarted");
+    expect(html).toContain("Purpose: Apply configuration · Back online after 2 minutes");
+    expect(html).toContain('aria-label="About 2 related events"');
+    expect(html).toContain("Server stopped");
+    expect(html).toContain("Server started");
   });
 
   it("does not show a detail for server start events", () => {

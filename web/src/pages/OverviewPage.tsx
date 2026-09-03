@@ -21,7 +21,7 @@ import type {
 } from '../types';
 import { formatUptime } from '../utils/resourceFormatting';
 import { formatAdaptiveBytes, formatRelativeTimestamp, minecraftVersionInfo, versionValue } from '../utils/format';
-import { Button, EmptyState, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
+import { Button, EmptyState, HelpTooltip, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
 import { AppIcon, SidebarIcon } from '../components/FileTypeIcon';
 import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
@@ -755,6 +755,18 @@ function defaultEventDetails(event: ServerEvent) {
   return undefined;
 }
 
+function restartDowntimeDetails(duration: number) {
+  if (duration < 2) return "Back online in under 2 seconds";
+  if (duration < 60) return `Back online after ${Math.round(duration)} seconds`;
+  const minutes = Math.round(duration / 6) / 10;
+  return `Back online after ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+}
+
+function restartDetails(stopped: ServerEvent, duration: number) {
+  const purpose = stopped.details?.trim();
+  return [purpose, restartDowntimeDetails(duration)].filter(Boolean).join(" · ");
+}
+
 export function groupRecentEvents(events: ServerEvent[], now = new Date()): RecentEventGroup[] {
   const groups: RecentEventGroup[] = [];
   const repeatedGroups = groupNearbyRepeatedEvents(events, (event) => eventDate(event.timestamp, now)?.getTime() ?? null);
@@ -811,7 +823,7 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
         kind: "server_restarted",
         severity: "success",
         title: "Server restarted",
-        details: duration < 2 ? "Back online in under 2 seconds" : `Back online after ${Math.round(duration)} seconds`,
+        details: restartDetails(next, duration),
         timestamp: event.timestamp,
         events: [event, next]
       });
@@ -857,6 +869,46 @@ function relatedEventLabel(group: RecentEventGroup) {
   return group.kind === "player_reconnected" || group.kind === "server_restarted"
     ? `${group.events.length} related events`
     : null;
+}
+
+function RelatedEventsTooltip({
+  group,
+  formatDate
+}: {
+  group: RecentEventGroup;
+  formatDate: (value: string | number | Date) => string;
+}) {
+  const label = relatedEventLabel(group);
+  if (!label) return null;
+  const events = [...group.events].sort((left, right) => {
+    const leftTime = eventDate(left.timestamp)?.getTime() ?? 0;
+    const rightTime = eventDate(right.timestamp)?.getTime() ?? 0;
+    return leftTime - rightTime;
+  });
+
+  return (
+    <HelpTooltip
+      className="serverEventRelatedTooltip"
+      label={label}
+      trigger={<span className="eventCount">{label}</span>}
+    >
+      <span className="serverEventRelatedList">
+        {events.map((event) => {
+          const timestamp = eventDate(event.timestamp);
+          const details = defaultEventDetails(event);
+          return (
+            <span className="serverEventRelatedItem" key={event.id}>
+              <span className="serverEventRelatedHeading">
+                <strong>{event.text}</strong>
+                {timestamp && <time dateTime={timestamp.toISOString()}>{formatDate(timestamp)}</time>}
+              </span>
+              {details && <small>{details}</small>}
+            </span>
+          );
+        })}
+      </span>
+    </HelpTooltip>
+  );
 }
 
 export function RecentEventsPanel({
@@ -996,7 +1048,6 @@ export function RecentEventsPanel({
                   const group = row.original;
                   const timestamp = eventDate(group.timestamp, now);
                   const presentation = recentEventPresentation(group);
-                  const relatedLabel = relatedEventLabel(group);
                   const playerName = playerHeadEventKinds.has(group.kind) ? presentation.subject : undefined;
                   const occurrenceCount = group.events.length > 1 && !uncountedEventKinds.has(group.kind) ? group.events.length : 0;
                   const category = serverEventCategory(group.events[0]);
@@ -1023,7 +1074,7 @@ export function RecentEventsPanel({
                       <td><span className={`serverEventCategory tone-${category}`}>{serverEventCategoryLabel(category)}</span></td>
                       <td className="serverEventDetails">
                         <span title={presentation.details}>{presentation.details || "—"}</span>
-                        {relatedLabel && <small className="eventCount">{relatedLabel}</small>}
+                        <RelatedEventsTooltip group={group} formatDate={formatDate} />
                       </td>
                       <td className="serverEventTime">
                         <time dateTime={timestamp?.toISOString()} title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>
