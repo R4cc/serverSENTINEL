@@ -9,6 +9,7 @@
 - Allowed schedules to continue after Start or Restart once Minecraft finishes starting, while requiring any non-final Stop to be followed immediately by Start.
 - Refreshed Overview statistics immediately after returning to the page and prioritized the selected server over background node polling, avoiding long waits for player, version, CPU, memory, and storage data.
 - Made grouped stop/start events clearly appear as restarts, retained their stop purpose, and exposed both underlying events from the related-event label.
+- Replaced the Overview player card's vague unavailable state with compact retry, configuration, and node-status guidance using balanced card spacing.
 
 ## 26.9.4 - 2026-09-02
 

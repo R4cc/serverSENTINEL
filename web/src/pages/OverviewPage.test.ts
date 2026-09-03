@@ -241,9 +241,24 @@ describe("active player states", () => {
   });
 
   it("distinguishes stopped, empty, and unavailable query states", () => {
-    expect(render(live(), false)).toContain("Server is not running");
+    expect(render(live(), false)).toContain("Server offline");
     expect(render(live({ online: 0, names: [] }))).toContain("No players online");
-    expect(render({ state: "unavailable", online: null, maxPlayers: 20, names: [], code: "QUERY_TIMEOUT", message: "Minecraft Query timed out" })).toContain("Player query unavailable");
+    const unavailable = render({ state: "unavailable", online: null, maxPlayers: 20, names: [], code: "QUERY_TIMEOUT", message: "Minecraft Query timed out", lastAttemptAt: new Date().toISOString() });
+    expect(unavailable).toContain("Player status delayed");
+    expect(unavailable).toContain("Retrying automatically");
+    expect(unavailable).toContain(">Retrying<");
+    expect(unavailable).not.toContain("Minecraft Query timed out");
+    expect(unavailable).not.toContain("uiEmptyState");
+  });
+
+  it("explains player states that need configuration or a node reconnect", () => {
+    const disabled = render({ state: "unavailable", online: null, maxPlayers: 20, names: [], code: "QUERY_DISABLED", message: "Query disabled" });
+    const nodeOffline = render({ state: "unavailable", online: null, maxPlayers: null, names: [], code: "NODE_UNAVAILABLE", message: "Node offline" });
+
+    expect(disabled).toContain("Player list not enabled");
+    expect(disabled).toContain("Enable Minecraft Query");
+    expect(nodeOffline).toContain("Waiting for the node");
+    expect(nodeOffline).toContain("update automatically");
   });
 
   it("renders every name from a complete live snapshot", () => {

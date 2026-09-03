@@ -119,7 +119,7 @@ function OverviewCardState({
   title: ReactNode;
   message?: ReactNode;
   icon: ReactNode;
-  tone?: "neutral" | "success";
+  tone?: "neutral" | "success" | "warning";
   onClick?: () => void;
   ariaLabel?: string;
 }) {
@@ -264,17 +264,36 @@ export function ActivePlayersPanel({
   const online = available?.online;
   const countLabel = available
     ? available.maxPlayers ? `${available.online} / ${available.maxPlayers}` : String(available.online)
-    : snapshot?.state === "stopped" ? "Stopped" : "Unavailable";
+    : snapshot?.state === "stopped"
+      ? "Stopped"
+      : snapshot?.state === "unavailable"
+        ? "Retrying"
+        : "Checking";
+  const countTone = available?.state === "stale" || snapshot?.state === "unavailable"
+    ? "warning"
+    : running && online
+      ? "success"
+      : "neutral";
 
   let content;
   if (loading && !snapshot) {
     content = <div className="overviewPanelSkeleton" aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="playerNameSkeleton" />)}</div>;
   } else if (!running || snapshot?.state === "stopped") {
-    content = <EmptyState compact title="Server is not running" />;
+    content = <OverviewCardState title="Server offline" message="Player activity will appear when it starts." icon={<SidebarIcon name="players" />} />;
   } else if (!snapshot || snapshot.state === "unavailable") {
-    content = <EmptyState compact title="Player query unavailable" message={snapshot?.message ?? "Waiting for the first complete player snapshot."} />;
+    const lastChecked = snapshot?.lastAttemptAt
+      ? `Last checked ${formatRelativeTimestamp(snapshot.lastAttemptAt).toLocaleLowerCase()}.`
+      : undefined;
+    const unavailableCopy = !snapshot
+      ? { title: "Checking player status", message: "The current player list will appear after the first completed check." }
+      : snapshot.code === "QUERY_DISABLED"
+        ? { title: "Player list not enabled", message: "Enable Minecraft Query for this server to show who is online." }
+        : snapshot.code === "NODE_UNAVAILABLE"
+          ? { title: "Waiting for the node", message: "Player status will update automatically when the node reconnects." }
+          : { title: "Player status delayed", message: `${lastChecked ? `${lastChecked} ` : ""}Retrying automatically.` };
+    content = <OverviewCardState {...unavailableCopy} icon={<SidebarIcon name="players" />} tone="warning" />;
   } else if (online === 0) {
-    content = <EmptyState compact title="No players online" />;
+    content = <OverviewCardState title="No players online" message="The player list is up to date." icon={<SidebarIcon name="players" />} />;
   } else {
     const visibleNames = playersExpanded ? snapshot.names : snapshot.names.slice(0, activePlayerPreviewLimit);
     const hiddenPlayerCount = snapshot.names.length - visibleNames.length;
@@ -326,7 +345,7 @@ export function ActivePlayersPanel({
     <OverviewCard
       className="playersPanel overviewOperationsPanel"
       title="Active Players"
-      actions={<StatusBadge tone={available?.state === "stale" ? "warning" : running && online ? "success" : "neutral"}>{countLabel}</StatusBadge>}
+      actions={<StatusBadge tone={countTone}>{countLabel}</StatusBadge>}
       loading={loading}
     >
       {loading && <LoadingLabel>Loading active players</LoadingLabel>}

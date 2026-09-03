@@ -151,6 +151,11 @@
   color: var(--sentinel-success);
 }
 
+.overviewCardStateIcon.tone-warning {
+  background: color-mix(in srgb, var(--sentinel-warning) 16%, var(--surface-raised));
+  color: var(--sentinel-warning);
+}
+
 .overviewCardStateIcon > .buttonIcon,
 .overviewCardStateIcon > .sideIcon {
   width: 20px;
@@ -225,6 +230,11 @@ button.overviewCardRow:focus-visible {
 .overviewOperationsPanel .uiEmptyState {
   min-height: 112px;
   padding: var(--space-4);
+}
+
+.playersPanel .overviewCardStateItem {
+  min-height: 112px;
+  padding: var(--space-3) var(--space-2);
 }
 
 .overviewPanelSkeleton {
