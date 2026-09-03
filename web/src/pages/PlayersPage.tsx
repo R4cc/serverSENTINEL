@@ -76,6 +76,18 @@ function PlayerLocationDisplay({ location }: { location: PlayerInsightsEntry["lo
   );
 }
 
+function PlayerPingDisplay({ entry, formatDate }: { entry: PlayerInsightsEntry; formatDate: (value: string | number | Date) => string }) {
+  if (entry.online) return <>{formatPing(entry.pingMs)}</>;
+  if (entry.lastSessionAveragePingMs === undefined) return <>{unknownValue}</>;
+  const measured = entry.lastPingSampledAt ? `, last updated ${formatDate(entry.lastPingSampledAt)}` : "";
+  return (
+    <span className="playerHistoricalPing" title={`Historical latency from this player's last measured session${measured}`}>
+      <span>{formatPing(entry.lastSessionAveragePingMs)}</span>
+      <small>Last session avg</small>
+    </span>
+  );
+}
+
 function ActivityHours({ hours, timeZone }: { hours: readonly PlayerActivityHour[]; timeZone: string }) {
   const peak = peakActivity(hours);
   const observed = observedActivityHours(hours);
@@ -182,7 +194,7 @@ function PlayerRoster({
     { id: "player", accessorKey: "player", header: "Player" },
     { id: "location", accessorFn: (entry) => formatLocation(entry.location), header: "Location" },
     { id: "distanceKm", accessorKey: "distanceKm", header: "Distance" },
-    { id: "pingMs", accessorKey: "pingMs", header: "Ping" },
+    { id: "pingMs", accessorFn: (entry) => entry.online ? entry.pingMs : entry.lastSessionAveragePingMs, header: "Ping" },
     { id: "lastSeenAt", accessorKey: "lastSeenAt", header: "Last seen" }
   ], []);
   const tableData = useMemo(() => [...players], [players]);
@@ -246,8 +258,8 @@ function PlayerRoster({
                   <PlayerLocationDisplay location={entry.location} />
                 </td>
                 <td className="playerNumericColumn">{formatDistance(entry.distanceKm, formatNumber)}</td>
-                <td className={`playerNumericColumn playerLatency playerLatency--${latencyTone(entry.pingMs)}`}>
-                  {formatPing(entry.pingMs)}
+                <td className={`playerNumericColumn playerLatency playerLatency--${entry.online ? latencyTone(entry.pingMs) : "neutral"}`} data-label="Ping">
+                  <PlayerPingDisplay entry={entry} formatDate={formatDate} />
                 </td>
                 <td className="playerNumericColumn" data-label="Last seen">{entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}</td>
               </tr>

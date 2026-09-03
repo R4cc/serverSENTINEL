@@ -111,6 +111,27 @@ describe("player geography storage", () => {
     expect(repository.find("server-1", "SULLYTHESNAK")?.observations).toBe(2);
   });
 
+  it("stores the newest bounded ping average without retaining a connection endpoint", async () => {
+    const { storage, repository } = await createRepository();
+    repository.record({ serverId: "server-1", player: "SullyTheSnak", location: copenhagen, at: 1_000 });
+
+    expect(repository.recordPingAverages("server-1", [
+      { playerKey: "sullythesnak", averagePingMs: 43.6, samples: 6, at: 3_000 },
+      { playerKey: "unknown", averagePingMs: 20, samples: 2, at: 3_000 }
+    ])).toBe(1);
+    repository.recordPingAverages("server-1", [
+      { playerKey: "sullythesnak", averagePingMs: 10, samples: 1, at: 2_000 }
+    ]);
+
+    expect(repository.find("server-1", "SullyTheSnak")).toMatchObject({
+      lastPingAverageMs: 44,
+      lastPingSamples: 6,
+      lastPingAt: 3_000
+    });
+    expect(storage.connection.prepare("SELECT last_ping_average_ms, last_ping_samples, last_ping_at FROM player_geo_locations").get())
+      .toEqual({ last_ping_average_ms: 44, last_ping_samples: 6, last_ping_at: 3_000 });
+  });
+
   it("prunes records that stopped describing anyone who plays here", async () => {
     const { repository } = await createRepository();
     repository.record({ serverId: "server-1", player: "Mover", location: copenhagen, at: 1_000 });

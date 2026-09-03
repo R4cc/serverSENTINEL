@@ -41,9 +41,12 @@ describe("player entries", () => {
     expect(entries.find((entry) => entry.player === "EnderBobo")?.pingMs).toBeUndefined();
   });
 
-  it("never gives an offline player a stale ping", () => {
-    const entries = playerInsightsEntries({ servers, snapshots: { "server-1": liveSnapshot([]) }, geo: [stored("SullyTheSnak", "server-1")], serverLocations, pings: { "server-1": new Map([["sullythesnak", 42]]) } });
-    expect(entries[0]).toMatchObject({ online: false });
+  it("keeps an offline player's last session average separate from live ping", () => {
+    const historical = stored("SullyTheSnak", "server-1");
+    historical.lastPingAverageMs = 47;
+    historical.lastPingAt = now - 30_000;
+    const entries = playerInsightsEntries({ servers, snapshots: { "server-1": liveSnapshot([]) }, geo: [historical], serverLocations, pings: { "server-1": new Map([["sullythesnak", 42]]) } });
+    expect(entries[0]).toMatchObject({ online: false, lastSessionAveragePingMs: 47, lastPingSampledAt: new Date(now - 30_000).toISOString() });
     expect(entries[0].pingMs).toBeUndefined();
   });
 

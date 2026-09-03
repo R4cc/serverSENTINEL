@@ -91,6 +91,19 @@ function MapPlayerAvatar({
   );
 }
 
+function MapPlayerPing({ entry }: { entry: PlayerInsightsEntry }) {
+  const historical = !entry.online && entry.lastSessionAveragePingMs !== undefined;
+  const pingMs = entry.online ? entry.pingMs : entry.lastSessionAveragePingMs;
+  return (
+    <b
+      className={`playerMapPingValue playerMapPingValue--${historical ? "historical" : latencyTone(pingMs)}`}
+      title={historical ? "Last session average; this player is offline" : undefined}
+    >
+      {formatPing(pingMs)}{historical ? " last avg" : ""}
+    </b>
+  );
+}
+
 function MapKeepScale(props: HTMLAttributes<HTMLDivElement>) {
   const elementRef = useRef<HTMLDivElement>(null);
   const transform = useTransformContext();
@@ -521,7 +534,7 @@ export function PlayerGeographyMap({
                           <MapPlayerAvatar entry={entry} version={headVersion} enabled={playerHeadsEnabled} compact />
                           <strong>{entry.player}</strong>
                           <span>{formatLocation(entry.location)}</span>
-                          <b className={`playerMapPingValue playerMapPingValue--${latencyTone(entry.pingMs)}`}>{formatPing(entry.pingMs)}</b>
+                          <MapPlayerPing entry={entry} />
                         </span>
                       ))}
                     </span>
@@ -546,7 +559,7 @@ export function PlayerGeographyMap({
                       <span className="playerMapClusterRow playerMapSinglePlayerRow">
                         <MapPlayerAvatar entry={mark.entries[0]} version={headVersion} enabled={playerHeadsEnabled} compact />
                         <span>{formatLocation(mark.entries[0].location)}</span>
-                        <b className={`playerMapPingValue playerMapPingValue--${latencyTone(mark.entries[0].pingMs)}`}>{formatPing(mark.entries[0].pingMs)}</b>
+                        <MapPlayerPing entry={mark.entries[0]} />
                       </span>
                     </span>
                   </ContainedMapPopup>

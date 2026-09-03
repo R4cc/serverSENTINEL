@@ -23,5 +23,6 @@ describe("demo player insight locations", () => {
 
     expect(insights.players.filter((player) => player.online).every((player) => player.distanceKm !== undefined && player.pingMs !== undefined)).toBe(true);
     expect(insights.players.filter((player) => !player.online).every((player) => player.pingMs === undefined)).toBe(true);
+    expect(insights.players.filter((player) => !player.online).every((player) => player.lastSessionAveragePingMs !== undefined && player.lastPingSampledAt !== undefined)).toBe(true);
   });
 });

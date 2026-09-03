@@ -292,6 +292,22 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
 
 async function assertPlayerClusterPopupDismisses(page, label) {
   await openPage(page, "players");
+  const historicalPing = page.locator(".playerRosterTable .playerHistoricalPing").first();
+  const rosterPager = page.getByRole("navigation", { name: "players pagination" });
+  for (let attempt = 0; attempt < 8 && await historicalPing.count() === 0; attempt += 1) {
+    const next = rosterPager.getByRole("button", { name: "Next", exact: true });
+    if (await next.isDisabled()) break;
+    const previousRange = await page.locator(".playerRosterCard .uiTableRange").textContent();
+    await next.click();
+    await page.waitForFunction((range) => document.querySelector(".playerRosterCard .uiTableRange")?.textContent !== range, previousRange);
+  }
+  await historicalPing.waitFor();
+  assert((await historicalPing.textContent())?.includes("Last session avg"), `${label}: offline ping is not labeled as a last-session average`);
+  const historicalCell = historicalPing.locator("xpath=ancestor::td");
+  const historicalRow = historicalPing.locator("xpath=ancestor::tr");
+  assert((await historicalCell.getAttribute("class"))?.includes("playerLatency--neutral"), `${label}: offline ping retains a live latency color`);
+  assert(!(await historicalRow.getAttribute("class"))?.includes("playerRosterRow--online"), `${label}: historical ping row looks online`);
+  assert(await historicalRow.locator(".playerOnlineFlag").count() === 0, `${label}: historical ping row carries an online badge`);
   const helpTrigger = page.getByRole("button", { name: "About player geography", exact: true });
   await helpTrigger.waitFor();
   const helpTarget = await helpTrigger.getAttribute("aria-controls");

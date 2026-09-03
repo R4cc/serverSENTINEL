@@ -23,7 +23,8 @@ import type { ManagedServer, PlayerSnapshot } from "../types.js";
  *
  * Who is online comes from Minecraft Query, geography from the locally held GeoLite2 database,
  * activity from retained resource samples, and ping from the module-owned Linux TCP collector.
- * Connection endpoints never reach this assembler; it receives only player keys and RTT values.
+ * Connection endpoints never reach this assembler; it receives only player keys, current RTTs,
+ * and bounded last-session averages.
  */
 
 export type PlayerInsightsInput = {
@@ -93,6 +94,8 @@ export function playerInsightsEntries(input: Pick<PlayerInsightsInput, "servers"
       location: stored.location,
       ...(distanceKm !== undefined ? { distanceKm } : {}),
       ...(pingMs !== undefined ? { pingMs } : {}),
+      ...(stored.lastPingAverageMs !== undefined ? { lastSessionAveragePingMs: stored.lastPingAverageMs } : {}),
+      ...(stored.lastPingAt !== undefined ? { lastPingSampledAt: new Date(stored.lastPingAt).toISOString() } : {}),
       firstSeenAt: new Date(stored.firstSeenAt).toISOString(),
       lastSeenAt: new Date(stored.lastSeenAt).toISOString(),
       observations: stored.observations

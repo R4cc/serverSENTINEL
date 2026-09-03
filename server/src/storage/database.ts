@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 23;
+export const currentSchemaVersion = 24;
 export const currentSchemaName = "current-schema-baseline";
 
 const applicationTableNames = [
@@ -43,7 +43,7 @@ const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   resource_stats: ["server_id", "sampled_at", "sample_json"],
   timeline_events: ["server_id", "event_key", "occurred_at", "event_json"],
   mod_preferences: ["server_id", "filename", "channel", "metadata_json"],
-  player_geo_locations: ["server_id", "player_key", "player_name", "location_json", "first_seen_at", "last_seen_at", "observations"],
+  player_geo_locations: ["server_id", "player_key", "player_name", "location_json", "first_seen_at", "last_seen_at", "observations", "last_ping_average_ms", "last_ping_samples", "last_ping_at"],
   operations: ["id", "type", "status", "server_id", "node_id", "created_by", "progress", "task", "created_at", "started_at", "finished_at", "error_message", "result_json", "log_summary"]
 };
 const currentAppSettingsColumns = ["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed", "maxmind_account_id", "maxmind_license_key"];
@@ -260,9 +260,9 @@ function createCurrentSchema(database: Database.Database) {
     CREATE INDEX operations_status_idx ON operations(status, created_at DESC);
 
     -- Player Insights geography. There is deliberately no address column, hashed or otherwise: the
-    -- address a Minecraft server logs at login is resolved in memory and dropped, and only the
-    -- derived place survives. player_key is the lowercased player name, which is what the Query
-    -- observation and the console log both identify a player by.
+    -- address a Minecraft server logs at login is resolved in memory and dropped. Only the derived
+    -- place and a bounded RTT average survive. player_key is the lowercased player name, which is
+    -- what the Query observation and the console log both identify a player by.
     --
     -- One row per run of joins from the same place, not one per player: first_seen_at is part of
     -- the key so a player who moves gains a row instead of overwriting where they used to be.
@@ -276,6 +276,9 @@ function createCurrentSchema(database: Database.Database) {
       first_seen_at INTEGER NOT NULL,
       last_seen_at INTEGER NOT NULL,
       observations INTEGER NOT NULL DEFAULT 1,
+      last_ping_average_ms INTEGER,
+      last_ping_samples INTEGER NOT NULL DEFAULT 0,
+      last_ping_at INTEGER,
       PRIMARY KEY (server_id, player_key, first_seen_at)
     );
     CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
@@ -435,6 +438,18 @@ function migrateSchema22(database: Database.Database) {
   }).immediate();
 }
 
+/** Adds a bounded per-session RTT average without retaining any connection endpoint. */
+function migrateSchema23(database: Database.Database) {
+  database.transaction(() => {
+    database.exec(`
+      ALTER TABLE player_geo_locations ADD COLUMN last_ping_average_ms INTEGER;
+      ALTER TABLE player_geo_locations ADD COLUMN last_ping_samples INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE player_geo_locations ADD COLUMN last_ping_at INTEGER;
+    `);
+    recordCurrentSchema(database);
+  }).immediate();
+}
+
 function initializeSchema(database: Database.Database) {
   if (!tableExists(database, "schema_migrations")) {
     if (applicationTables(database).length !== 0) {
@@ -471,6 +486,7 @@ function initializeSchema(database: Database.Database) {
     if (baseline <= 20) migrateSchema20(database);
     if (baseline <= 21) migrateSchema21(database);
     if (baseline <= 22) migrateSchema22(database);
+    if (baseline <= 23) migrateSchema23(database);
     assertCurrentSchemaLayout(database);
     return;
   }

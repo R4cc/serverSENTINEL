@@ -175,6 +175,7 @@
 .playerMapPingValue--warning { color: var(--status-warning-foreground); }
 .playerMapPingLabel--danger,
 .playerMapPingValue--danger { color: var(--status-danger-foreground); }
+.playerMapPingValue--historical { color: var(--text-soft); }
 
 .playerMapMarkerWrap {
   position: absolute;
@@ -878,6 +879,21 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 .playerLatency--warning { color: var(--sentinel-warning); }
 .playerLatency--danger { color: var(--sentinel-danger); }
 .playerLatency--neutral { color: var(--text-muted); }
+
+.playerHistoricalPing {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+
+.playerHistoricalPing small {
+  color: var(--text-soft);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
 
 .playerIdentity {
   display: inline-flex;

@@ -21,12 +21,14 @@ async function collectorFixture() {
   let enabled = false;
   let now = Date.parse("2026-09-02T12:00:00.000Z");
   const errors: unknown[] = [];
+  const averages: Array<{ playerKey: string; averagePingMs: number; samples: number; at: number }> = [];
   const collector = new PlayerPingCollector({
     readServers: async () => enabled ? [server] : [],
     snapshot: () => snapshot,
     readConnections: async () => observation,
     pollMs: 60_000,
     now: () => now,
+    recordAverages: (_serverId, entries) => averages.push(...entries),
     onError: (error) => errors.push(error)
   });
   collector.start();
@@ -35,6 +37,7 @@ async function collectorFixture() {
   return {
     collector,
     errors,
+    averages,
     setSnapshot(value: PlayerSnapshot) { snapshot = value; },
     setObservation(value: typeof observation) { observation = value; },
     setNow(value: number) { now = value; }
@@ -91,6 +94,45 @@ describe("player ping collection", () => {
     fixture.setSnapshot(online("Alex"));
     await fixture.collector.collectAll();
     expect(fixture.collector.latest(server.id).has(playerGeoKey("Alex"))).toBe(false);
+    fixture.collector.stop();
+  });
+
+  it("persists a rolling minute average and starts fresh on a newer login", async () => {
+    const fixture = await collectorFixture();
+    const start = Date.parse("2026-09-02T12:00:00.000Z");
+    fixture.collector.observeLogin(server, { player: "Alex", address: "198.51.100.8", port: 50001, at: new Date(start).toISOString() });
+
+    for (const [index, pingMs] of [10, 20, 30, 40, 50, 60, 70].entries()) {
+      fixture.setNow(start + (index + 1) * 10_000);
+      fixture.setObservation({
+        status: "available",
+        instanceId: "container-1",
+        connections: [{ remoteAddress: "198.51.100.8", remotePort: 50001, rttUs: pingMs * 1_000 }]
+      });
+      await fixture.collector.collectAll();
+    }
+
+    expect(fixture.averages.at(-1)).toEqual({ playerKey: "alex", averagePingMs: 45, samples: 6, at: start + 70_000 });
+
+    fixture.setNow(start + 200_000);
+    fixture.setObservation({
+      status: "available",
+      instanceId: "container-1",
+      connections: [{ remoteAddress: "198.51.100.8", remotePort: 50001, rttUs: 80_000 }]
+    });
+    await fixture.collector.collectAll();
+    expect(fixture.averages.at(-1)).toEqual({ playerKey: "alex", averagePingMs: 80, samples: 1, at: start + 200_000 });
+
+    fixture.collector.observeLogin(server, { player: "Alex", address: "198.51.100.8", port: 50001, at: new Date(start + 300_000).toISOString() });
+    fixture.setNow(start + 310_000);
+    fixture.setObservation({
+      status: "available",
+      instanceId: "container-1",
+      connections: [{ remoteAddress: "198.51.100.8", remotePort: 50001, rttUs: 90_000 }]
+    });
+    await fixture.collector.collectAll();
+
+    expect(fixture.averages.at(-1)).toEqual({ playerKey: "alex", averagePingMs: 90, samples: 1, at: start + 310_000 });
     fixture.collector.stop();
   });
 

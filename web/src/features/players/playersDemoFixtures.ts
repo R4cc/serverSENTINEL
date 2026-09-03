@@ -163,6 +163,8 @@ export function demoPlayerInsights(serverId: string, running: boolean, range: Pl
       location: place.location,
       distanceKm: place.distanceKm,
       ...(onlineNow.has(player) ? { pingMs: 18 + (index * 17) % 165 } : {}),
+      lastSessionAveragePingMs: 22 + (index * 19) % 150,
+      lastPingSampledAt: new Date(now - (index + 1) * 1_800_000).toISOString(),
       firstSeenAt: new Date(now - (index + 3) * 86_400_000).toISOString(),
       lastSeenAt: new Date(now - index * 1_800_000).toISOString(),
       observations: 12 - index
