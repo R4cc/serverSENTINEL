@@ -228,7 +228,18 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       } else {
         active.cancellable = false;
         try {
+          const hasFollowingStep = index < schedule.steps.length - 1;
+          const startupLogsBefore = hasFollowingStep && step.procedure !== "stop"
+            ? await scheduledRunLogSnapshot(runtime, server)
+            : undefined;
+          if (hasFollowingStep && step.procedure !== "stop" && startupLogsBefore === undefined) {
+            throw new Error("Server logs are unavailable, so startup cannot be validated before the next schedule step");
+          }
           await runScheduleProcedure(server, step.procedure);
+          if (hasFollowingStep && step.procedure !== "stop") {
+            active.message = "Waiting for server startup";
+            await waitForScheduleStartup(runtime, server, startupLogsBefore!);
+          }
           active.message = scheduleProcedureCompletedMessage[step.procedure];
         } catch (error) {
           stepDetails.status = "failed";
@@ -277,12 +288,12 @@ function runScheduleProcedure(server: ManagedServer, procedure: ScheduleProcedur
 }
 
 /**
- * Whether the run needs a running server to mean anything. Commands cannot reach a stopped server
- * and neither Restart nor Stop has anything to act on, so those runs are skipped rather than failed.
- * A schedule whose only action is Start is the exception: a stopped server is precisely its purpose.
+ * Whether the run needs a running server to begin. A leading Start can bring a stopped server up
+ * before later commands run; every other first step needs the server to already be running.
  */
 export function scheduleRequiresRunningServer(schedule: Pick<ScheduledExecution, "steps">) {
-  return schedule.steps.some((step) => step.type === "command" || step.procedure !== "start");
+  const first = schedule.steps[0];
+  return first?.type !== "action" || first.procedure !== "start";
 }
 
 const schedulePlayerWaitPollSeconds = 30;
@@ -366,6 +377,41 @@ function scheduledRunLogSnapshot(runtime: NodeRuntime, server: ManagedServer) {
       resolveSnapshot(undefined);
     });
   });
+}
+
+const minecraftStartupCompletePattern = /Done \([^)]+\)! For help, type ["']help["']/i;
+const scheduleStartupTimeoutMs = 10 * 60_000;
+
+function latestStartupCompleteLine(text: string | undefined) {
+  return text
+    ?.replace(/\r\n?/g, "\n")
+    .split("\n")
+    .findLast((line) => minecraftStartupCompletePattern.test(line))
+    ?.trim();
+}
+
+export function scheduleStartupWasValidated(before: string | undefined, after: string | undefined) {
+  const afterMarker = latestStartupCompleteLine(after);
+  return Boolean(afterMarker && afterMarker !== latestStartupCompleteLine(before));
+}
+
+async function waitForScheduleStartup(
+  runtime: NodeRuntime,
+  server: ManagedServer,
+  logsBefore: string,
+  timeoutMs = scheduleStartupTimeoutMs
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    const logsAfter = await scheduledRunLogSnapshot(runtime, server);
+    if (scheduleStartupWasValidated(logsBefore, logsAfter)) return;
+    const status = await runtime.serverStatus(server).catch(() => undefined) as { docker?: { running?: boolean } } | undefined;
+    if (status?.docker?.running === false) {
+      throw new Error("Minecraft stopped before startup completed");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error("Minecraft did not finish starting within 10 minutes");
 }
 
 async function scheduledRunCommandLogCapture(runtime: NodeRuntime, server: ManagedServer, before: string | undefined) {

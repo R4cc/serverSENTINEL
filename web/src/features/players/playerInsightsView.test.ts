@@ -103,21 +103,35 @@ describe("map marks", () => {
     expect(playerMapLabelPoint({ x: 160, y: 160 }, 2)).toEqual({ x: 160, y: 146.5 });
   });
 
-  it("anchors lower-marker panels directly above the marker regardless of panel height", () => {
+  it("flips panels above or below markers using the visible viewport", () => {
     expect(playerMapPopupPlacement({
-      pointY: 300,
-      renderedHeight: 360,
-      markerTopExtent: 22,
-      markerBottomExtent: 22,
-      panelMaxHeight: 240
-    })).toEqual({ placement: "above", anchorY: 268 });
+      marker: { left: 340, right: 380, top: 278, bottom: 322 },
+      panel: { width: 220, height: 120 },
+      viewport: { width: 720, height: 360 }
+    })).toEqual({ placement: "above", left: 250, top: 148, maxWidth: 704, maxHeight: 260 });
     expect(playerMapPopupPlacement({
-      pointY: 80,
-      renderedHeight: 360,
-      markerTopExtent: 22,
-      markerBottomExtent: 22,
-      panelMaxHeight: 240
-    })).toEqual({ placement: "below", anchorY: 112 });
+      marker: { left: 340, right: 380, top: 18, bottom: 62 },
+      panel: { width: 220, height: 120 },
+      viewport: { width: 720, height: 360 }
+    })).toEqual({ placement: "below", left: 250, top: 72, maxWidth: 704, maxHeight: 280 });
+  });
+
+  it("clamps panels to horizontal edges and constrains their height on the roomier side", () => {
+    expect(playerMapPopupPlacement({
+      marker: { left: 690, right: 718, top: 20, bottom: 48 },
+      panel: { width: 220, height: 90 },
+      viewport: { width: 720, height: 360 }
+    })).toEqual({ placement: "below", left: 492, top: 58, maxWidth: 704, maxHeight: 294 });
+    expect(playerMapPopupPlacement({
+      marker: { left: 2, right: 30, top: 20, bottom: 48 },
+      panel: { width: 220, height: 90 },
+      viewport: { width: 720, height: 360 }
+    }).left).toBe(8);
+    expect(playerMapPopupPlacement({
+      marker: { left: 145, right: 175, top: 74, bottom: 104 },
+      panel: { width: 300, height: 240 },
+      viewport: { width: 320, height: 180 }
+    })).toEqual({ placement: "below", left: 10, top: 114, maxWidth: 304, maxHeight: 58 });
   });
 
   it("keeps rendered marker extents inside every map edge", () => {

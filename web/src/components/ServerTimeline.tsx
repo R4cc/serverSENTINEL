@@ -25,6 +25,7 @@ import {
   type PlayerTimelineRow
 } from "./playerTimelineChart";
 import { RuntimeControlIcon } from "./RuntimeControls";
+import { subscribeToPageReactivation } from "../app/pageReactivation";
 import {
   buildTimelineChartOption,
   clampTimelineWindow,
@@ -940,15 +941,20 @@ export function ServerTimeline({
   // trade the render this saves for a poll and a redraw every five seconds.
   useEffect(() => {
     if (!live || paused) return;
-    const interval = window.setInterval(() => {
+    const refreshLiveTimeline = () => {
       if (document.hidden || navigationPendingRef.current) return;
       const span = viewportRef.current.to - viewportRef.current.from;
       const next = liveTimelineWindow(span);
       setClockNow(Date.now());
       setViewport(next);
       void loadWindow(next, true, { incremental: true });
-    }, 5_000);
-    return () => window.clearInterval(interval);
+    };
+    const interval = window.setInterval(refreshLiveTimeline, 5_000);
+    const unsubscribe = subscribeToPageReactivation(refreshLiveTimeline);
+    return () => {
+      window.clearInterval(interval);
+      unsubscribe();
+    };
   }, [live, paused, loadWindow, setViewport]);
 
   // Coming back to a paused timeline should show current data, not the window it froze on.

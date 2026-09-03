@@ -3,8 +3,7 @@ import { Box, UserRound } from "lucide-react";
 import { AppIcon } from "./FileTypeIcon";
 import { RestartRequiredBadge } from "./RestartRequiredBadge";
 import { RuntimeControls } from "./RuntimeControls";
-import { ServerRuntimeAlert } from "./ServerRuntimeAlert";
-import { Button, Spinner, StatusBadge } from "./UiPrimitives";
+import { Banner, Button, Spinner, StatusBadge } from "./UiPrimitives";
 import { GlassEffect } from "./GlassEffect";
 
 export type ServerStripHealth = { tone: string; message: string } | null;
@@ -117,7 +116,7 @@ export function ActiveServerStrip({
           </div>
         </div>
         <div className="serverStripRight">
-          {nodeOffline && <ServerRuntimeAlert title="Node offline" compact />}
+          {nodeOffline && <Banner tone="error" title="Node offline" compact className="serverRuntimeAlert compact" />}
           <RuntimeControls
             status={status}
             controlAvailableFallback={controlAvailableFallback}
@@ -141,7 +140,9 @@ export function ActiveServerStrip({
           </Button>
         </div>
       </div>
-      {alert && <ServerRuntimeAlert
+      {alert && <Banner
+        tone="error"
+        className="serverRuntimeAlert"
         title={alert.title}
         message={alert.message}
         action={server.runtimeIssues?.length && onResolveRuntimeIssue

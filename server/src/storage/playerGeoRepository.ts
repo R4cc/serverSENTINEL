@@ -5,9 +5,8 @@ import type { StorageDatabase } from "./database.js";
  * Where Player Insights keeps what it derived, and — as importantly — what it does not keep.
  *
  * The address a Minecraft server logs at login is resolved in memory and dropped. This table holds
- * only the place it resolved to, so it cannot answer "which IP was this player on"; it can answer
- * "roughly where in the world do this server's players connect from", which is the whole question
- * the feature exists to answer.
+ * only the derived place and a bounded RTT aggregate, so it cannot answer "which IP was this player
+ * on"; it can answer roughly where players connect from and what their latest session felt like.
  *
  * One current derived place is retained per player. Existing installations may still have several
  * legacy rows; reads collapse those rows while new observations update only the latest one.
@@ -21,6 +20,10 @@ export type StoredPlayerGeo = {
   firstSeenAt: number;
   lastSeenAt: number;
   observations: number;
+  /** Rolling average from the player's most recently measured online session. */
+  lastPingAverageMs?: number;
+  lastPingSamples?: number;
+  lastPingAt?: number;
 };
 
 type PlayerGeoRow = {
@@ -31,6 +34,9 @@ type PlayerGeoRow = {
   first_seen_at: number;
   last_seen_at: number;
   observations: number;
+  last_ping_average_ms: number | null;
+  last_ping_samples: number;
+  last_ping_at: number | null;
 };
 
 export function playerGeoKey(player: string) {
@@ -61,7 +67,10 @@ function group(rows: PlayerGeoRow[]): StoredPlayerGeo[] {
         location,
         firstSeenAt: row.first_seen_at,
         lastSeenAt: row.last_seen_at,
-        observations: row.observations
+        observations: row.observations,
+        ...(row.last_ping_average_ms !== null ? { lastPingAverageMs: row.last_ping_average_ms } : {}),
+        lastPingSamples: row.last_ping_samples,
+        ...(row.last_ping_at !== null ? { lastPingAt: row.last_ping_at } : {})
       });
       continue;
     }
@@ -72,6 +81,11 @@ function group(rows: PlayerGeoRow[]): StoredPlayerGeo[] {
     existing.firstSeenAt = Math.min(existing.firstSeenAt, row.first_seen_at);
     existing.lastSeenAt = Math.max(existing.lastSeenAt, row.last_seen_at);
     existing.observations += row.observations;
+    if (row.last_ping_at !== null && (existing.lastPingAt === undefined || row.last_ping_at >= existing.lastPingAt)) {
+      existing.lastPingAverageMs = row.last_ping_average_ms ?? undefined;
+      existing.lastPingSamples = row.last_ping_samples;
+      existing.lastPingAt = row.last_ping_at;
+    }
   }
   return [...byPlayer.values()].sort((left, right) => right.lastSeenAt - left.lastSeenAt);
 }
@@ -81,14 +95,16 @@ export class PlayerGeoRepository {
 
   list(): StoredPlayerGeo[] {
     return group(this.storage.connection.prepare<[], PlayerGeoRow>(`
-      SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations FROM player_geo_locations
+      SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations,
+        last_ping_average_ms, last_ping_samples, last_ping_at FROM player_geo_locations
       ORDER BY server_id, player_key, first_seen_at
     `).all());
   }
 
   listForServer(serverId: string): StoredPlayerGeo[] {
     return group(this.storage.connection.prepare<[string], PlayerGeoRow>(`
-      SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations FROM player_geo_locations
+      SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations,
+        last_ping_average_ms, last_ping_samples, last_ping_at FROM player_geo_locations
       WHERE server_id = ?
       ORDER BY player_key, first_seen_at
     `).all(serverId));
@@ -96,7 +112,8 @@ export class PlayerGeoRepository {
 
   find(serverId: string, player: string) {
     return group(this.storage.connection.prepare<[string, string], PlayerGeoRow>(`
-      SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations FROM player_geo_locations
+      SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations,
+        last_ping_average_ms, last_ping_samples, last_ping_at FROM player_geo_locations
       WHERE server_id = ? AND player_key = ?
       ORDER BY first_seen_at
     `).all(serverId, playerGeoKey(player)))[0];
@@ -119,7 +136,8 @@ export class PlayerGeoRepository {
     const name = entry.player.trim();
     this.storage.transaction((database) => {
       const newest = database.prepare<[string, string], PlayerGeoRow>(`
-        SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations FROM player_geo_locations
+        SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations,
+          last_ping_average_ms, last_ping_samples, last_ping_at FROM player_geo_locations
         WHERE server_id = ? AND player_key = ?
         ORDER BY first_seen_at DESC LIMIT 1
       `).get(entry.serverId, key);
@@ -137,6 +155,40 @@ export class PlayerGeoRepository {
         INSERT INTO player_geo_locations (server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations)
         VALUES (?, ?, ?, ?, ?, ?, 1)
       `).run(entry.serverId, key, name, JSON.stringify(entry.location), entry.at, entry.at);
+    });
+  }
+
+  /**
+   * Persists one bounded rolling average per measured player in a single transaction.
+   *
+   * Only the aggregate and its age survive. The endpoint used to match the TCP connection remains
+   * in the collector's memory and never reaches storage.
+   */
+  recordPingAverages(serverId: string, entries: readonly { playerKey: string; averagePingMs: number; samples: number; at: number }[]) {
+    const valid = entries.filter((entry) => entry.playerKey
+      && Number.isFinite(entry.averagePingMs) && entry.averagePingMs > 0
+      && Number.isInteger(entry.samples) && entry.samples > 0
+      && Number.isFinite(entry.at) && entry.at > 0);
+    if (!valid.length) return 0;
+    return this.storage.transaction((database) => {
+      const update = database.prepare(`
+        UPDATE player_geo_locations
+        SET last_ping_average_ms = ?, last_ping_samples = ?, last_ping_at = ?
+        WHERE server_id = ? AND player_key = ?
+          AND first_seen_at = (
+            SELECT MAX(first_seen_at) FROM player_geo_locations
+            WHERE server_id = ? AND player_key = ?
+          )
+          AND (last_ping_at IS NULL OR last_ping_at <= ?)
+      `);
+      let changes = 0;
+      for (const entry of valid) {
+        changes += update.run(
+          Math.round(entry.averagePingMs), entry.samples, Math.round(entry.at),
+          serverId, entry.playerKey, serverId, entry.playerKey, Math.round(entry.at)
+        ).changes;
+      }
+      return changes;
     });
   }
 

@@ -33,6 +33,7 @@ const observationSections: ServerObservationSection[] = ["status", "stats", "pla
 export class RemoteObservationCoordinator {
   private readonly cache = new Map<string, CachedServer>();
   private readonly inFlightNodes = new Map<string, Promise<void>>();
+  private readonly inFlightForeground = new Map<string, Promise<void>>();
   private readonly overviewInterest = new Map<string, number>();
   private readonly pollMs: number;
   private interval: NodeJS.Timeout | undefined;
@@ -55,6 +56,7 @@ export class RemoteObservationCoordinator {
     this.interval = undefined;
     this.cache.clear();
     this.inFlightNodes.clear();
+    this.inFlightForeground.clear();
     this.overviewInterest.clear();
   }
 
@@ -148,14 +150,17 @@ export class RemoteObservationCoordinator {
     if (!node || !this.options.connections.isConnected(node.id) || !nodeAdvertisesCapability(node, "server.observe")) {
       throw new Error(`Node ${server.nodeId} does not support optimized observations`);
     }
-    const existing = this.inFlightNodes.get(node.id);
-    if (existing) await existing.catch(() => undefined);
     const now = Date.now();
     const stillMissing = sections.filter((section) => {
       const cached = this.cache.get(server.id)?.[section];
       return !cached || now - cached.observedAt > maxAgeMs;
     });
-    if (stillMissing.length) await this.observeNodeOnce(node.id, () => this.observeNode([server], () => stillMissing));
+    if (!stillMissing.length) return;
+    // A visible server must not queue behind a fleet-wide background batch. The node protocol
+    // permits concurrent requests, and sequence-aware storage below prevents an older background
+    // response from replacing the newer foreground result when it eventually arrives.
+    const key = `${server.id}:${[...stillMissing].sort().join(",")}`;
+    await this.observeForegroundOnce(key, () => this.observeNode([server], () => stillMissing));
   }
 
   private observeNodeOnce(nodeId: string, operation: () => Promise<void>) {
@@ -165,6 +170,16 @@ export class RemoteObservationCoordinator {
       if (this.inFlightNodes.get(nodeId) === request) this.inFlightNodes.delete(nodeId);
     });
     this.inFlightNodes.set(nodeId, request);
+    return request;
+  }
+
+  private observeForegroundOnce(key: string, operation: () => Promise<void>) {
+    const existing = this.inFlightForeground.get(key);
+    if (existing) return existing;
+    const request = operation().finally(() => {
+      if (this.inFlightForeground.get(key) === request) this.inFlightForeground.delete(key);
+    });
+    this.inFlightForeground.set(key, request);
     return request;
   }
 

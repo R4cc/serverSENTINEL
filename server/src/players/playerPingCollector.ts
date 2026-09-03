@@ -6,10 +6,14 @@ import type { PlayerLoginAddress } from "./loginAddresses.js";
 import type { PlayerConnectionObservation, PlayerTcpConnection } from "./dockerPlayerConnections.js";
 
 export const playerPingPollMs = 10_000;
+export const playerPingAverageWindowMs = 60_000;
+const playerPingAverageMaxSamples = 6;
 const maxFreshPingAgeMs = 15_000;
 
-type PlayerEndpoint = { address: string; port: number };
+type PlayerEndpoint = { address: string; port: number; loginAt?: number };
 type CurrentPings = { sampledAt: number; values: Map<string, number> };
+type PlayerPingAverage = { playerKey: string; averagePingMs: number; samples: number; at: number };
+type TimedPing = { value: number; at: number };
 
 type PlayerPingCollectorOptions = {
   readServers(): Promise<ManagedServer[]>;
@@ -17,6 +21,8 @@ type PlayerPingCollectorOptions = {
   readConnections(server: ManagedServer): Promise<PlayerConnectionObservation>;
   pollMs?: number;
   now?(): number;
+  /** Persists aggregate RTT only; player endpoints never leave this collector. */
+  recordAverages?(serverId: string, entries: readonly PlayerPingAverage[]): void;
   onError?(error: unknown, server?: ManagedServer): void;
 };
 
@@ -46,6 +52,7 @@ export class PlayerPingCollector {
   private readonly pings = new Map<string, CurrentPings>();
   private readonly states = new Map<string, PlayerPingMeasurement>();
   private readonly instances = new Map<string, string>();
+  private readonly sessionPings = new Map<string, Map<string, TimedPing[]>>();
   private readonly inFlight = new Map<string, Promise<void>>();
   private interval: NodeJS.Timeout | undefined;
   private generation = 0;
@@ -68,6 +75,7 @@ export class PlayerPingCollector {
     this.pings.clear();
     this.states.clear();
     this.instances.clear();
+    this.sessionPings.clear();
   }
 
   observeLogin(server: ManagedServer, login: PlayerLoginAddress) {
@@ -82,10 +90,13 @@ export class PlayerPingCollector {
       this.clearPlayerPing(server.id, playerKey);
       return;
     }
-    if (previous && (previous.address !== address || previous.port !== login.port)) {
+    const parsedLoginAt = login.at ? Date.parse(login.at) : Number.NaN;
+    const loginAt = Number.isFinite(parsedLoginAt) ? parsedLoginAt : undefined;
+    if (previous && (previous.address !== address || previous.port !== login.port
+      || (loginAt !== undefined && (previous.loginAt === undefined || loginAt > previous.loginAt)))) {
       this.clearPlayerPing(server.id, playerKey);
     }
-    endpoints.set(playerKey, { address, port: login.port });
+    endpoints.set(playerKey, { address, port: login.port, ...(loginAt !== undefined ? { loginAt } : {}) });
     this.endpoints.set(server.id, endpoints);
   }
 
@@ -110,7 +121,7 @@ export class PlayerPingCollector {
       const servers = await this.options.readServers();
       if (generation !== this.generation) return;
       const active = new Set(servers.map((server) => server.id));
-      for (const store of [this.endpoints, this.pings, this.states, this.instances]) {
+      for (const store of [this.endpoints, this.pings, this.states, this.instances, this.sessionPings]) {
         for (const serverId of store.keys()) if (!active.has(serverId)) store.delete(serverId);
       }
       await Promise.allSettled(servers.map((server) => this.collect(server, generation)));
@@ -133,8 +144,11 @@ export class PlayerPingCollector {
     const online = new Set(onlineNames.map(playerGeoKey));
     const endpoints = this.endpoints.get(server.id);
     if (endpoints) for (const player of endpoints.keys()) if (!online.has(player)) endpoints.delete(player);
+    const sessionPings = this.sessionPings.get(server.id);
+    if (sessionPings) for (const player of sessionPings.keys()) if (!online.has(player)) sessionPings.delete(player);
     if (onlineNames.length === 0) {
       this.pings.delete(server.id);
+      this.sessionPings.delete(server.id);
       this.states.set(server.id, {
         serverId: server.id,
         status: "idle",
@@ -152,6 +166,7 @@ export class PlayerPingCollector {
       if (observation.instanceId && previousInstance && previousInstance !== observation.instanceId) {
         this.endpoints.delete(server.id);
         this.pings.delete(server.id);
+        this.sessionPings.delete(server.id);
       }
       if (observation.instanceId) this.instances.set(server.id, observation.instanceId);
 
@@ -160,6 +175,7 @@ export class PlayerPingCollector {
         if (observation.status === "idle") {
           this.endpoints.delete(server.id);
           this.instances.delete(server.id);
+          this.sessionPings.delete(server.id);
         }
         const status = observation.status === "unsupported" ? "unsupported" : observation.status === "idle" ? "idle" : "unavailable";
         this.states.set(server.id, {
@@ -187,6 +203,14 @@ export class PlayerPingCollector {
       // Freshness follows the panel's receipt time, not a remote node clock that may be skewed.
       const sampledAt = this.now();
       this.pings.set(server.id, { sampledAt, values });
+      const averages = this.updateSessionAverages(server.id, values, sampledAt);
+      if (averages.length) {
+        try {
+          this.options.recordAverages?.(server.id, averages);
+        } catch {
+          this.options.onError?.(new Error("Player ping average persistence failed"), server);
+        }
+      }
       this.states.set(server.id, {
         serverId: server.id,
         status: "available",
@@ -214,8 +238,30 @@ export class PlayerPingCollector {
 
   private clearPlayerPing(serverId: string, playerKey: string) {
     const current = this.pings.get(serverId);
-    if (!current) return;
-    current.values.delete(playerKey);
-    if (current.values.size === 0) this.pings.delete(serverId);
+    current?.values.delete(playerKey);
+    if (current?.values.size === 0) this.pings.delete(serverId);
+    const session = this.sessionPings.get(serverId);
+    session?.delete(playerKey);
+    if (session?.size === 0) this.sessionPings.delete(serverId);
+  }
+
+  private updateSessionAverages(serverId: string, values: ReadonlyMap<string, number>, sampledAt: number) {
+    const session = this.sessionPings.get(serverId) ?? new Map<string, TimedPing[]>();
+    this.sessionPings.set(serverId, session);
+    const averages: PlayerPingAverage[] = [];
+    for (const [playerKey, pingMs] of values) {
+      const samples = [
+        ...(session.get(playerKey) ?? []).filter((sample) => sample.at > sampledAt - playerPingAverageWindowMs),
+        { value: pingMs, at: sampledAt }
+      ].slice(-playerPingAverageMaxSamples);
+      session.set(playerKey, samples);
+      averages.push({
+        playerKey,
+        averagePingMs: Math.round(samples.reduce((total, sample) => total + sample.value, 0) / samples.length),
+        samples: samples.length,
+        at: sampledAt
+      });
+    }
+    return averages;
   }
 }

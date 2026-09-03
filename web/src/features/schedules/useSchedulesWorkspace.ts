@@ -197,7 +197,7 @@ export function useSchedulesWorkspace({
       const confirmed = await requestConfirmation({
         title: `Run ${schedule.name} now?`,
         description: "Run every step of this schedule immediately, ahead of its next scheduled time.",
-        warning: "This schedule restarts the Minecraft server, disconnecting anyone online.",
+        warning: "This schedule changes the Minecraft server's running state and may disconnect anyone online.",
         confirmLabel: "Run schedule",
         variant: "critical"
       });
@@ -207,7 +207,8 @@ export function useSchedulesWorkspace({
     if (activeServerIsDemo) {
       const runId = clientId();
       const startedAt = new Date().toISOString();
-      if (!demoRunning) {
+      const startsFirst = schedule.steps[0]?.type === "action" && schedule.steps[0].procedure === "start";
+      if (!demoRunning && !startsFirst) {
         const message = "Skipped because Minecraft server is stopped";
         const run: ScheduledRun = { id: runId, scheduleId: schedule.id, scheduleName: schedule.name, status: "skipped", message, ranAt: startedAt, details: { stepCount: schedule.steps.length, completedStepCount: 0 } };
         setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, lastRunAt: startedAt, lastStatus: "skipped", lastMessage: message, recentRuns: [run, ...(candidate.recentRuns ?? [])].slice(0, 25) } : candidate));
@@ -277,7 +278,7 @@ export function useSchedulesWorkspace({
       }
       for (const [index, step] of schedule.steps.entries()) {
         terminalStepIndex = index;
-        terminalStep = step.type === "command" ? step.command : "Restart";
+        terminalStep = step.type === "command" ? step.command : step.procedure[0].toUpperCase() + step.procedure.slice(1);
         const delayMs = Math.min(step.delaySeconds * 1000, 5_000);
         const update = (patch: Partial<ScheduledActiveRun>) => setDemoSchedules((current) => current.map((candidate) => candidate.id === schedule.id ? { ...candidate, activeRuns: [{ ...activeRun, currentStepIndex: index, currentStep: terminalStep, ...patch }] } : candidate));
         if (delayMs) {
@@ -301,12 +302,18 @@ export function useSchedulesWorkspace({
         };
         steps.push(stepDetails);
         if (step.type === "action") {
-          update({ cancellable: false, waitingUntil: undefined, waitingDelaySeconds: undefined, message: "Restarting server" });
-          setDemoRunning(false);
-          setStatus(demoFixtures().demoStatus(server, false));
-          await new Promise((resolve) => window.setTimeout(resolve, 1_500));
-          setDemoRunning(true);
-          setStatus(demoFixtures().demoStatus(server, true));
+          const actionMessage = step.procedure === "stop" ? "Stopping server" : step.procedure === "start" ? "Starting server" : "Restarting server";
+          update({ cancellable: false, waitingUntil: undefined, waitingDelaySeconds: undefined, message: actionMessage });
+          if (step.procedure !== "start") {
+            setDemoRunning(false);
+            setStatus(demoFixtures().demoStatus(server, false));
+          }
+          if (step.procedure !== "stop") {
+            if (index < schedule.steps.length - 1) update({ message: "Waiting for server startup" });
+            await new Promise((resolve) => window.setTimeout(resolve, 1_500));
+            setDemoRunning(true);
+            setStatus(demoFixtures().demoStatus(server, true));
+          }
         } else {
           update({ waitingUntil: undefined, waitingDelaySeconds: undefined, message: `Sent command ${index + 1}` });
           stepDetails.logs = [

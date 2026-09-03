@@ -1,5 +1,14 @@
 # Changelog
 
+## 26.9.5 - 2026-09-03
+
+- Kept player heads and map ping labels at a consistent screen size while zooming, including after switching between online and all-time players.
+- Kept player and cluster details inside the visible map when markers are opened near an edge while zoomed or panned.
+- Used the text cursor over player details while keeping the surrounding map draggable.
+- Showed offline players' clearly labeled last-session ping average, refreshed from a rolling minute of measurements whenever they play again.
+- Allowed schedules to continue after Start or Restart once Minecraft finishes starting, while requiring any non-final Stop to be followed immediately by Start.
+- Refreshed Overview statistics immediately after returning to the page and prioritized the selected server over background node polling, avoiding long waits for player, version, CPU, memory, and storage data.
+
 ## 26.9.4 - 2026-09-02
 
 - Replaced geographic ping estimates with live Linux TCP round-trip measurements matched to connected players without retaining their network endpoints.

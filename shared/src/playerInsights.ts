@@ -89,6 +89,10 @@ export type PlayerInsightsEntry = {
   distanceKm?: number;
   /** Linux TCP round-trip time while this player is directly matched and currently connected. */
   pingMs?: number;
+  /** Rolling average from the most recently measured online session; historical, never live state. */
+  lastSessionAveragePingMs?: number;
+  /** When the historical session average was last refreshed. */
+  lastPingSampledAt?: string;
   firstSeenAt?: string;
   lastSeenAt?: string;
   /** How many distinct joins have been recorded for this player. */

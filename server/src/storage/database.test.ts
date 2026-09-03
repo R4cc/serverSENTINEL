@@ -50,7 +50,7 @@ describe("SQLite storage", () => {
     expect(columnNames(storage.connection, "app_settings")).toEqual(["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed", "maxmind_account_id", "maxmind_license_key"]);
     expect(columnNames(storage.connection, "player_head_cache")).toEqual(["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"]);
     // Player Insights stores where a player connected from and never what they connected from.
-    expect(columnNames(storage.connection, "player_geo_locations")).toEqual(["server_id", "player_key", "player_name", "location_json", "first_seen_at", "last_seen_at", "observations"]);
+    expect(columnNames(storage.connection, "player_geo_locations")).toEqual(["server_id", "player_key", "player_name", "location_json", "first_seen_at", "last_seen_at", "observations", "last_ping_average_ms", "last_ping_samples", "last_ping_at"]);
     expect(columnNames(storage.connection, "player_geo_locations").join(" ")).not.toMatch(/address|ip_/);
   });
 
@@ -81,11 +81,25 @@ describe("SQLite storage", () => {
         observations INTEGER NOT NULL DEFAULT 1,
         PRIMARY KEY (server_id, player_key)
       );
-      INSERT INTO player_geo_locations_22 SELECT * FROM player_geo_locations;
+      INSERT INTO player_geo_locations_22
+        SELECT server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations
+        FROM player_geo_locations;
       DROP TABLE player_geo_locations;
       ALTER TABLE player_geo_locations_22 RENAME TO player_geo_locations;
       CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
       UPDATE schema_migrations SET version = 22;
+    `);
+    old.close();
+  }
+
+  /** Removes the rolling RTT summary so the file matches the schema written by release 23. */
+  function revertToSchema23(path: string) {
+    const old = new Database(path);
+    old.exec(`
+      ALTER TABLE player_geo_locations DROP COLUMN last_ping_average_ms;
+      ALTER TABLE player_geo_locations DROP COLUMN last_ping_samples;
+      ALTER TABLE player_geo_locations DROP COLUMN last_ping_at;
+      UPDATE schema_migrations SET version = 23;
     `);
     old.close();
   }
@@ -112,6 +126,28 @@ describe("SQLite storage", () => {
     `).run();
     database.close();
   }
+
+  it("migrates schema 23 for last-session player ping averages", async () => {
+    const path = await temporaryDatabasePath();
+    openStorageDatabase(path).close();
+    seedServer(path);
+    revertToSchema23(path);
+
+    const legacy = new Database(path);
+    legacy.prepare(`
+      INSERT INTO player_geo_locations (server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations)
+      VALUES ('server-1', 'sullythesnak', 'SullyTheSnak', '{"label":"Copenhagen","precision":"city"}', 1000, 9000, 4)
+    `).run();
+    legacy.close();
+
+    const migrated = openStorageDatabase(path);
+    openDatabases.push(migrated);
+    expect(columnNames(migrated.connection, "player_geo_locations")).toContain("last_ping_average_ms");
+    expect(migrated.connection.prepare("SELECT last_ping_average_ms, last_ping_samples, last_ping_at FROM player_geo_locations").get())
+      .toEqual({ last_ping_average_ms: null, last_ping_samples: 0, last_ping_at: null });
+    expect(migrated.connection.prepare("SELECT version FROM schema_migrations").get())
+      .toEqual({ version: currentSchemaVersion });
+  });
 
   it("migrates schema 22 to a geography history, carrying existing rows across", async () => {
     const path = await temporaryDatabasePath();

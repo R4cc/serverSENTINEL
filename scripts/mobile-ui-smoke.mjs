@@ -101,7 +101,92 @@ async function assertFloatingSurfaces(page, label) {
   assert(await page.getByRole("menuitem", { name: "Download log", exact: true }).count() === 0, `${label}: removed console download action is still available`);
 }
 
-async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
+async function assertNearestVisibleMapPopupContained(page, label) {
+  const markerIndex = await page.evaluate(() => {
+    const frame = document.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    if (!frame) return -1;
+    const candidates = Array.from(document.querySelectorAll(".playerMapMarker")).map((marker, index) => {
+      const rect = marker.getBoundingClientRect();
+      const centreX = rect.left + rect.width / 2;
+      const centreY = rect.top + rect.height / 2;
+      const visible = centreX >= frame.left && centreX <= frame.right && centreY >= frame.top && centreY <= frame.bottom;
+      const edgeDistance = Math.min(centreX - frame.left, frame.right - centreX, centreY - frame.top, frame.bottom - centreY);
+      return { index, visible, edgeDistance };
+    }).filter(({ visible }) => visible).sort((left, right) => left.edgeDistance - right.edgeDistance);
+    return candidates[0]?.index ?? -1;
+  });
+  assert(markerIndex >= 0, `${label}: no visible player marker was available for edge-popup verification`);
+
+  const marker = page.locator(".playerMapMarker").nth(markerIndex);
+  await marker.hover();
+  const popup = page.locator(".playerMapClusterPopup");
+  await popup.waitFor();
+  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.getAttribute("data-placement"));
+  const cursors = await popup.evaluate((element) => ({
+    panel: getComputedStyle(element).cursor,
+    text: Array.from(element.querySelectorAll([
+      ".playerMapClusterPopupHeader strong",
+      ".playerMapClusterPopupHeader > span",
+      ".playerMapClusterRow > strong",
+      ".playerMapClusterRow > span:not(.playerMapAvatar)",
+      ".playerMapPingValue"
+    ].join(","))).map((textElement) => getComputedStyle(textElement).cursor)
+  }));
+  assert.equal(cursors.panel, "default", `${label}: player popup surface retained the map drag cursor`);
+  assert(cursors.text.length > 0, `${label}: player popup has no text cursor targets`);
+  assert(cursors.text.every((cursor) => cursor === "text"), `${label}: player popup text retained a non-text cursor: ${JSON.stringify(cursors.text)}`);
+  const geometry = await page.evaluate(() => {
+    const frame = document.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    const marker = document.querySelector(".playerMapMarkerWrap--active .playerMapMarker")?.getBoundingClientRect();
+    const popup = document.querySelector(".playerMapClusterPopup")?.getBoundingClientRect();
+    if (!frame || !marker || !popup) return { missing: true };
+    return {
+      missing: false,
+      left: popup.left - frame.left,
+      right: frame.right - popup.right,
+      top: popup.top - frame.top,
+      bottom: frame.bottom - popup.bottom,
+      separated: popup.bottom <= marker.top - 8 || popup.top >= marker.bottom + 8
+    };
+  });
+  assert(!geometry.missing, `${label}: the edge marker or popup disappeared`);
+  for (const edge of ["left", "right", "top", "bottom"]) {
+    assert(geometry[edge] >= 7, `${label}: popup crossed the map's ${edge} inset: ${JSON.stringify(geometry)}`);
+  }
+  assert(geometry.separated, `${label}: constrained popup covered its player marker: ${JSON.stringify(geometry)}`);
+
+  await page.getByRole("button", { name: "Reset map view" }).hover();
+  await popup.waitFor({ state: "detached" });
+}
+
+async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
+  requirePingLabels = false,
+  exerciseScopeSwitch = false
+} = {}) {
+  const assertScreenSized = async (phase) => {
+    const measurements = await page.evaluate(() => {
+      const visualScale = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          label: element.textContent?.trim() || element.getAttribute("class"),
+          x: rect.width / element.offsetWidth,
+          y: rect.height / element.offsetHeight
+        };
+      };
+      return {
+        avatars: Array.from(document.querySelectorAll(".playerMapMarker .playerMapAvatar")).map(visualScale),
+        pingLabels: Array.from(document.querySelectorAll(".playerMapPingLabel")).map(visualScale)
+      };
+    });
+    assert(measurements.avatars.length > 0, `${label} ${phase}: fixed-size player heads are missing`);
+    if (requirePingLabels) {
+      assert(measurements.pingLabels.length > 0, `${label} ${phase}: fixed-size map ping labels are missing`);
+    }
+    const drifting = [...measurements.avatars, ...measurements.pingLabels]
+      .filter(({ x, y }) => Math.abs(x - 1) > 0.04 || Math.abs(y - 1) > 0.04);
+    assert(drifting.length === 0, `${label} ${phase}: map annotations inherited the map zoom: ${JSON.stringify(drifting)}`);
+  };
+
   const assertAnchored = async (phase) => {
     const measurements = await page.locator(".playerMapMarkerWrap").evaluateAll((wrappers) => {
       const content = document.querySelector(".playerMapTransformContent");
@@ -132,12 +217,14 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
     assert(measurements.length > 0, `${label} ${phase}: player map markers are missing`);
     const drifting = measurements.filter(({ delta }) => delta > 1.5);
     assert(drifting.length === 0, `${label} ${phase}: marker centers drifted from their transformed projected coordinates: ${JSON.stringify(drifting)}`);
+    await assertScreenSized(phase);
   };
 
   const zoomIn = page.getByRole("button", { name: "Zoom in" });
   await assertAnchored("at 100% zoom");
   await zoomIn.click();
   await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 1.49);
+  await page.waitForTimeout(100);
   await assertAnchored("at intermediate zoom");
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -153,7 +240,19 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
     await page.waitForTimeout(250);
   }
   await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a >= 3.99);
+  await page.waitForTimeout(100);
   await assertAnchored("at 4x zoom");
+
+  if (exerciseScopeSwitch) {
+    const mapScope = page.getByRole("group", { name: "Players shown on map" });
+    for (const scope of ["Online", "All time"]) {
+      const button = mapScope.getByRole("button", { name: scope, exact: true });
+      await button.click();
+      await page.waitForFunction((name) => document.querySelector(`[aria-label="Players shown on map"] button[aria-pressed="true"]`)?.textContent?.trim() === name, scope);
+      await assertAnchored(`after switching to ${scope.toLowerCase()} at 4x zoom`);
+    }
+    await assertNearestVisibleMapPopupContained(page, `${label} after scope switching at 4x zoom`);
+  }
 
   const mapTransform = page.locator(".playerMapTransformContent");
   const beforePan = await mapTransform.evaluate((element) => {
@@ -162,15 +261,30 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
   });
   const frame = await page.locator(".playerMapFrame").boundingBox();
   assert(frame, `${label}: player map frame is missing`);
+  const visibleMarker = await page.evaluate(() => {
+    const frameRect = document.querySelector(".playerMapFrame")?.getBoundingClientRect();
+    if (!frameRect) return undefined;
+    return Array.from(document.querySelectorAll(".playerMapMarker")).map((marker) => {
+      const rect = marker.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }).find(({ x, y }) => x >= frameRect.left && x <= frameRect.right && y >= frameRect.top && y <= frameRect.bottom);
+  });
+  assert(visibleMarker, `${label}: no visible player marker was available before panning`);
+  let panX = Math.sign(frame.x + frame.width / 2 - visibleMarker.x) * Math.min(40, frame.width * 0.04);
+  const panY = Math.sign(frame.y + frame.height / 2 - visibleMarker.y) * Math.min(32, frame.height * 0.06);
+  if (panX === 0 && panY === 0) panX = Math.min(32, frame.width * 0.04);
   await page.mouse.move(frame.x + frame.width * 0.5, frame.y + frame.height * 0.55);
   await page.mouse.down();
-  await page.mouse.move(frame.x + frame.width * 0.65, frame.y + frame.height * 0.7, { steps: 5 });
+  await page.mouse.move(frame.x + frame.width * 0.5 + panX, frame.y + frame.height * 0.55 + panY, { steps: 5 });
   await page.mouse.up();
   await page.waitForFunction(({ x, y }) => {
     const matrix = new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform);
     return Math.hypot(matrix.e - x, matrix.f - y) >= 3;
   }, beforePan);
   await assertAnchored("after panning");
+  if (exerciseScopeSwitch) {
+    await assertNearestVisibleMapPopupContained(page, `${label} after panning at 4x zoom`);
+  }
 
   await page.getByRole("button", { name: "Reset map view" }).click();
   await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a <= 1.01);
@@ -178,6 +292,22 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label) {
 
 async function assertPlayerClusterPopupDismisses(page, label) {
   await openPage(page, "players");
+  const historicalPing = page.locator(".playerRosterTable .playerHistoricalPing").first();
+  const rosterPager = page.getByRole("navigation", { name: "players pagination" });
+  for (let attempt = 0; attempt < 8 && await historicalPing.count() === 0; attempt += 1) {
+    const next = rosterPager.getByRole("button", { name: "Next", exact: true });
+    if (await next.isDisabled()) break;
+    const previousRange = await page.locator(".playerRosterCard .uiTableRange").textContent();
+    await next.click();
+    await page.waitForFunction((range) => document.querySelector(".playerRosterCard .uiTableRange")?.textContent !== range, previousRange);
+  }
+  await historicalPing.waitFor();
+  assert((await historicalPing.textContent())?.includes("Last session avg"), `${label}: offline ping is not labeled as a last-session average`);
+  const historicalCell = historicalPing.locator("xpath=ancestor::td");
+  const historicalRow = historicalPing.locator("xpath=ancestor::tr");
+  assert((await historicalCell.getAttribute("class"))?.includes("playerLatency--neutral"), `${label}: offline ping retains a live latency color`);
+  assert(!(await historicalRow.getAttribute("class"))?.includes("playerRosterRow--online"), `${label}: historical ping row looks online`);
+  assert(await historicalRow.locator(".playerOnlineFlag").count() === 0, `${label}: historical ping row carries an online badge`);
   const helpTrigger = page.getByRole("button", { name: "About player geography", exact: true });
   await helpTrigger.waitFor();
   const helpTarget = await helpTrigger.getAttribute("aria-controls");
@@ -254,6 +384,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
 
   const popup = page.locator(".playerMapClusterPopup");
   await popup.waitFor();
+  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.getAttribute("data-placement"));
   assert(await cluster.getAttribute("aria-expanded") === "true", `${label}: player cluster did not expand`);
   const geometry = await page.evaluate(() => {
     const marker = document.querySelector('.playerMapClusterMarker[aria-expanded="true"]');
@@ -267,6 +398,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
     const markerRect = marker.getBoundingClientRect();
     const viewportRect = document.querySelector(".playerMapViewport")?.getBoundingClientRect();
     const haloRect = halo.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const pings = Array.from(popup.querySelectorAll(".playerMapClusterRow .playerMapPingValue"));
     const avatar = document.querySelector(".playerMapAvatar");
@@ -284,6 +416,9 @@ async function assertPlayerClusterPopupDismisses(page, label) {
         ? serverBadge.getBoundingClientRect().bottom <= serverMarker.getBoundingClientRect().top + 3
         : standaloneServer instanceof SVGGraphicsElement,
       popupOverflow: popup.scrollWidth - popup.clientWidth,
+      popupFrameInset: viewportRect
+        ? Math.min(popupRect.left - viewportRect.left, viewportRect.right - popupRect.right, popupRect.top - viewportRect.top, viewportRect.bottom - popupRect.bottom)
+        : Number.NEGATIVE_INFINITY,
       overflowingRows: Array.from(popup.querySelectorAll(".playerMapClusterRow")).filter((row) => row.scrollWidth > row.clientWidth + 1).length,
       pingScrollbarClearance: listRect.right - Math.max(...pings.map((ping) => ping.getBoundingClientRect().right)),
       avatarIsSquare: avatarRect ? Math.abs(avatarRect.width - avatarRect.height) <= 1 : false,
@@ -301,6 +436,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(geometry.standaloneServerMarkers + geometry.sharedServerIcons === 1, `${label}: server marker representation is missing or duplicated`);
   assert(geometry.runningServerMarkers === 1 && geometry.serverBadgeAbovePlayers, `${label}: running server marker is not visually distinct`);
   assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
+  assert(geometry.popupFrameInset >= 6, `${label}: cluster popup crosses the visible map frame (${geometry.popupFrameInset}px inset)`);
   assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
   assert(geometry.avatarIsSquare && geometry.avatarRadius <= 4, `${label}: player head border does not fit the square avatar`);
   assert(geometry.overflowingMarkerSurfaces === 0, `${label}: ${geometry.overflowingMarkerSurfaces} player marker surfaces cross the map frame`);
@@ -922,7 +1058,10 @@ async function runDesktopMapAndRestorationProfile() {
     await assertPageRestoresOnReload(page, "files", "files", ".filesPage", `${label} files`);
     await openPage(page, "players");
     await page.getByRole("group", { name: "Players shown on map" }).getByRole("button", { name: "All time", exact: true }).click();
-    await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`);
+    await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`, {
+      requirePingLabels: true,
+      exerciseScopeSwitch: true
+    });
 
     await context.close();
     console.log(`mobile smoke passed: ${label}`);

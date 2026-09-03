@@ -738,6 +738,7 @@ services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsMo
       readServers: listManagedServers,
       snapshot: (serverId) => services.playerSnapshotCoordinator?.latest(serverId),
       readConnections: (server) => runtimeForServer(server).readPlayerConnections(server),
+      recordAverages: (serverId, entries) => services.playerGeoRepository.recordPingAverages(serverId, entries),
       onError: (error, server) => {
         logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "player_ping" }, "Player ping collection deferred");
       }

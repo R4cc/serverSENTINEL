@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import type { ScheduledActiveRun, ScheduledExecution } from "../types";
 import {
   activeRunStatus,
-  appendScheduleStep,
   lastRunRelativeTime,
   nextRunRelativeTime,
   SchedulePage,
@@ -14,8 +13,7 @@ import {
   resolveScheduleNavigationTarget,
   reorderScheduleSteps,
   scheduleDescription,
-  scheduleStepMoveBlocked,
-  scheduleStepTypeAvailability,
+  scheduleLifecycleValidationMessage,
   scheduleRunFeedKey,
   scheduleRunItems
 } from "./SchedulesPage";
@@ -61,50 +59,20 @@ describe("schedule step summaries", () => {
     expect(steps.map((step) => step.id)).toEqual(["one", "two", "three"]);
   });
 
-  // Both Restart rules were enforced only at submit, so the Type control offered Action on step 1
-  // of 3 and then the save was rejected.
-  it("offers Restart only where one could legally go", () => {
-    const steps = [
-      { id: "one", type: "command" as const },
-      { id: "two", type: "command" as const }
-    ];
-
-    expect(scheduleStepTypeAvailability(steps, "one").canBecomeRestart).toBe(false);
-    expect(scheduleStepTypeAvailability(steps, "one").reason).toBe("A lifecycle action has to be the last step.");
-    expect(scheduleStepTypeAvailability(steps, "two").canBecomeRestart).toBe(true);
-
-    const withRestart = [steps[0], { id: "two", type: "action" as const }];
-    expect(scheduleStepTypeAvailability(withRestart, "two").canBecomeRestart).toBe(true);
-    // A second Restart is not available anywhere, including the step that already is one.
-    expect(scheduleStepTypeAvailability([...withRestart, { id: "three", type: "command" as const }], "three").canBecomeRestart).toBe(false);
-  });
-
-  // Appending after a lifecycle action left the schedule invalid with nothing showing it until the
-  // save was rejected, and a step added to a schedule that ends in Restart belongs before it.
-  it("adds a step before the lifecycle action rather than after it", () => {
-    type Draft = { id: string; type: "command" | "action" };
-    const command: Draft = { id: "one", type: "command" };
-    const action: Draft = { id: "two", type: "action" };
-    const added: Draft = { id: "new", type: "command" };
-
-    expect(appendScheduleStep([command, action], added).map((step) => step.id)).toEqual(["one", "new", "two"]);
-    expect(appendScheduleStep([action], added).map((step) => step.id)).toEqual(["new", "two"]);
-    expect(appendScheduleStep([command], added).map((step) => step.id)).toEqual(["one", "new"]);
-    expect(appendScheduleStep([], added).map((step) => step.id)).toEqual(["new"]);
-  });
-
-  it("refuses a reorder that would leave Restart anywhere but last", () => {
-    const steps = [
-      { type: "command" as const },
-      { type: "command" as const },
-      { type: "action" as const }
-    ];
-
-    expect(scheduleStepMoveBlocked(steps, 2, 1)).toBe(true);
-    expect(scheduleStepMoveBlocked(steps, 0, 2)).toBe(true);
-    expect(scheduleStepMoveBlocked(steps, 0, 1)).toBe(false);
-    // Without a Restart step every move is fine.
-    expect(scheduleStepMoveBlocked([{ type: "command" as const }, { type: "command" as const }], 1, 0)).toBe(false);
+  it("allows follow-up steps after startup actions and validates non-final Stop", () => {
+    expect(scheduleLifecycleValidationMessage([
+      { type: "action", procedure: "restart", delaySeconds: 0 },
+      { type: "command", command: "say online", delaySeconds: 0 }
+    ])).toBe("");
+    expect(scheduleLifecycleValidationMessage([
+      { type: "action", procedure: "stop", delaySeconds: 0 },
+      { type: "action", procedure: "start", delaySeconds: 0 },
+      { type: "command", command: "say online", delaySeconds: 0 }
+    ])).toBe("");
+    expect(scheduleLifecycleValidationMessage([
+      { type: "action", procedure: "stop", delaySeconds: 0 },
+      { type: "command", command: "say offline", delaySeconds: 0 }
+    ])).toContain("Add Start directly after it");
   });
 
   it("describes mixed commands, restart actions, and delays", () => {

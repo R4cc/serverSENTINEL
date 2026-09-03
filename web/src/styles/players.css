@@ -148,8 +148,12 @@
   pointer-events: none;
 }
 
-.playerMapPingLabel {
+.playerMapPingLabelWrap {
   position: absolute;
+  transform-origin: top left;
+}
+
+.playerMapPingLabel {
   display: inline-flex;
   transform: translate(-50%, -50%);
   border-radius: var(--radius-xs);
@@ -171,6 +175,7 @@
 .playerMapPingValue--warning { color: var(--status-warning-foreground); }
 .playerMapPingLabel--danger,
 .playerMapPingValue--danger { color: var(--status-danger-foreground); }
+.playerMapPingValue--historical { color: var(--text-soft); }
 
 .playerMapMarkerWrap {
   position: absolute;
@@ -550,7 +555,9 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   position: absolute;
   z-index: 8;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-2);
+  overflow: hidden;
   border: var(--border-subtle) solid var(--border-panel);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
@@ -560,10 +567,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   backdrop-filter: none;
   color: var(--text);
   text-align: left;
-}
-
-.playerMapFloatingPanel--above {
-  transform: translateY(-100%);
+  cursor: default;
 }
 
 .playerMapClusterPopup:focus-visible {
@@ -587,6 +591,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   font-size: var(--type-body-size);
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapClusterPopupHeader > span {
@@ -595,10 +600,12 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapClusterList {
   display: grid;
+  min-height: 0;
   max-height: 176px;
   padding-inline-end: var(--space-3);
   overflow-y: auto;
@@ -624,6 +631,7 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapClusterRow > span:not(.playerMapAvatar) {
@@ -635,11 +643,12 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
   font-weight: var(--weight-strong);
   justify-self: end;
   white-space: nowrap;
+  cursor: text;
 }
 
 .playerMapSinglePlayerList {
   padding-inline-end: 0;
-  overflow: visible;
+  overflow: auto;
   scrollbar-gutter: auto;
 }
 
@@ -870,6 +879,21 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 .playerLatency--warning { color: var(--sentinel-warning); }
 .playerLatency--danger { color: var(--sentinel-danger); }
 .playerLatency--neutral { color: var(--text-muted); }
+
+.playerHistoricalPing {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+
+.playerHistoricalPing small {
+  color: var(--text-soft);
+  font-size: var(--type-badge-size);
+  font-weight: var(--weight-meta);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
 
 .playerIdentity {
   display: inline-flex;

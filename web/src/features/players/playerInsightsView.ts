@@ -182,31 +182,33 @@ export function clampPlayerMapPoint(
 }
 
 export function playerMapPopupPlacement({
-  pointY,
-  renderedHeight,
-  markerTopExtent,
-  markerBottomExtent,
-  panelMaxHeight,
+  marker,
+  panel,
+  viewport,
+  inset = 8,
   gap = 10
 }: {
-  pointY: number;
-  renderedHeight: number;
-  markerTopExtent: number;
-  markerBottomExtent: number;
-  panelMaxHeight: number;
+  marker: { left: number; right: number; top: number; bottom: number };
+  panel: { width: number; height: number };
+  viewport: { width: number; height: number };
+  inset?: number;
   gap?: number;
 }) {
-  if (renderedHeight < panelMaxHeight + 16) {
-    return { placement: "contained" as const, anchorY: 8 };
-  }
-  const spaceAbove = pointY - markerTopExtent - gap;
-  const spaceBelow = renderedHeight - pointY - markerBottomExtent - gap;
-  if (spaceBelow >= panelMaxHeight || spaceBelow >= spaceAbove) {
-    return { placement: "below" as const, anchorY: pointY + markerBottomExtent + gap };
-  }
-  // The panel uses translateY(-100%) from this edge. Anchoring the edge rather than
-  // subtracting a maximum height keeps short cluster lists next to low map markers.
-  return { placement: "above" as const, anchorY: pointY - markerTopExtent - gap };
+  const maxWidth = Math.max(0, viewport.width - inset * 2);
+  const width = Math.min(panel.width, maxWidth);
+  const left = Math.min(
+    viewport.width - inset - width,
+    Math.max(inset, (marker.left + marker.right - width) / 2)
+  );
+  const spaceAbove = Math.max(0, marker.top - inset - gap);
+  const spaceBelow = Math.max(0, viewport.height - inset - marker.bottom - gap);
+  const placement = panel.height <= spaceBelow || (panel.height > spaceAbove && spaceBelow >= spaceAbove)
+    ? "below" as const
+    : "above" as const;
+  const maxHeight = placement === "below" ? spaceBelow : spaceAbove;
+  const height = Math.min(panel.height, maxHeight);
+  const top = placement === "below" ? marker.bottom + gap : marker.top - gap - height;
+  return { placement, left, top, maxWidth, maxHeight };
 }
 
 /** Bands chosen so the colour says something a player would recognise, not merely "higher". */
