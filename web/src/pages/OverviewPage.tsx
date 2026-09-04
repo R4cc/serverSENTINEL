@@ -21,7 +21,7 @@ import type {
 } from '../types';
 import { formatUptime } from '../utils/resourceFormatting';
 import { formatAdaptiveBytes, formatRelativeTimestamp, minecraftVersionInfo, versionValue } from '../utils/format';
-import { Button, EmptyState, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
+import { Button, EmptyState, HelpTooltip, LoadingLabel, MetricTile, PanelHeader, SkeletonBlock, StatusBadge, Surface } from '../components/UiPrimitives';
 import { AppIcon, SidebarIcon } from '../components/FileTypeIcon';
 import { EventIcon, type EventIconKind } from '../components/EventIcon';
 import { ModIconImage } from '../features/mods/ModIconImage';
@@ -119,7 +119,7 @@ function OverviewCardState({
   title: ReactNode;
   message?: ReactNode;
   icon: ReactNode;
-  tone?: "neutral" | "success";
+  tone?: "neutral" | "success" | "warning";
   onClick?: () => void;
   ariaLabel?: string;
 }) {
@@ -264,17 +264,36 @@ export function ActivePlayersPanel({
   const online = available?.online;
   const countLabel = available
     ? available.maxPlayers ? `${available.online} / ${available.maxPlayers}` : String(available.online)
-    : snapshot?.state === "stopped" ? "Stopped" : "Unavailable";
+    : snapshot?.state === "stopped"
+      ? "Stopped"
+      : snapshot?.state === "unavailable"
+        ? "Retrying"
+        : "Checking";
+  const countTone = available?.state === "stale" || snapshot?.state === "unavailable"
+    ? "warning"
+    : running && online
+      ? "success"
+      : "neutral";
 
   let content;
   if (loading && !snapshot) {
     content = <div className="overviewPanelSkeleton" aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="playerNameSkeleton" />)}</div>;
   } else if (!running || snapshot?.state === "stopped") {
-    content = <EmptyState compact title="Server is not running" />;
+    content = <OverviewCardState title="Server offline" message="Player activity will appear when it starts." icon={<SidebarIcon name="players" />} />;
   } else if (!snapshot || snapshot.state === "unavailable") {
-    content = <EmptyState compact title="Player query unavailable" message={snapshot?.message ?? "Waiting for the first complete player snapshot."} />;
+    const lastChecked = snapshot?.lastAttemptAt
+      ? `Last checked ${formatRelativeTimestamp(snapshot.lastAttemptAt).toLocaleLowerCase()}.`
+      : undefined;
+    const unavailableCopy = !snapshot
+      ? { title: "Checking player status", message: "The current player list will appear after the first completed check." }
+      : snapshot.code === "QUERY_DISABLED"
+        ? { title: "Player list not enabled", message: "Enable Minecraft Query for this server to show who is online." }
+        : snapshot.code === "NODE_UNAVAILABLE"
+          ? { title: "Waiting for the node", message: "Player status will update automatically when the node reconnects." }
+          : { title: "Player status delayed", message: `${lastChecked ? `${lastChecked} ` : ""}Retrying automatically.` };
+    content = <OverviewCardState {...unavailableCopy} icon={<SidebarIcon name="players" />} tone="warning" />;
   } else if (online === 0) {
-    content = <EmptyState compact title="No players online" />;
+    content = <OverviewCardState title="No players online" message="The player list is up to date." icon={<SidebarIcon name="players" />} />;
   } else {
     const visibleNames = playersExpanded ? snapshot.names : snapshot.names.slice(0, activePlayerPreviewLimit);
     const hiddenPlayerCount = snapshot.names.length - visibleNames.length;
@@ -326,7 +345,7 @@ export function ActivePlayersPanel({
     <OverviewCard
       className="playersPanel overviewOperationsPanel"
       title="Active Players"
-      actions={<StatusBadge tone={available?.state === "stale" ? "warning" : running && online ? "success" : "neutral"}>{countLabel}</StatusBadge>}
+      actions={<StatusBadge tone={countTone}>{countLabel}</StatusBadge>}
       loading={loading}
     >
       {loading && <LoadingLabel>Loading active players</LoadingLabel>}
@@ -553,12 +572,14 @@ function activeScheduleStatus(run: ScheduledActiveRun) {
 
 export function SchedulePanel({
   schedules,
+  active = true,
   canView = true,
   formatDate,
   relativeTimestamps = true,
   onOpenSchedules
 }: {
   schedules: ScheduledExecution[];
+  active?: boolean;
   canView?: boolean;
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
@@ -572,10 +593,16 @@ export function SchedulePanel({
       || left.run.id.localeCompare(right.run.id)
   )), [schedules]);
   useEffect(() => {
-    if (!activeRuns.length) return undefined;
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    if (!active) return undefined;
+    // Upcoming rows carry relative times and move through the 24-hour window even when no run is
+    // active. Keep their snapshot current while Overview is visible, then stop all work off-page.
+    const updateNow = () => {
+      if (!document.hidden) setNow(Date.now());
+    };
+    updateNow();
+    const timer = window.setInterval(updateNow, 30_000);
     return () => window.clearInterval(timer);
-  }, [activeRuns.length]);
+  }, [active]);
 
   const snapshot = buildUpcomingScheduleSnapshot(schedules, new Date(now));
   const visibleActiveRuns = activeRuns.slice(0, overviewSupportCardSlotCount);
@@ -755,6 +782,18 @@ function defaultEventDetails(event: ServerEvent) {
   return undefined;
 }
 
+function restartDowntimeDetails(duration: number) {
+  if (duration < 2) return "Back online in under 2 seconds";
+  if (duration < 60) return `Back online after ${Math.round(duration)} seconds`;
+  const minutes = Math.round(duration / 6) / 10;
+  return `Back online after ${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+}
+
+function restartDetails(stopped: ServerEvent, duration: number) {
+  const purpose = stopped.details?.trim();
+  return [purpose, restartDowntimeDetails(duration)].filter(Boolean).join(" · ");
+}
+
 export function groupRecentEvents(events: ServerEvent[], now = new Date()): RecentEventGroup[] {
   const groups: RecentEventGroup[] = [];
   const repeatedGroups = groupNearbyRepeatedEvents(events, (event) => eventDate(event.timestamp, now)?.getTime() ?? null);
@@ -811,7 +850,7 @@ export function groupRecentEvents(events: ServerEvent[], now = new Date()): Rece
         kind: "server_restarted",
         severity: "success",
         title: "Server restarted",
-        details: duration < 2 ? "Back online in under 2 seconds" : `Back online after ${Math.round(duration)} seconds`,
+        details: restartDetails(next, duration),
         timestamp: event.timestamp,
         events: [event, next]
       });
@@ -859,9 +898,50 @@ function relatedEventLabel(group: RecentEventGroup) {
     : null;
 }
 
+function RelatedEventsTooltip({
+  group,
+  formatDate
+}: {
+  group: RecentEventGroup;
+  formatDate: (value: string | number | Date) => string;
+}) {
+  const label = relatedEventLabel(group);
+  if (!label) return null;
+  const events = [...group.events].sort((left, right) => {
+    const leftTime = eventDate(left.timestamp)?.getTime() ?? 0;
+    const rightTime = eventDate(right.timestamp)?.getTime() ?? 0;
+    return leftTime - rightTime;
+  });
+
+  return (
+    <HelpTooltip
+      className="serverEventRelatedTooltip"
+      label={label}
+      trigger={<span className="eventCount">{label}</span>}
+    >
+      <span className="serverEventRelatedList">
+        {events.map((event) => {
+          const timestamp = eventDate(event.timestamp);
+          const details = defaultEventDetails(event);
+          return (
+            <span className="serverEventRelatedItem" key={event.id}>
+              <span className="serverEventRelatedHeading">
+                <strong>{event.text}</strong>
+                {timestamp && <time dateTime={timestamp.toISOString()}>{formatDate(timestamp)}</time>}
+              </span>
+              {details && <small>{details}</small>}
+            </span>
+          );
+        })}
+      </span>
+    </HelpTooltip>
+  );
+}
+
 export function RecentEventsPanel({
   events,
   eventsStatus = "ok",
+  active = true,
   formatDate,
   relativeTimestamps = true,
   serverId = "",
@@ -871,6 +951,7 @@ export function RecentEventsPanel({
 }: {
   events: ServerEvent[];
   eventsStatus?: "ok" | "unavailable";
+  active?: boolean;
   formatDate: (value: string | number | Date) => string;
   relativeTimestamps?: boolean;
   serverId?: string;
@@ -935,9 +1016,14 @@ export function RecentEventsPanel({
   }, { player: 0, server: 0, automation: 0 }), [groupedEvents]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    if (!active) return undefined;
+    const updateNow = () => {
+      if (!document.hidden) setNow(new Date());
+    };
+    updateNow();
+    const timer = window.setInterval(updateNow, 30_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [active]);
 
   useEffect(() => setPage(0), [filter, serverId]);
 
@@ -996,7 +1082,6 @@ export function RecentEventsPanel({
                   const group = row.original;
                   const timestamp = eventDate(group.timestamp, now);
                   const presentation = recentEventPresentation(group);
-                  const relatedLabel = relatedEventLabel(group);
                   const playerName = playerHeadEventKinds.has(group.kind) ? presentation.subject : undefined;
                   const occurrenceCount = group.events.length > 1 && !uncountedEventKinds.has(group.kind) ? group.events.length : 0;
                   const category = serverEventCategory(group.events[0]);
@@ -1023,7 +1108,7 @@ export function RecentEventsPanel({
                       <td><span className={`serverEventCategory tone-${category}`}>{serverEventCategoryLabel(category)}</span></td>
                       <td className="serverEventDetails">
                         <span title={presentation.details}>{presentation.details || "—"}</span>
-                        {relatedLabel && <small className="eventCount">{relatedLabel}</small>}
+                        <RelatedEventsTooltip group={group} formatDate={formatDate} />
                       </td>
                       <td className="serverEventTime">
                         <time dateTime={timestamp?.toISOString()} title={relativeTimestamps && timestamp ? formatDate(timestamp) : undefined}>

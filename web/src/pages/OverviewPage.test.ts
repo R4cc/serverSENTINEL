@@ -241,9 +241,24 @@ describe("active player states", () => {
   });
 
   it("distinguishes stopped, empty, and unavailable query states", () => {
-    expect(render(live(), false)).toContain("Server is not running");
+    expect(render(live(), false)).toContain("Server offline");
     expect(render(live({ online: 0, names: [] }))).toContain("No players online");
-    expect(render({ state: "unavailable", online: null, maxPlayers: 20, names: [], code: "QUERY_TIMEOUT", message: "Minecraft Query timed out" })).toContain("Player query unavailable");
+    const unavailable = render({ state: "unavailable", online: null, maxPlayers: 20, names: [], code: "QUERY_TIMEOUT", message: "Minecraft Query timed out", lastAttemptAt: new Date().toISOString() });
+    expect(unavailable).toContain("Player status delayed");
+    expect(unavailable).toContain("Retrying automatically");
+    expect(unavailable).toContain(">Retrying<");
+    expect(unavailable).not.toContain("Minecraft Query timed out");
+    expect(unavailable).not.toContain("uiEmptyState");
+  });
+
+  it("explains player states that need configuration or a node reconnect", () => {
+    const disabled = render({ state: "unavailable", online: null, maxPlayers: 20, names: [], code: "QUERY_DISABLED", message: "Query disabled" });
+    const nodeOffline = render({ state: "unavailable", online: null, maxPlayers: null, names: [], code: "NODE_UNAVAILABLE", message: "Node offline" });
+
+    expect(disabled).toContain("Player list not enabled");
+    expect(disabled).toContain("Enable Minecraft Query");
+    expect(nodeOffline).toContain("Waiting for the node");
+    expect(nodeOffline).toContain("update automatically");
   });
 
   it("renders every name from a complete live snapshot", () => {
@@ -325,11 +340,29 @@ describe("recent event grouping", () => {
   it("combines adjacent stop/start lifecycle events into a restart", () => {
     const groups = groupRecentEvents([
       serverEvent("server_started", "2026-07-11T12:01:00.000Z", { text: "Server started", severity: "success" }),
-      serverEvent("server_stopped", "2026-07-11T12:00:30.000Z", { text: "Server stopped" })
+      serverEvent("server_stopped", "2026-07-11T12:00:30.000Z", { text: "Server stopped", details: "Purpose: Apply configuration" })
     ], now);
 
     expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Back online after 30 seconds" });
+    expect(groups[0]).toMatchObject({ kind: "server_restarted", title: "Server restarted", details: "Purpose: Apply configuration · Back online after 30 seconds" });
+  });
+
+  it("shows the events behind a restart through an accessible related-events tooltip", () => {
+    const html = renderToStaticMarkup(createElement(RecentEventsPanel, {
+      events: [
+        serverEvent("server_started", "2026-07-11T12:02:30.000Z", { text: "Server started", severity: "success" }),
+        serverEvent("server_stopped", "2026-07-11T12:00:30.000Z", { text: "Server stopped", details: "Purpose: Apply configuration" })
+      ],
+      formatDate: (value) => new Date(value).toISOString(),
+      onOpenConsole: () => undefined
+    }));
+
+    expect(html).toContain("eventKind--server_restarted");
+    expect(html).toContain("Server restarted");
+    expect(html).toContain("Purpose: Apply configuration · Back online after 2 minutes");
+    expect(html).toContain('aria-label="About 2 related events"');
+    expect(html).toContain("Server stopped");
+    expect(html).toContain("Server started");
   });
 
   it("does not show a detail for server start events", () => {

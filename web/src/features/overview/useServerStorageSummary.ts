@@ -36,8 +36,14 @@ export function useServerStorageSummary(
     if (!active || !serverId) return;
     let cancelled = false;
     let requestId = 0;
+    let requestInFlight = false;
 
     const load = () => {
+      // Focus and visibilitychange commonly arrive together when a tab is restored. Measuring a
+      // large world twice only makes both requests slower, so let the active read satisfy every
+      // reactivation signal until it settles.
+      if (requestInFlight) return;
+      requestInFlight = true;
       const currentRequestId = ++requestId;
       // A reload drops the figures held in memory. Seeding from the cache lets the tiles show the
       // last known sizes while the measurement runs, rather than sitting on a skeleton.
@@ -55,6 +61,9 @@ export function useServerStorageSummary(
           // longer succeeds, so the cache goes with it and the tiles fall back to "Unavailable".
           clearCachedStorageSummary(serverId);
           setState({ serverId, summary: unavailableStorageSummary, loading: false });
+        })
+        .finally(() => {
+          if (currentRequestId === requestId) requestInFlight = false;
         });
     };
 

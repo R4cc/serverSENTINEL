@@ -146,6 +146,7 @@ export function ServerOverviewTab({
           />
           <SchedulePanel
             schedules={server.schedules ?? []}
+            active={active}
             canView={canViewSchedules}
             formatDate={formatDate}
             relativeTimestamps={relativeTimestamps}
@@ -155,6 +156,7 @@ export function ServerOverviewTab({
         <RecentEventsPanel
           events={overviewData.events}
           eventsStatus={overviewData.eventsStatus}
+          active={active}
           formatDate={formatDate}
           relativeTimestamps={relativeTimestamps}
           serverId={server.id}

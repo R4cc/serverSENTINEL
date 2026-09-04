@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.9.6 - 2026-09-03
+
+- Prevented slow Players and Mods requests from showing data from a previous server, range, or search after the operator moves on.
+- Removed the large optional-module layout jump when a saved Players, Mods, or Schedules workspace is restored on mobile.
+- Kept initial dashboards responsive by deferring speculative page work, avoiding the Players-only flag font and decorative refraction on mobile, and reducing frontend build compression time.
+- Coalesced duplicate Overview storage measurements, kept schedule times current, and paused hidden Overview timers.
+- Made large mod lists and player maps cheaper to filter, cluster, and interact with while preserving accessible mobile targets.
+
 ## 26.9.5 - 2026-09-03
 
 - Kept player heads and map ping labels at a consistent screen size while zooming, including after switching between online and all-time players.
@@ -8,6 +16,8 @@
 - Showed offline players' clearly labeled last-session ping average, refreshed from a rolling minute of measurements whenever they play again.
 - Allowed schedules to continue after Start or Restart once Minecraft finishes starting, while requiring any non-final Stop to be followed immediately by Start.
 - Refreshed Overview statistics immediately after returning to the page and prioritized the selected server over background node polling, avoiding long waits for player, version, CPU, memory, and storage data.
+- Made grouped stop/start events clearly appear as restarts, retained their stop purpose, and exposed both underlying events from the related-event label.
+- Replaced the Overview player card's vague unavailable state with compact retry, configuration, and node-status guidance using balanced card spacing.
 
 ## 26.9.4 - 2026-09-02
 

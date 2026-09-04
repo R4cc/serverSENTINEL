@@ -76,10 +76,10 @@ function chunkName(moduleIds: readonly string[]) {
 
 /**
  * Precompresses the emitted assets so modern browsers receive a stored `.br` body instead of
- * encoding one per request. Build-time Brotli runs at maximum quality, which the request path
- * cannot afford, so the transfer is smaller *and* costs the host no CPU. Gzip-only clients fall
- * back to the plain asset and the server's response compressor instead of adding a second copy of
- * every compressed asset to the container image.
+ * encoding one per request. Quality 9 retains Brotli's dense static compression without the
+ * disproportionate build-time search cost of quality 11. Gzip-only clients fall back to the plain
+ * asset and the server's response compressor instead of adding a second copy of every compressed
+ * asset to the container image.
  *
  * Only text-shaped assets are worth it. Fonts and images are already compressed, and a second
  * pass over them adds files that are never smaller than the original.
@@ -102,7 +102,7 @@ function precompressAssets(): Plugin {
           const target = resolve(outputDirectory, fileName);
           const brotli = await compressBrotli(body, {
             params: {
-              [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
+              [constants.BROTLI_PARAM_QUALITY]: 9,
               [constants.BROTLI_PARAM_SIZE_HINT]: body.byteLength
             }
           });
@@ -131,7 +131,10 @@ function preloadFonts(base: string): Plugin {
     transformIndexHtml: {
       order: "post",
       handler(html, ctx) {
-        const fonts = Object.keys(ctx.bundle ?? {}).filter((fileName) => fileName.endsWith(".woff2")).sort();
+        // The flag font belongs to the lazy Players module and is injected only when that module
+        // loads. Preloading every emitted font pulled its 78 KiB onto Overview and Mods even though
+        // neither page can use it. Switzer is the only family needed by the initial shell.
+        const fonts = Object.keys(ctx.bundle ?? {}).filter((fileName) => /(?:^|\/)switzer-[^/]+\.woff2$/i.test(fileName)).sort();
         return {
           html,
           tags: fonts.map((fileName) => ({

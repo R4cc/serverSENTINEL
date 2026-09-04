@@ -34,6 +34,10 @@ export function supportsLiquidGlass({
   reducedTransparency: boolean;
 }) {
   if (!backdropFilter || reducedMotion || reducedTransparency) return false;
+  // The refractive layer is decorative and evaluates a sizeable canvas/filter implementation.
+  // Phones and tablets get the complete CSS frosted surface without downloading or running that
+  // extra module, keeping navigation and dashboard interaction responsive on constrained devices.
+  if (/\b(?:Android|iPhone|iPad|iPod|Mobile)\b/i.test(userAgent)) return false;
   return /(?:Chrome|Chromium)\//.test(userAgent) || /Edg\//.test(userAgent);
 }
 

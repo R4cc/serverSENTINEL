@@ -31,7 +31,7 @@ import { worldLandRings } from "./worldOutline";
 const mapWidth = 720;
 const mapHeight = 360;
 const desktopMarkerCollisionPx = 34;
-const mobileMarkerCollisionPx = 24;
+const mobileMarkerCollisionPx = 32;
 const serverMergeDistancePx = 42;
 const desktopClusterMarkerSizePx = 44;
 const clusterHoverCloseDelayMs = 160;
@@ -283,73 +283,84 @@ export function PlayerGeographyMap({
 
   const scale = renderedWidth > 0 ? renderedWidth / mapWidth : 1;
   const clusterMarkerSizePx = renderedWidth < 560 ? 32 : desktopClusterMarkerSizePx;
-  const server = serverLocation?.latitude !== undefined && serverLocation.longitude !== undefined
-    ? projectToMap(serverLocation.longitude, serverLocation.latitude, mapWidth, mapHeight)
-    : undefined;
-  // Projected once and shared: the server-merge search and the marker placement below both want
-  // the same point, and every hover re-runs all of this.
-  const markPoints = marks.map((mark) => projectToMap(mark.longitude, mark.latitude, mapWidth, mapHeight));
-  let nearestServerMark: { id: string; distancePx: number } | undefined;
-  if (server) {
-    marks.forEach((mark, index) => {
-      const distancePx = Math.hypot(markPoints[index].x - server.x, markPoints[index].y - server.y) * scale;
-      if (distancePx > serverMergeDistancePx) return;
-      if (!nearestServerMark || distancePx < nearestServerMark.distancePx) nearestServerMark = { id: mark.id, distancePx };
+  const server = useMemo(
+    () => serverLocation?.latitude !== undefined && serverLocation.longitude !== undefined
+      ? projectToMap(serverLocation.longitude, serverLocation.latitude, mapWidth, mapHeight)
+      : undefined,
+    [serverLocation?.latitude, serverLocation?.longitude]
+  );
+  const { serverMarkId, plottedMarks, routes, routeLabels } = useMemo(() => {
+    // Hovering a marker only changes emphasis and popup state. Keep the projection, containment,
+    // routes, accuracy radii, and label collision pass out of those pointer-driven rerenders.
+    const markPoints = marks.map((mark) => projectToMap(mark.longitude, mark.latitude, mapWidth, mapHeight));
+    let nearestServerMark: { id: string; distancePx: number } | undefined;
+    if (server) {
+      marks.forEach((mark, index) => {
+        const distancePx = Math.hypot(markPoints[index].x - server.x, markPoints[index].y - server.y) * scale;
+        if (distancePx > serverMergeDistancePx) return;
+        if (!nearestServerMark || distancePx < nearestServerMark.distancePx) nearestServerMark = { id: mark.id, distancePx };
+      });
+    }
+    const nextServerMarkId = nearestServerMark?.id;
+    const nextPlottedMarks = marks.map((mark, index) => {
+      const actualPoint = markPoints[index];
+      const sharesServer = mark.id === nextServerMarkId;
+      const originPoint = sharesServer && server ? server : actualPoint;
+      const clustered = mark.entries.length > 1;
+      const markerExtents = {
+        left: clustered ? clusterMarkerSizePx / 2 + 7 : 19,
+        right: clustered ? clusterMarkerSizePx / 2 + 7 : 19,
+        top: (sharesServer ? 48 : clustered ? 20 : 15) + 4,
+        bottom: (clustered ? 20 : 15) + 4
+      };
+      const point = clampPlayerMapPoint(originPoint, scale, markerExtents, mapWidth, mapHeight);
+      return {
+        mark,
+        point,
+        sharesServer,
+        accuracy: clusterAccuracyRadius(mark, point)
+      };
     });
-  }
-  const serverMarkId = nearestServerMark?.id;
-  const plottedMarks = marks.map((mark, index) => {
-    const actualPoint = markPoints[index];
-    const sharesServer = mark.id === serverMarkId;
-    const originPoint = sharesServer && server ? server : actualPoint;
-    const clustered = mark.entries.length > 1;
-    const markerExtents = {
-      left: clustered ? clusterMarkerSizePx / 2 + 7 : 19,
-      right: clustered ? clusterMarkerSizePx / 2 + 7 : 19,
-      top: (sharesServer ? 48 : clustered ? 20 : 15) + 4,
-      bottom: (clustered ? 20 : 15) + 4
-    };
-    const point = clampPlayerMapPoint(originPoint, scale, markerExtents, mapWidth, mapHeight);
+    const horizontalLabelInset = 28 / Math.max(scale, 0.01);
+    const nextRoutes = server
+      ? nextPlottedMarks.filter(({ sharesServer }) => !sharesServer).map((plotted) => {
+          const label = playerMapLabelPoint(plotted.point, scale, plotted.mark.entries.length > 1 ? 34 : 27);
+          return {
+            ...plotted,
+            arc: playerMapArc(server, plotted.point),
+            tone: latencyTone(plotted.mark.pingMs),
+            label: {
+              x: Math.min(mapWidth - horizontalLabelInset, Math.max(horizontalLabelInset, label.x)),
+              y: label.y
+            }
+          };
+        })
+      : [];
+    const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 4 : renderedWidth < 900 ? 10 : 14;
+    const nextRouteLabels = nextRoutes
+      .filter((route) => route.mark.pingMs !== undefined && route.arc.distance * scale >= 56)
+      .sort((left, right) => right.arc.distance - left.arc.distance)
+      .reduce<typeof nextRoutes>((accepted, route) => {
+        if (accepted.length >= labelLimit) return accepted;
+        const overlapsMarker = nextPlottedMarks.some((candidate) => (
+          candidate.mark.id !== route.mark.id
+          && Math.abs(candidate.point.x - route.label.x) * scale < 34
+          && Math.abs(candidate.point.y - route.label.y) * scale < 22
+        ));
+        const collides = accepted.some((candidate) => (
+          Math.abs(candidate.label.x - route.label.x) * scale < 56
+          && Math.abs(candidate.label.y - route.label.y) * scale < 18
+        ));
+        if (!overlapsMarker && !collides) accepted.push(route);
+        return accepted;
+      }, []);
     return {
-      mark,
-      point,
-      sharesServer,
-      accuracy: clusterAccuracyRadius(mark, point)
+      serverMarkId: nextServerMarkId,
+      plottedMarks: nextPlottedMarks,
+      routes: nextRoutes,
+      routeLabels: nextRouteLabels
     };
-  });
-  const horizontalLabelInset = 28 / Math.max(scale, 0.01);
-  const routes = server
-    ? plottedMarks.filter(({ sharesServer }) => !sharesServer).map((plotted) => {
-        const label = playerMapLabelPoint(plotted.point, scale, plotted.mark.entries.length > 1 ? 34 : 27);
-        return {
-          ...plotted,
-          arc: playerMapArc(server, plotted.point),
-          tone: latencyTone(plotted.mark.pingMs),
-          label: {
-            x: Math.min(mapWidth - horizontalLabelInset, Math.max(horizontalLabelInset, label.x)),
-            y: label.y
-          }
-        };
-      })
-    : [];
-  const labelLimit = renderedWidth < 420 ? 0 : renderedWidth < 560 ? 4 : renderedWidth < 900 ? 10 : 14;
-  const routeLabels = routes
-    .filter((route) => route.mark.pingMs !== undefined && route.arc.distance * scale >= 56)
-    .sort((left, right) => right.arc.distance - left.arc.distance)
-    .reduce<typeof routes>((accepted, route) => {
-      if (accepted.length >= labelLimit) return accepted;
-      const overlapsMarker = plottedMarks.some((candidate) => (
-        candidate.mark.id !== route.mark.id
-        && Math.abs(candidate.point.x - route.label.x) * scale < 34
-        && Math.abs(candidate.point.y - route.label.y) * scale < 22
-      ));
-      const collides = accepted.some((candidate) => (
-        Math.abs(candidate.label.x - route.label.x) * scale < 56
-        && Math.abs(candidate.label.y - route.label.y) * scale < 18
-      ));
-      if (!overlapsMarker && !collides) accepted.push(route);
-      return accepted;
-    }, []);
+  }, [clusterMarkerSizePx, marks, renderedWidth, scale, server]);
 
   return (
     <figure className="playerMap">

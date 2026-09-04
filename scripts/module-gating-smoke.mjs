@@ -65,10 +65,13 @@ async function openSession(browser) {
   return { context, page, scripts };
 }
 
-/** Chunks arrive on an idle prefetch, so give the queue a moment before judging it. */
+/**
+ * Bulk prefetch deliberately waits ten seconds so it cannot compete with initial rendering. Let
+ * that quiet window and the following idle imports complete before judging requested chunks.
+ */
 async function settlePrefetch(page) {
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1_500);
+  await page.waitForTimeout(11_500);
 }
 
 async function openSettingsCategory(page, category) {

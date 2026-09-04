@@ -43,7 +43,7 @@ export function EventIcon({ kind }: { kind: EventIconKind }) {
       {kind === "player_reconnected" && <><circle cx="8" cy="8" r="3" /><path d="M2.5 19c.5-3.5 2.3-5 5.5-5 1.4 0 2.5.3 3.4.8" /><path d="M14 10a5 5 0 1 1-1 7m1 3-1-3 3-1" /></>}
       {kind === "server_started" && <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m10 8 6 4-6 4Z" /></>}
       {kind === "server_stopped" && <><rect x="3" y="4" width="18" height="16" rx="3" /><rect x="9" y="9" width="6" height="6" /></>}
-      {kind === "server_restarted" && <><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M8 12a4 4 0 0 1 7-2m1-2-1 2-2-1" /><path d="M16 12a4 4 0 0 1-7 2m-1 2 1-2 2 1" /></>}
+      {kind === "server_restarted" && <><path d="M20 7v5h-5" /><path d="M18.5 16.5A8 8 0 1 1 20 12" /><path d="M4 17v-5h5" /><path d="M5.5 7.5A8 8 0 0 1 4 12" /></>}
       {kind === "automation_run" && <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /><path d="m9 15 2 2 4-4" /></>}
       {kind === "mod_disabled" && <><path d="M8 3h8v4a2 2 0 1 1 0 4v10H8v-4a2 2 0 1 0 0-4Z" /><path d="m4 4 16 16" /></>}
       {kind === "server_crashed" && <><path d="M12 3 2.5 20h19Z" /><path d="M12 9v5m0 3h.01" /></>}

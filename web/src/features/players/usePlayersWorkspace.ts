@@ -29,7 +29,7 @@ export function usePlayersWorkspace(inputs: {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const serverId = inputs.activeServer?.id ?? "";
-  const inFlightRef = useRef(false);
+  const inFlightRef = useRef<{ key: string; controller: AbortController } | null>(null);
   const loadedServerRef = useRef("");
   /**
    * The shell rebuilds these on every render, and the poll below depends on `load`. Holding them
@@ -42,30 +42,42 @@ export function usePlayersWorkspace(inputs: {
   const staleSessionRef = useRef(inputs.handleStaleSession);
   staleSessionRef.current = inputs.handleStaleSession;
 
-  const load = useCallback(async (options: { showLoading?: boolean } = {}) => {
-    if (!serverId || inFlightRef.current) return;
+  const load = useCallback(async (options: { showLoading?: boolean; replace?: boolean } = {}) => {
+    if (!serverId) return;
+    const requestKey = `${inputs.activeServerIsDemo ? "demo" : "remote"}:${serverId}:${range}`;
+    if (inFlightRef.current?.key === requestKey && !options.replace) return;
+    // A request for another server or range no longer owns this workspace. Abort it before the new
+    // request starts so it cannot suppress the load or paint its response under the new heading.
+    inFlightRef.current?.controller.abort();
+    inFlightRef.current = null;
     if (inputs.activeServerIsDemo) {
       setInsights(demoPlayerInsights(serverId, inputs.demoRunning, range));
       setError("");
       setLoading(false);
       return;
     }
-    inFlightRef.current = true;
+    const controller = new AbortController();
+    inFlightRef.current = { key: requestKey, controller };
     if (options.showLoading) setLoading(true);
     try {
       const data = await api<PlayerInsightsResponse>(
-        `/api/players/insights?serverId=${encodeURIComponent(serverId)}&windowMs=${rangeWindowMs(range)}`
+        `/api/players/insights?serverId=${encodeURIComponent(serverId)}&windowMs=${rangeWindowMs(range)}`,
+        { signal: controller.signal, timeoutMs: 15_000 }
       );
+      if (controller.signal.aborted) return;
       setInsights(data);
       setError("");
     } catch (requestError) {
+      if (controller.signal.aborted) return;
       if (staleSessionRef.current(requestError)) return;
       // Whatever was loaded before is left on screen: a failed refresh should not blank a page the
       // operator is reading, so the message sits beside the data it could not replace.
       setError(errorMessage(requestError, "Could not load player insights."));
     } finally {
-      inFlightRef.current = false;
-      setLoading(false);
+      if (inFlightRef.current?.controller === controller) {
+        inFlightRef.current = null;
+        setLoading(false);
+      }
     }
   }, [serverId, range, inputs.activeServerIsDemo, inputs.demoRunning]);
 
@@ -75,9 +87,17 @@ export function usePlayersWorkspace(inputs: {
   useEffect(() => {
     // Another server's players are another page's data; showing the previous one while the next
     // loads would attribute one server's geography to another.
+    inFlightRef.current?.controller.abort();
+    inFlightRef.current = null;
+    setLoading(false);
     setInsights(null);
     setError("");
   }, [serverId]);
+
+  useEffect(() => () => {
+    inFlightRef.current?.controller.abort();
+    inFlightRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (!inputs.active || !serverId) return;
@@ -102,7 +122,7 @@ export function usePlayersWorkspace(inputs: {
         method: "PUT",
         body: JSON.stringify({ address })
       });
-      await load();
+      await load({ replace: true });
       notifyRef.current("success", address ? "Server location updated" : "Server location cleared");
       return true;
     } catch (requestError) {
@@ -119,7 +139,7 @@ export function usePlayersWorkspace(inputs: {
     setBusy(true);
     try {
       await api("/api/players/geo-database/refresh", { method: "POST" });
-      await load();
+      await load({ replace: true });
       notifyRef.current("success", "GeoLite2 database checked");
       return true;
     } catch (requestError) {

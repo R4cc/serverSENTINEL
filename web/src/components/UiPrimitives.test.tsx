@@ -42,6 +42,14 @@ describe("UI primitives", () => {
     expect(html).toContain('id="retention-help" role="tooltip"');
   });
 
+  it("supports a descriptive custom tooltip trigger", () => {
+    const html = renderToStaticMarkup(<HelpTooltip id="events-help" label="2 related events" trigger={<span>2 related events</span>}>Event details</HelpTooltip>);
+
+    expect(html).toContain('aria-label="About 2 related events"');
+    expect(html).toContain('<span>2 related events</span>');
+    expect(html).toContain('id="events-help" role="tooltip"');
+  });
+
   it("hosts help in panel headers and form labels without nesting a button inside a label", () => {
     const panel = renderToStaticMarkup(<PanelHeader title="Players" help={<HelpTooltip id="players-help" label="players">Approximate locations.</HelpTooltip>} />);
     const field = renderToStaticMarkup(<FormField htmlFor="address" label="Address" help={<HelpTooltip id="address-help" label="address">Public host name.</HelpTooltip>}><input id="address" /></FormField>);

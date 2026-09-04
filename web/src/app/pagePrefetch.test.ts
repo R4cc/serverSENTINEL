@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pagePrefetchAllowed, pagePrefetchOrder } from "./pagePrefetch";
+import { pagePrefetchAllowed, pagePrefetchDelayMs, pagePrefetchOrder } from "./pagePrefetch";
 
 describe("page prefetch", () => {
   it("queues every lazily loaded workspace page", () => {
@@ -8,10 +8,11 @@ describe("page prefetch", () => {
     );
   });
 
-  // Lighthouse's all-page flow showed that first-use xterm setup dominates the Console transition,
-  // so it gets the first idle slot and the cheaper pages follow immediately afterwards.
-  it("warms the expensive console before the first interaction", () => {
+  // Once the first-render quiet window has passed, first-use xterm setup is still the most useful
+  // module to warm because it dominates the Console transition.
+  it("warms the expensive console first without competing with initial rendering", () => {
     expect(pagePrefetchOrder.at(0)).toBe("console");
+    expect(pagePrefetchDelayMs).toBeGreaterThanOrEqual(10_000);
   });
 
   it("stands down on connections where speculative bytes cost the visitor", () => {

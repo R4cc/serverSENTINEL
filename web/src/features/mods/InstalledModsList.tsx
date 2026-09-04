@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
@@ -34,32 +34,38 @@ function canonicalModFilename(filename: string) {
   return filename.replace(/\.jar\.disabled$/i, ".jar").toLowerCase();
 }
 
-function restartChangeMatchesMod(mod: InstalledMod, change: RestartRequiredChange) {
-  if (change.action === "removed") return false;
-  const filename = canonicalModFilename(mod.filename);
-  const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${filename}`;
-  return change.identity === identity || Boolean(change.filename && canonicalModFilename(change.filename) === filename);
-}
-
 export function InstalledModsList({ terminology = fabricContentTerminology, mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
+  const deferredQuery = useDeferredValue(query);
   // Filtering, health resolution, and sorting cost more than the rows they feed, and the parent
-  // re-renders for reasons that have nothing to do with this list — console output, for one.
+  // re-renders for reasons that have nothing to do with this list. Deferring the query keeps the
+  // search control responsive even when a large installation has hundreds of rows to rank.
   const visible = useMemo(() => {
     const plannedUpdateFor = updatePlanEntryLookup(updatePlan ?? null);
-    return filterInstalledMods(mods, query)
+    const restartIdentities = new Set<string>();
+    const restartFilenames = new Set<string>();
+    for (const change of restartRequiredChanges) {
+      if (change.action === "removed") continue;
+      restartIdentities.add(change.identity);
+      if (change.filename) restartFilenames.add(canonicalModFilename(change.filename));
+    }
+    return filterInstalledMods(mods, deferredQuery)
       .map((mod) => {
         const plannedUpdate = plannedUpdateFor(mod);
+        const filename = canonicalModFilename(mod.filename);
+        const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${filename}`;
         return {
           mod,
           plannedUpdate,
+          installedVersion: modVersion(mod),
           health: getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate), terminology),
+          requiresRestart: restartIdentities.has(identity) || restartFilenames.has(filename),
           updateAvailable: plannedUpdate
             ? plannedUpdate.status === "safe_update" || plannedUpdate.status === "needs_review"
             : mod.versionInfo?.upToDate === false && Boolean(mod.versionInfo.latestVersion)
         };
       })
       .sort((a, b) => Number(b.updateAvailable) - Number(a.updateAvailable));
-  }, [mods, query, terminology, updatePlan]);
+  }, [deferredQuery, mods, restartRequiredChanges, terminology, updatePlan]);
   const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
 
@@ -103,10 +109,9 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
           Array.from({ length: 5 }, (_, index) => <InstalledModSkeletonRow key={index} />)
         ) : visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? `No matching ${terminology.plural}` : `No ${terminology.plural} installed yet`} message={mods.length ? "Try a different search." : `Add a compatible ${terminology.runtimeName} ${terminology.singular} or upload a jar to get started.`} />
-        ) : visible.map(({ mod, plannedUpdate, health }) => {
+        ) : visible.map(({ mod, plannedUpdate, installedVersion, health, requiresRestart }) => {
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
-          const requiresRestart = restartRequiredChanges.some((change) => restartChangeMatchesMod(mod, change));
           return (
             <article
               key={mod.filename}
@@ -120,7 +125,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
               </button>
               <div className="modsWorkspaceMetadata">
                 <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
-                <div className="modsWorkspaceVersion" title={modVersion(mod)}>{modVersion(mod)}</div>
+                <div className="modsWorkspaceVersion" title={installedVersion}>{installedVersion}</div>
               </div>
               <div className="modsWorkspaceUpdate">
                 {health.key === "missing_dependencies" && (
