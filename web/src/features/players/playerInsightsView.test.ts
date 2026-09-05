@@ -166,6 +166,23 @@ describe("map marks", () => {
     expect(Math.min(...arc.controls.map((control) => control.y))).toBeLessThan(120);
   });
 
+  it.each([[1, 0], [-1, 0], [0, 1], [0, -1], [0.6, 0.8]])("keeps nearby routes nearly direct in direction %s, %s", (dx, dy) => {
+    const start = { x: 380, y: 85 };
+    for (const distance of [0.1, 1, 5, 10]) {
+      const end = { x: start.x + dx * distance, y: start.y + dy * distance };
+      const arc = playerMapArc(start, end);
+      for (const control of arc.controls) {
+        const offset = Math.abs((control.x - start.x) * dy - (control.y - start.y) * dx);
+        expect(offset).toBeLessThan(distance * 0.01);
+      }
+    }
+  });
+
+  it.each([0, 4, 85])("does not draw a loop for coincident locations at y=%s", (y) => {
+    const point = { x: 380, y };
+    expect(playerMapArc(point, point).controls).toEqual([point, point]);
+  });
+
   it("flips panels above or below markers using the visible viewport", () => {
     expect(playerMapPopupPlacement({
       marker: { left: 340, right: 380, top: 278, bottom: 322 },

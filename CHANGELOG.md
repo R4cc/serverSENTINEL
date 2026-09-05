@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.10 - 2026-09-05
+
+- Made player-map connections nearly straight for nearby locations while preserving curved routes over longer distances.
+
 ## 26.9.9 - 2026-09-05
 
 - Prevented overlapping node observations from duplicating recent log lines and reduced redundant node lookups during observation polling and foreground reads.

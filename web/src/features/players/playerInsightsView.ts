@@ -209,25 +209,29 @@ export function layoutPlayerMapBadges(
   });
 }
 
-/** A restrained northward cubic arc between the server and a player marker. */
+/** Nearby locations connect almost directly; longer routes retain a northward arc. */
 export function playerMapArc(
   start: { x: number; y: number },
   end: { x: number; y: number }
 ): PlayerMapArc {
   const delta = { x: end.x - start.x, y: end.y - start.y };
   const distance = Math.hypot(delta.x, delta.y);
-  const lift = Math.min(72, Math.max(10, distance * 0.18));
+  // Ease out the bow over 80 map units (40 degrees), independently of the zoom level.
+  const proximity = Math.min(1, distance / 80);
+  const curvature = proximity * proximity * (3 - 2 * proximity);
+  const lift = Math.min(72, distance * 0.18) * curvature;
+  const northLimit = Math.min(8, start.y, end.y);
   const direction = distance > 0 ? { x: delta.x / distance, y: delta.y / distance } : { x: 1, y: 0 };
   let normal = { x: -direction.y, y: direction.x };
   if (normal.y > 0) normal = { x: -normal.x, y: -normal.y };
   const controls: PlayerMapArc["controls"] = [
     {
       x: start.x + delta.x * 0.32 + normal.x * lift,
-      y: Math.max(8, start.y + delta.y * 0.32 + normal.y * lift)
+      y: Math.max(northLimit, start.y + delta.y * 0.32 + normal.y * lift)
     },
     {
       x: start.x + delta.x * 0.68 + normal.x * lift,
-      y: Math.max(8, start.y + delta.y * 0.68 + normal.y * lift)
+      y: Math.max(northLimit, start.y + delta.y * 0.68 + normal.y * lift)
     }
   ];
   return {
