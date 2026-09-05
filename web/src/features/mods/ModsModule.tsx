@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { ModHistoryPage } from "./ModHistoryPage";
+import { useDemoModHistory } from "./useDemoModHistory";
 import { toast } from "sonner";
+import { ToastProgress } from "../../components/ToastProgress";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import type { ServerRuntimeType } from "@serversentinel/contracts";
 import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModUpdatePlan, Notify, ServerStatus } from "../../types";
@@ -74,6 +77,9 @@ export type ModsModuleProps = {
 };
 
 export function ModsModule(props: ModsModuleProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const demoHistory = useDemoModHistory(props.activeServer?.id, props.activeServerIsDemo, props.demoInstalledMods, props.setDemoInstalledMods);
+  useEffect(() => { setHistoryOpen(false); }, [props.activeServer?.id, props.active]);
   const guards = resolveModGuards({
     isProvisioning: props.isProvisioning,
     dockerOperationalLock: props.dockerOperationalLock,
@@ -127,14 +133,14 @@ export function ModsModule(props: ModsModuleProps) {
     updateCheckInFlightRef.current = true;
     const managedContent = contentRef.current;
     const toastId = `overview-mod-update-check:${serverIdRef.current ?? "current"}`;
-    toast.loading("Checking for updates", { id: toastId, duration: Infinity, dismissible: false });
+    toast.loading("Checking for updates", { id: toastId, description: <ToastProgress />, duration: Infinity, dismissible: false });
     try {
       const updatePlan = await workspaceRef.current.actions.refresh(true, false);
       if (!updatePlan) {
-        toast.error(`Could not check ${managedContent.singular} updates`, { id: toastId, duration: 7000, closeButton: true, dismissible: true });
+        toast.error(`Could not check ${managedContent.singular} updates`, { id: toastId, description: <ToastProgress status="failed" />, duration: 7000, closeButton: true, dismissible: true });
         return;
       }
-      toast.success(modUpdateRefreshResultMessage(updatePlan, managedContent.plural), { id: toastId, duration: 5000, closeButton: true, dismissible: true });
+      toast.success(modUpdateRefreshResultMessage(updatePlan, managedContent.plural), { id: toastId, description: <ToastProgress status="succeeded" />, duration: 5000, closeButton: true, dismissible: true });
     } catch (error) {
       toast.error(`Could not check ${managedContent.singular} updates`, {
         id: toastId,
@@ -168,8 +174,21 @@ export function ModsModule(props: ModsModuleProps) {
 
   if (!props.active || !props.activeServer) return null;
 
+  if (historyOpen) return <ModHistoryPage key={props.activeServer.id} serverId={props.activeServer.id}
+    terminology={props.managedContent} installedMods={workspace.data.installedMods} locked={guards.modsLocked || mutating}
+    requestConfirmation={props.requestConfirmation} onBack={() => setHistoryOpen(false)}
+    onChanged={async () => {
+      // Demo changes flow through the fixture prop; an in-flight refresh would replay the old array.
+      if (!props.activeServerIsDemo && props.activeServer) await Promise.all([
+        workspace.actions.refresh(true, false),
+        props.refreshFiles(props.activeServer.id, `/${props.managedContent.directory}`)
+      ]);
+    }}
+    formatDate={props.formatDate} handleStaleSession={props.handleStaleSession} source={demoHistory} />;
+
   return (
     <ModsPage
+      onHistory={() => setHistoryOpen(true)}
       workspace={workspace}
       runtimeType={props.runtimeType}
       restartRequiredChanges={props.restartRequiredChanges}

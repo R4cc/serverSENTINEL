@@ -1029,21 +1029,13 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   align-items: center;
 }
 
-.fileToolbar,
-.modsWorkspaceToolbar {
+.fileToolbar {
   min-height: var(--toolbar-min-height);
   padding: var(--space-3);
   border-color: var(--border-row);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-muted));
   box-shadow: none;
-}
-
-.modsWorkspacePage > .modsWorkspaceToolbar {
-  padding-inline: 0;
-  border-inline-width: 0;
-  border-radius: 0;
-  background: transparent;
 }
 
 .fileToolbar .uiButton,

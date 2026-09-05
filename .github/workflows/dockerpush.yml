@@ -10,6 +10,11 @@ name: ci
       - main
       - dev
   workflow_dispatch:
+    inputs:
+      browser_comparison_base:
+        description: 'Optional base commit for documentation-only detection; omit to force browser coverage'
+        required: false
+        type: string
 
 # Superseding a pull request commit leaves the previous run doing a full install, test,
 # typecheck and Docker build for a commit nobody will merge. Push runs are never cancelled:
@@ -29,6 +34,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Compare the complete push/PR, including changes older than its last commit.
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -38,6 +46,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Determine browser coverage
+        id: browser
+        run: node scripts/browser-ci-changes.mjs
+
+      - name: Test CI orchestration
+        run: node --test scripts/browser-ci.test.mjs
 
       - name: Test
         run: npm run test
@@ -50,11 +65,13 @@ jobs:
         run: npm run typecheck
 
       - name: Install smoke browsers
-        run: npx playwright install --with-deps chromium webkit
+        if: steps.browser.outputs.required == 'true'
+        run: npx playwright install --with-deps --only-shell chromium webkit
 
       # Keep this in the existing ci check so browser regressions block PRs and publishing.
       # The suite builds once and exercises the production UI against isolated demo servers.
       - name: Browser regression gate (loading, console continuity, mobile navigation)
+        if: steps.browser.outputs.required == 'true'
         timeout-minutes: 15
         env:
           CONSOLE_LOADING_REPEATS: '1'

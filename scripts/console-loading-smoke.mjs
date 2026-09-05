@@ -92,10 +92,29 @@ try {
           await Promise.all([page.locator(`[data-nav-page="${name}"]`).evaluate(element => element.click()), connected]);
         } finally { clearTimeout(timeout); }
       };
-      const waitForTail = seq => page.waitForFunction(seq => [...document.querySelectorAll(".xterm-rows > div")].map(row => row.textContent).join("").includes(`ROW_${seq}_END`), seq);
+      const waitForTail = async seq => {
+        try {
+          await page.waitForFunction(seq => [...document.querySelectorAll(".xterm-rows > div")].map(row => row.textContent).join("").includes(`ROW_${seq}_END`), seq);
+        } catch (error) {
+          const state = await page.evaluate(() => ({
+            text: document.querySelector(".xterm-rows")?.textContent,
+            newOutputAvailable: !!document.querySelector(".consoleJumpToBottom")
+          }));
+          throw new Error(`Console tail missing: ${JSON.stringify({ width, count, repeat, seq, connections, errors, state })}`, { cause: error });
+        }
+      };
       await page.goto(harness.baseUrl);
       await page.locator(".appShell").waitFor().catch(error => {
         throw new Error(`App shell failed to load: ${[...errors, ...failedRequests].join("; ")}`, { cause: error });
+      });
+      await page.evaluate(() => {
+        window.WebSocket = new Proxy(window.WebSocket, {
+          construct(target, args) {
+            const socket = Reflect.construct(target, args);
+            if (new URL(args[0]).pathname === "/ws/console") window.consoleTestSocket = socket;
+            return socket;
+          }
+        });
       });
       await page.evaluate(() => { window.consoleTiming.started = performance.now(); });
       await navigate("console");
@@ -119,24 +138,57 @@ try {
       assert.equal(await page.evaluate(() => window.retainedTerminal === document.querySelector(".xterm")), true);
 
       if (!process.env.CONSOLE_LOADING_BASELINE) {
-        // Hold just the app's next frame flush; deliver output, then navigate before it can commit.
+        // Hold the app's next log flush; deliver output, then navigate before it can commit.
+        // Leave terminal/layout frames running: freezing those introduces unrelated scroll races.
+        // Keep distinct handles and honor cancellation, including after release. Replaying
+        // canceled layout/render callbacks can falsely move xterm away from its latest line.
         await page.evaluate(() => {
-          window.savedRAF = window.requestAnimationFrame;
-          window.heldFrames = [];
-          window.requestAnimationFrame = callback => { window.heldFrames.push(callback); return -1; };
+          const cancel = window.cancelAnimationFrame.bind(window);
+          window.heldFrames = new Map();
+          let nextId = -1;
+          const holdFrame = callback => {
+            const id = nextId--;
+            window.heldFrames.set(id, { callback });
+            return id;
+          };
+          const socket = window.consoleTestSocket;
+          const handleMessage = socket.onmessage;
+          socket.onmessage = function(event) {
+            if (JSON.parse(event.data).type !== "log") return handleMessage.call(this, event);
+            const request = window.requestAnimationFrame;
+            window.requestAnimationFrame = holdFrame;
+            try { return handleMessage.call(this, event); }
+            finally {
+              window.requestAnimationFrame = request;
+              socket.onmessage = handleMessage;
+            }
+          };
+          window.cancelAnimationFrame = id => {
+            const held = window.heldFrames.get(id);
+            if (held) {
+              window.heldFrames.delete(id);
+              if (held.nativeId !== undefined) cancel(held.nativeId);
+            } else cancel(id);
+          };
         });
         const next = payload(1, count + 101);
         lines.push(...next);
         socket.send(JSON.stringify({ type: "log", epoch, lines: next }));
-        await page.waitForFunction(() => window.heldFrames.length >= 2);
+        await page.waitForFunction(() => window.heldFrames.size >= 1);
+        assert(!await page.locator(".xterm-rows").textContent().then(text => text.includes(`ROW_${count + 101}_END`)), "queued line rendered before navigation");
         await navigate("files");
         await page.locator(".consoleTabPage").waitFor({ state: "hidden" });
         await page.evaluate(() => {
-          window.requestAnimationFrame = window.savedRAF;
-          for (const callback of window.heldFrames) requestAnimationFrame(callback);
+          for (const [id, held] of window.heldFrames) {
+            held.nativeId = requestAnimationFrame(time => {
+              window.heldFrames.delete(id);
+              held.callback(time);
+            });
+          }
         });
         await navigate("console");
         await waitForTail(count + 101);
+        assert.equal(connections.at(-1), count + 101, "navigation did not retain the cursor for the queued line");
         // Replayed overlapping lines must not appear twice, even when their text is identical.
         const overlap = payload(2, count + 101);
         lines.push(overlap[1]);

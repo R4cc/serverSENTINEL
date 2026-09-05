@@ -141,7 +141,7 @@ export class RemoteObservationCoordinator {
       byNode.set(node.id, grouped);
     }
     await Promise.allSettled(Array.from(byNode.entries()).map(async ([nodeId, grouped]) => {
-      return this.observeNodeOnce(nodeId, () => this.observeNode(grouped, sectionsFor));
+      return this.observeNodeOnce(nodeId, () => this.observeNode(grouped, sectionsFor, nodes.get(nodeId)));
     }));
   }
 
@@ -160,7 +160,7 @@ export class RemoteObservationCoordinator {
     // permits concurrent requests, and sequence-aware storage below prevents an older background
     // response from replacing the newer foreground result when it eventually arrives.
     const key = `${server.id}:${[...stillMissing].sort().join(",")}`;
-    await this.observeForegroundOnce(key, () => this.observeNode([server], () => stillMissing));
+    await this.observeForegroundOnce(key, () => this.observeNode([server], () => stillMissing, node));
   }
 
   private observeNodeOnce(nodeId: string, operation: () => Promise<void>) {
@@ -183,15 +183,17 @@ export class RemoteObservationCoordinator {
     return request;
   }
 
-  private async observeNode(servers: ManagedServer[], sectionsFor: (server: ManagedServer) => ServerObservationSection[]) {
-    const node = await this.options.lookupNode(servers[0]?.nodeId);
+  private async observeNode(servers: ManagedServer[], sectionsFor: (server: ManagedServer) => ServerObservationSection[], resolvedNode?: ManagedNode) {
+    const node = resolvedNode ?? await this.options.lookupNode(servers[0]?.nodeId);
     if (!node) throw new Error("Remote node was not found");
     for (let offset = 0; offset < servers.length; offset += nodeProtocolObservationBatchSize) {
       const chunk = servers.slice(offset, offset + nodeProtocolObservationBatchSize);
       this.sequence += 1;
       const sequence = this.sequence;
+      const logBases = new Map<string, string>();
       const requested = chunk.map((server) => {
         const sections = sectionsFor(server);
+        if (sections.includes("logs")) logBases.set(server.id, this.cache.get(server.id)?.logText ?? "");
         return {
           server: compactNodeServerSpec(server),
           sections,
@@ -211,11 +213,11 @@ export class RemoteObservationCoordinator {
       // against the panel's. A node running even a second behind made every observation look stale
       // on arrival, so each read forced its own round trip alongside the background tick.
       const observedAt = Date.now();
-      for (const item of response.items) this.store(item, observedAt, sequence);
+      for (const item of response.items) this.store(item, observedAt, sequence, logBases.get(item.serverId));
     }
   }
 
-  private store(item: ServerObservationResultItem, observedAt: number, sequence: number) {
+  private store(item: ServerObservationResultItem, observedAt: number, sequence: number, logBase = "") {
     const cached = this.cache.get(item.serverId) ?? {};
     // A background tick and an on-demand read can be in flight together, and the older request can
     // answer last. Counter-backed sections such as `stats` read as a reset when that happens, so
@@ -232,7 +234,9 @@ export class RemoteObservationCoordinator {
     success("players", item.players);
     success("overviewFiles", item.overviewFiles);
     if (item.logs !== undefined && !superseded("logs")) {
-      const combined = item.logs.reset ? item.logs.text : `${cached.logText ?? ""}${item.logs.text}`;
+      // The delta belongs to the cursor sent with this request. Another in-flight observation
+      // may already have appended overlapping bytes to the cache before this response arrives.
+      const combined = item.logs.reset ? item.logs.text : `${logBase}${item.logs.text}`;
       cached.logText = combined.length > recentLogCacheBytes ? combined.slice(-recentLogCacheBytes) : combined;
       cached.logCursor = item.logs.cursor;
       cached.logs = entry({ text: cached.logText, source: item.logs.source });

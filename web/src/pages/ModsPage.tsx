@@ -5,7 +5,6 @@ import { Banner, Button, Toolbar } from "../components/UiPrimitives";
 import { AddModsWorkflow } from "../features/mods/AddModsWorkflow";
 import { InstalledModsList } from "../features/mods/InstalledModsList";
 import { ModDetailsPanel } from "../features/mods/ModDetailsPanel";
-import { ModsSummary } from "../features/mods/ModsSummary";
 import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace";
 import type { RestartRequiredChange } from "../types";
 import { canUpdateAllSafe, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
@@ -33,6 +32,7 @@ type ModsPageAccess = {
 };
 
 type Props = {
+  onHistory?: () => void;
   workspace: ModsWorkspaceController;
   runtimeType: ServerRuntimeType;
   restartRequiredChanges?: RestartRequiredChange[];
@@ -45,7 +45,7 @@ type Props = {
   };
 };
 
-export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serverContext, access, relativeTimestamps, formatters }: Props) {
+export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serverContext, access, relativeTimestamps, formatters, onHistory }: Props) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const terminology = managedContentTerminology(runtimeType);
   const { data, state, derived, refs, actions } = workspace;
@@ -59,10 +59,9 @@ export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serve
   return (
     <section className="tabPage modsWorkspacePage layoutWide">
       {!access.modrinthConfigured && <Banner tone="info" title="Modrinth search is unavailable." message={<>Installed {terminology.singular} management still works. Add an API key in Settings to search and install {terminology.plural}.</>} />}
-      <ModsSummary mods={data.installedMods} updatePlan={data.updatePlan} loading={state.modsLoading} terminology={terminology} />
       <Toolbar
         className="modsWorkspaceToolbar"
-        primary={<div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add {terminology.plural}</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button></div>}
+        primary={<div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add {terminology.plural}</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button>{onHistory && <Button variant="secondary" onClick={onHistory}><AppIcon name="history" /> Update history</Button>}</div>}
         meta={<span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt} title={relativeTimestamps ? formatters.date(data.updatePlan.generatedAt) : undefined}>{relativeTimestamps ? formatRelativeTimestamp(data.updatePlan.generatedAt) : formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span>}
         secondary={<div className="modsWorkspaceUpdateActions">
           <Button variant="secondary" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? `Waiting for the current ${terminology.singular} change to finish.` : state.updatePlanLoading ? `Checking installed ${terminology.plural} for updates.` : `Check installed ${terminology.plural} for updates.`} reserveLabel={<><AppIcon name="refresh" />Check updates</>}><AppIcon name="refresh" /> {state.updatePlanLoading ? "Checking…" : "Check updates"}</Button>

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { archiveModSnapshot, modHistoryChanges, modHistoryRepository, pruneModHistoryArchives, readModHistorySnapshot, type ModHistoryActor } from "./modHistory.js";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -277,7 +278,11 @@ export function runtimeRunning(status: unknown) {
   return typeof docker?.running === "boolean" ? docker.running : undefined;
 }
 
-export async function withTrackedModMutation<T>(server: ManagedServer, action: () => Promise<T>) {
+export async function withRecordedModMutation<T>(server: ManagedServer, actor: ModHistoryActor, action: () => Promise<T>, revertsEntryId?: string) {
+  return withTrackedModMutation(server, action, actor, revertsEntryId);
+}
+
+export async function withTrackedModMutation<T>(server: ManagedServer, action: () => Promise<T>, actor?: ModHistoryActor, revertsEntryId?: string) {
   return withModMutationLock(server.id, async () => {
     if (blockingRuntimeOperations(server.id).length > 0) {
       operationInProgress("A server runtime action is already running", "RUNTIME_OPERATION_IN_PROGRESS");
@@ -302,6 +307,8 @@ export async function withTrackedModMutation<T>(server: ManagedServer, action: (
       }
     }
 
+    const historyBefore = actor ? await readModHistorySnapshot(server) : [];
+    if (actor) await archiveModSnapshot(server, historyBefore);
     let result!: T;
     let actionError: unknown;
     try {
@@ -311,6 +318,20 @@ export async function withTrackedModMutation<T>(server: ManagedServer, action: (
     }
 
     let reconciliationError: unknown;
+    if (actor) {
+      try {
+        const historyAfter = await readModHistorySnapshot(server);
+        await archiveModSnapshot(server, historyAfter.filter((snapshot) => !snapshot.sha1));
+        const entries = modHistoryChanges(historyBefore, historyAfter, actor, revertsEntryId);
+        modHistoryRepository().append(server.id, entries, actionError ? undefined : revertsEntryId);
+        await archiveModSnapshot(server, historyAfter);
+        await pruneModHistoryArchives(server, historyAfter).catch((error) => {
+          logWarn({ serverId: server.id, ...errorLogFields(error) }, "Could not prune mod history archives");
+        });
+      } catch (error) {
+        reconciliationError = error;
+      }
+    }
     if (baseline) {
       try {
         const current = snapshotMods(await listModsWithPanelMetadata(server));

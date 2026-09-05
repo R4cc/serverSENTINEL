@@ -38,6 +38,29 @@ Runs already in flight are left to finish. Interrupting a schedule midway throug
 
 Disabling is never destructive to what a server holds. Switching managed content off leaves every installed jar where it is — the server keeps loading them, and they are managed again the moment the module returns. The panel simply stops offering to change them.
 
+## Mod update history
+
+The Mods/Plugins workspace opens **Update history** as a separate screen. It records panel installs,
+uploads, version changes, removals and enable/disable actions, including changes through the file
+manager. Dependency installs and batch changes have one entry per affected jar. Each entry retains
+the acting user's name at the time of the action, its timestamp and the versions before and after.
+Older activity and changes made directly on a node outside the panel are not backfilled.
+
+Revert requires confirmation and the permission for the inverse action: remove for an installation,
+install or upload for a removal, update for a version change, or enable/disable for a state change.
+The current filename, content hash and enabled state must still match the entry; another mod cannot
+occupy the filename or project being restored. A revert is recorded as another entry and the original
+is marked reverted. Other mods, dependencies and configuration files are not rolled back with it.
+Normal mutation locks and restart tracking apply. History remains readable when a node is offline;
+reverts require the runtime to reconnect.
+
+The latest 500 entries per server are kept in SQLite. Saved jars live in the `mod-history` directory
+beside the panel database, deduplicated by content hash. Back up both together. The first change
+archives the existing jars; subsequent changes reuse saved copies. Archives referenced by retained
+history or currently installed jars are kept, and unreferenced copies are pruned after changes.
+Saved bytes let uploaded and deleted jars be restored without a Modrinth download. Unknown versions
+are labelled explicitly. Demo history follows the browser's simulated mods and resets with its session.
+
 ## When something goes wrong
 
 `enabled` is the administrator's setting; `accessible` is whether the module can actually be used. They come apart when a runtime fails:

@@ -482,7 +482,7 @@ export function PlayersPage({
           <PanelHeader
             title="Player geography"
             description={serverLocation?.location
-              ? `Measured from ${serverLocation.location.label}`
+              ? `Measured from ${serverLocation.location.country ?? serverLocation.location.label}`
               : serverLocation?.address
                 ? `${serverLocation.address} could not be placed; distances are unavailable.`
                 : "Set the server address for distance estimates."}
@@ -495,7 +495,7 @@ export function PlayersPage({
                   aria-pressed={mapScope === "online"}
                   onClick={() => setMapScope("online")}
                 >
-                  Online
+                  <span className="playerMapOnlineDot" aria-hidden="true" /> Online
                 </Button>
                 <Button
                   variant={mapScope === "all" ? "secondary" : "ghost"}

@@ -56,6 +56,10 @@ jobs:
       - name: Capture screenshots
         run: npm run screenshots:update
 
+      - name: Read screenshot comparison base
+        id: comparison
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Create or update screenshot pull request
         id: pull-request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
@@ -84,5 +88,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'dockerpush.yml',
-              ref: '${{ steps.pull-request.outputs.pull-request-branch }}'
+              ref: '${{ steps.pull-request.outputs.pull-request-branch }}',
+              inputs: {
+                browser_comparison_base: '${{ steps.comparison.outputs.sha }}'
+              }
             })

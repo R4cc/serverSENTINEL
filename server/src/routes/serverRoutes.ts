@@ -9,6 +9,7 @@ import { hasPermission } from "../permissions.js";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { activeScheduledRunsFor } from "../schedules/activeRuns.js";
 import { requireNoActiveModMutation } from "../mods/modService.js";
+import { removeModHistoryArchives } from "../mods/modHistory.js";
 import { allocateQueryPort, assertNodePortsAvailable, assertUniqueDockerHostPorts, dockerPortsWithManagedEntries, isValidServerPort, normalizeCreateServerPorts, normalizeManagedPorts, queryPortEntry } from "../servers/ports.js";
 import { runtimeProfileForServer } from "../runtime/profile.js";
 import { requireRequestPermission } from "../auth/sessionService.js";
@@ -180,10 +181,14 @@ app.delete<{
   // the recursive remove: the container goes first, the tree is partly removed, and an ENOTEMPTY
   // from a directory that refilled mid-walk aborts before the database row is deleted.
   const active = services.operationsRepository.listActive(server.id);
+  requireNoActiveModMutation(server.id);
   if (active.length > 0) {
     throwHttp(409, `Wait for the ${active[0].type} operation to finish before deleting this server`, { code: "OPERATION_IN_PROGRESS" });
   }
   const deleted = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
+  await removeModHistoryArchives(server).catch((error) => {
+    logWarn({ serverId: server.id, ...errorLogFields(error) }, "Could not remove deleted server's mod history archives");
+  });
   // The buffer and its upstream follow outlive the container otherwise: `dispose` is only reached
   // by the idle timer, which never runs while a viewer is still attached.
   consoleHub.dispose(server.id);

@@ -26,6 +26,7 @@ import { operationToProvisionActiveJob, serverFromOperation } from "./utils/prov
 import { appendConsoleLines, consoleLineStart, consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppToaster } from "./components/AppToaster";
+import { ToastProgress } from "./components/ToastProgress";
 import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
 import { WorkspaceNotices } from "./components/WorkspaceNotices";
 import { AppSidebar } from "./components/AppSidebar";
@@ -1212,7 +1213,9 @@ export default function App() {
     activeJobs.forEach((job) => {
       activeJobToastIdsRef.current.add(job.id);
       const inProgress = job.status === "queued" || job.status === "running";
-      const description = `${job.subject ? `${job.subject} - ` : ""}${job.error || job.task}${inProgress ? ` (${Math.round(job.progress)}%)` : ""}`;
+      const description = <ToastProgress key={job.id} progress={job.progress} status={job.status}>
+        {`${job.subject ? `${job.subject} - ` : ""}${job.error || job.task || ""}`}
+      </ToastProgress>;
       const options = {
         id: job.id,
         description,

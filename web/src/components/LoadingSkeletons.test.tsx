@@ -47,8 +47,8 @@ describe("loading skeletons", () => {
 
     expect(files).toContain("applicationFilesSkeleton");
     expect(files.match(/applicationFilesRow"/g)).toHaveLength(8);
-    expect(mods).toContain("applicationModsSummary");
-    expect(mods.match(/applicationModsMetric"/g)).toHaveLength(3);
+    expect(mods).toContain("applicationModsToolbar");
+    expect(mods).toContain("applicationModsTable");
     expect(schedules).toContain("applicationScheduleGrid");
     expect(consolePage).toContain("applicationConsoleSkeleton");
     expect(createPage).toContain("applicationCreateStepper");

@@ -125,6 +125,29 @@ describe("PanelNodeConnections", () => {
     connections.close();
   });
 
+  it("ignores buffered frames from a replaced session", async () => {
+    const connections = new PanelNodeConnections();
+    const first = new FakeSocket();
+    const second = new FakeSocket();
+    connections.connect(node(), first as unknown as WebSocket);
+    connections.connect(node(), second as unknown as WebSocket);
+    try {
+      const pending = connections.request(node(), "server.inspect", {}, 1_000);
+      const request = JSON.parse(String(second.sent[0]));
+      emitJson(first, { type: "response", id: request.id, ok: true, result: "stale" });
+      first.emit("message", Buffer.from("invalid JSON"), false);
+      first.emit("message", Buffer.from("invalid binary"), true);
+      first.emit("close");
+      first.emit("error", new Error("Old connection failed"));
+      expect(second.closed).toBeUndefined();
+      expect(connections.isConnected(node().id)).toBe(true);
+      emitJson(second, { type: "response", id: request.id, ok: true, result: "current" });
+      await expect(pending).resolves.toBe("current");
+    } finally {
+      connections.close();
+    }
+  });
+
   it("times out a finite stream, stops it remotely, and ignores a late end", async () => {
     vi.useFakeTimers();
     try {

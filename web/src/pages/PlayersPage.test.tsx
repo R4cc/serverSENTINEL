@@ -184,7 +184,7 @@ describe("the Players workspace with partial knowledge", () => {
     const html = render({ insights: partial, playerHeadsEnabled: true });
     const map = mapMarkup(html);
     expect(html).toContain('role="group" aria-label="Players shown on map"');
-    expect(html).toContain('aria-pressed="true" type="button" class="uiButton uiButton--secondary uiButton--compact">Online</button>');
+    expect(html).toMatch(/<button[^>]*aria-pressed="true"[^>]*><span[^>]*aria-hidden="true"><\/span> Online<\/button>/);
     expect(map).toContain('aria-label="Interactive player world map. Pinch or scroll to zoom and drag to move."');
     expect(map).toContain('aria-label="Zoom in"');
     expect(map).toContain('aria-label="Zoom out"');
