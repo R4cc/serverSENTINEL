@@ -19,7 +19,7 @@ function lifecycleTargets() {
 }
 
 describe("subscribeToPageReactivation", () => {
-  it("refreshes immediately when a visible page resumes or reconnects", () => {
+  it("refreshes immediately once for a burst of resume and reconnect events", () => {
     const lifecycle = lifecycleTargets();
     const refresh = vi.fn();
     subscribeToPageReactivation(refresh, lifecycle.targets);
@@ -29,7 +29,26 @@ describe("subscribeToPageReactivation", () => {
     lifecycle.windowTarget.dispatchEvent(new Event("pageshow"));
     lifecycle.documentTarget.dispatchEvent(new Event("visibilitychange"));
 
-    expect(refresh).toHaveBeenCalledTimes(4);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows a later reconnect to refresh again", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const lifecycle = lifecycleTargets();
+    const refresh = vi.fn();
+    const unsubscribe = subscribeToPageReactivation(refresh, lifecycle.targets);
+    try {
+      lifecycle.windowTarget.dispatchEvent(new Event("online"));
+      now.mockReturnValue(1_100);
+      lifecycle.windowTarget.dispatchEvent(new Event("focus"));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      now.mockReturnValue(1_300);
+      lifecycle.windowTarget.dispatchEvent(new Event("online"));
+      expect(refresh).toHaveBeenCalledTimes(2);
+    } finally {
+      unsubscribe();
+      now.mockRestore();
+    }
   });
 
   it("waits for visibility and removes every listener during cleanup", () => {

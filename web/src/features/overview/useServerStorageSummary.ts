@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ApiError } from "../../api";
 import type { ServerStorageSummary } from "../../types";
 import { subscribeToPageReactivation } from "../../app/pageReactivation";
 import { clearCachedStorageSummary, readCachedStorageSummary, writeCachedStorageSummary } from "./storageSummaryCache";
@@ -7,6 +8,7 @@ type StorageSummaryState = {
   serverId: string;
   summary: ServerStorageSummary;
   loading: boolean;
+  error: string;
 };
 
 const unavailableStorageSummary: ServerStorageSummary = {
@@ -18,23 +20,27 @@ const unavailableStorageSummary: ServerStorageSummary = {
 export function useServerStorageSummary(
   serverId: string,
   active: boolean,
-  loadStorageSummary: (serverId: string) => Promise<ServerStorageSummary>
+  loadStorageSummary: (serverId: string, signal?: AbortSignal) => Promise<ServerStorageSummary>,
+  cacheScope: string
 ) {
   const [state, setState] = useState<StorageSummaryState>({
     serverId: "",
     summary: unavailableStorageSummary,
+    error: "",
     loading: false
   });
   // Reading storage is deferred to a memo so a re-render does not re-parse the entry, and so the
   // first render of a server already carries its last known figures instead of waiting an effect.
+  const cacheKey = JSON.stringify([cacheScope, serverId]);
   const cachedSummary = useMemo(
-    () => (serverId ? readCachedStorageSummary(serverId) : null) ?? unavailableStorageSummary,
-    [serverId]
+    () => (serverId ? readCachedStorageSummary(cacheKey) : null) ?? unavailableStorageSummary,
+    [cacheKey, serverId]
   );
 
   useEffect(() => {
     if (!active || !serverId) return;
     let cancelled = false;
+    const controller = new AbortController();
     let requestId = 0;
     let requestInFlight = false;
 
@@ -47,20 +53,25 @@ export function useServerStorageSummary(
       const currentRequestId = ++requestId;
       // A reload drops the figures held in memory. Seeding from the cache lets the tiles show the
       // last known sizes while the measurement runs, rather than sitting on a skeleton.
-      setState((current) => current.serverId === serverId
+      setState((current) => current.serverId === cacheKey
         ? { ...current, loading: true }
-        : { serverId, summary: cachedSummary, loading: true });
-      void loadStorageSummary(serverId)
+        : { serverId: cacheKey, summary: cachedSummary, loading: true, error: "" });
+      void loadStorageSummary(serverId, controller.signal)
         .then((summary) => {
-          writeCachedStorageSummary(serverId, summary);
-          if (!cancelled && currentRequestId === requestId) setState({ serverId, summary, loading: false });
-        })
-        .catch(() => {
           if (cancelled || currentRequestId !== requestId) return;
-          // A failed read must not leave a stale number standing in for a measurement that no
-          // longer succeeds, so the cache goes with it and the tiles fall back to "Unavailable".
-          clearCachedStorageSummary(serverId);
-          setState({ serverId, summary: unavailableStorageSummary, loading: false });
+          writeCachedStorageSummary(cacheKey, summary);
+          setState({ serverId: cacheKey, summary, loading: false, error: "" });
+        })
+        .catch((error: unknown) => {
+          if (cancelled || currentRequestId !== requestId) return;
+          const accessDenied = error instanceof ApiError && [401, 403, 404].includes(error.status);
+          if (accessDenied) clearCachedStorageSummary(cacheKey);
+          setState((current) => ({
+            ...current,
+            summary: accessDenied ? unavailableStorageSummary : current.summary,
+            loading: false,
+            error: "Storage could not be refreshed. Last measured sizes are shown when available."
+          }));
         })
         .finally(() => {
           if (currentRequestId === requestId) requestInFlight = false;
@@ -72,11 +83,12 @@ export function useServerStorageSummary(
 
     return () => {
       cancelled = true;
+      controller.abort();
       unsubscribe();
     };
-  }, [active, cachedSummary, loadStorageSummary, serverId]);
+  }, [active, cacheKey, cachedSummary, loadStorageSummary, serverId]);
 
-  return state.serverId === serverId
-    ? { ...state.summary, loading: state.loading }
-    : { ...cachedSummary, loading: active };
+  return state.serverId === cacheKey
+    ? { ...state.summary, loading: state.loading, error: state.error }
+    : { ...cachedSummary, loading: active, error: "" };
 }

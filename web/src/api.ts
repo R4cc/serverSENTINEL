@@ -40,7 +40,8 @@ export async function apiErrorFromResponse(response: Response, fallback?: string
 export type ApiRequestInit = RequestInit & { timeoutMs?: number };
 
 export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
-  const { timeoutMs, ...requestInit } = init ?? {};
+  // Bound reads by default; long-running mutations retain their explicit deadline policy.
+  const { timeoutMs = (!init?.method || init.method.toUpperCase() === "GET") ? 30_000 : undefined, ...requestInit } = init ?? {};
   const multipartBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers = {
     "X-Requested-With": "XMLHttpRequest",
@@ -59,7 +60,25 @@ export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
       credentials: "same-origin",
       signal
     });
+    if (!response.ok) {
+      const error = await apiErrorFromResponse(response);
+      if (
+        typeof window !== "undefined"
+        && ["EXPORT_IN_PROGRESS", "EXPORT_ALREADY_RUNNING", "SERVER_MUTATION_IN_PROGRESS"].includes(error.code ?? "")
+      ) {
+        window.dispatchEvent(new Event(exportConflictEvent));
+      }
+      throw error;
+    }
+    if (response.status === 204) return {} as T;
+    try {
+      return await response.json() as T;
+    } catch {
+      if (signal?.aborted) throw signal.reason;
+      throw new ApiError("The panel returned an invalid response. Try again.", response.status, "INVALID_RESPONSE");
+    }
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     if (error instanceof DOMException && error.name === "TimeoutError") {
       throw new ApiError("The panel did not respond before the request deadline. Try again.", 0, "REQUEST_TIMEOUT");
     }
@@ -68,16 +87,4 @@ export async function api<T>(path: string, init?: ApiRequestInit): Promise<T> {
     }
     throw new Error("Could not reach the serverSENTINEL backend. Check that the panel is running and try again.");
   }
-  if (!response.ok) {
-    const error = await apiErrorFromResponse(response);
-    if (
-      typeof window !== "undefined"
-      && ["EXPORT_IN_PROGRESS", "EXPORT_ALREADY_RUNNING", "SERVER_MUTATION_IN_PROGRESS"].includes(error.code ?? "")
-    ) {
-      window.dispatchEvent(new Event(exportConflictEvent));
-    }
-    throw error;
-  }
-  const payload = await response.json().catch(() => ({}));
-  return payload as T;
 }

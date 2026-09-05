@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { api } from "../../api";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ApiError, api } from "../../api";
 import type { ActivePage, AuthSession, Notify, PublicUser } from "../../types";
 import { errorMessage, setValidationNotice } from "../../utils/appHelpers";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
@@ -32,33 +32,61 @@ export function useUsersWorkspace({
   refreshAuth,
   logout
 }: UsersWorkspaceInputs) {
-  const [users, setUsers] = useState<PublicUser[]>([]);
+  const scope = JSON.stringify([authSession?.user, canViewUsers, canManageUsers, demoMode]);
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const [loaded, setLoaded] = useState<{ scope: string; users: PublicUser[] } | null>(null);
+  const users = loaded?.scope === scope ? loaded.users : [];
+  const requestRef = useRef<AbortController | null>(null);
   const [editingUser, setEditingUser] = useState<"create" | PublicUser | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function loadUsers() {
-    if (!canViewUsers) return;
+    if (!canViewUsers || scopeRef.current !== scope) return;
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError("");
     try {
-      const result = await api<{ users: PublicUser[] }>("/api/users");
-      setUsers(result.users);
+      const result = await api<{ users: PublicUser[] }>("/api/users", { signal: controller.signal });
+      if (controller.signal.aborted || scopeRef.current !== scope) return;
+      setLoaded({ scope, users: result.users });
     } catch (loadError) {
+      if (controller.signal.aborted || scopeRef.current !== scope) return;
+      if (loadError instanceof ApiError && [401, 403].includes(loadError.status)) {
+        setLoaded(null);
+        setEditingUser(null);
+      }
       if (handleStaleSession(loadError)) return;
       const message = errorMessage(loadError, "Could not load users. Check your permissions and try again.");
       setError(message);
       notify("error", message);
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
+    setLoaded(null);
+    setEditingUser(null);
+    setError("");
+    setLoading(false);
+    return () => {
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
+  }, [scope]);
+
+  useEffect(() => {
     if (activePage !== "settings" || !authSession?.authenticated || !canViewUsers || demoMode) return;
     void loadUsers();
-  }, [activePage, authSession?.authenticated, canViewUsers, demoMode]);
+  }, [activePage, authSession?.authenticated, canViewUsers, demoMode, scope]);
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

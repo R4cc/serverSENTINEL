@@ -34,6 +34,7 @@ export function ServerOverviewTab({
   onTimelineLatestSample,
   loadTimeline,
   loadStorageSummary,
+  cacheScope,
   playerSnapshot,
   playerHeadsEnabled,
   modUpdatePlan,
@@ -63,7 +64,8 @@ export function ServerOverviewTab({
   timelineLatestSample: ServerTimelineResourcePoint | undefined;
   onTimelineLatestSample: (sample?: ServerTimelineResourcePoint) => void;
   loadTimeline: (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
-  loadStorageSummary: (serverId: string) => Promise<ServerStorageSummary>;
+  loadStorageSummary: (serverId: string, signal?: AbortSignal) => Promise<ServerStorageSummary>;
+  cacheScope: string;
   playerSnapshot: PlayerSnapshot | undefined;
   playerHeadsEnabled: boolean;
   modUpdatePlan: ModUpdatePlan | null;
@@ -80,10 +82,11 @@ export function ServerOverviewTab({
   formatTime: (value: string | number | Date) => string;
   formatShortTime: (value: string | number | Date) => string;
 }) {
-  const storageSummary = useServerStorageSummary(server.id, active, loadStorageSummary);
+  const storageSummary = useServerStorageSummary(server.id, active, loadStorageSummary, cacheScope);
 
   return (
     <section className="tabPage overviewPage layoutWide" hidden={!active}>
+      {storageSummary.error && <InlineState tone="warning" title="Storage is not up to date" message={storageSummary.error} />}
       {overviewError && (
         <InlineState
           tone="warning"

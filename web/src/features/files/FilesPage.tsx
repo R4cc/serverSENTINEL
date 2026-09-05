@@ -60,6 +60,7 @@ export function FilesPage({
   } = data;
   const {
     filesLoading,
+    filesLoaded,
     filesError,
     fileBackStack,
     fileForwardStack,
@@ -106,7 +107,7 @@ export function FilesPage({
   const [fileContextMenu, setFileContextMenu] = useState<FileContextMenuState | null>(null);
   const [draggedFilePath, setDraggedFilePath] = useState("");
   const [fileDropTargetPath, setFileDropTargetPath] = useState("");
-  const initialFilesLoading = filesLoading && listing.entries.length === 0;
+  const initialFilesLoading = filesLoading && !filesLoaded;
   const operationLabel = fileOperationBusy === "upload" ? "Uploading file…"
     : fileOperationBusy === "new-folder" ? "Creating folder…"
       : fileOperationBusy === "rename" ? "Renaming item…"
@@ -114,7 +115,7 @@ export function FilesPage({
         : fileOperationBusy === "duplicate" ? "Duplicating file…"
           : fileOperationBusy === "delete" ? "Deleting items…"
             : "";
-  const emptyFolderVisible = !filesLoading && !filesError && sortedFileEntries.length === 0;
+  const emptyFolderVisible = filesLoaded && !filesError && sortedFileEntries.length === 0;
   const renderedFileRowCount = (initialFilesLoading ? 8 : sortedFileEntries.length + (emptyFolderVisible ? 1 : 0)) + 1;
 
   useEffect(() => {

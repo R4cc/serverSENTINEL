@@ -15,8 +15,15 @@ export function subscribeToPageReactivation(
   refresh: () => void,
   targets: PageReactivationTargets = { windowTarget: window, documentTarget: document }
 ) {
+  let lastRefresh = -Infinity;
   const refreshWhenVisible = () => {
-    if (!targets.documentTarget.hidden) refresh();
+    // A restored tab emits focus, pageshow and visibilitychange together. Keep the first
+    // refresh immediate without cancelling and restarting it for the rest of that burst.
+    const now = Date.now();
+    if (!targets.documentTarget.hidden && now - lastRefresh >= 250) {
+      lastRefresh = now;
+      refresh();
+    }
   };
 
   targets.windowTarget.addEventListener("focus", refreshWhenVisible);
