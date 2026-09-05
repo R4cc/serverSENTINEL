@@ -19,6 +19,7 @@ import {
   Gauge,
   GripHorizontal,
   Hourglass,
+  History,
   House,
   Minus,
   MoreHorizontal,
@@ -59,9 +60,10 @@ export function SidebarIcon({ name }: { name: SidebarIconName }) {
   return <Icon className="sideIcon" aria-hidden="true" />;
 }
 
-type AppIconName = "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "minus" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" | "moreHorizontal" | "moreVertical";
+type AppIconName = "history" | "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "minus" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" | "moreHorizontal" | "moreVertical";
 
 const appIcons: Record<AppIconName, LucideIcon> = {
+  history: History,
   chevronLeft: ChevronLeft,
   chevronRight: ChevronRight,
   chevronUp: ChevronUp,

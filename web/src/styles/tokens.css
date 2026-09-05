@@ -216,7 +216,6 @@
 
 html {
   background: var(--app-background);
-  scrollbar-gutter: stable;
 }
 
 /* Keep the workspace neutral so operational colours carry the emphasis. */

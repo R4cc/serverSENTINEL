@@ -25,11 +25,11 @@
   .modHistoryTable small { max-width: none; }
   .modHistoryTable td:last-child .uiButton { min-height: 44px; margin-top: var(--space-1); }
 }
-.modsWorkspacePage { display: flex; flex-direction: column; gap: var(--space-3); height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
+.modsWorkspacePage { display: flex; flex-direction: column; gap: var(--space-4); height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 /* The metric tiles are the shared uiMetricTile--summary variant; this file only
    owns how they are arranged. */
-.modsWorkspaceToolbar { display: grid; flex: 0 0 auto; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; gap: var(--space-3); }
+.modsWorkspaceToolbar { padding: 0; display: grid; flex: 0 0 auto; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-3); }
 .modsWorkspaceToolbar > div { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .modsWorkspaceToolbar .uiToolbarPrimary { justify-self: start; }
 .modsWorkspaceToolbar .uiToolbarMeta { justify-self: center; }
@@ -37,7 +37,6 @@
 .modsWorkspacePrimaryActions, .modsWorkspaceUpdateActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .modsWorkspaceUpdateActions { justify-content: flex-end; }
 .modsWorkspaceLastChecked { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
-.modsWorkspaceHistoryMeta { display: flex; align-items: center; gap: var(--space-2); }
 .modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); }
 /* Inline padding matches the table head and rows below, so the heading starts on
    the same edge as the mod icons rather than one pixel off it. */
@@ -49,7 +48,7 @@
 .modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: var(--shadow-xs), 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
 .modsWorkspaceSearch input, .modsAddSearch input { width: 100%; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
-.modsWorkspaceTable { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
+.modsWorkspaceTable { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
 .modsWorkspaceTable.isDragTarget { outline: 2px solid var(--sentinel-accent); outline-offset: -2px; }
 .modsWorkspaceDropOverlay { position: absolute; z-index: 5; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; min-height: 150px; color: var(--text); background: color-mix(in srgb, var(--surface-raised) 88%, transparent); pointer-events: none; }
 .modsWorkspaceDropOverlay svg { width: 28px; height: 28px; color: var(--sentinel-accent); }
@@ -285,8 +284,8 @@
   .modsWorkspaceSearch { width: 100%; min-width: 0; }
   .modsWorkspaceToolbar > div, .modsWorkspaceToolbar button { width: 100%; }
   .modsWorkspaceToolbar .uiButton {
-    min-height: 56px;
-    padding-block: 12px;
+    min-height: 44px;
+    padding-block: 0;
   }
   .modsWorkspaceUpdate .uiButton { min-height: 40px; padding-block: 6px; }
   .modsWorkspaceRow {
@@ -636,7 +635,6 @@
 
   .modsWorkspaceToolbar .uiToolbarPrimary { grid-row: 1; }
   .modsWorkspaceToolbar .uiToolbarMeta { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; justify-content: center; }
-  .modsWorkspaceHistoryMeta { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .modsWorkspaceToolbar .uiToolbarSecondary { grid-row: 3; }
 
   .modsWorkspacePrimaryActions,
@@ -652,7 +650,7 @@
     min-width: 0;
   }
 
-  .modsWorkspaceBatchAction {
+  .modsWorkspacePrimaryActions > :last-child:nth-child(odd) {
     grid-column: 1 / -1;
   }
 

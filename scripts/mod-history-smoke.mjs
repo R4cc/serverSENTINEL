@@ -19,6 +19,24 @@ try {
     if (!await nav.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
     await nav.click();
     await page.locator(".modsWorkspaceInstalled").waitFor();
+    const toolbarMetrics = () => page.locator(".tabPage .uiToolbar").evaluate((toolbar) => {
+      const button = toolbar.querySelector("button");
+      const rect = toolbar.getBoundingClientRect();
+      return { height: rect.height, buttonHeight: button.getBoundingClientRect().height, buttonOffset: button.getBoundingClientRect().top - rect.top };
+    });
+    const modsToolbar = await toolbarMetrics();
+    assert.equal(await page.locator(".modsWorkspacePrimaryActions").getByRole("button", { name: "Update history", exact: true }).count(), 1);
+    assert.equal(await page.locator(".modsWorkspaceTable").evaluate((table) => table.offsetWidth - table.clientWidth), 0, "Short mod lists must not reserve a blank scrollbar strip");
+    const schedulesNav = page.locator('[data-nav-page="schedule"]');
+    if (!await schedulesNav.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
+    await schedulesNav.click();
+    await page.locator(".scheduleWorkspaceToolbar").waitFor();
+    const schedulesToolbar = await toolbarMetrics();
+    assert.equal(modsToolbar.buttonHeight, schedulesToolbar.buttonHeight, `Toolbar button heights differ at ${width}px`);
+    if (width >= 1440) assert.deepEqual(modsToolbar, schedulesToolbar, "Desktop toolbar spacing must match across Mods and Schedules");
+    if (!await nav.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
+    await nav.click();
+    await page.locator(".modsWorkspaceInstalled").waitFor();
     const overflowingButtons = await page.locator(".modsWorkspaceToolbar button").evaluateAll((buttons) => buttons.filter((button) => button.scrollWidth > button.clientWidth + 1).map((button) => button.textContent));
     assert.deepEqual(overflowingButtons, [], `Mods toolbar labels overflow at ${width}px`);
     const openHistory = () => page.getByRole("button", { name: "Update history", exact: true }).click();
