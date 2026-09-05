@@ -137,7 +137,6 @@ export function useFilesWorkspace({
       resetEditorState,
       setSelectedPath,
       setEditorText,
-      setDirty,
       setFileReadError,
       setDiscardEditorRequest
     }
@@ -1153,7 +1152,6 @@ export function useFilesWorkspace({
       setSelectedFilePaths,
       setFocusedFilePath,
       setEditorText,
-      setDirty,
       setDiscardEditorRequest,
       setZipDestinationListing
     }

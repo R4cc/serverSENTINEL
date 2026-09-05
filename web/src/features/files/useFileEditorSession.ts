@@ -65,17 +65,41 @@ export function useFileEditorSession({
   const [editorText, setEditorText] = useState("");
   const [savedEditorText, setSavedEditorText] = useState("");
   const [fileRevision, setFileRevision] = useState("");
-  const [fileEditLease, setFileEditLease] = useState<FileEditLease | null>(null);
+  const [fileEditLease, updateFileEditLease] = useState<FileEditLease | null>(null);
   const [fileEditMode, setFileEditMode] = useState(false);
   const [fileLeaseBusy, setFileLeaseBusy] = useState(false);
   const [fileLeaseMessage, setFileLeaseMessage] = useState("");
-  const [dirty, setDirty] = useState(false);
+  const dirty = editorText !== savedEditorText;
   const [fileReadError, setFileReadError] = useState("");
   const [fileOpenFailed, setFileOpenFailed] = useState(false);
   const [fileOpening, setFileOpening] = useState(false);
   const [fileSaving, setFileSaving] = useState(false);
   const [discardEditorRequest, setDiscardEditorRequest] = useState<DiscardEditorRequest | null>(null);
   const fileEditLeaseRef = useRef<FileEditLease | null>(null);
+  const requestOwnerRef = useRef(0);
+  const pendingLeaseRef = useRef(false);
+  const pendingSaveRef = useRef(false);
+  const scope = JSON.stringify([activeServer?.id, activeServerIsDemo, permissionUser]);
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+
+  function ownsRequest(owner: number) {
+    return requestOwnerRef.current === owner && scopeRef.current === scope;
+  }
+
+  function setFileEditLease(lease: FileEditLease | null) {
+    fileEditLeaseRef.current = lease;
+    updateFileEditLease(lease);
+  }
+
+  useEffect(() => {
+    resetEditorState();
+    return () => {
+      requestOwnerRef.current++;
+      releaseFileLease();
+      fileEditLeaseRef.current = null;
+    };
+  }, [scope]);
 
   const editDisabledReason = serverMutationLocked
     ? serverMutationBlockedReason
@@ -83,28 +107,32 @@ export function useFileEditorSession({
   const canEditSelectedPath = !editDisabledReason
     && (activeServerIsDemo || (selectedPath ? hasFileManagerPermission(permissionUser, selectedPath, "edit") : false));
 
-  function releaseFileLease(lease = fileEditLease) {
-    if (!lease || activeServerIsDemo) return;
+  function releaseFileLease(lease = fileEditLeaseRef.current) {
+    if (!lease) return;
     void api(`/api/servers/${encodeURIComponent(lease.serverId)}/file/lease/${encodeURIComponent(lease.leaseId)}`, {
       method: "DELETE"
     }).catch(() => undefined);
   }
 
   useEffect(() => {
-    fileEditLeaseRef.current = fileEditLease;
-  }, [fileEditLease]);
-
-  useEffect(() => {
-    if (!fileEditLease || !fileEditMode || activeServerIsDemo) return;
+    if (!fileEditLease || !fileEditMode || activeServerIsDemo || fileSaving) return;
+    const owner = requestOwnerRef.current;
+    let cancelled = false;
+    let pending = false;
+    const ownsHeartbeat = () => !cancelled && ownsRequest(owner)
+      && !pendingSaveRef.current && fileEditLeaseRef.current?.leaseId === fileEditLease.leaseId;
     const heartbeat = async () => {
+      if (pending || !ownsHeartbeat()) return;
+      pending = true;
       try {
         const result = await api<{ lease: FileEditLease }>(
           `/api/servers/${encodeURIComponent(fileEditLease.serverId)}/file/lease/${encodeURIComponent(fileEditLease.leaseId)}/heartbeat`,
           { method: "POST" }
         );
+        if (!ownsHeartbeat()) return;
         setFileEditLease(result.lease);
       } catch (error) {
-        if (handleStaleSession(error)) return;
+        if (!ownsHeartbeat() || handleStaleSession(error)) return;
         const message = error instanceof ApiError && error.code === "FILE_EDIT_LEASE_LOST"
           ? "Your edit lease expired or was lost. Your text is preserved read-only; reload the file before editing again."
           : "The edit lease could not be refreshed. Editing was stopped to protect this file.";
@@ -113,11 +141,13 @@ export function useFileEditorSession({
         setFileEditLease(null);
         setFileLeaseMessage(message);
         notify("error", message);
+      } finally {
+        pending = false;
       }
     };
     const interval = window.setInterval(() => void heartbeat(), 20_000);
-    return () => window.clearInterval(interval);
-  }, [fileEditLease?.leaseId, fileEditMode, activeServerIsDemo]);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [fileEditLease?.leaseId, fileEditMode, activeServerIsDemo, fileSaving, scope]);
 
   useEffect(() => {
     const releaseOnUnload = () => {
@@ -138,7 +168,11 @@ export function useFileEditorSession({
   }, []);
 
   function resetEditorState() {
+    requestOwnerRef.current++;
+    pendingLeaseRef.current = false;
+    pendingSaveRef.current = false;
     releaseFileLease();
+    setDiscardEditorRequest(null);
     setSelectedPath("");
     setEditorText("");
     setSavedEditorText("");
@@ -147,7 +181,6 @@ export function useFileEditorSession({
     setFileEditMode(false);
     setFileLeaseBusy(false);
     setFileLeaseMessage("");
-    setDirty(false);
     setFileReadError("");
     setFileOpenFailed(false);
     setFileOpening(false);
@@ -194,7 +227,7 @@ export function useFileEditorSession({
       notify("warning", message);
       return;
     }
-    if (selectedPath && selectedPath !== path && dirty && !discardConfirmed) {
+    if (selectedPath && dirty && !discardConfirmed) {
       setDiscardEditorRequest({ action: "switch", path });
       return;
     }
@@ -212,17 +245,9 @@ export function useFileEditorSession({
       notify("warning", message);
       return;
     }
-    if (fileEditLease && selectedPath !== path) releaseFileLease(fileEditLease);
+    resetEditorState();
+    const owner = requestOwnerRef.current;
     setSelectedPath(path);
-    setEditorText("");
-    setSavedEditorText("");
-    setDirty(false);
-    setFileRevision("");
-    setFileEditLease(null);
-    setFileEditMode(false);
-    setFileLeaseMessage("");
-    setFileReadError("");
-    setFileOpenFailed(false);
     setFileOpening(true);
     setNotice("");
     setSelectedFilePaths([path]);
@@ -234,7 +259,6 @@ export function useFileEditorSession({
       setEditorText(content);
       setSavedEditorText(content);
       setFileRevision("demo");
-      setDirty(false);
       setFileOpening(false);
       return;
     }
@@ -242,26 +266,26 @@ export function useFileEditorSession({
       const file = await api<{ path: string; content: string; revision: string }>(
         `/api/servers/${activeServer.id}/file?path=${encodeURIComponent(path)}`
       );
+      if (!ownsRequest(owner)) return;
       setSelectedPath(file.path);
       setEditorText(file.content);
       setSavedEditorText(file.content);
       setFileRevision(file.revision);
-      setDirty(false);
       setSelectedFilePaths([file.path]);
     } catch (error) {
-      if (handleStaleSession(error)) return;
+      if (!ownsRequest(owner) || handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not read this file. Check that the path is available and editable.");
       setFileReadError(message);
       setFileOpenFailed(true);
       setSelectedFilePaths([]);
       notify("error", message);
     } finally {
-      setFileOpening(false);
+      if (ownsRequest(owner)) setFileOpening(false);
     }
   }
 
   async function enterFileEditMode() {
-    if (!activeServer || !selectedPath || !fileRevision || fileLeaseBusy || fileOpening || fileOpenFailed) return;
+    if (!activeServer || !selectedPath || !fileRevision || fileEditMode || pendingLeaseRef.current || pendingSaveRef.current || fileLeaseBusy || fileOpening || fileOpenFailed) return;
     if (editDisabledReason) {
       setFileLeaseMessage(editDisabledReason);
       notify("warning", editDisabledReason);
@@ -278,6 +302,8 @@ export function useFileEditorSession({
       setFileLeaseMessage("");
       return;
     }
+    const owner = requestOwnerRef.current;
+    pendingLeaseRef.current = true;
     setFileLeaseBusy(true);
     setFileLeaseMessage("");
     try {
@@ -285,24 +311,31 @@ export function useFileEditorSession({
         method: "POST",
         body: JSON.stringify({ path: selectedPath, revision: fileRevision })
       });
+      if (!ownsRequest(owner)) {
+        releaseFileLease(result.lease);
+        return;
+      }
       setFileEditLease(result.lease);
       setFileEditMode(true);
     } catch (error) {
-      if (handleStaleSession(error)) return;
+      if (!ownsRequest(owner) || handleStaleSession(error)) return;
       const message = error instanceof ApiError && error.code === "FILE_REVISION_CONFLICT"
         ? "This file changed since it was opened. Reload it before entering edit mode."
         : fileLeaseConflictMessage(error, formatDisplayDate);
       setFileLeaseMessage(message);
       notify("warning", message);
     } finally {
-      setFileLeaseBusy(false);
+      if (ownsRequest(owner)) {
+        pendingLeaseRef.current = false;
+        setFileLeaseBusy(false);
+      }
     }
   }
 
   async function saveFile() {
     if (isProvisioning || dockerOperationalLock || !canEditSelectedPath || !activeServer) return;
     if (!selectedPath || !dirty) return;
-    if (!fileEditMode || (!activeServerIsDemo && !fileEditLease) || fileSaving) return;
+    if (!fileEditMode || (!activeServerIsDemo && !fileEditLease) || fileSaving || pendingSaveRef.current) return;
     setFileSaving(true);
     setNotice("");
     setFileReadError("");
@@ -325,31 +358,37 @@ export function useFileEditorSession({
       const nextFiles = { ...demoFiles, [selectedPath]: editorText };
       setDemoFiles(nextFiles);
       setSavedEditorText(editorText);
-      setDirty(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       setListing(demoFixtures().demoListing(listing.path, nextFiles, demoInstalledMods));
       setFileSaving(false);
       return;
     }
+    const owner = requestOwnerRef.current;
+    const savedText = editorText;
+    pendingSaveRef.current = true;
     try {
       const result = await api<{ revision: string }>(`/api/servers/${activeServer.id}/file`, {
         method: "PUT",
         body: JSON.stringify({
           path: selectedPath,
-          content: editorText,
+          content: savedText,
           leaseId: fileEditLease?.leaseId,
           revision: fileRevision
         })
       });
-      setSavedEditorText(editorText);
+      if (!ownsRequest(owner)) return;
+      setSavedEditorText(savedText);
       setFileRevision(result.revision);
-      setDirty(false);
+      // Successful writes consume the backend lease; keep newer text, but
+      // require a fresh lease against this revision before editing again.
+      setFileEditLease(null);
+      setFileEditMode(false);
       setNotice(`Saved ${selectedPath}`);
       notify("success", `Saved ${selectedPath}`);
       await refreshFiles(activeServer.id, listing.path);
     } catch (error) {
-      if (handleStaleSession(error)) return;
+      if (!ownsRequest(owner) || handleStaleSession(error)) return;
       const saveError = fileSaveError(error);
       if (saveError.conflict) {
         releaseFileLease();
@@ -362,7 +401,10 @@ export function useFileEditorSession({
       setNotice(saveError.message);
       notify("error", saveError.message);
     } finally {
-      setFileSaving(false);
+      if (ownsRequest(owner)) {
+        pendingSaveRef.current = false;
+        setFileSaving(false);
+      }
     }
   }
 
@@ -395,9 +437,8 @@ export function useFileEditorSession({
       requestCloseEditor,
       discardEditorChanges,
       resetEditorState,
-      setSelectedPath,
+      setSelectedPath: (path: string) => { void openFile(path, true); },
       setEditorText,
-      setDirty,
       setFileReadError,
       setDiscardEditorRequest
     }

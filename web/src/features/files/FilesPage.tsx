@@ -69,7 +69,6 @@ export function FilesPage({
     fileActionDialog,
     selectedPath,
     editorText,
-    savedEditorText,
     dirty,
     fileOpening,
     fileOpenFailed,
@@ -677,7 +676,6 @@ export function FilesPage({
         discardRequestOpen={Boolean(discardEditorRequest)}
         onTextChange={(nextText) => {
           actions.setEditorText(nextText);
-          actions.setDirty(nextText !== savedEditorText);
         }}
         onRequestClose={actions.requestCloseEditor}
         onCancel={actions.cancelFileEdit}
