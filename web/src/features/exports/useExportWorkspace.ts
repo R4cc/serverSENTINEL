@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   EXPORT_DEFAULT_CATEGORIES,
   type ExportCategory,
@@ -38,6 +38,7 @@ type ImportOperationResult = {
   warnings?: Array<{ code: string; message: string }>;
 };
 
+const emptyExportState: ServerExportState = { latest: null, artifact: null };
 const pollIntervalMs = 1000;
 const minimumImportUploadChunkBytes = 256 * 1024;
 
@@ -100,9 +101,17 @@ export function useExportWorkspace(
   const [estimating, setEstimating] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState("");
-  const [serverExportState, setServerExportState] = useState<ServerExportState>({ latest: null, artifact: null });
-  const [serverExportStateLoading, setServerExportStateLoading] = useState(false);
-  const [serverExportStateError, setServerExportStateError] = useState("");
+  // Each visit has its own identity, including A -> B -> A and disable -> enable.
+  const scope = useMemo(() => ({ serverId: activeServerId, enabled }), [activeServerId, enabled]);
+  const scopeRef = useRef<typeof scope | null>(scope);
+  scopeRef.current = scope;
+  const [exportStatus, setExportStatus] = useState({
+    scope, data: emptyExportState, loading: enabled && Boolean(activeServerId), error: ""
+  });
+  const currentStatus = exportStatus.scope === scope && enabled && activeServerId ? exportStatus : null;
+  const serverExportState = currentStatus?.data ?? emptyExportState;
+  const serverExportStateLoading = enabled && Boolean(activeServerId) && (currentStatus?.loading ?? true);
+  const serverExportStateError = currentStatus?.error ?? "";
   const [deletingExportId, setDeletingExportId] = useState("");
 
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -121,35 +130,40 @@ export function useExportWorkspace(
   // refresh leaves the loading flag alone, because raising it announces a spinner every few
   // seconds for a card that is already showing the answer.
   const refreshServerExportState = useCallback(async (serverId = activeServerId, options?: { background?: boolean }) => {
-    if (!enabled || !serverId) {
-      setServerExportState((current) => current.latest === null && current.artifact === null ? current : { latest: null, artifact: null });
-      setServerExportStateError("");
-      return;
-    }
-    const requestId = exportStateRequestRef.current + 1;
-    exportStateRequestRef.current = requestId;
-    if (!options?.background) setServerExportStateLoading(true);
+    // Old mutation callbacks cannot refresh an inactive server or invalidate its replacement's read.
+    if (!enabled || !serverId || scopeRef.current !== scope || serverId !== scope.serverId) return;
+    const requestId = ++exportStateRequestRef.current;
+    const isCurrent = () => scopeRef.current === scope && exportStateRequestRef.current === requestId;
+    setExportStatus((current) => current.scope !== scope
+      ? { scope, data: emptyExportState, loading: true, error: "" }
+      : options?.background ? current : { ...current, loading: true });
     try {
       const next = await api<ServerExportState>(`/api/servers/${encodeURIComponent(serverId)}/exports`);
-      if (exportStateRequestRef.current === requestId) {
-        // This polls for the whole session, and `exportMutationLocked` derives from the result and
-        // feeds the guard layer the files, mods, schedules and settings workspaces read. Swapping in
-        // an equal-but-new object would recompute all of that and re-render the app for nothing.
-        setServerExportState((current) => sameServerExportState(current, next) ? current : next);
-        setServerExportStateError("");
+      if (isCurrent()) {
+        setExportStatus((current) => current.scope === scope && !current.loading && !current.error
+          && sameServerExportState(current.data, next)
+          ? current : { scope, data: next, loading: false, error: "" });
       }
     } catch (error) {
-      if (exportStateRequestRef.current === requestId) {
-        setServerExportStateError(errorMessage(error, "Export status is temporarily unavailable."));
+      if (isCurrent()) {
+        setExportStatus({ scope, data: emptyExportState, loading: false,
+          error: errorMessage(error, "Export status is temporarily unavailable.") });
       }
-    } finally {
-      if (exportStateRequestRef.current === requestId && !options?.background) setServerExportStateLoading(false);
     }
-  }, [activeServerId, enabled]);
+  }, [activeServerId, enabled, scope]);
 
   useEffect(() => {
+    scopeRef.current = scope;
+    setExportOpen(false);
+    setExportBusy(false);
+    setExportError("");
+    setEstimate(null);
+    setEstimating(false);
+    setDeletingExportId("");
+    ++estimateRequestRef.current;
     void refreshServerExportState();
-  }, [refreshServerExportState]);
+    return () => { scopeRef.current = null; };
+  }, [scope, refreshServerExportState]);
 
   // The poll reads its own cadence, so it cannot depend on the state it sets: doing that made each
   // result reschedule the effect, and it also meant the loop only survived because every response
@@ -244,6 +258,7 @@ export function useExportWorkspace(
   }, [exportBusy]);
 
   const runExport = useCallback(async () => {
+    if (scopeRef.current !== scope || !enabled || exportServerId !== activeServerId) return;
     setExportBusy(true);
     setExportError("");
     try {
@@ -251,19 +266,25 @@ export function useExportWorkspace(
         method: "POST",
         body: JSON.stringify(exportRequestPayload(exportServerId, categories, contentStrategy, estimate?.inventoryId))
       });
-      setServerExportState((current) => ({
-        ...current,
-        latest: {
-          id: operation.id,
-          status: operation.status,
-          progress: operation.progress,
-          task: operation.task,
-          createdAt: operation.createdAt,
-          startedAt: operation.startedAt,
-          finishedAt: operation.finishedAt,
-          errorMessage: operation.errorMessage,
-          startedByRequester: true,
-          canCancel: true
+      if (scopeRef.current !== scope) return;
+      // A read started before this acknowledgement must not replace the new operation.
+      ++exportStateRequestRef.current;
+      setExportStatus((current) => ({
+        scope, loading: false, error: "",
+        data: {
+          ...(current.scope === scope ? current.data : emptyExportState),
+          latest: {
+            id: operation.id,
+            status: operation.status,
+            progress: operation.progress,
+            task: operation.task,
+            createdAt: operation.createdAt,
+            startedAt: operation.startedAt,
+            finishedAt: operation.finishedAt,
+            errorMessage: operation.errorMessage,
+            startedByRequester: true,
+            canCancel: true
+          }
         }
       }));
       setExportOpen(false);
@@ -273,25 +294,26 @@ export function useExportWorkspace(
       notify("info", "Export started in the background.");
       void refreshServerExportState(exportServerId);
     } catch (error) {
-      setExportError(errorMessage(error, "The export could not be started."));
+      if (scopeRef.current === scope) setExportError(errorMessage(error, "The export could not be started."));
     } finally {
-      setExportBusy(false);
+      if (scopeRef.current === scope) setExportBusy(false);
     }
-  }, [categories, contentStrategy, estimate?.inventoryId, exportServerId, notify, refreshServerExportState]);
+  }, [activeServerId, enabled, scope, categories, contentStrategy, estimate?.inventoryId, exportServerId, notify, refreshServerExportState]);
 
   const cancelExport = useCallback(async (operationId: string) => {
+    if (scopeRef.current !== scope || !enabled) return;
     try {
       await api<OperationRecord>(`/api/operations/${operationId}/cancel`, { method: "POST" });
-      notify("info", "Cancelling export…");
+      if (scopeRef.current === scope) notify("info", "Cancelling export…");
     } catch (error) {
-      notify("error", errorMessage(error, "The export could not be cancelled."));
+      if (scopeRef.current === scope) notify("error", errorMessage(error, "The export could not be cancelled."));
     } finally {
       await refreshServerExportState();
     }
-  }, [notify, refreshServerExportState]);
+  }, [enabled, scope, notify, refreshServerExportState]);
 
   const deleteExport = useCallback(async (artifact: ServerExportArtifact) => {
-    if (!requestConfirmation) return;
+    if (!requestConfirmation || !enabled || scopeRef.current !== scope) return;
     const confirmed = await requestConfirmation({
       title: "Delete export?",
       description: `Permanently delete ${artifact.filename}.`,
@@ -299,18 +321,18 @@ export function useExportWorkspace(
       confirmLabel: "Delete export",
       variant: "critical"
     });
-    if (!confirmed) return;
+    if (!confirmed || scopeRef.current !== scope) return;
     setDeletingExportId(artifact.operationId);
     try {
       await api<{ ok: boolean }>(`/api/exports/${encodeURIComponent(artifact.operationId)}`, { method: "DELETE" });
-      notify("success", "Export deleted");
+      if (scopeRef.current === scope) notify("success", "Export deleted");
     } catch (error) {
-      notify("error", errorMessage(error, "The export could not be deleted."));
+      if (scopeRef.current === scope) notify("error", errorMessage(error, "The export could not be deleted."));
     } finally {
-      setDeletingExportId("");
+      if (scopeRef.current === scope) setDeletingExportId("");
       await refreshServerExportState();
     }
-  }, [notify, refreshServerExportState, requestConfirmation]);
+  }, [enabled, scope, notify, refreshServerExportState, requestConfirmation]);
 
   const openImport = useCallback((defaultNodeId: string) => {
     setImportFile(null);
