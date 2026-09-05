@@ -10,7 +10,7 @@
 .serverPropertiesWorkspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-5);
+  gap: var(--space-4);
   align-items: start;
   width: 100%;
   min-width: 0;
@@ -29,35 +29,19 @@
   border: 0;
 }
 
-.propertiesSideCard {
-  min-width: 0;
-  border: 1px solid var(--border-row);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-}
-
-/* General and Advanced span the full width; Resources and Network auto-place
-   side by side on the row between them and stretch to a shared height. */
-.propertiesSettingsSurface {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  gap: var(--space-3);
-  min-width: 0;
-}
-
+.propertiesSettingsSurface { min-width: 0; }
 .propertiesSection {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: minmax(160px, 0.28fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-5);
   min-width: 0;
-  border: 1px solid var(--border-row);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
   padding: var(--space-5);
 }
-
-.propertiesSectionGeneral {
-  grid-column: 1 / -1;
-}
+.propertiesSection + .propertiesSection { border-top: 1px solid var(--border-row); }
+.propertiesSection > .uiPanelHeader { align-items: start; }
+.propertiesSectionBody { display: grid; min-width: 0; gap: var(--space-4); }
+.propertiesSection .minecraftPortsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .propertiesFieldGrid {
   display: grid;
@@ -133,13 +117,21 @@
 }
 
 .propertiesMemorySection .memoryRangeLayout {
-  grid-template-columns: 1fr;
-  gap: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
 }
 
 .propertiesMemorySection .memoryNumberFields {
-  max-width: 420px;
+  order: -1;
+  width: 100%;
+  max-width: 480px;
 }
+
+/* Exact values stay in the number controls; duplicate slider bubbles overlap on narrow screens. */
+.propertiesMemorySection .memoryValueBubble { display: none; }
+.propertiesMemorySection .memoryRangeTrackWrap { height: 28px; padding-top: 0; }
 
 .propertiesSection .minecraftPortsSection {
   padding: 0;
@@ -220,10 +212,10 @@
 }
 
 .propertiesDisclosure.resourceDisclosure {
-  grid-column: 1 / -1;
-  border: 1px solid var(--border-row);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
+  border: 0;
+  border-top: 1px solid var(--border-row);
+  border-radius: 0;
+  background: transparent;
   overflow: visible;
 }
 
@@ -232,13 +224,13 @@
   display: flex;
   justify-content: space-between;
   gap: 9px;
-  padding: var(--space-3) var(--space-4);
-  border-radius: calc(var(--radius-md) - 1px);
+  padding: var(--space-4) var(--space-5);
+  border-radius: 0;
   color: var(--text);
 }
 
 .propertiesDisclosure.advancedResourceDisclosure[open] > summary {
-  border-radius: calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;
+  border-radius: 0;
 }
 
 .propertiesDisclosure.advancedResourceDisclosure summary::after {
@@ -271,7 +263,7 @@
 
 .propertiesAdvancedBody {
   gap: var(--space-5);
-  padding: 0 var(--space-4) var(--space-4);
+  padding: 0 var(--space-5) var(--space-5);
 }
 
 .propertiesAdvancedPorts {
@@ -454,7 +446,7 @@
 
 .propertiesSideCards {
   display: grid;
-  grid-template-columns: minmax(0, 720px);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   align-items: stretch;
 }
@@ -462,7 +454,7 @@
 .propertiesExportZone,
 .propertiesDangerZone {
   display: flex;
-  max-width: 720px;
+  min-width: 0;
 }
 
 .propertiesExportZone > .propertiesSideCard,
@@ -470,7 +462,7 @@
   width: 100%;
 }
 
-@media (min-width: 1500px) {
+@media (min-width: 1101px) {
   .propertiesSideCards--paired {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -485,10 +477,11 @@
   }
 }
 
-/* Single column; the `1 / -1` spans above already collapse to it. */
+/* Stack section headings above their controls on smaller screens. */
 @media (max-width: 1100px) {
-  .propertiesSettingsSurface {
-    grid-template-columns: 1fr;
+  .propertiesSection {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
   }
 }
 
