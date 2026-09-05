@@ -451,6 +451,10 @@ try {
     // Reading the clipboard back is the only way to assert that Ctrl+C copied what was selected.
     permissions: ["clipboard-read", "clipboard-write"]
   });
+  // Exercise xterm's Linux selection mirror even when this smoke runs on Windows or macOS.
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "platform", { get: () => "Linux x86_64" });
+  });
   await signInThroughApi(context, baseUrl);
 
   // Between the phone and desktop shells, navigation sits above the workspace. A short landscape

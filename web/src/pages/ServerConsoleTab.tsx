@@ -68,10 +68,13 @@ export function ServerConsoleTab({
   function handleCopyShortcut(event: React.KeyboardEvent<HTMLDivElement>) {
     const selection = selectionRef.current;
     const target = event.target as Partial<HTMLInputElement> | null;
+    // Linux xterm mirrors output selections into its hidden textarea for middle-click paste.
+    // That mirror still belongs to the terminal, not to a separate editable field or document.
+    const terminalTarget = target instanceof Element && Boolean(target.closest(".minecraftTerminal"));
     const copyable = shouldCopyTerminalSelection(event, {
       terminal: selection?.text ?? "",
-      input: target?.selectionStart != null && target.selectionStart !== target.selectionEnd,
-      document: window.getSelection()?.toString() ?? ""
+      input: !terminalTarget && target?.selectionStart != null && target.selectionStart !== target.selectionEnd,
+      document: terminalTarget ? "" : window.getSelection()?.toString() ?? ""
     });
     if (!copyable || !selection) return;
 
