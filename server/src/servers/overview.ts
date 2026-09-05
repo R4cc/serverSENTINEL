@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { logWarn, errorLogFields } from "../logging.js";
 import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
 import { DockerLogDecoder } from "../docker/dockerLogs.js";
+import { DockerLogResume } from "../docker/dockerLogResume.js";
 import { configuredServerPort, currentContainerInspect, dockerContainerName, dockerControlConfigured, dockerRecentLogs, inspectDockerContainer, normalizeJavaRuntime, readFileRange, readLatestServerLog, serverLogFields, validDockerTimestamp, type DockerContainerInspect } from "../runtime/local/dockerContainers.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { compactRecentEvents, parseLogEvent } from "./logEvents.js";
@@ -25,7 +26,7 @@ export type Client = BackpressuredClient;
  */
 const consoleLogPollMaxBytes = 1024 * 1024;
 
-/** History requested when first following a container. Later attachments ask for none of it. */
+/** History requested on the first attachment. Reconnects replay from a timestamp. */
 export const dockerFollowInitialTail = 200;
 export const dockerFollowRetryMs = 1_000;
 
@@ -152,9 +153,8 @@ export function streamLatestServerLog(server: ManagedServer, upstream: ConsoleUp
  * Follows a container's output into the server's console buffer.
  *
  * The follow ends whenever the container does, which a restart makes routine, so it reattaches
- * instead of leaving the console silent until someone reloads the page. Reattaching asks for no
- * history: the buffer already holds everything from before, and re-reading the tail would number
- * lines it already has a second time.
+ * instead of leaving the console silent until someone reloads the page. Timestamp overlap
+ * recovers output written during the outage, with counted deduplication of retained records.
  */
 export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstream) {
   if (!dockerControlConfigured(server) || !dockerAvailable()) {
@@ -166,7 +166,9 @@ export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstrea
   let closed = false;
   let hasAttached = false;
   let announceReattachOnOutput = false;
-  let nextTail = dockerFollowInitialTail;
+  let containerId: string | undefined;
+  let resume = new DockerLogResume();
+  let attachedToContainer = false;
   let request: http.ClientRequest | undefined;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -175,27 +177,44 @@ export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstrea
     retryTimer = setTimeout(() => {
       retryTimer = undefined;
       if (closed) return;
-      follow(nextTail);
+      void follow();
     }, dockerFollowRetryMs);
     retryTimer.unref?.();
   };
 
-  const follow = (tail: number) => {
+  const follow = async () => {
+    let details: DockerContainerInspect | null;
+    try {
+      details = await inspectDockerContainer(server);
+    } catch (error) {
+      if (closed) return;
+      upstream.unavailable(error instanceof Error ? error.message : "Unable to inspect Docker container", { retryable: true });
+      reattach();
+      return;
+    }
+    if (closed) return;
+    if (!details?.Id) { reattach(); return; }
+    if (containerId !== details.Id) {
+      containerId = details.Id;
+      resume = new DockerLogResume();
+      attachedToContainer = false;
+    }
+    // Pin the inspected ID so replacement between inspect and logs cannot reuse an old cursor.
+    // Replacements get all startup output, even when it exceeds the initial history tail.
+    const tail = hasAttached ? "all" : dockerFollowInitialTail;
+    const since = attachedToContainer ? `&since=${resume.since}` : "";
+    let finishStream: (() => void) | undefined;
     request = http.request(
       {
         socketPath: config.dockerSocket,
-        path: `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=${tail}&follow=1`,
+        path: `/containers/${encodeURIComponent(containerId)}/logs?stdout=1&stderr=1&tail=${tail}&follow=1&timestamps=1${since}`,
         method: "GET"
       },
       (response) => {
+        if (closed) { response.destroy(); return; }
         if (response.statusCode !== 200) {
           response.resume();
-          if (response.statusCode === 404) {
-            // A newly imported/local server has no container until its first start. Keep the
-            // viewer attached and retain the initial history tail so startup output written while
-            // Docker creates the container is not lost between retries.
-            nextTail = dockerFollowInitialTail;
-          } else {
+          if (response.statusCode !== 404) {
             logWarn({ ...serverLogFields(server), source: "docker", statusCode: response.statusCode }, "Docker log stream returned non-OK status");
             upstream.unavailable(`Docker logs returned ${response.statusCode}`, { retryable: true });
           }
@@ -204,36 +223,51 @@ export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstrea
         }
         announceReattachOnOutput ||= hasAttached;
         hasAttached = true;
-        nextTail = 0;
+        attachedToContainer = true;
         const decoder = new DockerLogDecoder();
         // No socket pausing here: the buffer is shared, so one viewer falling behind must not stop
         // the workload's output reaching everyone else. Memory stays bounded by the buffer's own
         // retention, and a viewer that falls too far behind is told its resume point was trimmed.
-        response.on("data", (chunk: Buffer) => {
-          const decoded = decoder.write(chunk).toString("utf8");
-          if (!decoded) return;
+        const records = resume.attachment((text) => {
+          if (closed) return;
           if (announceReattachOnOutput) {
             announceReattachOnOutput = false;
             upstream.notice("[serverSENTINEL] Reattached to the container log stream.");
           }
-          upstream.write(decoded);
+          upstream.write(text);
         });
-        response.on("end", reattach);
+        let ended = false;
+        const activeRequest = request;
+        const finish = () => {
+          if (ended) return;
+          ended = true;
+          activeRequest?.destroy();
+          reattach();
+        };
+        finishStream = finish;
+        response.on("data", (chunk: Buffer) => {
+          if (!closed && !ended) records.write(decoder.write(chunk));
+        });
+        response.on("end", () => { if (!closed && !ended) records.end(); finish(); });
+        response.on("aborted", finish);
+        response.on("close", finish);
         response.on("error", (error) => {
           logWarn({ ...serverLogFields(server), source: "docker", ...errorLogFields(error) }, "Docker log stream failed");
-          reattach();
+          finish();
         });
       }
     );
     request.on("error", (error) => {
+      if (closed) return;
       logWarn({ ...serverLogFields(server), source: "docker", ...errorLogFields(error) }, "Docker log stream failed");
       upstream.unavailable(error.message);
-      reattach();
+      if (finishStream) finishStream();
+      else reattach();
     });
     request.end();
   };
 
-  follow(dockerFollowInitialTail);
+  void follow();
 
   return () => {
     closed = true;

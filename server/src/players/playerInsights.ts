@@ -36,6 +36,7 @@ export type PlayerInsightsInput = {
   pingMeasurements: PlayerPingMeasurement[];
   /** Retained resource samples per server; player counts and anonymous RTT arrays are read. */
   resourceSamples: Record<string, ResourceStatsSample[]>;
+  activityHours?: PlayerActivityHour[];
   geoDatabase: PlayerGeoDatabaseState;
   timeZone: string;
   /** How far back the measured ping series reaches; the browser chooses this with its range control. */
@@ -189,19 +190,20 @@ export function playerLatencyHistory(input: {
 /**
  * Average and peak players per hour of the day, in the panel's own time zone.
  *
- * Read straight off the resource samples that already carry a player count, so this costs one
- * query per server and no new collection. An hour with no retained samples reports zero samples
+ * Uses the latest count in each ten-second slot; callers can supply count-only history and cache
+ * the result. An hour with no retained samples reports zero samples
  * rather than zero players, which is what stops a fresh installation from recommending a
  * maintenance window it has no evidence for.
  */
 export function playerActivityHours(input: {
-  resourceSamples: Record<string, ResourceStatsSample[]>;
+  resourceSamples: Record<string, Pick<ResourceStatsSample, "sampledAt" | "playersOnline">[]>;
   timeZone: string;
   from: number;
 }): PlayerActivityHour[] {
   const hourFormatter = new Intl.DateTimeFormat("en-US", { timeZone: input.timeZone, hour12: false, hour: "2-digit" });
   const buckets = Array.from({ length: 24 }, () => ({ total: 0, peak: 0, samples: 0 }));
   const samplesByInstant = new Map<number, Map<string, { sampledAt: number; players: number }>>();
+  const hours = new Map<number, number>();
 
   for (const [serverId, samples] of Object.entries(input.resourceSamples)) {
     for (const sample of samples) {
@@ -221,7 +223,13 @@ export function playerActivityHours(input: {
 
   for (const [slot, byServer] of samplesByInstant) {
     const players = [...byServer.values()].reduce((total, sample) => total + sample.players, 0);
-    const hour = Number.parseInt(hourFormatter.format(new Date(slot)), 10);
+    // Time-zone offsets can change within a UTC hour (including half-hour DST changes).
+    const minute = Math.floor(slot / 60_000);
+    let hour = hours.get(minute);
+    if (hour === undefined) {
+      hour = Number.parseInt(hourFormatter.format(new Date(slot)), 10);
+      hours.set(minute, hour);
+    }
     if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
     const bucket = buckets[hour];
     bucket.total += players;
@@ -247,7 +255,7 @@ export function buildPlayerInsights(input: PlayerInsightsInput): PlayerInsightsR
     .map((entry) => entry.pingMs)
     .filter((value): value is number => value !== undefined);
 
-  const activityHours = playerActivityHours({
+  const activityHours = input.activityHours ?? playerActivityHours({
     resourceSamples: input.resourceSamples,
     timeZone: input.timeZone,
     from: now - (input.activityWindowMs ?? input.historyWindowMs)

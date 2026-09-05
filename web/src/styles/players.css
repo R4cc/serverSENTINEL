@@ -353,11 +353,16 @@ button.playerMapMarker:hover:not(:disabled) {
   pointer-events: auto;
 }
 
-.playerMapServer {
+button.playerMapServer {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
   box-sizing: border-box;
   transform: translate(-50%, -50%) rotate(45deg);
   border: 2px solid currentColor;
@@ -405,6 +410,25 @@ button.playerMapMarker:hover:not(:disabled) {
   stroke: var(--surface);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+}
+
+button.playerMapServer:hover:not(:disabled) {
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--surface-raised);
+  color: var(--sentinel-success);
+  border-color: currentColor;
+}
+
+button.playerMapServer--stopped:hover:not(:disabled) {
+  color: var(--sentinel-danger);
+}
+
+.playerMapServerDetails {
+  display: grid;
+  gap: var(--space-2);
+  overflow: auto;
+  font-size: var(--type-meta-size);
+  color: var(--text-muted);
 }
 
 .playerMapLocations--group .playerMapLeader {

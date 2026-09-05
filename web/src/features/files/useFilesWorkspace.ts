@@ -1,5 +1,5 @@
 import { type ChangeEvent, type Dispatch, type MutableRefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, api, apiErrorFromResponse } from "../../api";
+import { ApiError, api } from "../../api";
 import { demoFixtures, demoServerId } from "../../demoRuntime";
 import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, Notify, OperationRecord, PublicUser } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
@@ -670,23 +670,15 @@ export function useFilesWorkspace({
     }
   }
 
-  async function downloadUrl(url: string, filename: string) {
-    const response = await fetch(url, {
-      headers: {
-        "X-Requested-With": "XMLHttpRequest"
-      },
-      credentials: "same-origin"
-    });
-    if (!response.ok) {
-      throw await apiErrorFromResponse(response);
-    }
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
+  function downloadUrl(url: string, filename: string) {
+    // The same-origin attachment route authenticates the session cookie. Let the browser
+    // stream to disk and own progress/cancellation instead of buffering the response in JS.
     const anchor = document.createElement("a");
-    anchor.href = objectUrl;
+    anchor.href = url;
     anchor.download = filename;
+    document.body.append(anchor);
     anchor.click();
-    URL.revokeObjectURL(objectUrl);
+    anchor.remove();
   }
 
   async function downloadSelectedItems() {
@@ -710,15 +702,16 @@ export function useFilesWorkspace({
       } else {
         const intent = await api<DownloadIntent>(`/api/servers/${activeServer.id}/files/download/intent`, {
           method: "POST",
+          timeoutMs: 30_000,
           body: JSON.stringify({
             paths: selectedEntries.map((entry) => entry.path)
           })
         });
         if (intent.mode === "archive") {
-          await downloadUrl(intent.url, intent.filename);
+          downloadUrl(intent.url, intent.filename);
         } else {
           for (const file of intent.files) {
-            await downloadUrl(file.url, file.name);
+            downloadUrl(file.url, file.name);
           }
         }
       }

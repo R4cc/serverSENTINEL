@@ -16,7 +16,7 @@ serverSENTINEL is a web panel for running and managing Minecraft servers and the
 * Manage users, roles, and permissions
 * Monitor server status and resource usage
 
-A large part of serverSENTINEL was written with the help of AI, which made it possible to scale the project and accelerate development far beyond what I could have done on my own. The AI-generated code has gone through extensive cleanup, testing, review, and polish passes. The priority throughout development has been to make the underlying systems work reliably and predictably.
+serverSENTINEL is developed with AI as a tool under human guidance. I set the project's direction, make design decisions, and review and refine the work. AI helps with implementation, debugging, and iteration, while testing and cleanup are part of the development process. The focus is on building reliable systems that are easy to understand and maintain.
 
 ## Security
 
@@ -83,33 +83,43 @@ The screenshots below show the default dark theme. Light mode is also available 
 
 ## How It Works
 
-The panel provides the web interface and API. It can manage Docker on the same host or connect to node agents on other Docker hosts. Each Minecraft server runs in its own container rather than inside the panel container.
+serverSENTINEL has two main parts: a panel that provides the web interface and API, and a node agent that manages Minecraft containers on a Docker host. Each Minecraft server runs in its own container.
 
-For a single machine, use the included all-in-one Docker Compose setup. For multiple machines, run the panel in `panel` mode, add nodes from the web interface, and use the generated install command on each host.
+- **One machine:** use the included all-in-one Docker Compose setup to run the panel and node agent together.
+- **Multiple machines:** run the panel with `SS_MODE=panel`, then add a node for each Docker host through the web interface. The panel generates an install command to run on each host.
 
 ## Quick Start
 
-Docker Engine with Docker Compose is required. Clone the repository and start the included all-in-one setup:
+Install Docker Engine and Docker Compose on the machine that will host your servers. Then clone this repository:
 
 ```bash
 git clone https://github.com/R4cc/serverSENTINEL.git
 cd serverSENTINEL
-docker compose up -d
 ```
 
-Open `http://localhost:8080`. On first launch, get the one-time setup token from the container log and use it to create the administrator account:
+The default configuration is ready to use. To change the port, time zone, image, or optional API settings, copy [`.env.example`](.env.example) to `.env` and edit it before starting.
+
+Start serverSENTINEL and view its logs to find the one-time setup token:
 
 ```bash
+docker compose up -d
 docker compose logs serversentinel
 ```
 
-At the default `LOG_LEVEL=info`, the container emits structured JSON for completed API requests and audited authentication or administration actions. Request entries include the request ID, client IP, authenticated actor, normalized route, status, and duration. Passwords, session cookies, authorization headers, raw request bodies, and URL query values are not logged.
+Open `http://localhost:8080` on that machine, or use the host's address if you are connecting from another device. Enter the setup token to create your administrator account.
 
-The defaults work as-is. To customize the port, time zone, image, or optional API settings, copy [`.env.example`](.env.example) to `.env` before starting the container.
+### Set up your first server
+
+1. Follow the setup guide to choose this machine or a connected node as your server host. You can leave the guide and resume it later.
+2. Create a Minecraft server or restore a serverSENTINEL export.
+3. Start the server and check its status and console output.
+4. Review the optional integrations and time-zone settings.
+
+To add another Docker host later, open **Nodes**, add a node, and run the generated install command on that host.
 
 ### All-in-one Docker Compose
 
-You can also create a `docker-compose.yml` with the following configuration and run `docker compose up -d`:
+If you prefer to use the published image without cloning the repository, save the following as `docker-compose.yml` in an empty directory. Run `docker compose up -d` from that directory, then follow the setup-token and first-server steps above.
 
 ```yaml
 services:
@@ -147,9 +157,13 @@ volumes:
 
 All-in-one mode requires access to the Docker socket so serverSENTINEL can create, start, and stop Minecraft containers. Only mount the socket in a trusted environment.
 
-### Surviving a Docker restart
+## Docker Restarts and World Saves
 
-Restarting or upgrading the Docker daemon — `apt upgrade` of the Docker packages, most often — stops every container on the host, and serverSENTINEL never sees the request, so it cannot send Minecraft the `stop` command first. Two host settings decide what happens to a running world:
+Restarting or upgrading Docker can stop running Minecraft containers. Because this happens outside serverSENTINEL, the panel cannot send the Minecraft `stop` command beforehand. Two settings help protect running servers and give worlds time to save.
+
+### Keep containers running with live-restore
+
+On a Linux Docker host, add `live-restore` to `/etc/docker/daemon.json`, preserving any existing settings:
 
 ```json
 {
@@ -157,28 +171,30 @@ Restarting or upgrading the Docker daemon — `apt upgrade` of the Docker packag
 }
 ```
 
-Put that in `/etc/docker/daemon.json` and run `systemctl reload docker`. Running containers then stay up while the daemon restarts, so a Docker upgrade does not interrupt Minecraft at all. serverSENTINEL logs a warning at startup when live-restore is off.
+Reload the configuration with `sudo systemctl reload docker`. Live-restore allows containers to keep running during supported Docker daemon restarts; it does not keep them running through a host reboot. serverSENTINEL logs a warning at startup if live-restore is disabled.
 
-Without live-restore, the daemon stops each container and waits out that container's stop timeout before killing it. serverSENTINEL sets a 60 second timeout on every Minecraft container it creates, which is also long enough for the JVM to run its shutdown hook and save the world; Docker's own default of 10 seconds is not. Raise it with `SERVERSENTINEL_MINECRAFT_STOP_TIMEOUT_SECONDS` for a very large world, and raise `TimeoutStopSec` for `docker.service` alongside it — systemd's 90 second default caps how long the daemon is allowed to take.
+### Allow enough time for shutdown
 
-## First Run
+When Docker stops a container, it waits for the container's stop timeout before forcibly terminating it. serverSENTINEL gives managed Minecraft containers 60 seconds by default so Minecraft has time to shut down and save the world.
 
-1. Create the initial administrator with the setup token from `docker compose logs serversentinel`.
-2. Follow the resumable setup guide to choose this machine or a connected node as the first server host.
-3. Create a new Minecraft server or restore a serverSENTINEL export.
-4. Start the server, verify its runtime, and review the optional integration and time-zone choices.
+If your world needs more time, set `SERVERSENTINEL_MINECRAFT_STOP_TIMEOUT_SECONDS` in the environment of the all-in-one service or node agent managing it. With Docker Compose, add this variable to the service's `environment` section. Also check `TimeoutStopSec` for the host's `docker.service`: the service manager must allow Docker enough time to finish shutting down its containers.
 
-To manage additional Docker hosts, open the Nodes area, add a node, and run the command generated by the panel on that host.
+## Logs
+
+View the panel's logs with `docker compose logs serversentinel`. Add `-f` to follow new entries as they arrive.
+
+At the default `LOG_LEVEL=info`, logs use structured JSON and record completed API requests, authentication events, and audited administration actions. Request entries include the request ID, client IP, signed-in user, route pattern, response status, and duration. Passwords, session cookies, authorization headers, raw request bodies, and URL query values are excluded.
 
 ## Development
 
-```bash
-npm install
-npm run dev:server
-npm run dev:web
-```
+From the repository root, install dependencies with `npm install`. Then start the backend and frontend in separate terminals:
 
-Run the backend and frontend development commands in separate terminals. Before submitting changes, run:
+| Terminal | Command |
+| --- | --- |
+| Backend | `npm run dev:server` |
+| Frontend | `npm run dev:web` |
+
+Docker is still required to create and run Minecraft servers. Before submitting code changes, run these checks from the repository root:
 
 ```bash
 npm test
@@ -188,8 +204,8 @@ npm run build
 
 ## Known Limitations
 
-- Managed server creation and runtime-appropriate Modrinth content management support both Fabric and Paper.
-- Existing external Minecraft servers are not the primary management model.
-- Modrinth integration does not fully resolve mod dependencies or conflicts.
+- Server creation and Modrinth content management currently support Fabric mods and Paper plugins.
+- The panel is designed around Minecraft containers it manages. Managing existing external Minecraft servers is not its primary use case.
+- Modrinth integration does not fully resolve dependencies or conflicts. You may need to install required dependencies or resolve incompatible mods yourself.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history. serverSENTINEL is licensed under the [Apache License 2.0](LICENSE).

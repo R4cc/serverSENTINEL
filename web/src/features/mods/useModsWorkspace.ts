@@ -10,6 +10,7 @@ import { createDemoUpdatePlan, safeUpdateRequestGroups } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { managedContentTerminology } from "./contentTerminology";
+import { useRequestScope } from "../../utils/useRequestScope";
 
 const modSearchDebounceMs = 650;
 
@@ -176,6 +177,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     isProvisioning, canManage, canInstall, modsLocked, toggleLocked, notify, setNotice,
     setActiveJobs, handleStaleSession, refreshFiles, refreshServerState, requestConfirmation
   } = inputs;
+  const requests = useRequestScope(`${activeServer?.id ?? ""}:${activePage}:${activeNodeRuntimeBlocked}`);
   const terminology = managedContentTerminology(activeServer?.runtimeProfile.runtimeType ?? "fabric");
   const demoFixture = readModsDemoFixture();
 
@@ -198,6 +200,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [installState, setInstallState] = useState<ModInstallModalState | null>(null);
+  const searchRequests = useRequestScope(JSON.stringify([activeServer?.id, query, showIncompatibleResults, addOpen, Boolean(installState)]));
   const [updatePlan, setUpdatePlan] = useState<ModUpdatePlan | null>(null);
   const [updatePlanLoading, setUpdatePlanLoading] = useState(false);
   const [updatePlanError, setUpdatePlanError] = useState("");
@@ -244,10 +247,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       if (!serverId || activeServerIdRef.current === serverId) setModsLoading(false);
       return;
     }
+    if (activeServerIdRef.current !== serverId) return;
+    const isCurrent = requests.begin("installed");
     setModsLoading(true);
     setModsError("");
     if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
-      if (activeServerIdRef.current === serverId) {
+      if (isCurrent()) {
         setInstalledMods(demoInstalledMods);
         setInstalledModsServerId(serverId);
       }
@@ -256,7 +261,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
     try {
       const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods${options.forceRefresh ? "?forceRefresh=true" : ""}`);
-      if (activeServerIdRef.current === serverId) {
+      if (isCurrent()) {
         setInstalledMods((current) => mergeStableModMetadata(current, result.mods));
         setInstalledModsServerId(serverId);
         setModsError("");
@@ -264,7 +269,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     } catch (error) {
       if (handleStaleSession(error)) return;
       const message = errorMessage(error, `Could not load installed ${terminology.plural}. Check the server ${terminology.directory} folder and retry.`);
-      if (activeServerIdRef.current === serverId) {
+      if (isCurrent()) {
         setModsError(message);
         if (options.notifyOnError) {
           setNotice(message);
@@ -272,12 +277,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         }
       }
     } finally {
-      if (activeServerIdRef.current === serverId) setModsLoading(false);
+      if (isCurrent()) setModsLoading(false);
     }
   }
 
   async function loadUpdatePlan(serverId = activeServer?.id, options: { forceRefresh?: boolean; notifyOnError?: boolean } = {}) {
     if (!serverId || isProvisioning) return null;
+    if (activeServerIdRef.current !== serverId) return null;
+    const isCurrent = requests.begin("plan");
     const showLoading = options.forceRefresh === true || (activePage === "mods" && updatePlan?.serverId !== serverId);
     if (showLoading) {
       setUpdatePlanLoading(true);
@@ -286,7 +293,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
       const fixtureError = demoFixtureFailureMessage(demoFixture, "update-plan");
       if (fixtureError) {
-        if (activeServerIdRef.current === serverId) {
+        if (isCurrent()) {
           setUpdatePlan(null);
           setUpdatePlanError(fixtureError);
         }
@@ -294,13 +301,13 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         return null;
       }
       const plan = createDemoUpdatePlan(serverId, demoInstalledMods);
-      if (activeServerIdRef.current === serverId) setUpdatePlan(plan);
+      if (isCurrent()) setUpdatePlan(plan);
       if (showLoading) setUpdatePlanLoading(false);
       return plan;
     }
     try {
       const plan = await api<ModUpdatePlan | null>(`/api/servers/${serverId}/mods/update-plan${options.forceRefresh ? "?forceRefresh=true" : ""}`);
-      if (activeServerIdRef.current === serverId) {
+      if (isCurrent()) {
         setUpdatePlan(plan);
         setUpdatePlanError("");
       }
@@ -308,20 +315,21 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     } catch (error) {
       if (handleStaleSession(error)) return null;
       const message = errorMessage(error, `Could not build the ${terminology.singular} update plan.`);
-      if (activeServerIdRef.current === serverId) {
+      if (isCurrent()) {
         setUpdatePlanError(message);
         if (options.notifyOnError) notify("error", message);
       }
       return null;
     } finally {
-      if (showLoading && activeServerIdRef.current === serverId) setUpdatePlanLoading(false);
+      if (isCurrent()) setUpdatePlanLoading(false);
     }
   }
 
   async function refreshUpdates(forceRefresh = true, notifyOnError = forceRefresh) {
     const serverId = activeServer?.id;
     if (!serverId || refreshUpdatesInFlightRef.current.has(serverId)) return null;
-    refreshUpdatesInFlightRef.current.add(serverId);
+    const inFlight = refreshUpdatesInFlightRef.current;
+    inFlight.add(serverId);
     try {
       const [, updatePlanResult] = await Promise.all([
         loadInstalledMods(serverId, { forceRefresh, notifyOnError }),
@@ -330,7 +338,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       ]);
       return updatePlanResult;
     } finally {
-      refreshUpdatesInFlightRef.current.delete(serverId);
+      inFlight.delete(serverId);
     }
   }
 
@@ -374,6 +382,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   useEffect(() => {
     resetPageState();
     toggleQueueRef.current = {};
+    refreshUpdatesInFlightRef.current = new Set();
+    setBatchUpdateRunning(false);
+    setUpdatePlanLoading(false);
     const serverId = activeServer?.id ?? "";
     if (workspaceServerIdRef.current !== serverId) {
       workspaceServerIdRef.current = serverId;
@@ -525,6 +536,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function loadMoreMods() {
     if (loadMoreInFlightRef.current || loadingMore || searching || !activeServer || installState) return;
+    const isCurrent = searchRequests.begin("more");
     const offset = searchNextOffset;
     if (!searchHasMore) return;
     loadMoreInFlightRef.current = true;
@@ -537,6 +549,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     }
     if (activeServerIsDemo) {
       window.setTimeout(() => {
+        if (!isCurrent()) return;
         if (activeServerIdRef.current !== activeServer.id || searchQueryRef.current !== searchQuery || showIncompatibleResultsRef.current !== showIncompatibleResults || installReviewOpenRef.current) {
           loadMoreInFlightRef.current = false;
           setLoadingMore(false);
@@ -556,7 +569,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       const serverId = activeServer.id;
       const compatibility = showIncompatibleResults;
       const result = await api<ModrinthSearchPage>(buildModrinthSearchPath({ query: searchQuery, serverId, showIncompatibleResults: compatibility, offset, limit: 20 }));
-      if (activeServerIdRef.current === serverId && searchQueryRef.current === searchQuery && showIncompatibleResultsRef.current === compatibility && !installReviewOpenRef.current) {
+      if (isCurrent() && activeServerIdRef.current === serverId && searchQueryRef.current === searchQuery && showIncompatibleResultsRef.current === compatibility && !installReviewOpenRef.current) {
         setSearchResults((current) => {
           const seen = new Set(current.map((hit) => hit.project_id));
           return [...current, ...result.hits.filter((hit) => !seen.has(hit.project_id))];
@@ -566,10 +579,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
     } catch (error) {
       if (handleStaleSession(error)) return;
-      setSearchError(errorMessage(error, "Could not load more search results."));
+      if (isCurrent()) setSearchError(errorMessage(error, "Could not load more search results."));
     } finally {
-      loadMoreInFlightRef.current = false;
-      setLoadingMore(false);
+      if (isCurrent()) {
+        loadMoreInFlightRef.current = false;
+        setLoadingMore(false);
+      }
     }
   }
 
@@ -681,6 +696,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function uploadModFile(file: File) {
     if (modsLocked || !canManage || !activeServer) return;
+    const isCurrent = requests.capture();
     const selection = validateModUploadSelection(file, currentInstalledMods, terminology);
     if (selection.kind === "cancelled") return;
     if (selection.kind === "error") { notify("error", selection.message); return; }
@@ -694,7 +710,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         await new Promise((resolve) => window.setTimeout(resolve, 400)); patchJob(jobId, { progress: 95, task: `Refreshing installed ${terminology.plural}` });
         const mod = uploadedManualMod(file);
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
-        setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
+        if (isCurrent()) setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);
       } catch (error) {
         patchJob(jobId, { status: "failed", task: "Upload failed", error: (error as Error).message, dismissible: true });
@@ -709,7 +725,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       await api(`/api/servers/${activeServer.id}/mods/upload`, { method: "POST", body: form });
       patchJob(jobId, { progress: 90, task: `Refreshing installed ${terminology.plural}` });
       try {
-        await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
+        if (isCurrent()) await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);
       } catch (error) {
         patchJob(jobId, { status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh ${terminology.singular} list`, error: (error as Error).message, dismissible: true });
@@ -717,21 +733,24 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
       const message = modUploadErrorMessage(error, file.name);
-      setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Upload failed", error: message, dismissible: true });
+      if (isCurrent()) setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Upload failed", error: message, dismissible: true });
     } finally {
-      setSearching(false);
+      if (isCurrent()) setSearching(false);
     }
   }
 
   async function installSelectedMod() {
     if (modsLocked || !canManage || !activeServer || !installState?.data || !selectedVersion?.selectable) return;
+    const isCurrent = requests.capture();
+    const installRequest = installVersionsRequestRef.current;
+    const ownsInstall = () => isCurrent() && installVersionsRequestRef.current === installRequest;
     const projectId = installState.mod.project_id;
     const title = installState.data.project.title || installState.mod.title;
     const { forceIncompatible, overrideMinecraftVersion } = selectedInstallFlags(selectedVersion);
     if (getInstallVersionHealth(selectedVersion).requiresAcknowledgement && !installState.acknowledgeMinecraftMismatch) return;
     const switchMode = installState.mode === "switch";
     setNotice("");
-    setInstallState((current) => current ? { ...current, installing: true, error: "" } : current);
+    if (ownsInstall()) setInstallState((current) => current ? { ...current, installing: true, error: "" } : current);
     const jobId = `${switchMode ? "switch" : "install"}-${projectId}-${selectedVersion.id}-${Date.now()}`;
     setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: switchMode ? `Switching ${terminology.singular} version` : `Installing ${terminology.singular}`, subject: `${title} ${selectedVersion.versionNumber}`, progress: 10, task: "Resolving version", dismissible: false }]);
     if (activeServerIsDemo) {
@@ -754,12 +773,12 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         };
         const replacedFilename = switchMode ? installState.sourceFilename : filename;
         setDemoInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== replacedFilename && candidate.filename !== filename)]);
-        setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== replacedFilename && candidate.filename !== filename)]);
-        removeJob(jobId); notify("success", switchMode ? `Switched ${title} to ${selectedVersion.versionNumber}` : `Installed ${title}`); setInstallState(null); if (switchMode) setAddOpen(false);
+        if (isCurrent()) setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== replacedFilename && candidate.filename !== filename)]);
+        removeJob(jobId); notify("success", switchMode ? `Switched ${title} to ${selectedVersion.versionNumber}` : `Installed ${title}`); if (ownsInstall()) setInstallState(null); if (switchMode && ownsInstall()) setAddOpen(false);
       } catch (error) {
         const message = (error as Error).message;
         patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
-        setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
+        if (ownsInstall()) setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
       }
       return;
     }
@@ -772,11 +791,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         : await api<{ installed?: Array<{ filename: string; dependencyType: "root" | "required" }> }>("/api/modrinth/install", {
             method: "POST", body: JSON.stringify({ serverId: activeServer.id, projectId, versionId: selectedVersion.id, channel: installState.channel, forceIncompatible, overrideMinecraftVersion })
       });
-      setInstallState(null);
-      if (switchMode) setAddOpen(false);
+      if (ownsInstall()) setInstallState(null);
+      if (switchMode && ownsInstall()) setAddOpen(false);
       patchJob(jobId, { progress: 90, task: `Refreshing installed ${terminology.plural}` });
       try {
-        await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
+        if (isCurrent()) await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         const requiredCount = "installed" in result ? result.installed?.filter((item) => item.dependencyType === "required").length ?? 0 : 0;
         removeJob(jobId);
         const switchedVersion = "version" in result ? result.version : selectedVersion.versionNumber;
@@ -787,14 +806,18 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
       const message = (error as Error).message;
-      setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
-      setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
-      void refreshUpdates(true); void refreshFiles(activeServer.id, `/${terminology.directory}`);
+      if (isCurrent()) setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
+      if (ownsInstall()) setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
+      if (isCurrent()) {
+        void refreshUpdates(true);
+        void refreshFiles(activeServer.id, `/${terminology.directory}`);
+      }
     }
   }
 
   async function installMissingDependencies(mod: InstalledMod) {
     if (modsLocked || !canInstall || !modrinthConfigured || !activeServer || mod.dependencyHealth?.status !== "missing") return;
+    const isCurrent = requests.capture();
     const count = mod.dependencyHealth.missing.length;
     const jobId = `dependencies-${installedModKey(mod)}-${Date.now()}`;
     setNotice("");
@@ -804,7 +827,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         ? { ...candidate, dependencyHealth: { status: "satisfied" as const, requiredCount: candidate.dependencyHealth?.requiredCount ?? count, missing: [] } }
         : candidate);
       setDemoInstalledMods(repair);
-      setInstalledMods(repair);
+      if (isCurrent()) setInstalledMods(repair);
       removeJob(jobId);
       notify("success", `Installed ${count} required ${count === 1 ? "dependency" : "dependencies"} for ${mod.displayName}`);
       return;
@@ -816,7 +839,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         body: JSON.stringify({ filename: mod.filename })
       });
       patchJob(jobId, { progress: 90, task: `Refreshing ${terminology.singular} health` });
-      await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
+      if (isCurrent()) await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
       removeJob(jobId);
       const changed = result.installed.length + result.enabled.length;
       notify("success", result.alreadySatisfied || changed === 0
@@ -824,15 +847,19 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         : `Installed ${changed} required ${changed === 1 ? "dependency" : "dependencies"} for ${mod.displayName}`);
     } catch (error) {
       const message = errorMessage(error, `Could not install dependencies for ${mod.displayName}.`);
-      setNotice(message);
+      if (isCurrent()) setNotice(message);
       notify("error", message);
       patchJob(jobId, { status: "failed", task: "Dependency install failed", error: message, dismissible: true });
-      void loadInstalledMods(activeServer.id, { forceRefresh: true });
+      if (isCurrent()) void loadInstalledMods(activeServer.id, { forceRefresh: true });
     }
   }
 
   async function uploadModFiles(files: File[]) {
-    for (const file of files) await uploadModFile(file);
+    const isCurrent = requests.capture();
+    for (const file of files) {
+      if (!isCurrent()) break;
+      await uploadModFile(file);
+    }
   }
 
   async function uploadMod(event: ChangeEvent<HTMLInputElement>) {
@@ -843,6 +870,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function updateMod(mod: InstalledMod) {
     if (modsLocked || !canManage || !activeServer || !mod.modrinth) return;
+    const isCurrent = requests.capture();
     setNotice("");
     const title = mod.displayName;
     const oldFilename = mod.filename;
@@ -858,7 +886,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         const filename = mod.versionInfo?.latestFilename || oldFilename.replace(mod.modrinth.versionNumber, version);
         const updated: InstalledMod = { ...mod, filename, modifiedAt: new Date().toISOString(), versionInfo: { ...mod.versionInfo, currentVersion: version, latestVersion: version, upToDate: true }, modrinth: { ...mod.modrinth, filename, versionNumber: version, installedAt: new Date().toISOString() } };
         setDemoInstalledMods((current) => [updated, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
-        setInstalledMods((current) => [updated, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
+        if (isCurrent()) setInstalledMods((current) => [updated, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
         finishJobWithNotification(jobId, "success", `Updated ${title} to ${version}`);
       } catch (error) {
         finishJobWithNotification(jobId, "error", (error as Error).message);
@@ -871,21 +899,26 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       patchJob(jobId, { progress: 90, task: `Refreshing installed ${terminology.plural}` });
       const successMessage = result.upToDate ? `${title} is already up to date` : `Updated ${title} to ${result.version}`;
       try {
-        await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
+        if (isCurrent()) await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
         finishJobWithNotification(jobId, "success", successMessage);
       } catch (error) {
         finishJobWithNotification(jobId, "warning", `${successMessage}, but failed to refresh ${terminology.singular} list`);
       }
     } catch (error) {
       const message = (error as Error).message;
-      setNotice(message); finishJobWithNotification(jobId, "error", message);
-      void refreshUpdates(true); void refreshFiles(activeServer.id, `/${terminology.directory}`);
+      if (isCurrent()) setNotice(message); finishJobWithNotification(jobId, "error", message);
+      if (isCurrent()) {
+        void refreshUpdates(true);
+        void refreshFiles(activeServer.id, `/${terminology.directory}`);
+      }
     }
   }
 
   async function updateAllSafe() {
     if (modsLocked || !canManage || !activeServer || batchUpdateRunning) return;
+    const isCurrent = requests.capture();
     const plan = currentUpdatePlan ?? await loadUpdatePlan(activeServer.id, { forceRefresh: true });
+    if (!isCurrent()) return;
     const safeEntries = plan?.updates.filter((entry) => entry.status === "safe_update" && entry.safeBatchEligible) ?? [];
     if (!safeEntries.length) {
       notify("info", `No safe ${terminology.singular} updates are available.`);
@@ -914,7 +947,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           };
         });
         setDemoInstalledMods(apply);
-        setInstalledMods(apply);
+        if (isCurrent()) setInstalledMods(apply);
         result = {
           updated: safeEntries.map((entry) => ({ filename: entry.filename, result: { ok: true, version: entry.targetVersion } })),
           skipped: [],
@@ -934,7 +967,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         result = mergeSafeBatchUpdateResults(results);
       }
       patchJob(jobId, { progress: 85, task: "Refreshing update plan" });
-      await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
+      if (isCurrent()) await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
       const feedback = safeBatchUpdateFeedback(result, terminology);
       const issueDetails = [
         ...result.skipped.map((entry) => `${entry.filename} skipped: ${entry.reason}`),
@@ -944,16 +977,18 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       window.setTimeout(() => removeJob(jobId), 5000);
     } catch (error) {
       const message = errorMessage(error, `Safe ${terminology.singular} updates failed.`);
-      setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Safe updates failed", error: message, dismissible: true });
-      void refreshUpdates(true);
+      if (isCurrent()) setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: "Safe updates failed", error: message, dismissible: true });
+      if (isCurrent()) void refreshUpdates(true);
     } finally {
-      setBatchUpdateRunning(false);
+      if (isCurrent()) setBatchUpdateRunning(false);
     }
   }
 
   async function processToggleQueue(filename: string, displayName: string) {
     const item = toggleQueueRef.current[filename];
     if (!item || item.inFlightEnabled !== null) return;
+    const ownsScope = requests.capture();
+    const isCurrent = () => ownsScope() && toggleQueueRef.current[filename] === item;
     let currentFilename = filename;
     while (true) {
       const runEnabled = item.targetEnabled;
@@ -963,11 +998,14 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       } else if (activeServer) {
         try {
           const result = await api<{ filename: string; enabled: boolean }>(`/api/servers/${activeServer.id}/mods`, { method: "PATCH", body: JSON.stringify({ filename: currentFilename, enabled: runEnabled }) });
+          if (!isCurrent()) return;
           const nextFilename = result.filename || currentFilename;
-          setInstalledMods((current) => current.map((mod) => mod.filename === currentFilename ? { ...mod, filename: nextFilename, displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"), enabled: result.enabled } : mod));
+          const responseFilename = currentFilename;
+          setInstalledMods((current) => current.map((mod) => mod.filename === responseFilename ? { ...mod, filename: nextFilename, displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"), enabled: result.enabled } : mod));
           currentFilename = nextFilename;
           void Promise.all([refreshFiles(activeServer.id, `/${terminology.directory}`), refreshServerState()]);
         } catch (error) {
+          if (!isCurrent()) return;
           const message = `Failed to toggle ${terminology.singular} ${displayName}: ${(error as Error).message}`;
           setNotice(message); notify("error", message);
           const rollback = !runEnabled;
@@ -976,6 +1014,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           break;
         }
       }
+      if (!isCurrent()) return;
       item.inFlightEnabled = null;
       if (item.targetEnabled === runEnabled) break;
     }
@@ -997,6 +1036,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   async function removeMod(mod: InstalledMod) {
     if (modsLocked || !canManage || !activeServer) return;
+    const isCurrent = requests.capture();
     setNotice("");
     const confirmed = await requestConfirmation({
       title: `Remove ${mod.displayName}?`,
@@ -1006,24 +1046,25 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       confirmLabel: `Remove ${terminology.singular}`,
       variant: "critical"
     });
-    if (!confirmed) return;
+    if (!confirmed || !isCurrent()) return;
     if (activeServerIsDemo) {
       setDemoInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
-      setInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
-      setDetailsModKey(""); notify("success", `Removed ${mod.displayName}`); return;
+      if (isCurrent()) setInstalledMods((current) => current.filter((candidate) => candidate.filename !== mod.filename));
+      if (isCurrent()) setDetailsModKey(""); notify("success", `Removed ${mod.displayName}`); return;
     }
     try {
       await api(`/api/servers/${activeServer.id}/mods?filename=${encodeURIComponent(mod.filename)}`, { method: "DELETE" });
-      notify("success", `Removed ${mod.displayName}`); setDetailsModKey("");
-      await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
+      notify("success", `Removed ${mod.displayName}`); if (isCurrent()) setDetailsModKey("");
+      if (isCurrent()) await refreshModsWorkspace(activeServer.id, { forceRefresh: true });
     } catch (error) {
       const message = errorMessage(error, `Could not remove the ${terminology.singular}.`);
-      setNotice(message); notify("error", message);
+      if (isCurrent()) setNotice(message); notify("error", message);
     }
   }
 
   async function acknowledgeModReview(mod: InstalledMod) {
     if (!canManage || !activeServer || !mod.modrinth) return;
+    const isCurrent = requests.capture();
     setNotice("");
     const acknowledgedAt = new Date().toISOString();
     const applyAcknowledgement = (current: InstalledMod[]) => current.map((candidate) => (
@@ -1033,21 +1074,22 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     ));
     if (activeServerIsDemo) {
       setDemoInstalledMods(applyAcknowledgement);
-      setInstalledMods(applyAcknowledgement);
+      if (isCurrent()) setInstalledMods(applyAcknowledgement);
       notify("success", `Marked ${mod.displayName} as healthy`);
       return;
     }
     try {
       await api("/api/modrinth/acknowledge-review", { method: "POST", body: JSON.stringify({ serverId: activeServer.id, filename: mod.filename }) });
-      setInstalledMods(applyAcknowledgement);
+      if (isCurrent()) setInstalledMods(applyAcknowledgement);
       notify("success", `Marked ${mod.displayName} as healthy`);
+      if (!isCurrent()) return;
       await Promise.all([
         loadInstalledMods(activeServer.id, { forceRefresh: true, notifyOnError: true }),
         loadUpdatePlan(activeServer.id, { forceRefresh: true, notifyOnError: true })
       ]);
     } catch (error) {
       const message = errorMessage(error, `Could not acknowledge the ${terminology.singular} review.`);
-      setNotice(message);
+      if (isCurrent()) setNotice(message);
       notify("error", message);
       throw error;
     }
