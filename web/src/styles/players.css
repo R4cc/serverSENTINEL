@@ -606,6 +606,8 @@ button.playerMapServer--stopped:hover:not(:disabled) {
 }
 
 .playerMapRegionPanel .playerMapClusterList {
+  grid-auto-rows: max-content;
+  align-content: start;
   max-height: 280px;
   padding-inline-end: 4px;
 }

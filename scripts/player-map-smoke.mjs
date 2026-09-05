@@ -144,6 +144,25 @@ try {
         const initialRows = await popup.locator('.playerMapClusterRow').count();
         await viewAll.click();
         assert(await popup.locator('.playerMapClusterRow').count() > initialRows, 'View all must expose the complete region roster');
+        const roster = await popup.locator('.playerMapClusterList').evaluate(list => {
+          const rows = [...list.querySelectorAll('.playerMapClusterRow')];
+          return {
+            scrolls: list.scrollHeight > list.clientHeight,
+            contained: rows.every(row => {
+              const bounds = row.getBoundingClientRect();
+              return [...row.children].every(child => {
+                const box = child.getBoundingClientRect();
+                return box.top >= bounds.top - 1 && box.bottom <= bounds.bottom + 1;
+              });
+            }),
+            separated: rows.every((row, index) => index === 0 ||
+              rows[index - 1].getBoundingClientRect().bottom <= row.getBoundingClientRect().top + 1)
+          };
+        });
+        assert(roster.contained && roster.separated, `${engine.name()} ${width}px: expanded player rows overlap their contents`);
+        assert(roster.scrolls, 'Expanded roster must scroll instead of compressing player rows');
+        await popup.locator('.playerMapClusterRow').last().scrollIntoViewIfNeeded();
+        await page.locator('.playerMap').screenshot({path:join(output,`${engine.name()}-${width}-${theme}-expanded.png`)});
       }
       await popup.getByRole('button', {name:'Close region summary'}).click();
       await popup.waitFor({state:'detached'});
