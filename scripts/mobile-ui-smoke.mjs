@@ -7,6 +7,7 @@ const harness = await startDemoHarness({
   env: { MODRINTH_API_KEY: "demo-token" }
 });
 const { baseUrl } = harness;
+const navigationOnly = process.argv.includes("--navigation-only");
 
 async function openPage(page, title) {
   const target = page.locator(`.sideNav button[title="Open ${title}"]`);
@@ -1102,7 +1103,8 @@ async function runProfile(engine, profile, label) {
     const page = await context.newPage();
     await page.addInitScript(() => {
       localStorage.setItem("serversentinel-theme", "light");
-      localStorage.setItem("serversentinel-active-page", "overview");
+      // Seed a fresh context without overwriting the page under test on reload.
+      if (!localStorage.getItem("serversentinel-active-page")) localStorage.setItem("serversentinel-active-page", "overview");
 
       // A stand-in for the software keyboard, which a headless browser has no way to raise. It
       // reports the real viewport, and forwards the real events, until a test gives it an inset or
@@ -1130,6 +1132,18 @@ async function runProfile(engine, profile, label) {
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
     await assertNavigationOverlay(page, label);
+    if (navigationOnly) {
+      for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings"]) {
+        await assertPageDocumentScroll(page, title, `${label} ${title}`);
+      }
+      await assertConsoleViewportOwnership(page, `${label} console`);
+      await assertConsoleSurvivesTheKeyboard(page, `${label} console keyboard`);
+      await assertPageRestoresOnReload(page, "schedules", "schedule", ".schedulePage", `${label} schedules`);
+      await assertPageRestoresOnReload(page, "files", "files", ".filesPage", `${label} files`);
+      await context.close();
+      console.log(`mobile navigation smoke passed: ${label}`);
+      return;
+    }
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .refreshStatusButton"], label);
     await assertFloatingSurfaces(page, label);
     await assertPlayerClusterPopupDismisses(page, `${label} players`);
@@ -1253,9 +1267,9 @@ async function runTabletProfile() {
 }
 
 try {
-  await runDesktopMapAndRestorationProfile();
+  if (!navigationOnly) await runDesktopMapAndRestorationProfile();
   await runTabletProfile();
-  await assertConfiguredPlayerAddressEditor();
+  if (!navigationOnly) await assertConfiguredPlayerAddressEditor();
   await runProfile(chromium, {
     ...devices["Pixel 7"],
     viewport: { width: 390, height: 844 }
