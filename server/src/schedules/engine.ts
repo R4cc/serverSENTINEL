@@ -160,7 +160,8 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
       return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
     }
-    if (schedule.onlyWhenNoPlayers && !schedule.waitForPlayersToLeave) {
+    // Players may have joined while this run waited for an export to finish.
+    if (schedule.onlyWhenNoPlayers) {
       throwIfScheduleCancelled(active.controller.signal);
       active.message = "Checking online players";
       const count = await services.playerSnapshotCoordinator!.freshOnlineCount(server);
