@@ -5,7 +5,6 @@ import { Banner, Button, Toolbar } from "../components/UiPrimitives";
 import { AddModsWorkflow } from "../features/mods/AddModsWorkflow";
 import { InstalledModsList } from "../features/mods/InstalledModsList";
 import { ModDetailsPanel } from "../features/mods/ModDetailsPanel";
-import { ModsSummary } from "../features/mods/ModsSummary";
 import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace";
 import type { RestartRequiredChange } from "../types";
 import { canUpdateAllSafe, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
@@ -60,7 +59,6 @@ export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serve
   return (
     <section className="tabPage modsWorkspacePage layoutWide">
       {!access.modrinthConfigured && <Banner tone="info" title="Modrinth search is unavailable." message={<>Installed {terminology.singular} management still works. Add an API key in Settings to search and install {terminology.plural}.</>} />}
-      <ModsSummary mods={data.installedMods} updatePlan={data.updatePlan} loading={state.modsLoading} terminology={terminology} />
       <Toolbar
         className="modsWorkspaceToolbar"
         primary={<div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add {terminology.plural}</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button></div>}

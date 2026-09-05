@@ -76,9 +76,6 @@ function ApplicationSkeletonContent({ page }: { page: ActivePage }) {
   if (page === "mods") {
     return (
       <div className="applicationModsSkeleton" aria-hidden="true">
-        <div className="applicationModsSummary">
-          {Array.from({ length: 3 }, (_, index) => <SkeletonBlock className="applicationModsMetric" key={index} />)}
-        </div>
         <div className="applicationModsToolbar">
           <SkeletonBlock className="applicationSkeletonButtonGroup" />
           <SkeletonBlock className="applicationSkeletonButtonGroup applicationSkeletonButtonGroup--end" />
