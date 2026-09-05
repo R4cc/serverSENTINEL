@@ -120,7 +120,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const extract = () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
     services.operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
   });
-  void (touchesMods ? withTrackedModMutation(server, extract) : withFileMutation(server, extract)).then(async (result) => {
+  void (touchesMods ? withTrackedModMutation(server, extract, await requireRequestPermission(request)) : withFileMutation(server, extract)).then(async (result) => {
     services.operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
   }).catch((error) => {
     services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
@@ -312,7 +312,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/files/upload", destructiv
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const touchesMods = runtime.isModsPath(server, target);
   const upload = () => runtime.uploadFile(server, parent, filename, uploadRequest.content);
-  return touchesMods ? withTrackedModMutation(server, upload) : withFileMutation(server, upload);
+  return touchesMods ? withTrackedModMutation(server, upload, await requireRequestPermission(request)) : withFileMutation(server, upload);
 });
 
 app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -330,7 +330,7 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
   const renameEntry = () => runtime.renameFile(server, source, targetName);
-  return touchesMods ? withTrackedModMutation(server, renameEntry) : withFileMutation(server, renameEntry);
+  return touchesMods ? withTrackedModMutation(server, renameEntry, await requireRequestPermission(request)) : withFileMutation(server, renameEntry);
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string } }>("/api/servers/:id/file/move", destructiveRateLimit, async (request) => {
@@ -348,7 +348,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
   const moveEntry = () => runtime.moveFile(server, source, destination);
-  return touchesMods ? withTrackedModMutation(server, moveEntry) : withFileMutation(server, moveEntry);
+  return touchesMods ? withTrackedModMutation(server, moveEntry, await requireRequestPermission(request)) : withFileMutation(server, moveEntry);
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/file/duplicate", destructiveRateLimit, async (request) => {
@@ -360,7 +360,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const touchesMods = runtime.isModsPath(server, source);
   if (runtime.isServerSettingsFile(server, source)) await requireServerStoppedForMutableConfiguration(server);
   const duplicate = () => runtime.duplicateFile(server, source, request.body.name);
-  return touchesMods ? withTrackedModMutation(server, duplicate) : withFileMutation(server, duplicate);
+  return touchesMods ? withTrackedModMutation(server, duplicate, await requireRequestPermission(request)) : withFileMutation(server, duplicate);
 });
 
 app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -372,7 +372,7 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   const touchesMods = runtime.isModsPath(server, target);
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const deleteEntry = () => runtime.deleteFile(server, target, request.query.recursive);
-  return touchesMods ? withTrackedModMutation(server, deleteEntry) : withFileMutation(server, deleteEntry);
+  return touchesMods ? withTrackedModMutation(server, deleteEntry, await requireRequestPermission(request)) : withFileMutation(server, deleteEntry);
 });
 
 }

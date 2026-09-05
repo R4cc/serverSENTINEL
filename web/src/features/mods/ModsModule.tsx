@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { ModHistoryPage } from "./ModHistoryPage";
+import { useDemoModHistory } from "./useDemoModHistory";
 import { toast } from "sonner";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import type { ServerRuntimeType } from "@serversentinel/contracts";
@@ -74,6 +76,9 @@ export type ModsModuleProps = {
 };
 
 export function ModsModule(props: ModsModuleProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const demoHistory = useDemoModHistory(props.activeServer?.id, props.activeServerIsDemo, props.demoInstalledMods, props.setDemoInstalledMods);
+  useEffect(() => { setHistoryOpen(false); }, [props.activeServer?.id, props.active]);
   const guards = resolveModGuards({
     isProvisioning: props.isProvisioning,
     dockerOperationalLock: props.dockerOperationalLock,
@@ -168,8 +173,21 @@ export function ModsModule(props: ModsModuleProps) {
 
   if (!props.active || !props.activeServer) return null;
 
+  if (historyOpen) return <ModHistoryPage key={props.activeServer.id} serverId={props.activeServer.id}
+    terminology={props.managedContent} locked={guards.modsLocked || mutating}
+    requestConfirmation={props.requestConfirmation} onBack={() => setHistoryOpen(false)}
+    onChanged={async () => {
+      // Demo changes flow through the fixture prop; an in-flight refresh would replay the old array.
+      if (!props.activeServerIsDemo && props.activeServer) await Promise.all([
+        workspace.actions.refresh(true, false),
+        props.refreshFiles(props.activeServer.id, `/${props.managedContent.directory}`)
+      ]);
+    }}
+    formatDate={props.formatDate} handleStaleSession={props.handleStaleSession} source={demoHistory} />;
+
   return (
     <ModsPage
+      onHistory={() => setHistoryOpen(true)}
       workspace={workspace}
       runtimeType={props.runtimeType}
       restartRequiredChanges={props.restartRequiredChanges}

@@ -8,7 +8,7 @@ type AppliedMigration = {
   name: string;
 };
 
-export const currentSchemaVersion = 24;
+export const currentSchemaVersion = 25;
 export const currentSchemaName = "current-schema-baseline";
 
 const applicationTableNames = [
@@ -25,6 +25,7 @@ const applicationTableNames = [
   "resource_stats",
   "timeline_events",
   "mod_preferences",
+  "mod_history",
   "operations",
   "player_head_cache",
   "player_geo_locations"
@@ -43,17 +44,19 @@ const unchangedTableColumns: Readonly<Record<string, readonly string[]>> = {
   resource_stats: ["server_id", "sampled_at", "sample_json"],
   timeline_events: ["server_id", "event_key", "occurred_at", "event_json"],
   mod_preferences: ["server_id", "filename", "channel", "metadata_json"],
+  mod_history: ["sequence", "id", "server_id", "entry_json", "reverted_at"],
   player_geo_locations: ["server_id", "player_key", "player_name", "location_json", "first_seen_at", "last_seen_at", "observations", "last_ping_average_ms", "last_ping_samples", "last_ping_at"],
   operations: ["id", "type", "status", "server_id", "node_id", "created_by", "progress", "task", "created_at", "started_at", "finished_at", "error_message", "result_json", "log_summary"]
 };
 const currentAppSettingsColumns = ["id", "modrinth_api_key", "player_heads_enabled", "player_heads_onboarding_completed", "maxmind_account_id", "maxmind_license_key"];
 const playerHeadCacheColumns = ["cache_key", "player_name", "png_bytes", "etag", "fetched_at", "refresh_after", "last_accessed_at"];
-const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "timeline_events_occurred_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx", "player_geo_locations_last_seen_idx"];
+const applicationIndexNames = ["sessions_user_id_idx", "servers_node_id_idx", "managed_ports_server_id_idx", "schedules_enabled_idx", "scheduled_runs_schedule_idx", "file_edit_leases_expiry_idx", "resource_stats_sampled_at_idx", "timeline_events_occurred_at_idx", "operations_created_at_idx", "operations_server_id_idx", "operations_status_idx", "player_geo_locations_last_seen_idx", "mod_history_server_sequence_idx"];
 
 /** The oldest baseline this release can still upgrade; anything before it has to pass through 1.6.2. */
 export const oldestSupportedSchemaVersion = 20;
 
 function createCurrentSchema(database: Database.Database) {
+  createModHistoryTable(database);
   database.exec(`
     CREATE TABLE storage_metadata (
       key TEXT PRIMARY KEY,
@@ -450,6 +453,16 @@ function migrateSchema23(database: Database.Database) {
   }).immediate();
 }
 
+function createModHistoryTable(database: Database.Database) {
+  database.exec(`CREATE TABLE mod_history (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
+    server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    entry_json TEXT NOT NULL,
+    reverted_at TEXT
+  ); CREATE INDEX mod_history_server_sequence_idx ON mod_history(server_id, sequence DESC)`);
+}
+
 function initializeSchema(database: Database.Database) {
   if (!tableExists(database, "schema_migrations")) {
     if (applicationTables(database).length !== 0) {
@@ -487,6 +500,10 @@ function initializeSchema(database: Database.Database) {
     if (baseline <= 21) migrateSchema21(database);
     if (baseline <= 22) migrateSchema22(database);
     if (baseline <= 23) migrateSchema23(database);
+    if (baseline <= 24) database.transaction(() => {
+      createModHistoryTable(database);
+      recordCurrentSchema(database);
+    }).immediate();
     assertCurrentSchemaLayout(database);
     return;
   }

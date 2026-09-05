@@ -33,6 +33,7 @@ type ModsPageAccess = {
 };
 
 type Props = {
+  onHistory?: () => void;
   workspace: ModsWorkspaceController;
   runtimeType: ServerRuntimeType;
   restartRequiredChanges?: RestartRequiredChange[];
@@ -45,7 +46,7 @@ type Props = {
   };
 };
 
-export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serverContext, access, relativeTimestamps, formatters }: Props) {
+export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serverContext, access, relativeTimestamps, formatters, onHistory }: Props) {
   const uploadRef = useRef<HTMLInputElement>(null);
   const terminology = managedContentTerminology(runtimeType);
   const { data, state, derived, refs, actions } = workspace;
@@ -63,7 +64,7 @@ export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serve
       <Toolbar
         className="modsWorkspaceToolbar"
         primary={<div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add {terminology.plural}</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button></div>}
-        meta={<span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt} title={relativeTimestamps ? formatters.date(data.updatePlan.generatedAt) : undefined}>{relativeTimestamps ? formatRelativeTimestamp(data.updatePlan.generatedAt) : formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span>}
+        meta={<div className="modsWorkspaceHistoryMeta">{onHistory && <Button variant="secondary" onClick={onHistory}>Update history</Button>}<span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt} title={relativeTimestamps ? formatters.date(data.updatePlan.generatedAt) : undefined}>{relativeTimestamps ? formatRelativeTimestamp(data.updatePlan.generatedAt) : formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span></div>}
         secondary={<div className="modsWorkspaceUpdateActions">
           <Button variant="secondary" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? `Waiting for the current ${terminology.singular} change to finish.` : state.updatePlanLoading ? `Checking installed ${terminology.plural} for updates.` : `Check installed ${terminology.plural} for updates.`} reserveLabel={<><AppIcon name="refresh" />Check updates</>}><AppIcon name="refresh" /> {state.updatePlanLoading ? "Checking…" : "Check updates"}</Button>
           {showSafeBatch && <Button className="modsWorkspaceBatchAction" onClick={() => void actions.updateAllSafe()} disabled={!canRunSafeBatch} reserveLabel={`Updating safe ${terminology.plural}…`}>{state.batchUpdateRunning ? `Updating safe ${terminology.plural}…` : `Update all safe (${data.updatePlan?.counts.safeUpdates})`}</Button>}

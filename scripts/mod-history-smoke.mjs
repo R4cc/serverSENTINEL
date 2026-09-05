@@ -1,0 +1,72 @@
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+import { launchBrowser, signInThroughApi, startDemoHarness } from "./lib/demo-harness.mjs";
+
+const harness = await startDemoHarness({ dataDirectoryPrefix: "serversentinel-mod-history-smoke-" });
+let browser;
+try {
+  browser = await launchBrowser(chromium);
+  for (const width of [1440, 390, 320]) {
+    const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: "reduce" });
+    await signInThroughApi(context, harness.baseUrl);
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(harness.baseUrl);
+    await page.locator(".appShell").waitFor();
+    const nav = page.locator('[data-nav-page="mods"]');
+    await nav.waitFor({ state: "attached" });
+    if (!await nav.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
+    await nav.click();
+    await page.locator(".modsWorkspaceInstalled").waitFor();
+    const overflowingButtons = await page.locator(".modsWorkspaceToolbar button").evaluateAll((buttons) => buttons.filter((button) => button.scrollWidth > button.clientWidth + 1).map((button) => button.textContent));
+    assert.deepEqual(overflowingButtons, [], `Mods toolbar labels overflow at ${width}px`);
+    const openHistory = () => page.getByRole("button", { name: "Update history", exact: true }).click();
+    const back = () => page.getByRole("button", { name: "Back to mods", exact: true }).click();
+    await openHistory();
+    await page.getByText("No changes recorded", { exact: true }).waitFor();
+    assert.equal(await page.locator(".modsWorkspaceInstalled").count(), 0, "History must be a separate view");
+    await back();
+    const toggle = page.locator('.modsWorkspaceInstalled input[type="checkbox"]').first();
+    await toggle.waitFor({ state: "attached" });
+    const previous = await toggle.isChecked();
+    const originalToggleLabel = await toggle.getAttribute("aria-label");
+    await toggle.locator("..").click();
+    await openHistory();
+    const rows = page.locator(".modHistoryTable tbody tr");
+    await rows.first().waitFor();
+    assert.match(await rows.first().innerText(), /demo/);
+    assert.match(await rows.first().innerText(), /Enabled|Disabled/);
+    const dialog = page.getByRole("dialog");
+    const requestRevert = () => rows.first().getByRole("button", { name: "Revert", exact: true }).click();
+    const confirmRevert = () => dialog.getByRole("button", { name: "Revert action", exact: true }).click();
+    await requestRevert();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    assert.equal(await rows.count(), 1, "Cancel must not change history");
+    await requestRevert();
+    await confirmRevert();
+    await page.getByRole("button", { name: "Reverted", exact: true }).waitFor();
+    assert.equal(await rows.count(), 2, "Reverting must add an audit entry");
+    await back();
+    const restoredToggle = page.getByLabel(originalToggleLabel, { exact: true });
+    await restoredToggle.waitFor({ state: "attached" });
+    assert.equal(await restoredToggle.isChecked(), previous);
+    await page.locator(".modsWorkspaceIdentity").first().click();
+    await page.getByRole("button", { name: "Remove", exact: true }).click();
+    await dialog.getByRole("button", { name: "Remove mod", exact: true }).click();
+    await openHistory();
+    await rows.first().waitFor();
+    assert.match(await rows.first().innerText(), /removed/i);
+    await requestRevert();
+    await confirmRevert();
+    await page.getByText(/action reverted\./).waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `Page overflow at ${width}px`);
+    if (process.env.MOD_HISTORY_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.MOD_HISTORY_SCREENSHOT_DIR}/mod-history-${width}.png`, fullPage: true });
+    assert.deepEqual(errors, []);
+    await context.close();
+    console.log(`Mod history, cancel, revert, deletion recovery and layout passed at ${width}px`);
+  }
+} finally {
+  await browser?.close();
+  await harness.stop();
+}

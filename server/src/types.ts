@@ -8,6 +8,7 @@ import type {
 } from "@serversentinel/contracts";
 
 export type {
+  ModHistoryEntry,
   JavaMajorVersion,
   ManagedServerPort,
   ModCompatibility,

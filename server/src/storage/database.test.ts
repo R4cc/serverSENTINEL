@@ -71,6 +71,7 @@ describe("SQLite storage", () => {
   function revertToSchema22(path: string) {
     const old = new Database(path);
     old.exec(`
+      DROP TABLE mod_history;
       CREATE TABLE player_geo_locations_22 (
         server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
         player_key TEXT NOT NULL,
@@ -96,6 +97,7 @@ describe("SQLite storage", () => {
   function revertToSchema23(path: string) {
     const old = new Database(path);
     old.exec(`
+      DROP TABLE mod_history;
       ALTER TABLE player_geo_locations DROP COLUMN last_ping_average_ms;
       ALTER TABLE player_geo_locations DROP COLUMN last_ping_samples;
       ALTER TABLE player_geo_locations DROP COLUMN last_ping_at;
@@ -126,6 +128,19 @@ describe("SQLite storage", () => {
     `).run();
     database.close();
   }
+
+  it("migrates schema 24 to persistent mod history without changing servers", async () => {
+    const path = await temporaryDatabasePath();
+    openStorageDatabase(path).close();
+    seedServer(path);
+    const previous = new Database(path);
+    previous.exec("DROP TABLE mod_history; UPDATE schema_migrations SET version = 24");
+    previous.close();
+    const migrated = openStorageDatabase(path);
+    openDatabases.push(migrated);
+    expect(migrated.connection.prepare("SELECT id FROM servers").all()).toEqual([{ id: "server-1" }]);
+    expect(migrated.connection.prepare("SELECT * FROM mod_history").all()).toEqual([]);
+  });
 
   it("migrates schema 23 for last-session player ping averages", async () => {
     const path = await temporaryDatabasePath();

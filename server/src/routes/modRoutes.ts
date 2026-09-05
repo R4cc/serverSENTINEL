@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { modHistoryBackupAvailable, modHistoryRepository, modRevertConflict, modRevertPermission, publicModHistoryEntry, readModHistorySnapshot, revertModHistoryEntry } from "../mods/modHistory.js";
+import { hasPermission } from "../permissions.js";
 import { runtimeForServer, services } from "../appServices.js";
 import { durationSince, errorLogFields, logDebug, logError, logInfo } from "../logging.js";
 import { apiErrorResponse, throwHttp } from "../http/errors.js";
@@ -20,7 +22,7 @@ import { executeSafeUpdatePlan } from "../modrinth/updatePlan.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, unknownCompatibility } from "../modrinth/compatibility.js";
 import { fetchModrinthIcon, modrinthIconProxyUrl } from "../mods/icons.js";
 import { modFileSizeLimit, withModMutationLock } from "../mods/managedContent.js";
-import { acknowledgeInstalledModReview, buildModUpdatePlan, classifyModrinthInstallVersion, enrichInstalledModDependencies, installModWithRemoteVersionFallback, listModsWithPanelMetadata, modrinthSearchFacets, modsFromListResult, remoteModMetadata, switchModrinthModVersion, updateModrinthMod, withTrackedModMutation } from "../mods/modService.js";
+import { acknowledgeInstalledModReview, buildModUpdatePlan, classifyModrinthInstallVersion, enrichInstalledModDependencies, installModWithRemoteVersionFallback, listModsWithPanelMetadata, modrinthSearchFacets, modsFromListResult, remoteModMetadata, switchModrinthModVersion, updateModrinthMod, withRecordedModMutation } from "../mods/modService.js";
 import type { ModrinthProject, ReleaseChannel } from "../types.js";
 
 /**
@@ -37,6 +39,35 @@ function updatePlanCoordinator() {
 }
 
 export function registerModRoutes(app: FastifyInstance) {
+app.get<{ Params: { id: string }; Querystring: { offset?: string; limit?: string } }>("/api/servers/:id/mods/history", async (request) => {
+  const user = await requireRequestPermission(request, "mods.view");
+  const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
+  const limit = optionalBoundedInteger(request.query.limit, "Limit", 1, 100) ?? 50;
+  const offset = optionalBoundedInteger(request.query.offset, "Offset", 0, Number.MAX_SAFE_INTEGER) ?? 0;
+  const entries = modHistoryRepository().list(server.id);
+  // Retained history stays readable while a remote node is disconnected.
+  const current = await readModHistorySnapshot(server).catch(() => null);
+  return { total: entries.length, limit, offset, entries: entries.slice(offset, offset + limit).map((entry) => {
+    const reason = !hasPermission(user, modRevertPermission(entry)) ? "You do not have permission to revert this action."
+      : current ? modRevertConflict(entry, current, managedContentRuntime(server).directory) || (modHistoryBackupAvailable(server, entry) ? null : "A saved jar is unavailable. Check the panel's mod history archive.") : "Reconnect the server runtime before reverting.";
+    return publicModHistoryEntry(entry, reason);
+  }) };
+});
+
+app.post<{ Params: { id: string; entryId: string } }>("/api/servers/:id/mods/history/:entryId/revert", modChangeRateLimit, async (request) => {
+  await requireRequestPermission(request, "mods.view");
+  const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
+  const entry = modHistoryRepository().list(server.id).find((item) => item.id === request.params.entryId);
+  if (!entry) throwHttp(404, "Mod history entry not found", { code: "MOD_HISTORY_NOT_FOUND" });
+  const user = await requireRequestPermission(request, modRevertPermission(entry));
+  return withRecordedModMutation(server, user, () => recordOperation({
+    type: "mod.update", serverId: server.id, nodeId: server.nodeId, createdBy: user.id,
+    task: `Reverting ${entry.modName}`, successTask: "Mod history action reverted"
+  }, () => revertModHistoryEntry(server, entry)), entry.id);
+});
+
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/api/servers/:id/mods", async (request) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
@@ -83,7 +114,7 @@ app.patch<{ Params: { id: string }; Body: { filename?: string; enabled?: boolean
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
   const { singular: contentName, Singular } = managedContentRuntime(server);
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.toggle",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -98,7 +129,7 @@ app.delete<{ Params: { id: string }; Querystring: { filename?: string } }>("/api
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
   const { singular: contentName, Singular } = managedContentRuntime(server);
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.remove",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -115,7 +146,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/mods/upload", modChangeRa
   const { singular: contentName, Singular } = managedContentRuntime(server);
   if (!request.isMultipart()) throw new Error("Mod and plugin uploads require multipart form data");
   const uploadRequest = await multipartUpload(request, modFileSizeLimit);
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.upload",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -130,7 +161,7 @@ app.post<{ Body: { serverId?: string; projectId?: string; versionId?: string; ch
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
   const { singular: contentName, Singular } = managedContentRuntime(server);
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.install",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -145,7 +176,7 @@ app.post<{ Params: { id: string }; Body: { filename?: string } }>("/api/servers/
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
   const filename = safeInstalledModFilename(requiredString(request.body.filename, "filename"));
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.install",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -386,7 +417,7 @@ app.post<{ Body: { serverId?: string; filename?: string; channel?: ReleaseChanne
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
   const { singular: contentName, Singular } = managedContentRuntime(server);
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -401,7 +432,7 @@ app.post<{ Body: { serverId?: string; filename?: string; versionId?: string; cha
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
   const { singular: contentName, Singular } = managedContentRuntime(server);
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.update",
     serverId: server.id,
     nodeId: server.nodeId,
@@ -431,7 +462,7 @@ app.post<{ Body: { serverId?: string; filenames?: string[]; channel?: ReleaseCha
   const server = await getServer(request.body.serverId);
   requireManagedModsRuntime(server);
   const { Singular, plural: contentPlural } = managedContentRuntime(server);
-  return withTrackedModMutation(server, () => recordOperation({
+  return withRecordedModMutation(server, user, () => recordOperation({
     type: "mod.batchUpdate",
     serverId: server.id,
     nodeId: server.nodeId,

@@ -1,4 +1,5 @@
 export * from "./cron.js";
+export * from "./modHistory.js";
 export * from "./modules.js";
 export * from "./playerInsights.js";
 

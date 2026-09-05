@@ -1,4 +1,30 @@
 /* Cohesive Mods workspace */
+.modHistoryPage { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.modHistoryHeading h2 { margin: 0 0 var(--space-2); }
+.modHistoryHeading p { margin: 0; color: var(--text-muted); }
+.modHistorySurface { min-width: 0; overflow: hidden; }
+.modHistoryTableScroll { overflow-x: auto; }
+.modHistoryTable { width: 100%; border-collapse: collapse; text-align: left; }
+.modHistoryTable th, .modHistoryTable td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); vertical-align: top; }
+.modHistoryTable th { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
+.modHistoryTable td { font-size: .85rem; overflow-wrap: anywhere; min-width: 120px; }
+.modHistoryTable td:first-child { min-width: 180px; }
+.modHistoryTable small { display: block; color: var(--text-muted); margin-top: var(--space-1); max-width: 260px; }
+.modHistoryAction { text-transform: capitalize; }
+.modHistoryArrow { color: var(--text-muted); margin-inline: .25em; }
+.modHistoryPagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); color: var(--text-muted); }
+.modHistoryPagination > div { display: flex; gap: var(--space-2); }
+@media (max-width: 700px) {
+  .modHistoryPagination { flex-wrap: wrap; }
+  .modHistoryTable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .modHistoryTable, .modHistoryTable tbody { display: block; width: 100%; }
+  .modHistoryTable tr { display: grid; gap: var(--space-2); padding: var(--space-4) 0; border-bottom: 1px solid var(--border); }
+  .modHistoryTable td, .modHistoryTable td:first-child { display: block; min-width: 0; padding: 0; border: 0; }
+  .modHistoryTable td[data-label] { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--space-2); }
+  .modHistoryTable td[data-label]::before { content: attr(data-label); color: var(--text-muted); }
+  .modHistoryTable small { max-width: none; }
+  .modHistoryTable td:last-child .uiButton { min-height: 44px; margin-top: var(--space-1); }
+}
 .modsWorkspacePage { display: flex; flex-direction: column; gap: var(--space-3); height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
 .modsWorkspaceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 /* The metric tiles are the shared uiMetricTile--summary variant; this file only
@@ -11,6 +37,7 @@
 .modsWorkspacePrimaryActions, .modsWorkspaceUpdateActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .modsWorkspaceUpdateActions { justify-content: flex-end; }
 .modsWorkspaceLastChecked { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
+.modsWorkspaceHistoryMeta { display: flex; align-items: center; gap: var(--space-2); }
 .modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); }
 /* Inline padding matches the table head and rows below, so the heading starts on
    the same edge as the mod icons rather than one pixel off it. */
@@ -608,7 +635,8 @@
   }
 
   .modsWorkspaceToolbar .uiToolbarPrimary { grid-row: 1; }
-  .modsWorkspaceToolbar .uiToolbarMeta { grid-column: 2; grid-row: 2; justify-self: stretch; justify-content: center; }
+  .modsWorkspaceToolbar .uiToolbarMeta { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; justify-content: center; }
+  .modsWorkspaceHistoryMeta { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .modsWorkspaceToolbar .uiToolbarSecondary { grid-row: 3; }
 
   .modsWorkspacePrimaryActions,
