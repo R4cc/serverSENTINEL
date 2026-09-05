@@ -70,6 +70,58 @@
   background: var(--app-background);
 }
 
-.themeLight {
+:root:not(.themeDark),
+.appShell.themeLight {
   color-scheme: light;
+  --sentinel-accent: #3d46d9;
+  --sentinel-accent-strong: #2933a3;
+  --sentinel-accent-soft: #dce3ff;
+  --sentinel-accent-muted: #97a6f6;
+  --sentinel-success: #087f70;
+  --sentinel-info: #1268c4;
+  --sentinel-warning: #a76508;
+  --sentinel-danger: #cf2848;
+  --status-success-foreground: #086858;
+  --status-warning-foreground: #855008;
+  --status-danger-foreground: #ae203f;
+  --status-neutral-foreground: #455575;
+  --surface: #f3f6ff;
+  --surface-raised: #f8faff;
+  --surface-muted: #dfe8fa;
+  --surface-read-only: #eaf0fc;
+  --app-background: #d3e1f7;
+  --text: #142443;
+  --text-muted: #405273;
+  --text-soft: #526482;
+  --border: #355584;
+  --border-muted: color-mix(in srgb, var(--border) 27%, var(--surface));
+  --border-panel: color-mix(in srgb, var(--border) 32%, var(--surface));
+  --border-row: color-mix(in srgb, var(--border) 17%, var(--surface));
+  /* Cool optical glass keeps the ambient color visible without tinting menus
+     or input fields enough to compete with their content. */
+  --glass-tint: rgb(242 248 255 / 0.56);
+  --glass-tint-strong: rgb(240 246 255 / 0.72);
+  --glass-tint-soft: rgb(225 237 255 / 0.46);
+  --glass-tint-menu: rgb(246 249 255 / 0.96);
+  --glass-border: rgb(255 255 255 / 0.88);
+  --glass-rim-base: rgb(133 164 234 / 0.36);
+  --glass-shadow:
+    0 0 0 0.5px rgb(48 73 143 / 0.12),
+    0 16px 40px -14px rgb(52 73 153 / 0.24),
+    0 3px 10px -4px rgb(32 86 151 / 0.14);
+  --glass-shadow-floating:
+    0 0 0 0.5px rgb(48 73 143 / 0.14),
+    0 26px 60px -18px rgb(52 73 153 / 0.32),
+    0 6px 16px -6px rgb(32 86 151 / 0.18);
+  --glass-brightness: 1.02;
+  --solid-control-surface: rgb(249 252 255 / 0.9);
+}
+
+/* Broad pools of color refract through the existing glass surfaces. Keep the
+   wash fixed so scrolling does not create seams between short and long pages. */
+:root:not(.themeDark) body {
+  background-image:
+    radial-gradient(ellipse at 12% 8%, rgb(92 143 255 / 0.48), transparent 52%),
+    radial-gradient(ellipse at 96% 18%, rgb(86 213 225 / 0.44), transparent 48%),
+    radial-gradient(ellipse at 66% 96%, rgb(170 138 247 / 0.4), transparent 56%);
 }
