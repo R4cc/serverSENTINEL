@@ -6,6 +6,20 @@ A web panel for managing Minecraft servers across Docker hosts: server lifecycle
 
 [Console](docs/screenshots/console.png) · [Files](docs/screenshots/files.png) · [Mods](docs/screenshots/mods.png) · [Players](docs/screenshots/players.png) · [Light mode](docs/screenshots/overview-light.png)
 
+## Features
+
+- Create and configure Minecraft servers
+- Start, stop, and restart servers
+- Search for and install Fabric mods or Paper plugins through Modrinth
+- Get notified when a compatible mod or plugin update is available and update in one click
+- View the live console and send commands
+- Browse, upload, edit, and manage server files
+- Add existing mod or plugin files and manage installed content
+- Schedule commands and server actions
+- Manage multiple nodes from one panel
+- Manage users, roles, and permissions
+- Monitor server status and resource usage
+
 ## Install
 
 Install Docker Engine and Docker Compose on your server host. Save this as `docker-compose.yml` in an empty directory:
