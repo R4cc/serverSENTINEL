@@ -66,6 +66,8 @@ export class PanelNodeConnections {
     const connected: ConnectedNode = { node, socket, pending: new Map(), streams: new Map(), transfers: new Map(), lastPongAt: connectedAt, lastPingAt: connectedAt, readPausedAt: undefined };
     this.connected.set(node.id, connected);
     socket.on("message", (raw, isBinary) => {
+      // A replaced socket can still deliver buffered frames while its close handshake finishes.
+      if (this.connected.get(node.id) !== connected) return;
       const buffer = Array.isArray(raw) ? Buffer.concat(raw) : Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
       this.onMessage(node.id, buffer, isBinary);
     });

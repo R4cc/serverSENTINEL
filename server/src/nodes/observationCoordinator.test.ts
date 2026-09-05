@@ -110,8 +110,7 @@ describe("RemoteObservationCoordinator", () => {
     });
     coordinator.start();
     for (let attempt = 0; attempt < 20 && lookups === 0; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 1));
-    // One lookup to group the fleet, one inside observeNode to address the batch.
-    expect(lookups).toBeLessThanOrEqual(2);
+    expect(lookups).toBe(1);
     coordinator.stop();
   });
 
@@ -193,6 +192,46 @@ describe("RemoteObservationCoordinator", () => {
     await background;
     await expect(coordinator.read(servers[0], "status", 60_000)).resolves.toEqual({ docker: { running: true } });
     coordinator.stop();
+  });
+
+  it.each([false, true])("merges overlapping log deltas against their requested cursor (newer first: %s)", async (newerFirst) => {
+    const observedServer = server(0);
+    const source = "logs/latest.log";
+    const cursor = { source, identity: "1:2", offset: 5 };
+    const pending: Array<(value: unknown) => void> = [];
+    let bothIssued!: () => void;
+    const issued = new Promise<void>((resolve) => { bothIssued = resolve; });
+    const connections = {
+      isConnected: () => true,
+      request: async (_node: ManagedNode, _command: string, payload: { items: Array<{ logCursor?: unknown }> }) => {
+        if (!payload.items[0].logCursor) {
+          return { observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, logs: { text: "base\n", source, reset: true, cursor } }] };
+        }
+        expect(payload.items[0].logCursor).toEqual(cursor);
+        return new Promise((resolve) => {
+          pending.push(resolve);
+          if (pending.length === 2) bothIssued();
+        });
+      }
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => [observedServer], lookupNode: async () => node(), connections });
+    try {
+      await coordinator.read(observedServer, "logs", 60_000);
+      const older = coordinator.readMany(observedServer, ["logs"], -1);
+      const newer = coordinator.readMany(observedServer, ["logs", "status"], -1);
+      await issued;
+      const respond = (index: number) => pending[index]({
+        observedAt: new Date().toISOString(),
+        items: [{ serverId: observedServer.id, logs: { text: index === 0 ? "one\n" : "one\ntwo\n", source, reset: false, cursor: { ...cursor, offset: index === 0 ? 9 : 13 } } }]
+      });
+      respond(newerFirst ? 1 : 0);
+      await (newerFirst ? newer : older);
+      respond(newerFirst ? 0 : 1);
+      await Promise.all([older, newer]);
+      await expect(coordinator.read(observedServer, "logs", 60_000)).resolves.toEqual({ text: "base\none\ntwo\n", source });
+    } finally {
+      coordinator.stop();
+    }
   });
 
   it("rejects a failed section instead of returning an old confirmed value", async () => {

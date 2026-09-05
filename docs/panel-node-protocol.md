@@ -24,6 +24,8 @@ The panel coordinator polls status and resource stats every five seconds and add
 
 Foreground reads for the selected server do not wait behind a fleet-wide background batch. They use their own bounded observation request, while sequence-aware cache writes ensure an older background response cannot replace a newer foreground result.
 
+Each log delta is applied to the cached text captured alongside its outgoing cursor. Overlapping observations can share that cursor without duplicating log lines when their responses arrive. Both foreground and background observations reuse the node metadata resolved for their request or poll.
+
 File logs use a cursor containing source, file identity, and byte offset. Append-only reads return deltas. Rotation, truncation, identity changes, or deltas larger than 128 KiB reset the cursor to the bounded 128 KiB tail. If `logs/latest.log` is unavailable, the existing bounded Docker log tail remains the fallback.
 
 ## Optional player connection measurement
