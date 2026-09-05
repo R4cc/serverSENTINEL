@@ -5,6 +5,7 @@ export type ModHistorySnapshot = {
   identity: string;
   directory: string;
   displayName: string;
+  iconUrl?: string;
   filename: string;
   version: string | null;
   enabled: boolean;

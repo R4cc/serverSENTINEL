@@ -10,7 +10,12 @@
 .modHistoryTable td { font-size: .85rem; overflow-wrap: anywhere; min-width: 120px; }
 .modHistoryTable td:first-child { min-width: 180px; }
 .modHistoryTable small { display: block; color: var(--text-muted); margin-top: var(--space-1); max-width: 260px; }
+.modHistoryAction, .modHistoryTable .modHistoryRevert { display: inline-flex; align-items: center; gap: var(--space-2); }
+.modHistoryTable .modHistoryRevert { display: flex; }
 .modHistoryAction { text-transform: capitalize; }
+.modHistoryIdentity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.modHistoryIdentity > div { min-width: 0; }
+.modHistoryIdentity img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: var(--radius-sm); object-fit: cover; }
 .modHistoryArrow { color: var(--text-muted); margin-inline: .25em; }
 .modHistoryPagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); color: var(--text-muted); }
 .modHistoryPagination > div { display: flex; gap: var(--space-2); }

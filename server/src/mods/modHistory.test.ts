@@ -197,4 +197,20 @@ describe("persistent mod update history", () => {
     database.connection.prepare("DELETE FROM servers WHERE id = ?").run(server.id);
     expect(modHistoryRepository().list(server.id)).toEqual([]);
   });
+
+  it("retains the available icon after a mod is removed and accepts older snapshots", async () => {
+    const iconUrl = "https://cdn.modrinth.com/data/testmod/icon.png";
+    const listMods = runtime.listMods.getMockImplementation()!;
+    runtime.listMods.mockImplementation(async () => {
+      const result = await listMods();
+      return { mods: result.mods.map((mod) => ({ ...mod, iconUrl })) };
+    });
+    put("test.jar", "1");
+    await withRecordedModMutation(server, actor, () => runtime.removeMod(server, "test.jar"));
+    const entry = modHistoryRepository().list(server.id)[0];
+    expect(entry.before?.iconUrl).toBe(iconUrl);
+    expect(publicModHistoryEntry(entry, null).iconUrl).toBe(iconUrl);
+    delete entry.before!.iconUrl;
+    expect(publicModHistoryEntry(entry, null).iconUrl).toBeUndefined();
+  });
 });

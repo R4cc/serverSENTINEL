@@ -174,7 +174,7 @@ export function ModsModule(props: ModsModuleProps) {
   if (!props.active || !props.activeServer) return null;
 
   if (historyOpen) return <ModHistoryPage key={props.activeServer.id} serverId={props.activeServer.id}
-    terminology={props.managedContent} locked={guards.modsLocked || mutating}
+    terminology={props.managedContent} installedMods={workspace.data.installedMods} locked={guards.modsLocked || mutating}
     requestConfirmation={props.requestConfirmation} onBack={() => setHistoryOpen(false)}
     onChanged={async () => {
       // Demo changes flow through the fixture prop; an in-flight refresh would replay the old array.

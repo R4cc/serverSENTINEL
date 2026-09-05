@@ -44,6 +44,7 @@ export async function readModHistorySnapshot(server: ManagedServer): Promise<Mod
       identity: metadata?.projectId ? `project:${metadata.projectId}` : `file:${filename.replace(/\.disabled$/, "")}`,
       directory: managedContentRuntime(server).directory,
       displayName: typeof mod.displayName === "string" ? mod.displayName : filename,
+      iconUrl: typeof mod.iconUrl === "string" ? mod.iconUrl : undefined,
       filename,
       version: metadata?.versionNumber || null,
       enabled: mod.enabled === true,
@@ -118,7 +119,7 @@ export function modRevertConflict(entry: StoredModHistoryEntry, current: ModHist
 
 export function publicModHistoryEntry(entry: StoredModHistoryEntry, reason: string | null): ModHistoryEntry {
   const version = (snapshot: ModHistorySnapshot | null) => snapshot ? { filename: snapshot.filename, version: snapshot.version, enabled: snapshot.enabled } : null;
-  return { id: entry.id, modName: entry.modName, action: entry.action, before: version(entry.before), after: version(entry.after),
+  return { id: entry.id, modName: entry.modName, iconUrl: entry.after?.iconUrl || entry.before?.iconUrl, action: entry.action, before: version(entry.before), after: version(entry.after),
     occurredAt: entry.occurredAt, user: entry.user, revertsEntryId: entry.revertsEntryId, revertedAt: entry.revertedAt, canRevert: !reason, revertBlockedReason: reason };
 }
 

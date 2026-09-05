@@ -55,6 +55,12 @@ try {
     await rows.first().waitFor();
     assert.match(await rows.first().innerText(), /demo/);
     assert.match(await rows.first().innerText(), /Enabled|Disabled/);
+    assert.match(await rows.first().locator('[data-label="Details"]').innerText(), /^(Enabled|Disabled)\s*→\s*(Enabled|Disabled)$/);
+    assert.equal(await rows.first().locator(".modHistoryAction svg").count(), 1);
+    assert.equal(await rows.first().locator(".modHistoryIdentity img, .modHistoryIdentity .modsWorkspaceFallback").count(), 1);
+    await page.getByRole("button", { name: "About recent changes", exact: true }).click();
+    await page.getByRole("tooltip").filter({ hasText: "Revert restores the saved file" }).waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
     const dialog = page.getByRole("dialog");
     const requestRevert = () => rows.first().getByRole("button", { name: "Revert", exact: true }).click();
     const confirmRevert = () => dialog.getByRole("button", { name: "Revert action", exact: true }).click();

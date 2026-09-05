@@ -31,7 +31,7 @@ export function useDemoModHistory(serverId: string | undefined, enabled: boolean
       if (same(before, after)) continue;
       const version = (mod: InstalledMod | null) => mod ? { filename: mod.filename, version: modVersion(mod) === "Unknown" ? null : modVersion(mod), enabled: mod.enabled } : null;
       state.entries.unshift({ before, after, entry: {
-        id: crypto.randomUUID(), modName: (after || before)!.displayName,
+        id: crypto.randomUUID(), modName: (after || before)!.displayName, iconUrl: after?.iconUrl || before?.iconUrl,
         action: !before ? "installed" : !after ? "removed" : modVersion(before) !== modVersion(after) ? "updated" : after.enabled ? "enabled" : "disabled",
         before: version(before), after: version(after), occurredAt: new Date().toISOString(), user: { id: "demo", username: "demo" },
         revertsEntryId, revertedAt: null, canRevert: true, revertBlockedReason: null

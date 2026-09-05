@@ -7,6 +7,7 @@ export type ModHistoryVersion = {
 export type ModHistoryEntry = {
   id: string;
   modName: string;
+  iconUrl?: string;
   action: "installed" | "updated" | "removed" | "enabled" | "disabled";
   before: ModHistoryVersion | null;
   after: ModHistoryVersion | null;
