@@ -1,4 +1,4 @@
-import { Suspense, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyPage } from "../app/lazyPage";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import type { ConsoleLine } from "../types";
@@ -48,6 +48,16 @@ export function ServerConsoleTab({
   onCommand: (command: string) => void;
 }) {
   const selectionRef = useRef<TerminalSelection | null>(null);
+  const [terminalCodeReady, setTerminalCodeReady] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    const ready = () => { if (!disposed) setTerminalCodeReady(true); };
+    // Resolve lazyPage before rendering it to avoid React's Suspense reveal delay. Snapshot
+    // delivery proceeds independently. A failed preload falls through to the normal lazy retry.
+    void loadMinecraftTerminal().then(ready, ready);
+    return () => { disposed = true; };
+  }, []);
 
   /**
    * Answers Ctrl+C for the whole console, in the capture phase so it settles before the command
@@ -82,11 +92,10 @@ export function ServerConsoleTab({
             className={`minecraftTerminalShell ${canSendCommands ? "" : "disabled"}`}
             onKeyDownCapture={handleCopyShortcut}
           >
-            {!snapshotReady ? (
-              <TerminalLoadingSkeleton />
-            ) : (
+            {terminalCodeReady ? (
               <Suspense fallback={<TerminalLoadingSkeleton />}>
                 <MinecraftTerminal
+                  snapshotReady={snapshotReady}
                   entries={entries}
                   generation={generation}
                   fontSize={fontSize}
@@ -94,7 +103,7 @@ export function ServerConsoleTab({
                   onSelectionChange={(selection) => { selectionRef.current = selection; }}
                 />
               </Suspense>
-            )}
+            ) : <TerminalLoadingSkeleton />}
             <ConsolePrompt
               canSendCommands={canSendCommands}
               disabledReason={disabledReason}

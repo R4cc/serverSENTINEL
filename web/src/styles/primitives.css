@@ -407,7 +407,8 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   }
 
   .uiTablePagination { align-items: stretch; flex-direction: column; }
-  .uiTablePager { justify-content: space-between; }
+  .uiTablePager { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .uiTablePager .uiButton { min-width: 0; min-height: 44px; }
 }
 
 @media (pointer: coarse) {

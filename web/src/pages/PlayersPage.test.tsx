@@ -230,7 +230,7 @@ describe("the Players workspace with partial knowledge", () => {
         }]
       })
     });
-    expect(html).toContain("playerMapServerIcon");
+    expect(html).toContain("playerMapServerWrap");
     expect(html).toContain("playerMapServer--running");
     expect(html).toContain("lucide-server");
     expect(html).not.toContain("server-icon-cube");
@@ -247,7 +247,7 @@ describe("the Players workspace with partial knowledge", () => {
     })).toContain("playerMapServer--stopped");
   });
 
-  it("combines a nearby player cluster with the server marker instead of displacing it", () => {
+  it("keeps a co-located server independent from the player badge", () => {
     const sharedLocation = { label: "Copenhagen", city: "Copenhagen", country: "Denmark", countryCode: "DK", continentCode: "EU", continent: "Europe", latitude: 55.68, longitude: 12.57, accuracyRadiusKm: 20, precision: "city" } as const;
     const html = render({
       playerHeadsEnabled: true,
@@ -259,13 +259,19 @@ describe("the Players workspace with partial knowledge", () => {
         serverLocations: [{ serverId: "server-1", address: "play.example.net", location: sharedLocation }]
       })
     });
-    expect(html).toContain("playerMapClusterMarker--server");
-    expect(html).toContain("playerMapSharedServerIcon");
-    expect(html).toContain("playerMapSharedServer--running");
-    expect(html).not.toContain('<g class="playerMapServer">');
+    const map = mapMarkup(html);
+    expect(map.match(/class="playerMapServerWrap"/g)).toHaveLength(1);
+    const serverPosition = map.match(/class="playerMapServerWrap" style="left:([^%]+)%;top:([^%]+)%/);
+    expect(Number(serverPosition?.[1])).toBeCloseTo((12.57 + 180) / 360 * 100, 6);
+    expect(Number(serverPosition?.[2])).toBeCloseTo((90 - 55.68) / 180 * 100, 6);
+    const playerPosition = map.match(/class="playerMapLocationDot" cx="([^"]+)" cy="([^"]+)"/);
+    expect(Number(playerPosition?.[1])).toBeCloseTo(385.14, 6);
+    expect(Number(playerPosition?.[2])).toBeCloseTo(68.64, 6);
+    expect(map).toContain("playerMapServer--running");
+    expect(map).not.toContain("playerMapSharedServer");
   });
 
-  it("renders nearby players as one head cluster with one averaged curved route", () => {
+  it("groups nearby heads while preserving each reported location", () => {
     const clusteredPlayers: PlayerInsightsResponse["players"] = [
       {
         player: "FastPlayer",
@@ -303,9 +309,11 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toMatch(/playerMapClusterMarker[^>]+aria-controls=/);
-    expect(html).toContain('data-player-count="2"');
-    expect(html).toContain('data-ping="100"');
-    expect(html).toContain("playerMapRoute--info");
+    const map = mapMarkup(html);
+    expect(map.match(/class="playerMapLocationDot"/g)).toHaveLength(2);
+    expect(map.match(/class="playerMapLeader"/g)).toHaveLength(2);
+    expect(map).toContain("Average ping 100 ms");
+    expect(map).not.toContain("playerMapRoute--info");
     expect(html).toContain("/api/servers/server-1/player-head/FastPlayer");
     expect(html).not.toContain("playerMapDot");
     expect(html).not.toContain("playerMapLink");

@@ -23,7 +23,7 @@ import { copyToClipboard } from "./utils/clipboard";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
-import { consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { appendConsoleLines, consoleLineStart, consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppToaster } from "./components/AppToaster";
 import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
@@ -1010,6 +1010,7 @@ export default function App() {
 
     socket.onopen = markConsoleLive;
     socket.onmessage = (event) => {
+      if (closedByCleanup || activeServerIdRef.current !== serverId) return;
       let message: ConsoleStreamFrame;
       try {
         message = JSON.parse(event.data);
@@ -1031,6 +1032,8 @@ export default function App() {
           setConsoleLoading(false);
         }
         ingestConsoleLines(message.lines);
+        // Commit a snapshot before the terminal's ready state can reveal an empty buffer.
+        if (message.type === "backlog") flushQueuedConsoleLines();
         if (message.lines.some((line) => hasPotentialEvent(line.text)) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
@@ -1071,7 +1074,8 @@ export default function App() {
     socket.onclose = scheduleReconnect;
     return () => {
       closedByCleanup = true;
-      discardQueuedConsoleLines();
+      // The resume cursor already includes queued lines. Keep their scheduled flush on navigation;
+      // resetting the server/epoch owns discarding them, along with that cursor.
       if (consoleReconnectTimeoutRef.current !== null) {
         window.clearTimeout(consoleReconnectTimeoutRef.current);
         consoleReconnectTimeoutRef.current = null;
@@ -1588,10 +1592,15 @@ export default function App() {
    * dropped here rather than drawn twice.
    */
   function ingestConsoleLines(lines: ConsoleLine[]) {
-    const fresh = lines.filter((line) => line.seq > consoleCursorRef.current.since);
-    if (!fresh.length) return;
-    consoleCursorRef.current = { ...consoleCursorRef.current, since: fresh[fresh.length - 1].seq };
-    queueConsoleLines(toDisplayLines(fresh.map((line) => line.text)));
+    const start = consoleLineStart(lines, consoleCursorRef.current.since);
+    if (start === lines.length) return;
+    consoleCursorRef.current = { ...consoleCursorRef.current, since: lines[lines.length - 1].seq };
+    const displayed: ConsoleLine[] = [];
+    for (let index = Math.max(start, lines.length - consoleScrollbackRef.current); index < lines.length; index++) {
+      const text = lines[index].text;
+      displayed.push({ seq: ++displaySeqRef.current, text: text.endsWith("\n") ? text : `${text}\n` });
+    }
+    queueConsoleLines(displayed);
   }
 
   /**
@@ -1600,21 +1609,28 @@ export default function App() {
    * once per animation frame keeps a burst to a single render and a single write.
    */
   function queueConsoleLines(lines: ConsoleLine[]) {
-    pendingLogLinesRef.current.push(...lines);
     // A background tab never runs animation frames, so cap what can pile up at the same limit
     // the buffer would enforce on flush anyway.
-    const overflow = pendingLogLinesRef.current.length - consoleScrollbackRef.current;
-    if (overflow > 0) pendingLogLinesRef.current.splice(0, overflow);
+    const limit = consoleScrollbackRef.current;
+    if (lines.length >= limit) pendingLogLinesRef.current = lines.slice(-limit);
+    else {
+      const pending = pendingLogLinesRef.current;
+      const overflow = pending.length + lines.length - limit;
+      if (overflow > 0) pending.splice(0, overflow);
+      // Reuse the pending array between frames instead of copying it for every stream message.
+      for (const line of lines) pending.push(line);
+    }
     if (logFlushFrameRef.current !== null) return;
     logFlushFrameRef.current = window.requestAnimationFrame(flushQueuedConsoleLines);
   }
 
   function flushQueuedConsoleLines() {
+    if (logFlushFrameRef.current !== null) window.cancelAnimationFrame(logFlushFrameRef.current);
     logFlushFrameRef.current = null;
     const pending = pendingLogLinesRef.current;
     if (!pending.length) return;
     pendingLogLinesRef.current = [];
-    const next = [...logsRef.current, ...pending].slice(-consoleScrollbackRef.current);
+    const next = appendConsoleLines(logsRef.current, pending, consoleScrollbackRef.current);
     logsRef.current = next;
     setLogs(next);
   }
@@ -1658,6 +1674,7 @@ export default function App() {
       if (activeServerIdRef.current !== serverId) return false;
       if (backlog.epoch !== consoleCursorRef.current.epoch) resetConsoleBuffer(backlog.epoch);
       ingestConsoleLines(backlog.lines);
+      flushQueuedConsoleLines();
       setConsoleSnapshotReadyServerId(serverId);
       return true;
     } catch (error) {
@@ -2384,6 +2401,7 @@ export default function App() {
 
             {consoleTabMounted && (
               <ServerConsoleTab
+                key={activeServer.id}
                 active={activePage === "console"}
                 snapshotReady={consoleSnapshotReadyServerId === activeServer.id}
                 generation={consoleGeneration}

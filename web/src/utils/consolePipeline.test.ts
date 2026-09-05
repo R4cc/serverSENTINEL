@@ -1,7 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage } from "./consolePipeline";
+import { appendConsoleLines, consoleLineStart, consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage } from "./consolePipeline";
 
 describe("console pipeline", () => {
+  it("selects only new sequences, including overlap and a trimmed history", () => {
+    const lines = [100, 101, 105, 106].map(seq => ({ seq }));
+    expect(consoleLineStart([], 0)).toBe(0);
+    expect(lines.slice(consoleLineStart(lines, 0))).toEqual(lines);
+    expect(lines.slice(consoleLineStart(lines, 101))).toEqual([{ seq: 105 }, { seq: 106 }]);
+    expect(consoleLineStart(lines, 104)).toBe(2);
+    expect(consoleLineStart(lines, 106)).toBe(4);
+    expect(consoleLineStart(lines, 1000)).toBe(4);
+  });
+
+  it("retains exactly the newest entries without changing inputs", () => {
+    const current = Object.freeze([1, 2, 3]);
+    const incoming = Object.freeze([4, 5]);
+    expect(appendConsoleLines(current, incoming, 4)).toEqual([2, 3, 4, 5]);
+    expect(appendConsoleLines(current, incoming, 2)).toEqual([4, 5]);
+    expect(appendConsoleLines(current, incoming, 1)).toEqual([5]);
+    expect(appendConsoleLines(current, [], 2)).toEqual([2, 3]);
+    expect(appendConsoleLines([], incoming, 4)).toEqual([4, 5]);
+  });
+
   it("recognizes structured and legacy offline messages", () => {
     expect(isNodeOfflineConsoleMessage({ code: "NODE_OFFLINE" })).toBe(true);
     expect(isNodeOfflineConsoleMessage({ message: "Node Remote is offline" })).toBe(true);

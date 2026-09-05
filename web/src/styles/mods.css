@@ -255,7 +255,7 @@
   .modsWorkspaceToolbar { flex: 0 0 auto; }
   .modsWorkspaceInstalled { height: auto; flex: none; }
   .modsWorkspaceToolbar, .modsWorkspaceListHeader { align-items: stretch; flex-direction: column; }
-  .modsWorkspaceSearch { min-width: 0; }
+  .modsWorkspaceSearch { width: 100%; min-width: 0; }
   .modsWorkspaceToolbar > div, .modsWorkspaceToolbar button { width: 100%; }
   .modsWorkspaceToolbar .uiButton {
     min-height: 56px;
@@ -265,34 +265,36 @@
   .modsWorkspaceRow {
     grid-template-columns: minmax(0, 1fr) 44px 44px;
     grid-template-areas:
-      "identity enabled switchVersion"
-      "metadata metadata metadata"
+      "identity identity identity"
+      "metadata enabled switchVersion"
       "update update update";
     align-items: center;
-    gap: 5px 8px;
+    gap: 12px 8px;
     min-height: 0;
-    padding: 8px 10px;
+    padding: var(--space-3);
   }
   .modsWorkspaceIdentity { grid-area: identity; }
   .modsWorkspaceIdentity img,
   .modsWorkspaceIdentity .modsWorkspaceFallback { width: 36px; height: 36px; }
-  .modsWorkspaceIdentity strong { white-space: nowrap; }
+  .modsWorkspaceIdentity strong { white-space: normal; overflow-wrap: anywhere; }
   .modsWorkspaceIdentity small { display: block; white-space: nowrap; }
   .modsWorkspaceMetadata {
     grid-area: metadata;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
+    display: grid;
+    gap: 6px;
     min-width: 0;
   }
-  .modsWorkspaceStatus { min-width: 0; flex: 1 1 0; }
-  .modsWorkspaceVersion { display: block; min-width: 0; max-width: 55%; flex: 0 1 auto; color: var(--text-muted); font-size: var(--type-meta-size); text-align: right; }
+  .modsWorkspaceStatus { grid-area: auto; min-width: 0; }
+  .modsWorkspaceVersion { grid-area: auto; display: block; min-width: 0; color: var(--text-muted); font-size: var(--type-meta-size); white-space: normal; overflow-wrap: anywhere; }
   .modsWorkspaceVersion::before { content: "Installed "; color: var(--text-soft); font-weight: var(--weight-meta); }
   .modsWorkspaceUpdate { grid-area: update; min-width: 0; }
   .modsWorkspaceUpdate:empty { display: none; }
   .modsUpdateCell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; }
   .modsUpdateVersions { flex: none; }
+  .modsUpdateVersions strong,
+  .modsUpdateTransition strong { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; text-align: left; }
+  .modsWorkspaceUpdate .modsUpdateAction { padding-block: var(--space-2); }
+  .modsWorkspaceUpdate .modsReviewAction { min-height: 44px; }
   .modsWorkspaceEnabled { grid-area: enabled; display: flex; justify-content: center; align-items: center; width: 44px; height: 44px; }
   .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: center; align-self: center; }
   .modsSearchActivity { text-align: left; }
