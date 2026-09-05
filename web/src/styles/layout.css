@@ -676,6 +676,43 @@ button .buttonIcon {
   filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--overlay) 25%, transparent));
 }
 
+.sonnerToast [data-content] {
+  flex: 1;
+  min-width: 0;
+}
+
+.toastProgressDescription {
+  width: 100%;
+}
+
+.toastProgress {
+  height: 5px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--toast-severity) 15%, var(--surface-raised));
+}
+
+.toastProgressFill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--toast-severity);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.toastProgress[data-status="succeeded"] .toastProgressFill {
+  transition: transform 250ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toastProgress[data-status="succeeded"] .toastProgressFill {
+    transition: none;
+  }
+}
+
 .sonnerToast [data-button] {
   min-height: 30px !important;
   height: auto !important;

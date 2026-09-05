@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { ModHistoryPage } from "./ModHistoryPage";
 import { useDemoModHistory } from "./useDemoModHistory";
 import { toast } from "sonner";
+import { ToastProgress } from "../../components/ToastProgress";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import type { ServerRuntimeType } from "@serversentinel/contracts";
 import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModUpdatePlan, Notify, ServerStatus } from "../../types";
@@ -132,14 +133,14 @@ export function ModsModule(props: ModsModuleProps) {
     updateCheckInFlightRef.current = true;
     const managedContent = contentRef.current;
     const toastId = `overview-mod-update-check:${serverIdRef.current ?? "current"}`;
-    toast.loading("Checking for updates", { id: toastId, duration: Infinity, dismissible: false });
+    toast.loading("Checking for updates", { id: toastId, description: <ToastProgress />, duration: Infinity, dismissible: false });
     try {
       const updatePlan = await workspaceRef.current.actions.refresh(true, false);
       if (!updatePlan) {
-        toast.error(`Could not check ${managedContent.singular} updates`, { id: toastId, duration: 7000, closeButton: true, dismissible: true });
+        toast.error(`Could not check ${managedContent.singular} updates`, { id: toastId, description: <ToastProgress status="failed" />, duration: 7000, closeButton: true, dismissible: true });
         return;
       }
-      toast.success(modUpdateRefreshResultMessage(updatePlan, managedContent.plural), { id: toastId, duration: 5000, closeButton: true, dismissible: true });
+      toast.success(modUpdateRefreshResultMessage(updatePlan, managedContent.plural), { id: toastId, description: <ToastProgress status="succeeded" />, duration: 5000, closeButton: true, dismissible: true });
     } catch (error) {
       toast.error(`Could not check ${managedContent.singular} updates`, {
         id: toastId,
