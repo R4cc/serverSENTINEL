@@ -557,18 +557,11 @@
   overflow: auto;
 }
 
-.fileDetailsEmpty,
 .fileDetailsContent {
   display: grid;
   align-content: start;
   gap: var(--space-4);
   min-height: 0;
-}
-
-.fileDetailsEmpty {
-  place-content: center;
-  text-align: center;
-  color: var(--text-muted);
 }
 
 .fileDetailsTitle {

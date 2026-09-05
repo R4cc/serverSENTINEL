@@ -67,12 +67,7 @@
   --solid-control-surface: rgb(25 28 37 / 0.9);
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.32);
   --shadow-elevated: 0 18px 52px rgb(0 0 0 / 0.36);
-  background:
-    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--accent) 16%, transparent) 0, transparent 38%),
-    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--sentinel-info) 12%, transparent) 0, transparent 40%),
-    radial-gradient(circle at 66% 48%, color-mix(in srgb, var(--sentinel-warning) 5%, transparent) 0, transparent 34%),
-    radial-gradient(circle at 28% 94%, color-mix(in srgb, var(--sentinel-accent-muted) 14%, transparent) 0, transparent 46%),
-    var(--app-background);
+  background: var(--app-background);
 }
 
 .themeLight {

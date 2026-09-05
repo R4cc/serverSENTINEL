@@ -489,13 +489,8 @@
   }
 }
 
-/* One column: the third tile's `1 / -1` span already collapses to it, and the
-   primitive layer already stretches toolbar buttons below 720px. */
+/* Keep the fleet summary compact while stacking each node's actions. */
 @media (max-width: 460px) {
-  .nodesFleetSummary {
-    grid-template-columns: 1fr;
-  }
-
   .nodeListRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
@@ -573,3 +568,6 @@
     z-index: 2;
   }
 }
+
+.nodesBoardHeader .uiPanelHeaderActions { flex: 0 1 360px; }
+.nodesBoardHeader .uiSearchField { width: 100%; }

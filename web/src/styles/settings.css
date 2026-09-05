@@ -7,7 +7,7 @@
 
 .settingsHubShell {
   display: grid;
-  grid-template-columns: 238px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   align-items: start;
   gap: var(--space-4);
   min-width: 0;
@@ -29,9 +29,9 @@
 
 .settingsHubCategories > button {
   width: 100%;
-  min-height: 64px;
+  min-height: 48px;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
   border: 1px solid transparent;
@@ -73,8 +73,8 @@
 }
 
 .settingsHubCategoryIcon {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
 }
 
 .settingsHubCategories > button.active .settingsHubCategoryIcon {
@@ -111,7 +111,7 @@
 }
 
 .settingsHubSectionHeader {
-  min-height: 78px;
+  min-height: 64px;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;

@@ -134,9 +134,6 @@
     padding: var(--space-3);
   }
 
-  .workspaceHeader h2 {
-    font-size: clamp(34px, 14vw, 58px);
-  }
 
   .workspaceActions {
     align-items: stretch;
@@ -1199,9 +1196,6 @@ textarea:hover:not(:disabled),
     margin-bottom: 0;
   }
 
-  .workspaceHeader h2 {
-    font-size: clamp(22px, 1.9vw, 30px);
-  }
 
   .activeServerStrip {
     padding: var(--space-3);

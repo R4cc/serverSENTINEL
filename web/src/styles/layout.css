@@ -232,16 +232,11 @@ button .buttonIcon {
 }
 
 .workspaceHeader {
-  border-bottom: var(--border-heavy) solid var(--border);
-  padding-bottom: var(--space-5);
-  margin-bottom: var(--space-5);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+  padding-bottom: var(--space-3);
+  margin-bottom: 0;
 }
 
-.workspaceHeader h2 {
-  font-size: clamp(36px, 5vw, 84px);
-  letter-spacing: var(--tracking-tight);
-  line-height: 0.86;
-}
 
 .workspaceActions {
   display: flex;
@@ -1977,3 +1972,5 @@ button .buttonIcon {
     padding: var(--space-3);
   }
 }
+
+.usersSettings > .uiSearchField { margin-bottom: var(--space-3); }

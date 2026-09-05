@@ -23,24 +23,3 @@
    responsive layer instead of competing with it. */
 @import "./styles/nodes.css";
 @import "./styles/motion.css";
-
-.workspaceHeader h2 {
-  font-family: var(--font-page-heading);
-  font-size: clamp(32px, 4.5vw, 72px);
-  font-weight: var(--weight-title);
-  /* The only tracking adjustment in the app: Switzer's default spacing is tuned
-     for text sizes and opens up noticeably past ~32px. */
-  letter-spacing: -0.012em;
-}
-
-@media (max-width: 1366px) {
-  .workspaceHeader h2 {
-    font-size: clamp(20px, 1.75vw, 28px);
-  }
-}
-
-@media (max-width: 720px) {
-  .workspaceHeader h2 {
-    font-size: clamp(20px, 6vw, 27px);
-  }
-}

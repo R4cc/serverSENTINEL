@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { SearchField } from "../components/SearchField";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Banner, Button, EmptyState, FormField, HelpTooltip, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
@@ -488,6 +489,7 @@ export function NodesPage({
   playerSnapshots: Record<string, PlayerSnapshot>;
   formatDate: (value: string | number | Date) => string;
 }) {
+  const [query, setQuery] = useState("");
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
   const nodeVersionState = (node: NodeView) => getNodeVersionState(node, panelVersion);
@@ -537,6 +539,9 @@ export function NodesPage({
   }, [playerSnapshots, serverStateLabel, sortedNodes]);
 
   const hasNodes = sortedNodes.length > 0;
+  const search = query.trim().toLocaleLowerCase();
+  const visibleNodes = sortedNodes.filter((node) => !search || node.name.toLocaleLowerCase().includes(search)
+    || node.servers.some((server) => server.displayName.toLocaleLowerCase().includes(search)));
 
   const addNodeButton = (
     <Button
@@ -609,6 +614,7 @@ export function NodesPage({
             className="nodesBoardHeader"
             headingLevel={3}
             title="Connected nodes"
+            actions={<SearchField label="Search nodes and servers" value={query} onChange={setQuery} />}
           />
         )}
         {!hasNodes && (
@@ -619,14 +625,15 @@ export function NodesPage({
             action={addNodeButton}
           />
         )}
+        {hasNodes && visibleNodes.length === 0 && <EmptyState compact title="No matching nodes or servers" message="Try a different name or clear the search." action={<Button variant="secondary" onClick={() => setQuery("")}>Clear search</Button>} />}
         <div className="nodeList" role="list">
-          {sortedNodes.map((node) => {
+          {visibleNodes.map((node) => {
             const operation = nodeOperations[node.id];
             const operationLabel = operation?.phase === "waiting"
               ? operation.kind === "update" ? "Updating" : "Restarting"
               : operation?.phase === "timed-out" ? "Attention" : "";
             const expanded = Boolean(expandedNodeIds[node.id]);
-            const visibleServers = expanded ? node.servers : node.servers.slice(0, collapsedServerLimit);
+            const visibleServers = expanded || search ? node.servers : node.servers.slice(0, collapsedServerLimit);
             const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
             const canAddServer = isNodeRuntimeUsable(node);
             const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";

@@ -550,8 +550,17 @@ export function FilesPage({
 
       <aside className="panel fileDetailsPanel">
         {!selectedEntry && selectedEntries.length === 0 && (
-          <div className="fileDetailsEmpty">
-            <h2>No file selected</h2>
+          <div className="fileDetailsContent">
+            <h2>Current folder</h2>
+            <dl>
+              <div><dt>Location</dt><dd>{listing.path}</dd></div>
+              <div><dt>Items</dt><dd>{filesLoading ? "Loading…" : filesError ? "Unavailable" : listing.entries.length}</dd></div>
+            </dl>
+            <div className="fileFolderHelp">
+              <h3>Working with files</h3>
+              <p>Select an item to see its details and preview.</p>
+              <p>Double-click or press Enter to open. Use Shift to select a range.</p>
+            </div>
           </div>
         )}
         {selectedEntries.length > 1 && (

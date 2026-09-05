@@ -4,6 +4,7 @@ import { AppIcon } from './FileTypeIcon';
 import { Banner, Button, EmptyState, HelpTooltip, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
 import { ActionMenu } from './ActionMenu';
+import { SearchField } from "./SearchField";
 import { TableSortButton } from './TableControls';
 import {
   PERMISSION_DEPENDENCIES,
@@ -49,6 +50,7 @@ export function UserManagement({
   onResetPassword: (event: FormEvent<HTMLFormElement>, user: PublicUser) => Promise<boolean>;
   onDelete: (user: PublicUser) => void;
 }) {
+  const [query, setQuery] = useState("");
   const modalUser = editingUser && editingUser !== "create" ? editingUser : null;
   const [passwordUser, setPasswordUser] = useState<PublicUser | null>(null);
   const [sort, setSort] = useState<SimpleTableSort<UserSortColumn>>({ id: "username", desc: false });
@@ -62,8 +64,12 @@ export function UserManagement({
     return sort.desc ? -comparison : comparison;
   }), [sort, users]);
 
+  const search = query.trim().toLocaleLowerCase();
+  const visibleUsers = sortedUsers.filter((user) => `${user.username} ${rolePresetLabel(displayedRolePreset(user))}`.toLocaleLowerCase().includes(search));
+
   return (
     <div className="usersSettings uiTableViewport">
+      {users.length > 0 && <SearchField label="Search users and roles" value={query} onChange={setQuery} />}
       <table className="usersTable uiDataTable" aria-label="Users" aria-busy={initialLoading}>
         <thead className="uiTableHeader">
           <tr>
@@ -87,7 +93,7 @@ export function UserManagement({
               <td><div className="userActions"><SkeletonBlock className="userActionSkeleton" /><SkeletonBlock className="userActionSkeleton short" /><SkeletonBlock className="userActionSkeleton short" /></div></td>
             </tr>
           ))}
-          {sortedUsers.map((user) => (
+          {visibleUsers.map((user) => (
             <tr className="uiTableRow" key={user.id}>
               <td data-label="User">
                 <div className="userNameCell">
@@ -131,10 +137,10 @@ export function UserManagement({
               </td>
             </tr>
           ))}
-          {!initialLoading && users.length === 0 && (
+          {!initialLoading && visibleUsers.length === 0 && (
             <tr>
               <td colSpan={3}>
-                <EmptyState compact className="emptyInline noBorder" title="No users yet" message="Create a user to give someone access to this serverSENTINEL panel." />
+                <EmptyState compact className="emptyInline noBorder" title={users.length ? "No matching users" : "No users yet"} message={users.length ? "Try a different name or role, or clear the search." : "Create a user to give someone access to this serverSENTINEL panel."} />
               </td>
             </tr>
           )}

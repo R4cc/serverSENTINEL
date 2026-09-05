@@ -552,6 +552,9 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 }
 
 .playerMapClusterPopup {
+  /* Position is measured and applied together; interpolating the reset coordinates
+     can leave the popup at the frame origin under reduced-motion rules. */
+  transition-property: none;
   position: absolute;
   z-index: 8;
   display: grid;
@@ -1338,7 +1341,20 @@ button.playerMapPlayerMarker:hover:not(:disabled) {
 
 @media (max-width: 560px) {
   .playerSummaryGrid {
+    gap: var(--space-2);
+  }
+
+  .playerSummaryGrid .uiMetricTile {
     grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-3);
+  }
+
+  .playerSummaryGrid .uiMetricTileMarker {
+    display: none;
+  }
+
+  .playerSummaryGrid .uiMetricTileDetail {
+    white-space: normal;
   }
 }
 
