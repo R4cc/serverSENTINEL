@@ -272,11 +272,17 @@ async function assertTerminalSelectionCopiesOnCtrlC(page) {
   await page.mouse.down();
   await page.mouse.move(box.x + Math.min(160, box.width - 2), box.y + box.height / 2, { steps: 8 });
   await page.mouse.up();
+  const rowText = (await row.textContent()).replace(/ /g, " ");
   await page.keyboard.press("Control+c");
 
+  // Clipboard writes are asynchronous; Linux CI can still return the previous copy here.
+  // Wait for selected output, not merely a nonempty clipboard left by the shortcut test.
+  await page.waitForFunction(async (text) => {
+    const copied = await navigator.clipboard.readText();
+    return copied.trim().length > 0 && text.includes(copied);
+  }, rowText, { timeout: 5_000 });
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   assert(copied.trim().length > 0, "Ctrl+C copied nothing after selecting console output");
-  const rowText = (await row.textContent()).replace(/ /g, " ");
   assert(
     rowText.includes(copied),
     `Ctrl+C copied something other than the selected output: ${JSON.stringify({ copied, rowText })}`
