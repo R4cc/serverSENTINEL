@@ -15,6 +15,7 @@ import {
   peakActivity,
   playerMapArc,
   playerMapMarks,
+  playerMapRegion,
   playerMapPopupPlacement,
   projectToMap,
   rangeWindowMs,
@@ -44,6 +45,44 @@ describe("map projection", () => {
 });
 
 describe("map marks", () => {
+  it("keeps isolated heads at their geographic coordinates", () => {
+    const [badge] = layoutPlayerMapBadges(playerMapMarks([entry("Solo")]), undefined, 1.5);
+    expect(badge.point).toEqual(badge.anchor);
+  });
+
+  it("separates players as zoom creates readable space", () => {
+    const players = [entry("A"), entry("B", { location: location({ longitude: 22.57 }) })];
+    expect(playerMapMarks(players, 720, 360, 720, 34, 1)).toHaveLength(1);
+    expect(playerMapMarks(players, 720, 360, 720, 34, 4)).toHaveLength(2);
+  });
+
+  it("uses world-scale labels until zoom makes local names useful", () => {
+    expect(playerMapMarks([entry("A"), entry("B")])[0].label).toBe("Europe");
+    expect(playerMapMarks([entry("A"), entry("B")], 720, 360, 720, 34, 4)[0].label).toBe("Copenhagen");
+    expect(playerMapRegion(location({ continent: "Asia", continentCode: "AS", countryCode: "JP" }))).toBe("East Asia");
+    expect(playerMapRegion(location({ continent: "Asia", continentCode: "AS", countryCode: "SG" }))).toBe("Southeast Asia");
+    expect(playerMapRegion(location({ continent: "Asia", continentCode: "AS", countryCode: "IN" }))).toBe("South Asia");
+    expect(playerMapRegion(location({ continent: "Asia", continentCode: "AS", countryCode: "TR" }))).toBe("Middle East / Western Asia");
+  });
+
+  it("accounts for stacked head widths without moving isolated neighbors", () => {
+    const players = [entry("A"), entry("B"), entry("C", { location: location({ longitude: 34 }) })];
+    expect(playerMapMarks(players)).toHaveLength(1);
+    expect(playerMapMarks(players, 720, 360, 720, 34, 4)).toHaveLength(2);
+  });
+
+  it("includes last-session averages for offline players", () => {
+    expect(playerMapMarks([entry("A", { lastSessionAveragePingMs: 80 }), entry("B", { online: true, pingMs: 20 })])[0].pingMs).toBe(50);
+  });
+
+  it("keeps a mixed world-scale cluster title short enough to leave room for its roster", () => {
+    const marks = playerMapMarks([
+      entry("A"),
+      entry("B", { location: location({ continent: "Africa", continentCode: "AF" }) }),
+      entry("C", { location: location({ continent: "Oceania", continentCode: "OC" }) })
+    ]);
+    expect(marks[0].label).toBe("Multiple regions");
+  });
   it.each([0.4, 0.75, 1, 1.5, 2, 4])("keeps dense player badges clear of the fixed server at scale %s", (scale) => {
     const players = Array.from({ length: 120 }, (_, index) => entry(`Player${index}`, {
       location: location({ longitude: 12.57 + (index % 5) * 0.2, latitude: 55.68 + (index % 3) * 0.2 })
@@ -56,7 +95,8 @@ describe("map marks", () => {
       expect(badge.anchor).toEqual(projectToMap(badge.mark.longitude, badge.mark.latitude, 720, 360));
       const dx = Math.abs(badge.point.x - server.x) * scale;
       const dy = Math.abs(badge.point.y - server.y) * scale;
-      expect(dx >= 56 || dy >= 42).toBe(true);
+      expect(dx).toBeLessThan(0.01);
+      expect(dy).toBeCloseTo(22);
     }
     expect(server).toEqual(projectToMap(12.57, 55.68, 720, 360));
   });

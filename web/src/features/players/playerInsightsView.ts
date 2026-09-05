@@ -41,6 +41,20 @@ export type PlayerMapMark = {
   pingMs?: number;
 };
 
+/** Broad region labels come from geolocation metadata. */
+export function playerMapRegion(location: PlayerLocation | undefined) {
+  if (!location) return "Nearby locations";
+  if (location.continentCode !== "AS" && location.continent !== "Asia") return location.continent ?? location.country ?? "Nearby locations";
+  const code = location.countryCode ?? "";
+  if ("BN KH ID LA MY MM PH SG TH TL VN".split(" ").includes(code)) return "Southeast Asia";
+  if ("AF BD BT IN MV NP PK LK".split(" ").includes(code)) return "South Asia";
+  if ("KZ KG TJ TM UZ".split(" ").includes(code)) return "Central Asia";
+  if ("AM AZ BH CY GE IQ IR IL JO KW LB OM PS QA SA SY TR AE YE".split(" ").includes(code)) return "Middle East / Western Asia";
+  if (code === "RU") return "Northern Asia";
+  if ("CN HK JP MO MN KP KR TW".split(" ").includes(code)) return "East Asia";
+  return "Asia";
+}
+
 /**
  * Players collapsed into markers that would not collide at the current rendered map width.
  *
@@ -53,7 +67,8 @@ export function playerMapMarks(
   width = 720,
   height = 360,
   renderedWidth = width,
-  collisionDistancePx = 32
+  collisionDistancePx = 32,
+  zoomScale = 1
 ): PlayerMapMark[] {
   const placed = entries.flatMap((entry) => {
     const { latitude, longitude } = entry.location ?? {};
@@ -68,7 +83,7 @@ export function playerMapMarks(
     const rightRoot = find(right);
     if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
   };
-  const scale = renderedWidth > 0 ? renderedWidth / width : 1;
+  const scale = renderedWidth > 0 ? renderedWidth * zoomScale / width : 1;
   const collisionDistance = Math.max(collisionDistancePx / scale, Number.EPSILON);
   const collisionDistanceSquared = collisionDistance ** 2;
   // Only marks in the same or an adjacent collision-sized cell can overlap. Keeping those small
@@ -101,7 +116,27 @@ export function playerMapMarks(
     else groups.set(root, [candidate]);
   });
 
-  const marks = [...groups.values()].map((group): PlayerMapMark => {
+  // Stacked heads are wider than individual heads. Merge only overlapping footprints,
+  // instead of pushing their badges into a different geographic region.
+  const visibleGroups = [...groups.values()];
+  const footprint = (group: typeof placed) => ({
+    x: group.reduce((sum, item) => sum + item.point.x, 0) / group.length * scale,
+    y: group.reduce((sum, item) => sum + item.point.y, 0) / group.length * scale,
+    halfWidth: group.length > 1 ? 46 : 16
+  });
+  for (let left = 0; left < visibleGroups.length; left++) {
+    for (let right = left + 1; right < visibleGroups.length; right++) {
+      const a = footprint(visibleGroups[left]);
+      const b = footprint(visibleGroups[right]);
+      if (Math.abs(a.x - b.x) < a.halfWidth + b.halfWidth + 2 && Math.abs(a.y - b.y) < 36) {
+        visibleGroups[left].push(...visibleGroups[right]);
+        visibleGroups.splice(right, 1);
+        left = -1;
+        break;
+      }
+    }
+  }
+  const marks = visibleGroups.map((group): PlayerMapMark => {
     const centre = group.reduce(
       (total, candidate) => ({ longitude: total.longitude + candidate.longitude, latitude: total.latitude + candidate.latitude }),
       { longitude: 0, latitude: 0 }
@@ -109,8 +144,12 @@ export function playerMapMarks(
     const members = group
       .map(({ entry }) => entry)
       .sort((left, right) => left.player.localeCompare(right.player));
-    const pings = members.flatMap((entry) => entry.pingMs === undefined ? [] : [entry.pingMs]);
+    const pings = members.flatMap((entry) => {
+      const ping = entry.online ? entry.pingMs : entry.lastSessionAveragePingMs ?? entry.pingMs;
+      return ping === undefined ? [] : [ping];
+    });
     const labels = [...new Set(members.map((entry) => entry.location?.label).filter((label): label is string => Boolean(label)))];
+    const regions = [...new Set(members.map((entry) => playerMapRegion(entry.location)))].sort();
     const accuracyRadii = members.flatMap((entry) => entry.location?.accuracyRadiusKm === undefined ? [] : [entry.location.accuracyRadiusKm]);
     const id = members.map((entry) => `${entry.serverId}:${entry.player.toLowerCase()}`).sort().join("|");
     return {
@@ -120,7 +159,9 @@ export function playerMapMarks(
       players: members.map((entry) => entry.player),
       entries: members,
       ...(accuracyRadii.length ? { accuracyRadiusKm: Math.max(...accuracyRadii) } : {}),
-      label: labels.length === 1 ? labels[0] : `${labels[0] ?? "Nearby locations"} area`,
+      label: members.length === 1 || zoomScale >= 3
+        ? (labels.length === 1 ? labels[0] : [...new Set(members.map((entry) => entry.location?.country).filter(Boolean))].join(" / ") || regions.join(" / "))
+        : regions.length > 2 ? "Multiple regions" : regions.join(" / "),
       ...(pings.length
         ? { pingMs: Math.round(pings.reduce((total, ping) => total + ping, 0) / pings.length) }
         : {})
@@ -145,40 +186,26 @@ export function layoutPlayerMapBadges(
   height = 360
 ) {
   const pixelsPerUnit = Math.max(scale, 0.01);
-  const occupied = marks.flatMap((mark) => mark.entries.map((entry) => {
-    const point = projectToMap(entry.location!.longitude!, entry.location!.latitude!, width, height);
-    return { x: point.x * pixelsPerUnit, y: point.y * pixelsPerUnit, halfWidth: 6, halfHeight: 6 };
-  }));
-  // Stable ordering prevents changes to the roster order from shuffling the labels.
+  const hub = server ? marks
+    .filter((mark) => {
+      const anchor = projectToMap(mark.longitude, mark.latitude, width, height);
+      return Math.abs(anchor.x - server.x) * pixelsPerUnit < 50
+        && Math.abs(anchor.y - server.y) * pixelsPerUnit < 34;
+    })
+    .sort((a, b) => {
+      const left = projectToMap(a.longitude, a.latitude, width, height);
+      const right = projectToMap(b.longitude, b.latitude, width, height);
+      return Math.hypot(left.x - server.x, left.y - server.y) - Math.hypot(right.x - server.x, right.y - server.y);
+    })[0] : undefined;
   return [...marks].sort((a, b) => a.id.localeCompare(b.id)).map((mark) => {
     const anchor = projectToMap(mark.longitude, mark.latitude, width, height);
-    const halfWidth = mark.entries.length > 1 ? 30 : 16;
-    const halfHeight = 16;
-    let best = { x: anchor.x * pixelsPerUnit, y: anchor.y * pixelsPerUnit };
-    let bestScore = Infinity;
-    for (let radius = 28; radius <= 160; radius += 12) {
-      for (let direction = 0; direction < 8; direction++) {
-        const angle = -Math.PI / 2 + direction * Math.PI / 4;
-        const candidate = clampPlayerMapPoint({
-          x: anchor.x * pixelsPerUnit + Math.cos(angle) * radius,
-          y: anchor.y * pixelsPerUnit + Math.sin(angle) * radius
-        }, 1, { left: halfWidth + 4, right: halfWidth + 4, top: halfHeight + 4, bottom: halfHeight + 4 }, width * pixelsPerUnit, height * pixelsPerUnit);
-        // The server is a hard exclusion, even when a crowded map has no perfect badge layout.
-        if (server && Math.abs(candidate.x - server.x * pixelsPerUnit) < halfWidth + 26
-          && Math.abs(candidate.y - server.y * pixelsPerUnit) < halfHeight + 26) continue;
-        const overlap = occupied.reduce((sum, box) => sum +
-          Math.max(0, halfWidth + box.halfWidth + 4 - Math.abs(candidate.x - box.x)) *
-          Math.max(0, halfHeight + box.halfHeight + 4 - Math.abs(candidate.y - box.y)), 0);
-        const score = overlap * 1000 + Math.hypot(candidate.x - anchor.x * pixelsPerUnit, candidate.y - anchor.y * pixelsPerUnit);
-        if (score < bestScore) {
-          best = candidate;
-          bestScore = score;
-        }
-      }
-      if (bestScore < 1000) break;
-    }
-    occupied.push({ ...best, halfWidth, halfHeight });
-    return { mark, anchor, point: { x: best.x / pixelsPerUnit, y: best.y / pixelsPerUnit } };
+    const halfWidth = mark.entries.length > 1 ? 43 : 16;
+    const nearServer = server && mark === hub;
+    // The hub stays at the server longitude, with player heads immediately below it.
+    const preferred = nearServer ? { x: server.x, y: server.y + 22 / pixelsPerUnit } : anchor;
+    const point = clampPlayerMapPoint(preferred, pixelsPerUnit,
+      { left: halfWidth + 4, right: halfWidth + 4, top: 22, bottom: 22 }, width, height);
+    return { mark, anchor, point, hub: Boolean(nearServer) };
   });
 }
 

@@ -9,7 +9,7 @@ const output = process.env.SERVERSENTINEL_MAP_SCREENSHOTS ?? join(tmpdir(), 'ser
 await mkdir(output, {recursive:true});
 const harness = await startDemoHarness({dataDirectoryPrefix:'serversentinel-map-smoke-'});
 try {
-  for (const [engine, width, theme] of [[chromium,1440,'dark'],[chromium,1440,'light'],[chromium,390,'dark'],[webkit,320,'light']]) {
+  for (const [engine, width, theme] of [[chromium,1440,'dark'],[chromium,1440,'light'],[chromium,1280,'light'],[chromium,390,'dark'],[webkit,320,'light']]) {
     const browser=await launchBrowser(engine);
     try {
       const context=await browser.newContext({viewport:{width,height:1000},reducedMotion:theme === 'dark' ? 'no-preference' : 'reduce'});
@@ -17,27 +17,20 @@ try {
       const page=await context.newPage();
       await signInThroughForm(page,harness.baseUrl);
       const nav=page.locator('[data-nav-page="players"]');
+      await nav.waitFor({state:"attached"});
       if(!await nav.isVisible()) await page.getByRole('button',{name:'Expand navigation'}).click();
       await nav.click();
       await page.locator('.playerMapMarker').first().waitFor();
       await page.getByRole('group',{name:'Players shown on map'}).getByRole('button',{name:'All time',exact:true}).click();
       await page.locator('.playerMap').scrollIntoViewIfNeeded();
-      // Sample every animation frame, not just the settled endpoints: the old layout passed
-      // endpoint checks while continuously repacking badges during a zoom gesture.
+      // Fixed-size heads must stay aligned with their wrappers through every animation frame.
+      // Cluster membership may change after a gesture settles.
       await page.evaluate(() => {
         window.mapMotionErrors = [];
-        const original = new Map();
-        let expectedCount;
         const sample = () => {
           const scene = document.querySelector('.playerMapScene').getBoundingClientRect();
           const wrappers = [...document.querySelectorAll('[data-map-mark]')];
-          expectedCount ??= wrappers.length;
-          if (wrappers.length !== expectedCount) window.mapMotionErrors.push('cluster membership changed during zoom');
           for (const wrapper of wrappers) {
-            const key = wrapper.dataset.mapMark;
-            const coordinates = `${wrapper.style.left}:${wrapper.style.top}`;
-            if (original.has(key) && original.get(key) !== coordinates) window.mapMotionErrors.push(`badge repacked: ${key}`);
-            original.set(key, coordinates);
             const marker = wrapper.querySelector('.playerMapMarker').getBoundingClientRect();
             const dx = marker.left + marker.width / 2 - scene.left - scene.width * parseFloat(wrapper.style.left) / 100;
             const dy = marker.top + marker.height / 2 - scene.top - scene.height * parseFloat(wrapper.style.top) / 100;
@@ -48,11 +41,13 @@ try {
         window.mapMotionFrame = requestAnimationFrame(sample);
       });
       let originalLocations;
+      const markerCounts = [];
       for(let step=0;step<5;step++) {
         await page.waitForTimeout(600);
         const result=await page.evaluate(()=>{
           const scene=document.querySelector('.playerMapScene').getBoundingClientRect();
           const server=document.querySelector('.playerMapServer').getBoundingClientRect();
+          const serverAnchor=document.querySelector('.playerMapServerWrap').getBoundingClientRect();
           const dots=[...document.querySelectorAll('.playerMapLocationDot')];
           const locations=[...new Set(dots.map(dot=>`${dot.getAttribute('cx')}:${dot.getAttribute('cy')}`))].sort();
           const heads=[...document.querySelectorAll('.playerMapMarker .playerMapAvatar')];
@@ -62,8 +57,9 @@ try {
           });
           return {
             locations,
-            serverX:(server.left+server.width/2-scene.left)/scene.width,
-            serverY:(server.top+server.height/2-scene.top)/scene.height,
+            markerCount: document.querySelectorAll(".playerMapMarker").length,
+            serverX:(serverAnchor.left-scene.left)/scene.width,
+            serverY:(serverAnchor.top-scene.top)/scene.height,
             serverSize:server.width,
             overlaps:overlaps.length,
             zoom:new DOMMatrix(getComputedStyle(document.querySelector('.playerMapTransformContent')).transform).a,
@@ -75,18 +71,20 @@ try {
         const label=`${engine.name()} ${width}px ${theme} ${Math.round(result.zoom*100)}%`;
         assert(Math.abs(result.serverX-(8.5417+180)/360)<0.001,`${label}: server longitude moved`);
         assert(Math.abs(result.serverY-(90-47.3769)/180)<0.001,`${label}: server latitude moved`);
-        assert(Math.abs(result.serverSize-28*Math.SQRT2)<0.1,`${label}: server icon scaled to ${result.serverSize}`);
+        assert(Math.abs(result.serverSize-28)<0.1,`${label}: server icon scaled to ${result.serverSize}`);
         assert.equal(result.overlaps,0,`${label}: player badge covers server`);
         assert(!result.headDrift && !result.dotDrift,`${label}: map glyph size changed`);
         assert(result.leaders,`${label}: connector starts away from a location`);
         if(originalLocations) assert.deepEqual(result.locations,originalLocations,`${label}: clustering moved reported locations`);
         originalLocations=result.locations;
+        markerCounts.push(result.markerCount);
         await page.locator('.playerMap').screenshot({path:join(output,`${engine.name()}-${width}-${theme}-${Math.round(result.zoom*100)}.png`)});
         console.log(`map smoke passed: ${label}, ${result.locations.length} fixed locations`);
         const zoomIn=page.getByRole('button',{name:'Zoom in',exact:true});
         if(await zoomIn.isDisabled()) break;
         await zoomIn.click();
       }
+      assert(markerCounts.at(-1) > markerCounts[0], "Zoom must separate crowded players");
       for (let step = 0; step < 2; step++) {
         await page.getByRole('button',{name:'Zoom out',exact:true}).click();
         await page.waitForTimeout(600);
@@ -105,8 +103,8 @@ try {
       assert((await serverPopup.textContent()).includes('Zurich, Switzerland'));
       const serverGeometry = await page.evaluate(() => {
         const svg = document.querySelector('.playerMapCanvas');
-        const box = document.querySelector('.playerMapServer').getBoundingClientRect();
-        const point = new DOMPoint(box.left + box.width/2, box.top + box.height/2).matrixTransform(svg.getScreenCTM().inverse());
+        const box = document.querySelector('.playerMapServerWrap').getBoundingClientRect();
+        const point = new DOMPoint(box.left, box.top).matrixTransform(svg.getScreenCTM().inverse());
         return {x:point.x,y:point.y,onLand:document.querySelector('.playerMapLand').isPointInFill(point)};
       });
       assert(Math.abs(serverGeometry.x - (8.5417+180)*2)<0.1 && Math.abs(serverGeometry.y - (90-47.3769)*2)<0.1, 'Server icon does not align with Zurich on the SVG');
@@ -117,9 +115,18 @@ try {
       await serverPopup.waitFor({state:'detached'});
       await serverButton.click();
       await serverPopup.waitFor();
-      await page.locator('.playerMapClusterMarker').first().click();
+      await serverPopup.getByRole('button', {name:'Close server location'}).click();
+      await serverPopup.waitFor({state:'detached'});
+      const europe = page.locator('.playerMapClusterMarker').and(page.getByRole('button', {name:/players near Europe\./}));
+      const selectedCluster = await europe.count() ? europe.first() : page.locator('.playerMapClusterMarker').first();
+      await selectedCluster.click();
       const popup = page.locator('.playerMapClusterPopup');
       await popup.waitFor();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(250);
+      assert(await popup.isVisible(), 'Clicked region must remain open away from its marker');
+      assert(await popup.locator('.playerMapClusterList').evaluate(element => element.clientHeight >= 40), 'Region panel must leave readable space for players');
+      assert(await page.locator('.playerMapClusterMarker .playerMapAvatar').count() >= 2, 'Clusters need multiple visible heads');
       const selection = await page.evaluate(() => {
         const frame = document.querySelector('.playerMapFrame').getBoundingClientRect();
         const popup = document.querySelector('.playerMapClusterPopup').getBoundingClientRect();
@@ -131,6 +138,17 @@ try {
       });
       assert(selection.visibleLinks && selection.contained, `${engine.name()} ${width}px: selected locations or contained popup missing`);
       await page.locator('.playerMap').screenshot({path:join(output,`${engine.name()}-${width}-${theme}-selected.png`)});
+      if (width >= 1280) await page.locator('.playerGeographyCard').screenshot({path:join(output,`${engine.name()}-${width}-${theme}-geography.png`)});
+      const viewAll = popup.getByRole('button', {name:/View all/});
+      if (await viewAll.count()) {
+        const initialRows = await popup.locator('.playerMapClusterRow').count();
+        await viewAll.click();
+        assert(await popup.locator('.playerMapClusterRow').count() > initialRows, 'View all must expose the complete region roster');
+      }
+      await popup.getByRole('button', {name:'Close region summary'}).click();
+      await popup.waitFor({state:'detached'});
+      await page.locator('.playerMapClusterMarker').first().click();
+      await popup.waitFor();
       // WebKit does not focus buttons on a pointer click; exercise dismissal from the dialog.
       await popup.focus();
       await page.keyboard.press('Escape');
@@ -139,4 +157,3 @@ try {
   }
   console.log(`Map screenshots: ${output}`);
 } finally {await harness.stop();}
-

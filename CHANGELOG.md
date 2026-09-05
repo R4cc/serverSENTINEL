@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.8 - 2026-09-05
+
+- Redesigned Player geography with a softer full-width map, stacked player heads, zoom-aware clusters, geographic region names, curved server connections, and a floating player summary.
+
 ## 26.9.7 - 2026-09-05
 
 - Unified page headings, compact corners, and calmer work surfaces across desktop and mobile while keeping operational status colours distinct.
