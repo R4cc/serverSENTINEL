@@ -60,6 +60,7 @@ export function FilesPage({
   } = data;
   const {
     filesLoading,
+    filesLoaded,
     filesError,
     fileBackStack,
     fileForwardStack,
@@ -68,7 +69,6 @@ export function FilesPage({
     fileActionDialog,
     selectedPath,
     editorText,
-    savedEditorText,
     dirty,
     fileOpening,
     fileOpenFailed,
@@ -106,7 +106,7 @@ export function FilesPage({
   const [fileContextMenu, setFileContextMenu] = useState<FileContextMenuState | null>(null);
   const [draggedFilePath, setDraggedFilePath] = useState("");
   const [fileDropTargetPath, setFileDropTargetPath] = useState("");
-  const initialFilesLoading = filesLoading && listing.entries.length === 0;
+  const initialFilesLoading = filesLoading && !filesLoaded;
   const operationLabel = fileOperationBusy === "upload" ? "Uploading file…"
     : fileOperationBusy === "new-folder" ? "Creating folder…"
       : fileOperationBusy === "rename" ? "Renaming item…"
@@ -114,7 +114,7 @@ export function FilesPage({
         : fileOperationBusy === "duplicate" ? "Duplicating file…"
           : fileOperationBusy === "delete" ? "Deleting items…"
             : "";
-  const emptyFolderVisible = !filesLoading && !filesError && sortedFileEntries.length === 0;
+  const emptyFolderVisible = filesLoaded && !filesError && sortedFileEntries.length === 0;
   const renderedFileRowCount = (initialFilesLoading ? 8 : sortedFileEntries.length + (emptyFolderVisible ? 1 : 0)) + 1;
 
   useEffect(() => {
@@ -550,8 +550,17 @@ export function FilesPage({
 
       <aside className="panel fileDetailsPanel">
         {!selectedEntry && selectedEntries.length === 0 && (
-          <div className="fileDetailsEmpty">
-            <h2>No file selected</h2>
+          <div className="fileDetailsContent">
+            <h2>Current folder</h2>
+            <dl>
+              <div><dt>Location</dt><dd>{listing.path}</dd></div>
+              <div><dt>Items</dt><dd>{filesLoading ? "Loading…" : filesError ? "Unavailable" : listing.entries.length}</dd></div>
+            </dl>
+            <div className="fileFolderHelp">
+              <h3>Working with files</h3>
+              <p>Select an item to see its details and preview.</p>
+              <p>Double-click or press Enter to open. Use Shift to select a range.</p>
+            </div>
           </div>
         )}
         {selectedEntries.length > 1 && (
@@ -667,7 +676,6 @@ export function FilesPage({
         discardRequestOpen={Boolean(discardEditorRequest)}
         onTextChange={(nextText) => {
           actions.setEditorText(nextText);
-          actions.setDirty(nextText !== savedEditorText);
         }}
         onRequestClose={actions.requestCloseEditor}
         onCancel={actions.cancelFileEdit}

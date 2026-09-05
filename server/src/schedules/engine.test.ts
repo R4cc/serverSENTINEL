@@ -246,11 +246,46 @@ describe("scheduled run bookkeeping", () => {
       .mockReturnValueOnce("export-1")
       .mockReturnValue(undefined);
 
-    await executeMatchedSchedule(server, { ...schedule, onlyWhenNoPlayers: true, waitForPlayersToLeave: true });
+    await executeMatchedSchedule(server, {
+      ...schedule,
+      onlyWhenNoPlayers: true,
+      waitForPlayersToLeave: true,
+      steps: [{ type: "command", command: "save-all", delaySeconds: 0 }]
+    });
 
     // The wait policy already accepts an unbounded delay, so it reaches the mutation wait instead.
     expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({ status: "success" }));
-    expect(exportCoordinator.withMutation).toHaveBeenCalledTimes(1);
+    expect(freshOnlineCount).toHaveBeenCalledTimes(2);
+    expect(sendConsoleCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { count: 1, message: "Skipped because 1 player are online" },
+    { count: null, message: "Skipped because online player count could not be determined" }
+  ])("rechecks player count after an export wait when it becomes $count", async ({ count, message }) => {
+    exportCoordinator.activeOperationId.mockReturnValueOnce("export-1").mockReturnValue(undefined);
+    freshOnlineCount.mockResolvedValueOnce(0).mockResolvedValue(count);
+
+    await executeMatchedSchedule(server, {
+      ...schedule,
+      onlyWhenNoPlayers: true,
+      waitForPlayersToLeave: true,
+      steps: [{ type: "command", command: "save-all", delaySeconds: 0 }]
+    });
+
+    expect(operationsRepository.update).toHaveBeenCalledWith("operation-1", expect.objectContaining({
+      task: "Server is empty; waiting for export to finish"
+    }));
+    expect(freshOnlineCount).toHaveBeenCalledTimes(2);
+    expect(sendConsoleCommand).not.toHaveBeenCalled();
+    expect(operationsRepository.update).not.toHaveBeenCalledWith("operation-1", expect.objectContaining({
+      result: expect.objectContaining({ phase: "executing" })
+    }));
+    expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({
+      status: "skipped",
+      message,
+      details: expect.objectContaining({ completedStepCount: 0 })
+    }));
   });
 
   it("keeps the manual run refusal while relaxing it for the scheduler", async () => {

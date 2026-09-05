@@ -56,6 +56,7 @@ import { PlayerGeoCollector } from "./players/playerGeoCollector.js";
 import { readDockerPlayerConnections } from "./players/dockerPlayerConnections.js";
 import { PlayerPingCollector } from "./players/playerPingCollector.js";
 import { buildPlayerInsights } from "./players/playerInsights.js";
+import { PlayerActivityCache } from "./players/playerActivityCache.js";
 import { resolveServerLocation, ServerLocationStore } from "./players/serverLocations.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
 import { TimelineEventCollector } from "./timelineEventCollector.js";
@@ -311,12 +312,13 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "GET" && /^\/api\/servers\/[^/?]+\/player-head\/[^/?]+(?:\?|$)/.test(request.url)) {
     return;
   }
-  // The export modal hands the artifact to the browser as an ordinary link so it streams a
-  // multi-gigabyte archive itself, with a real size in its download UI. A navigation cannot set a
-  // request header, so requiring one here rejected every download. The session cookie is
-  // SameSite=Strict, which is what actually stops a cross-site request; the route still demands
-  // `servers.export` and an operation the caller started, and it only ever reads.
-  if (request.method === "GET" && /^\/api\/exports\/[^/?]+\/download(?:\?|$)/.test(request.url)) {
+  // Browser-managed downloads cannot set custom headers. Only these read-only attachment
+  // routes are exempt: they still authenticate the SameSite=Strict session cookie and check
+  // export ownership or file-path permissions, including every entry in an archive.
+  if (request.method === "GET" && (
+    /^\/api\/exports\/[^/?]+\/download(?:\?|$)/.test(request.url)
+    || /^\/api\/servers\/[^/?]+\/(?:file\/download|files\/download\/archive\/[^/?]+)(?:\?|$)/.test(request.url)
+  )) {
     return;
   }
   if (request.raw.url?.split("?", 1)[0] === "/api/nodes/connect") {
@@ -484,7 +486,6 @@ async function playerInsightsSnapshot(options: { serverId?: string; windowMs?: n
   const geoDatabase = services.playerGeoDatabase;
   const historyWindowMs = options.windowMs ?? playerInsightsHistoryWindow;
   const now = Date.now();
-  const activityFrom = now - playerInsightsHistoryWindow;
   return buildPlayerInsights({
     servers,
     snapshots: await services.playerSnapshotCoordinator?.snapshots(servers) ?? {},
@@ -495,7 +496,8 @@ async function playerInsightsSnapshot(options: { serverId?: string; windowMs?: n
     pings: Object.fromEntries(servers.map((server) => [server.id, services.playerPingCollector?.latest(server.id) ?? new Map()])),
     pingMeasurements: services.playerPingCollector?.measurements(servers.map((server) => server.id))
       ?? servers.map((server) => ({ serverId: server.id, status: "unsupported" as const, onlinePlayers: 0, measuredPlayers: 0 })),
-    resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.list(server.id, activityFrom)])),
+    resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.listRange(server.id, now - historyWindowMs, now)])),
+    activityHours: playerActivityCache.hours(servers.map((server) => server.id), config.timeZone, playerInsightsHistoryWindow, now),
     geoDatabase: geoDatabase?.state() ?? {
       available: false,
       configured: Boolean(maxmindCredentials()),
@@ -694,6 +696,7 @@ services.moduleRegistry.registerRuntime("managedContent", createManagedContentMo
 }));
 
 services.resourceStatsRepository = new ResourceStatsRepository(services.storageDatabase);
+const playerActivityCache = new PlayerActivityCache(services.resourceStatsRepository);
 services.timelineEventsRepository = new TimelineEventsRepository(services.storageDatabase);
 services.resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,

@@ -272,11 +272,20 @@ async function assertTerminalSelectionCopiesOnCtrlC(page) {
   await page.mouse.down();
   await page.mouse.move(box.x + Math.min(160, box.width - 2), box.y + box.height / 2, { steps: 8 });
   await page.mouse.up();
+  const rowText = (await row.textContent()).replace(/ /g, " ");
   await page.keyboard.press("Control+c");
 
-  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  // Clipboard writes are asynchronous; Linux CI can still return the previous copy here.
+  // Wait for selected output, not merely a nonempty clipboard left by the shortcut test.
+  // Poll from Node: waitForFunction treats an async predicate's Promise as truthy.
+  let copied = "";
+  const deadline = Date.now() + 5_000;
+  do {
+    copied = await page.evaluate(() => navigator.clipboard.readText());
+    if (copied.trim().length > 0 && rowText.includes(copied)) break;
+    await page.waitForTimeout(50);
+  } while (Date.now() < deadline);
   assert(copied.trim().length > 0, "Ctrl+C copied nothing after selecting console output");
-  const rowText = (await row.textContent()).replace(/ /g, " ");
   assert(
     rowText.includes(copied),
     `Ctrl+C copied something other than the selected output: ${JSON.stringify({ copied, rowText })}`
@@ -441,6 +450,10 @@ try {
     reducedMotion: "reduce",
     // Reading the clipboard back is the only way to assert that Ctrl+C copied what was selected.
     permissions: ["clipboard-read", "clipboard-write"]
+  });
+  // Exercise xterm's Linux selection mirror even when this smoke runs on Windows or macOS.
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "platform", { get: () => "Linux x86_64" });
   });
   await signInThroughApi(context, baseUrl);
 

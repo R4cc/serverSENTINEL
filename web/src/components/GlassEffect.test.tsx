@@ -28,9 +28,9 @@ describe("liquid glass capability gating", () => {
 
 describe("liquid glass surface geometry", () => {
   it("matches the shared surface radii", () => {
-    expect(liquidGlassCornerRadius("chrome")).toBe(18);
-    expect(liquidGlassCornerRadius("floating")).toBe(18);
-    expect(liquidGlassCornerRadius("modal")).toBe(24);
+    expect(liquidGlassCornerRadius("chrome")).toBe(10);
+    expect(liquidGlassCornerRadius("floating")).toBe(10);
+    expect(liquidGlassCornerRadius("modal")).toBe(14);
   });
 
   it("supports square chrome without removing its refraction", () => {

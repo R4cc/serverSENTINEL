@@ -696,7 +696,7 @@ async function assertLiquidGlassAndEditorScrollbar(context) {
       return { sidebar: read(".sidebar"), strip: read(".activeServerStrip") };
     });
 
-    assert.equal(geometry.strip.surfaceRadius, "18px", `Server-strip radius changed: ${JSON.stringify(geometry)}`);
+    assert.equal(geometry.strip.surfaceRadius, "10px", `Server-strip radius changed: ${JSON.stringify(geometry)}`);
     assert.equal(geometry.strip.overlays.filter((overlay) => overlay.display !== "none").length, 1, `Server strip renders more than one liquid-glass rim: ${JSON.stringify(geometry)}`);
     assert(geometry.strip.overlays.every((overlay) => overlay.radius === geometry.strip.surfaceRadius), `Server-strip liquid-glass rims do not follow the surface: ${JSON.stringify(geometry)}`);
     assert.equal(geometry.sidebar.surfaceRadius, "0px", `Desktop sidebar radius changed: ${JSON.stringify(geometry)}`);

@@ -46,6 +46,24 @@ export class ResourceStatsRepository {
     return row ? JSON.parse(row.sample_json) as ResourceStatsSample : undefined;
   }
 
+  /** SQLite's single MAX selects the other column from that same newest valid row. */
+  activitySamples(serverId: string, from: number, to: number) {
+    return this.storage.connection.prepare<[string, number, number], { sampledAt: number; playersOnline: number }>(`
+      SELECT MAX(sampled_at) AS sampledAt, json_extract(sample_json, '$.playersOnline') AS playersOnline
+      FROM resource_stats
+      WHERE server_id = ? AND sampled_at >= ? AND sampled_at <= ?
+        AND json_type(sample_json, '$.playersOnline') IN ('integer', 'real')
+      GROUP BY CAST((sampled_at + 5000) / 10000 AS INTEGER)
+    `).all(serverId, from, to);
+  }
+
+  recent(serverId: string, cutoff: number, limit: number): ResourceStatsSample[] {
+    return this.storage.connection.prepare<[string, number, number], ResourceStatsRow>(`
+      SELECT sample_json FROM resource_stats WHERE server_id = ? AND sampled_at >= ?
+      ORDER BY sampled_at DESC LIMIT ?
+    `).all(serverId, cutoff, limit).reverse().map((row) => JSON.parse(row.sample_json) as ResourceStatsSample);
+  }
+
   prune(cutoff: number) {
     return this.storage.connection.prepare("DELETE FROM resource_stats WHERE sampled_at < ?").run(cutoff).changes;
   }

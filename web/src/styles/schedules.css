@@ -1499,7 +1499,7 @@
      40% of a phone's width to say what the values already say. Name and schedule carry themselves,
      so only the two timestamps keep a caption. */
   .scheduleTableRow {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
     grid-template-areas:
       "name    name    enabled"
       "cron    cron    cron"
@@ -1524,6 +1524,14 @@
   .scheduleCell[data-label="Schedule"] { grid-area: cron; }
   .scheduleCell[data-label="Last run"] { grid-area: lastrun; }
   .scheduleCell[data-label="Next run"] { grid-area: nextrun; }
+
+  .scheduleCell[data-label="Last run"],
+  .scheduleCell[data-label="Next run"] {
+    gap: var(--space-1);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-row);
+    overflow-wrap: anywhere;
+  }
 
   .scheduleEnabledCell {
     grid-area: enabled;

@@ -72,9 +72,9 @@ function useLiquidGlassSupport() {
 }
 
 const glassSettings: Record<GlassVariant, { blurAmount: number; cornerRadius: number; displacementScale: number; saturation: number }> = {
-  chrome: { blurAmount: 0.08, cornerRadius: 18, displacementScale: 24, saturation: 142 },
-  floating: { blurAmount: 0.09, cornerRadius: 18, displacementScale: 28, saturation: 148 },
-  modal: { blurAmount: 0.1, cornerRadius: 24, displacementScale: 22, saturation: 140 }
+  chrome: { blurAmount: 0.08, cornerRadius: 10, displacementScale: 24, saturation: 142 },
+  floating: { blurAmount: 0.09, cornerRadius: 10, displacementScale: 28, saturation: 148 },
+  modal: { blurAmount: 0.1, cornerRadius: 14, displacementScale: 22, saturation: 140 }
 };
 
 export function liquidGlassCornerRadius(variant: GlassVariant, cornerRadius?: number) {

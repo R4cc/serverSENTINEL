@@ -23,14 +23,14 @@ import { rangeWindowMs, type PlayerInsightsRange } from "./playerInsightsView";
  * derived, and says so when it derived nothing.
  */
 
-const demoServerCoordinates = { latitude: 55.68, longitude: 12.57 } as const;
+const demoServerCoordinates = { latitude: 47.3769, longitude: 8.5417 } as const;
 
 const demoServerLocation: PlayerLocation = {
-  label: "Copenhagen",
-  city: "Copenhagen",
-  subdivision: "Capital Region",
-  country: "Denmark",
-  countryCode: "DK",
+  label: "Zurich",
+  city: "Zurich",
+  subdivision: "Zurich",
+  country: "Switzerland",
+  countryCode: "CH",
   continent: "Europe",
   continentCode: "EU",
   ...demoServerCoordinates,

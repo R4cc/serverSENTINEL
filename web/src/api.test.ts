@@ -41,6 +41,35 @@ function mockFetch(response: Response) {
 }
 
 describe("api error contract", () => {
+  it("rejects malformed successful bodies instead of treating them as loaded data", async () => {
+    mockFetch(new Response("<html>proxy error</html>", { status: 200 }));
+    await expect(api("/api/test")).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("accepts an explicitly empty response", async () => {
+    mockFetch(new Response(null, { status: 204 }));
+    await expect(api("/api/test", { method: "DELETE" })).resolves.toEqual({});
+  });
+
+  it("sets a default deadline for reads without limiting long-running mutations", async () => {
+    mockFetch(Response.json({ ok: true }));
+    await api("/api/test");
+    expect(globalThis.fetch).toHaveBeenLastCalledWith("/api/test", expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    mockFetch(Response.json({ ok: true }));
+    await api("/api/test", { method: "POST" });
+    expect(globalThis.fetch).toHaveBeenLastCalledWith("/api/test", expect.objectContaining({ signal: undefined }));
+  });
+
+  it("reports timeouts while reading a successful response body", async () => {
+    globalThis.fetch = vi.fn(async (_path: unknown, init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: () => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      })
+    })) as unknown as typeof fetch;
+    await expect(api("/api/test", { timeoutMs: 10 })).rejects.toMatchObject({ code: "REQUEST_TIMEOUT" });
+  });
   it("parses structured validation errors", async () => {
     mockWindow();
     mockFetch(Response.json({

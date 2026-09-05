@@ -1,7 +1,8 @@
 import { FormEvent, useMemo, useState } from "react";
+import { SearchField } from "../components/SearchField";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, EmptyState, FormField, HelpTooltip, MetricTile, PanelHeader, Spinner, StatusBadge, Toolbar } from "../components/UiPrimitives";
+import { Banner, Button, EmptyState, FormField, HelpTooltip, MetricTile, Spinner, StatusBadge, Surface, Toolbar } from "../components/UiPrimitives";
 import { DialogSurface } from "../components/DialogSurface";
 import type { ContextNode, CreateNodeResponse, NodeView, NodeInstallInstructions, NodeInstallResponse, NodeManualRecovery, NodeOperation, PlayerSnapshot } from "../types";
 import { defaultNodeDataPath } from "../app/appConfig";
@@ -15,8 +16,7 @@ type AddNodeInput = {
   dataMount: string;
 };
 
-/* Keep dense fleets scannable without hiding the servers that matter most. The
-   list uses two columns on wide screens, so six servers fill three compact rows. */
+/* Limit the initial rows per host; search reveals all servers on a matching host. */
 const collapsedServerLimit = 6;
 
 function onlinePlayers(snapshot?: PlayerSnapshot) {
@@ -488,6 +488,7 @@ export function NodesPage({
   playerSnapshots: Record<string, PlayerSnapshot>;
   formatDate: (value: string | number | Date) => string;
 }) {
+  const [query, setQuery] = useState("");
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
   const addNodeCurrent = addNodeResult ? nodes.find((node) => node.id === addNodeResult.node.id) : undefined;
   const nodeVersionState = (node: NodeView) => getNodeVersionState(node, panelVersion);
@@ -537,6 +538,9 @@ export function NodesPage({
   }, [playerSnapshots, serverStateLabel, sortedNodes]);
 
   const hasNodes = sortedNodes.length > 0;
+  const search = query.trim().toLocaleLowerCase();
+  const visibleNodes = sortedNodes.filter((node) => !search || node.name.toLocaleLowerCase().includes(search)
+    || node.servers.some((server) => server.displayName.toLocaleLowerCase().includes(search)));
 
   const addNodeButton = (
     <Button
@@ -578,10 +582,11 @@ export function NodesPage({
 
           <Toolbar
             className="nodesToolbar"
-            primary={addNodeButton}
+            primary={<SearchField label="Search nodes and servers" value={query} onChange={setQuery} />}
             meta={`${fleet.nodesOnline} of ${fleet.nodes} ${fleet.nodes === 1 ? "node" : "nodes"} online`}
             secondary={(
               <>
+                {addNodeButton}
                 {canImportServers && (
                   <Button variant="secondary" onClick={onImportServers} disabled={busy}>
                     <AppIcon name="fileUp" /> Import server
@@ -604,13 +609,6 @@ export function NodesPage({
       )}
 
       <section className="nodesBoard">
-        {hasNodes && (
-          <PanelHeader
-            className="nodesBoardHeader"
-            headingLevel={3}
-            title="Connected nodes"
-          />
-        )}
         {!hasNodes && (
           <EmptyState
             className="nodesEmptyState"
@@ -619,14 +617,15 @@ export function NodesPage({
             action={addNodeButton}
           />
         )}
+        {hasNodes && visibleNodes.length === 0 && <EmptyState compact title="No matching nodes or servers" message="Try a different name or clear the search." action={<Button variant="secondary" onClick={() => setQuery("")}>Clear search</Button>} />}
         <div className="nodeList" role="list">
-          {sortedNodes.map((node) => {
+          {visibleNodes.map((node) => {
             const operation = nodeOperations[node.id];
             const operationLabel = operation?.phase === "waiting"
               ? operation.kind === "update" ? "Updating" : "Restarting"
               : operation?.phase === "timed-out" ? "Attention" : "";
             const expanded = Boolean(expandedNodeIds[node.id]);
-            const visibleServers = expanded ? node.servers : node.servers.slice(0, collapsedServerLimit);
+            const visibleServers = expanded || search ? node.servers : node.servers.slice(0, collapsedServerLimit);
             const hiddenServerCount = Math.max(0, node.servers.length - visibleServers.length);
             const canAddServer = isNodeRuntimeUsable(node);
             const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";
@@ -636,7 +635,7 @@ export function NodesPage({
               node.isInternal ? "" : node.agentVersion ? `Agent ${node.agentVersion}` : "Agent version unknown"
             ].filter(Boolean);
             return (
-              <article key={node.id} className="nodeListItem" role="listitem">
+              <Surface as="article" density="flush" key={node.id} className="nodeListItem" role="listitem">
                 <header className="nodeListRow">
                   <div className="nodeListIdentity">
                     <span className={`nodeListMark ${statusTone(node.status)}`} aria-hidden="true"><AppIcon name="server" /></span>
@@ -644,14 +643,6 @@ export function NodesPage({
                       <h3 className="nodeListName" title={node.name}>{node.name}</h3>
                       <p className="nodeListMeta">{nodeMeta.join(" · ")}</p>
                     </div>
-                  </div>
-                  <div className="nodeListStat nodeListStatServers">
-                    <span>Servers</span>
-                    <strong>{node.servers.length}</strong>
-                  </div>
-                  <div className="nodeListStat nodeListStatPlayers">
-                    <span>Players</span>
-                    <strong>{nodePlayers}</strong>
                   </div>
                   <div className="nodeListBadges">
                     <StatusBadge
@@ -671,32 +662,14 @@ export function NodesPage({
                       <StatusBadge tone="danger" className="nodeListStatus danger" title={node.lastUpdateFailure.message}>Update failed</StatusBadge>
                     )}
                   </div>
-                  <div className="nodeListActions">
-                    {nodeUpdateAvailable(node) && (
-                      <Button
-                        variant="secondary"
-                        compact
-                        className="nodeUpgradeButton"
-                        onClick={() => onUpdateNode(node)}
-                        disabled={busyNodeId === node.id || Boolean(operation) || !canManageNodes || !nodeCanPanelUpdate(node)}
-                        title={nodeUpdateTitle(node)}
-                        reserveLabel="Restarting…"
-                      >
-                        {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
-                      </Button>
-                    )}
-                    <Button variant="secondary" compact onClick={() => openNodeDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
-                  </div>
                 </header>
 
                 <section className="nodeServers" aria-label={`${node.name} servers`}>
                   <header className="nodeServersHeader">
                     <div>
-                      <strong>Servers</strong>
+                      <strong>{node.servers.length} {node.servers.length === 1 ? "server" : "servers"}</strong>
+                      <span>{nodePlayers} players</span>
                     </div>
-                    <Button variant="ghost" compact onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
-                      <AppIcon name="plus" /> Add server
-                    </Button>
                   </header>
                   {visibleServers.length > 0 ? (
                     <div className="nodeServerList" id={`node-servers-${node.id}`}>
@@ -724,7 +697,7 @@ export function NodesPage({
                   ) : (
                     <p className="nodeServersEmpty">No servers on this node yet.</p>
                   )}
-                  {node.servers.length > collapsedServerLimit && (
+                  {node.servers.length > collapsedServerLimit && !search && (
                     <Button
                       variant="ghost"
                       compact
@@ -738,7 +711,28 @@ export function NodesPage({
                     </Button>
                   )}
                 </section>
-              </article>
+                <footer className="nodeCardFooter">
+                  <Button variant="ghost" compact onClick={() => onAddServer(node.id)} disabled={!canAddServer} title={canAddServer ? `Add server to ${node.name}` : addServerReason}>
+                    <AppIcon name="plus" /> Add server
+                  </Button>
+                  <div className="nodeListActions">
+                    {nodeUpdateAvailable(node) && (
+                      <Button
+                        variant="secondary"
+                        compact
+                        className="nodeUpgradeButton"
+                        onClick={() => onUpdateNode(node)}
+                        disabled={busyNodeId === node.id || Boolean(operation) || !canManageNodes || !nodeCanPanelUpdate(node)}
+                        title={nodeUpdateTitle(node)}
+                        reserveLabel="Restarting…"
+                      >
+                        {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
+                      </Button>
+                    )}
+                    <Button variant="secondary" compact onClick={() => openNodeDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
+                  </div>
+                </footer>
+              </Surface>
             );
           })}
         </div>

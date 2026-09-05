@@ -21,6 +21,7 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     permissions:
       contents: read
@@ -45,11 +46,19 @@ jobs:
         id: version
         run: node -e "console.log('value=' + require('./package.json').version)" >> "$GITHUB_OUTPUT"
 
-      # Not `npm run build`: .dockerignore excludes dist/, so the Docker build below recompiles from
-      # source anyway and the artifact produced here would be discarded. Typecheck gives the same
-      # signal without the duplicate compile.
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Install smoke browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      # Keep this in the existing ci check so browser regressions block PRs and publishing.
+      # The suite builds once and exercises the production UI against isolated demo servers.
+      - name: Browser regression gate (loading, console continuity, mobile navigation)
+        timeout-minutes: 15
+        env:
+          CONSOLE_LOADING_REPEATS: '1'
+        run: npm run test:browser:ci
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

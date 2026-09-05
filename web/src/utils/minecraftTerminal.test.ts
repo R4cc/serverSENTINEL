@@ -12,6 +12,15 @@ import {
 } from "./minecraftTerminal";
 
 describe("Minecraft terminal helpers", () => {
+  it("preserves unsupported and incomplete codes, Unicode and existing ANSI", () => {
+    const text = "§k &z &#12345 §#xx1122 trailing& § 😀 \x1b[31mred\x1b[0m";
+    expect(minecraftFormattingToAnsi(text)).toBe(text);
+    expect(minecraftFormattingToAnsi("§Agreen&R &Oitalic&Nunderline&Mstrike"))
+      .toBe("\x1b[38;2;85;255;85mgreen\x1b[0m \x1b[3mitalic\x1b[4munderline\x1b[9mstrike");
+    expect(minecraftFormattingToAnsi("&&a§§L§#AABBCChex"))
+      .toBe("&\x1b[38;2;85;255;85m§\x1b[1m\x1b[38;2;170;187;204mhex");
+  });
+
   it("adds trimmed commands to history without empty or duplicate entries", () => {
     expect(appendCommandHistory(["say hi"], "   ")).toEqual(["say hi"]);
     expect(appendCommandHistory(["list", "say hi"], "/say hi")).toEqual(["list", "say hi"]);

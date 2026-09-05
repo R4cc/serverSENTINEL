@@ -1,3 +1,21 @@
+/** Lines are ordered by sequence within a buffer generation; find only the unwritten suffix. */
+export function consoleLineStart(lines: readonly { seq: number }[], since: number) {
+  let low = 0;
+  let high = lines.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (lines[middle].seq <= since) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/** Copy only entries that survive retention, including when one burst exceeds the limit. */
+export function appendConsoleLines<T>(current: readonly T[], incoming: readonly T[], limit: number): T[] {
+  if (incoming.length >= limit) return incoming.slice(-limit);
+  return current.slice(Math.max(0, current.length - (limit - incoming.length))).concat(incoming);
+}
+
 export type ConsoleConnectionState = "connecting" | "live" | "polling" | "reconnecting" | "offline" | "error";
 
 type ConsoleUnavailableMessage = {

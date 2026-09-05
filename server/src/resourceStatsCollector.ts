@@ -84,11 +84,15 @@ function unavailableSample(message: string, sampledAt = Date.now()): ResourceSta
 }
 
 export class ResourceStatsCollector {
+  private readonly memoryWindowMs: number;
+  private readonly maxMemorySamples = 2_000;
   private readonly samples = new Map<string, ResourceStatsSample[]>();
   private readonly inFlight = new Map<string, Promise<ResourceStatsSample>>();
   private interval: NodeJS.Timeout | undefined;
 
-  constructor(private readonly options: CollectorOptions) {}
+  constructor(private readonly options: CollectorOptions) {
+    this.memoryWindowMs = Math.min(options.historyWindowMs, 60 * 60 * 1000);
+  }
 
   start() {
     if (this.interval) return;
@@ -131,6 +135,9 @@ export class ResourceStatsCollector {
     }
     const samples = this.samples.get(server.id) ?? [];
     const latestAt = samples.at(-1)?.sampledAt ?? Date.now();
+    if (windowMs > this.memoryWindowMs || samples.length >= this.maxMemorySamples) {
+      return { samples: this.options.statsRepository.list(server.id, latestAt - windowMs) };
+    }
     return { samples: samples.filter((sample) => sample.sampledAt >= latestAt - windowMs) };
   }
 
@@ -159,7 +166,8 @@ export class ResourceStatsCollector {
     samples.push(sample);
     // Samples arrive in time order, so expired entries can only be at the front.
     let expired = 0;
-    while (expired < samples.length && samples[expired].sampledAt < cutoff) expired += 1;
+    while (expired < samples.length && samples[expired].sampledAt < sample.sampledAt - this.memoryWindowMs) expired += 1;
+    expired = Math.max(expired, samples.length - this.maxMemorySamples);
     if (expired > 0) samples.splice(0, expired);
     this.options.statsRepository.append(serverId, sample, cutoff);
     return sample;
@@ -171,7 +179,7 @@ export class ResourceStatsCollector {
       const cutoff = Date.now() - this.options.historyWindowMs;
       this.options.statsRepository.prune(cutoff);
       for (const server of servers) {
-        const samples = this.options.statsRepository.list(server.id, cutoff);
+        const samples = this.options.statsRepository.recent(server.id, Date.now() - this.memoryWindowMs, this.maxMemorySamples);
         if (samples.length > 0) this.samples.set(server.id, samples);
       }
     } catch {

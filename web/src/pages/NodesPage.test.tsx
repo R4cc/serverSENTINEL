@@ -150,10 +150,10 @@ function renderDenseNodesPage(nodes: ContextNode[], overrides: Partial<Component
 }
 
 describe("dense node fleets", () => {
-  it("keeps nodes as list rows and limits each initial server list", () => {
+  it("uses shared host surfaces and limits each initial server list", () => {
     const html = renderDenseNodesPage(Array.from({ length: 8 }, (_, index) => denseNode(index + 1)));
 
-    expect(html.match(/class="nodeListItem"/g)).toHaveLength(8);
+    expect(html.match(/class="[^"]*\bnodeListItem"/g)).toHaveLength(8);
     expect(html.match(/class="nodeServerRow"/g)).toHaveLength(8 * 6);
     expect(html.match(/Show all 12 servers/g)).toHaveLength(8);
     expect(html).toContain('role="list"');

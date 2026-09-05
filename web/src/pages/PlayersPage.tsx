@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { Activity, ChevronDown, Globe, MapPin, Wrench } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerRegionSummary } from "../types";
+import { SearchField } from "../components/SearchField";
 import { InlineState } from "../components/InlineState";
 import { PlayerHead } from "../components/PlayerHead";
 import { SortHeaderButton, TablePagination, headerAriaSort } from "../components/TableControls";
@@ -184,6 +185,7 @@ function PlayerRoster({
   formatNumber: (value: number) => string;
 }) {
   const [page, setPage] = useState(0);
+  const [query, setQuery] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   // Only a different server starts the reader over. The roster refreshes every thirty seconds and
   // its length moves whenever anyone joins or leaves, so resetting on that threw whoever was
@@ -197,7 +199,7 @@ function PlayerRoster({
     { id: "pingMs", accessorFn: (entry) => entry.online ? entry.pingMs : entry.lastSessionAveragePingMs, header: "Ping" },
     { id: "lastSeenAt", accessorKey: "lastSeenAt", header: "Last seen" }
   ], []);
-  const tableData = useMemo(() => [...players], [players]);
+  const tableData = useMemo(() => players.filter((entry) => `${entry.player} ${formatLocation(entry.location)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [players, query]);
   const table = useReactTable({
     data: tableData,
     columns,
@@ -221,6 +223,7 @@ function PlayerRoster({
 
   return (
     <>
+      <SearchField label="Search players and locations" value={query} onChange={(value) => { setQuery(value); setPage(0); }} />
       <table className="playerRosterTable uiDataTable" aria-label="Player roster">
         <thead className="uiTableHeader">
           <tr>
@@ -239,6 +242,7 @@ function PlayerRoster({
           </tr>
         </thead>
         <tbody>
+          {rows.length === 0 && <tr><td colSpan={5}><EmptyState compact title="No matching players" message="Try a different name or location, or clear the search." /></td></tr>}
           {visible.map((row) => {
             const entry = row.original;
             return (

@@ -1,5 +1,5 @@
 import { type ChangeEvent, type Dispatch, type MutableRefObject, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { api, apiErrorFromResponse } from "../../api";
+import { ApiError, api } from "../../api";
 import { demoFixtures, demoServerId } from "../../demoRuntime";
 import type { FileEntry, FileListing, FilePreview, GeneralJob, InstalledMod, ManagedServer, Notify, OperationRecord, PublicUser } from "../../types";
 import type { FilePreviewState } from "../../app/uiState";
@@ -95,7 +95,14 @@ export function useFilesWorkspace({
   const [filePreview, setFilePreview] = useState<FilePreviewState>({ path: "", loading: false, data: null, error: "" });
   const [fileOperationBusy, setFileOperationBusy] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
+  const [filesLoaded, setFilesLoaded] = useState(false);
   const [filesError, setFilesError] = useState("");
+  const listingRequestRef = useRef<AbortController | null>(null);
+  const fileScope = JSON.stringify([activeServer?.id, permissionUser]);
+  useEffect(() => () => {
+    listingRequestRef.current?.abort();
+    listingRequestRef.current = null;
+  }, [fileScope]);
   const [zipDestinationListing, setZipDestinationListing] = useState<FileListing | null>(null);
   const [zipDestinationLoading, setZipDestinationLoading] = useState(false);
   const [zipOperationId, setZipOperationId] = useState("");
@@ -130,7 +137,6 @@ export function useFilesWorkspace({
       resetEditorState,
       setSelectedPath,
       setEditorText,
-      setDirty,
       setFileReadError,
       setDiscardEditorRequest
     }
@@ -303,8 +309,18 @@ export function useFilesWorkspace({
   }
 
   async function loadFiles(serverId: string, path: string, historyMode: "replace" | "push" | "back" | "forward" = "replace", preserveSelection = false) {
-    if (isProvisioning) return false;
+    if (serverId !== activeServerIdRef.current) return;
+    listingRequestRef.current?.abort();
+    const controller = new AbortController();
+    listingRequestRef.current = controller;
+    if (isProvisioning) {
+      listingRequestRef.current = null;
+      setFilesLoading(false);
+      return false;
+    }
     if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, path, "view")) {
+      listingRequestRef.current = null;
+      setFilesLoading(false);
       const message = "View files permission is required for this folder.";
       setFilesError(message);
       setNotice(message);
@@ -318,6 +334,7 @@ export function useFilesWorkspace({
       if (activeServerIdRef.current === serverId) {
         const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
+        setFilesLoaded(true);
         writeStoredFileLocation(serverId, nextListing.path);
         applyPostLoadSelection(nextListing.entries, preserveSelection);
         setFilePreview({ path: "", loading: false, data: null, error: "" });
@@ -327,12 +344,15 @@ export function useFilesWorkspace({
         }
       }
       setFilesLoading(false);
+      listingRequestRef.current = null;
       return true;
     }
     try {
-      const nextListing = await api<FileListing>(`/api/servers/${serverId}/files?path=${encodeURIComponent(path)}`);
+      const nextListing = await api<FileListing>(`/api/servers/${serverId}/files?path=${encodeURIComponent(path)}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
+        setFilesLoaded(true);
         writeStoredFileLocation(serverId, nextListing.path);
         applyPostLoadSelection(nextListing.entries, preserveSelection);
         setFilePreview({ path: "", loading: false, data: null, error: "" });
@@ -344,6 +364,13 @@ export function useFilesWorkspace({
       }
       return true;
     } catch (error) {
+      if (controller.signal.aborted || activeServerIdRef.current !== serverId) return;
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
+        setListing({ path, entries: [] });
+        setFilesLoaded(false);
+        clearFileSelection();
+        setFilePreview({ path: "", loading: false, data: null, error: "" });
+      }
       if (handleStaleSession(error)) return false;
       const message = errorMessage(error, "Could not load server files. Check that the server path is available.");
       setFilesError(message);
@@ -351,7 +378,10 @@ export function useFilesWorkspace({
       notify("error", message);
       return false;
     } finally {
-      if (activeServerIdRef.current === serverId) setFilesLoading(false);
+      if (listingRequestRef.current === controller) {
+        listingRequestRef.current = null;
+        if (activeServerIdRef.current === serverId) setFilesLoading(false);
+      }
     }
   }
 
@@ -639,23 +669,15 @@ export function useFilesWorkspace({
     }
   }
 
-  async function downloadUrl(url: string, filename: string) {
-    const response = await fetch(url, {
-      headers: {
-        "X-Requested-With": "XMLHttpRequest"
-      },
-      credentials: "same-origin"
-    });
-    if (!response.ok) {
-      throw await apiErrorFromResponse(response);
-    }
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
+  function downloadUrl(url: string, filename: string) {
+    // The same-origin attachment route authenticates the session cookie. Let the browser
+    // stream to disk and own progress/cancellation instead of buffering the response in JS.
     const anchor = document.createElement("a");
-    anchor.href = objectUrl;
+    anchor.href = url;
     anchor.download = filename;
+    document.body.append(anchor);
     anchor.click();
-    URL.revokeObjectURL(objectUrl);
+    anchor.remove();
   }
 
   async function downloadSelectedItems() {
@@ -679,15 +701,16 @@ export function useFilesWorkspace({
       } else {
         const intent = await api<DownloadIntent>(`/api/servers/${activeServer.id}/files/download/intent`, {
           method: "POST",
+          timeoutMs: 30_000,
           body: JSON.stringify({
             paths: selectedEntries.map((entry) => entry.path)
           })
         });
         if (intent.mode === "archive") {
-          await downloadUrl(intent.url, intent.filename);
+          downloadUrl(intent.url, intent.filename);
         } else {
           for (const file of intent.files) {
-            await downloadUrl(file.url, file.name);
+            downloadUrl(file.url, file.name);
           }
         }
       }
@@ -968,7 +991,10 @@ export function useFilesWorkspace({
   }
 
   function clearWorkspace() {
+    listingRequestRef.current?.abort();
+    listingRequestRef.current = null;
     setListing({ path: "/", entries: [] });
+    setFilesLoaded(false);
     setFilesError("");
     setFilesLoading(false);
     setSelectedFilePaths([]);
@@ -982,15 +1008,21 @@ export function useFilesWorkspace({
   }
 
   function initializeDemoRoot(path = "/") {
+    listingRequestRef.current?.abort();
+    listingRequestRef.current = null;
     const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
     setListing(nextListing);
+    setFilesLoaded(true);
     writeStoredFileLocation(demoServerId, nextListing.path);
   }
 
   function setUnavailable(message: string) {
+    listingRequestRef.current?.abort();
+    listingRequestRef.current = null;
     setFilesError(message);
     setFilesLoading(false);
     setListing({ path: "/", entries: [] });
+    setFilesLoaded(false);
     setSelectedFilePaths([]);
     setFocusedFilePath("");
     setSelectionAnchorPath("");
@@ -1029,6 +1061,7 @@ export function useFilesWorkspace({
     },
     state: {
       filesLoading,
+      filesLoaded,
       filesError,
       fileBackStack,
       fileForwardStack,
@@ -1119,7 +1152,6 @@ export function useFilesWorkspace({
       setSelectedFilePaths,
       setFocusedFilePath,
       setEditorText,
-      setDirty,
       setDiscardEditorRequest,
       setZipDestinationListing
     }

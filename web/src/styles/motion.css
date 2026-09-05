@@ -28,6 +28,12 @@
   transform-origin: center;
 }
 
+/* CodeMirror measures row geometry on mount. Scaling its dialog during that
+   measurement leaves the gutter out of sync until the next layout pass. */
+.modalPanel.fileEditorModal {
+  animation-name: sentinelScrimSettle;
+}
+
 /* Tint and rim carry the hover and press response for glass, because the shell
    deliberately holds still -- nothing here translates or lifts. */
 .uiSurface,

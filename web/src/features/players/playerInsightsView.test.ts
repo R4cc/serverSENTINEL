@@ -9,11 +9,11 @@ import {
   formatLocation,
   formatMaintenanceWindow,
   latencyTone,
+  layoutPlayerMapBadges,
   locationAccuracyPresentation,
   observedActivityHours,
   peakActivity,
   playerMapArc,
-  playerMapLabelPoint,
   playerMapMarks,
   playerMapPopupPlacement,
   projectToMap,
@@ -44,6 +44,30 @@ describe("map projection", () => {
 });
 
 describe("map marks", () => {
+  it.each([0.4, 0.75, 1, 1.5, 2, 4])("keeps dense player badges clear of the fixed server at scale %s", (scale) => {
+    const players = Array.from({ length: 120 }, (_, index) => entry(`Player${index}`, {
+      location: location({ longitude: 12.57 + (index % 5) * 0.2, latitude: 55.68 + (index % 3) * 0.2 })
+    }));
+    const server = projectToMap(12.57, 55.68, 720, 360);
+    const marks = playerMapMarks(players, 720, 360, 720 * scale);
+    const badges = layoutPlayerMapBadges(marks, server, scale);
+    expect(badges.flatMap(({ mark }) => mark.entries)).toHaveLength(120);
+    for (const badge of badges) {
+      expect(badge.anchor).toEqual(projectToMap(badge.mark.longitude, badge.mark.latitude, 720, 360));
+      const dx = Math.abs(badge.point.x - server.x) * scale;
+      const dy = Math.abs(badge.point.y - server.y) * scale;
+      expect(dx >= 56 || dy >= 42).toBe(true);
+    }
+    expect(server).toEqual(projectToMap(12.57, 55.68, 720, 360));
+  });
+
+  it("contains edge badges without moving their geographic anchors", () => {
+    const marks = playerMapMarks([entry("Edge", { location: location({ longitude: 179.9, latitude: -89.9 }) })]);
+    const [badge] = layoutPlayerMapBadges(marks, undefined, 0.4);
+    expect(badge.anchor).toEqual(projectToMap(179.9, -89.9, 720, 360));
+    expect(badge.point.x * 0.4).toBeLessThanOrEqual(720 * 0.4 - 20);
+    expect(badge.point.y * 0.4).toBeLessThanOrEqual(360 * 0.4 - 20);
+  });
   it("collects players in the same place into one mark", () => {
     const marks = playerMapMarks([
       entry("A", { online: true }),
@@ -95,12 +119,11 @@ describe("map marks", () => {
     expect(marks.at(-1)?.players).toHaveLength(2);
   });
 
-  it("draws a curved route and keeps its label a stable distance above the player marker", () => {
+  it("draws a curved route between reported locations", () => {
     const arc = playerMapArc({ x: 360, y: 80 }, { x: 160, y: 160 });
     expect(arc.path).toMatch(/^M .* C .*$/);
     expect(arc.controls).toHaveLength(2);
     expect(Math.min(...arc.controls.map((control) => control.y))).toBeLessThan(120);
-    expect(playerMapLabelPoint({ x: 160, y: 160 }, 2)).toEqual({ x: 160, y: 146.5 });
   });
 
   it("flips panels above or below markers using the visible viewport", () => {

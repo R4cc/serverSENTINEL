@@ -17,7 +17,7 @@ import {
   versionValue
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, FormField, HelpTooltip, PanelHeader, Spinner, StatusBadge } from "../components/UiPrimitives";
+import { Banner, Button, FormField, HelpTooltip, PanelHeader, Spinner, StatusBadge, Surface } from "../components/UiPrimitives";
 import type { ServerExportArtifact, ServerExportState } from "../features/exports/useExportWorkspace";
 import {
   clampNumber,
@@ -366,56 +366,60 @@ export function ServerEditForm({
         {disabled && disabledReason && !saving && <Banner tone="warning" title={disabledReason} />}
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
-          <section className="propertiesSettingsSurface">
+          <Surface density="flush" className="propertiesSettingsSurface">
             <section className="propertiesSection propertiesSectionGeneral">
               <PanelHeader
                 title="General"
+                description="Server identity, version, and automatic startup."
               />
-              <div className="propertiesFieldGrid three">
-                <FormField htmlFor="properties-display-name" label="Display name" required>
-                  <input id="properties-display-name" name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
-                </FormField>
-                <FormField htmlFor="properties-minecraft-version" label="Minecraft version" description={<>Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</>}>
-                  <select id="properties-minecraft-version" name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
-                    setMinecraftVersion(event.target.value);
-                    setRuntimeVersion("");
-                    if (!dockerImageCustomized) setDockerImage(defaultDockerImageForMinecraftVersion(event.target.value));
-                  }}>
-                    {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
-                    {runtime.managedProvisioning && availableMinecraftVersions.length ? availableMinecraftVersions.map((version) => (
-                      <option key={version.version} value={version.version}>{version.version}</option>
-                    )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
-                  </select>
-                </FormField>
-                <FormField htmlFor="properties-runtime-version" label={runtime.versionLabel} description={<>Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</>}>
-                  <select id="properties-runtime-version" name="runtimeVersion" value={runtimeVersion} onChange={(event) => setRuntimeVersion(event.target.value)}>
-                    {runtime.managedProvisioning && <option value="">Latest stable</option>}
-                    {runtimeVersion && (!runtime.managedProvisioning || !currentRuntimeVersionListed) && <option value={runtimeVersion}>{runtimeVersion}</option>}
-                    {runtime.managedProvisioning && availableRuntimeVersions.map((version) => (
-                      <option key={version.id} value={version.runtimeVersion}>{version.runtimeVersion}{version.stable === false ? " (Development)" : ""}</option>
-                    ))}
-                  </select>
-                </FormField>
+              <div className="propertiesSectionBody">
+                <div className="propertiesFieldGrid three">
+                  <FormField htmlFor="properties-display-name" label="Display name" required>
+                    <input id="properties-display-name" name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
+                  </FormField>
+                  <FormField htmlFor="properties-minecraft-version" label="Minecraft version" description={<>Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</>}>
+                    <select id="properties-minecraft-version" name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
+                      setMinecraftVersion(event.target.value);
+                      setRuntimeVersion("");
+                      if (!dockerImageCustomized) setDockerImage(defaultDockerImageForMinecraftVersion(event.target.value));
+                    }}>
+                      {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
+                      {runtime.managedProvisioning && availableMinecraftVersions.length ? availableMinecraftVersions.map((version) => (
+                        <option key={version.version} value={version.version}>{version.version}</option>
+                      )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
+                    </select>
+                  </FormField>
+                  <FormField htmlFor="properties-runtime-version" label={runtime.versionLabel} description={<>Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</>}>
+                    <select id="properties-runtime-version" name="runtimeVersion" value={runtimeVersion} onChange={(event) => setRuntimeVersion(event.target.value)}>
+                      {runtime.managedProvisioning && <option value="">Latest stable</option>}
+                      {runtimeVersion && (!runtime.managedProvisioning || !currentRuntimeVersionListed) && <option value={runtimeVersion}>{runtimeVersion}</option>}
+                      {runtime.managedProvisioning && availableRuntimeVersions.map((version) => (
+                        <option key={version.id} value={version.runtimeVersion}>{version.runtimeVersion}{version.stable === false ? " (Development)" : ""}</option>
+                      ))}
+                    </select>
+                  </FormField>
+                </div>
+                <label className="propertiesStartupToggle">
+                  <span className="switch">
+                    <input
+                      name="startOnNodeStart"
+                      type="checkbox"
+                      checked={startOnNodeStart}
+                      onChange={(event) => setStartOnNodeStart(event.target.checked)}
+                    />
+                    <span className="slider" />
+                  </span>
+                  <span>
+                    <strong>Start when node starts</strong>
+                  </span>
+                </label>
               </div>
-              <label className="propertiesStartupToggle">
-                <span className="switch">
-                  <input
-                    name="startOnNodeStart"
-                    type="checkbox"
-                    checked={startOnNodeStart}
-                    onChange={(event) => setStartOnNodeStart(event.target.checked)}
-                  />
-                  <span className="slider" />
-                </span>
-                <span>
-                  <strong>Start when node starts</strong>
-                </span>
-              </label>
             </section>
 
             <section className="propertiesSection propertiesSectionResources">
               <PanelHeader
                 title="Resources"
+                description="Set how much memory Minecraft can use."
               />
               <section className="resourceStepSection propertiesMemorySection" aria-label="Minecraft memory">
                 <div className="memoryRangeLayout">
@@ -460,6 +464,7 @@ export function ServerEditForm({
             <section className="propertiesSection propertiesSectionNetwork">
               <PanelHeader
                 title="Network"
+                description="Connection ports for players and server monitoring."
               />
               <MinecraftPortsSection
                 serverPort={serverPort}
@@ -476,6 +481,7 @@ export function ServerEditForm({
               <summary>
                 <span className="propertiesDisclosureCopy">
                   <strong>Advanced</strong>
+                  <small>Container runtime, Java arguments, and additional ports.</small>
                 </span>
               </summary>
               <div className="advancedResourceBody propertiesAdvancedBody">
@@ -541,7 +547,7 @@ export function ServerEditForm({
                 </div>
               </div>
             </details>
-          </section>
+          </Surface>
         </fieldset>
         {(dirty || saving) && (
           <div className="propertiesSaveDock" aria-live="polite">
@@ -621,7 +627,7 @@ export function ExportServerPanel({
   const retainedIsPrevious = Boolean(artifact && latest && artifact.operationId !== latest.id);
 
   return (
-    <section className="propertiesSideCard exportPanel" aria-label={`Exports for ${server.displayName}`}>
+    <Surface className="propertiesSideCard exportPanel" aria-label={`Exports for ${server.displayName}`}>
       <PanelHeader
         title="Exports"
         actions={<StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>}
@@ -700,7 +706,7 @@ export function ExportServerPanel({
           </Button>
         )}
       </div>
-    </section>
+    </Surface>
   );
 }
 
@@ -721,7 +727,7 @@ export function DeleteServerPanel({
   }, [server.id]);
 
   return (
-    <section className="propertiesSideCard dangerPanel">
+    <Surface className="propertiesSideCard dangerPanel">
       <PanelHeader
         title="Danger zone"
         description="Deleting a server is permanent and cannot be undone."
@@ -749,6 +755,6 @@ export function DeleteServerPanel({
         <Button type="submit" variant="critical" disabled={!deleteConfirmed} title={deleteConfirmed ? "Permanently delete this server" : `Enter “${server.displayName}” exactly to enable deletion`}>Delete server</Button>
         </fieldset>
       </form>
-    </section>
+    </Surface>
   );
 }

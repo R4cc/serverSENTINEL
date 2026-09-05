@@ -23,7 +23,7 @@ import { copyToClipboard } from "./utils/clipboard";
 import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
-import { consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
+import { appendConsoleLines, consoleLineStart, consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
 import { ActiveServerStrip } from "./components/ActiveServerStrip";
 import { AppToaster } from "./components/AppToaster";
 import { NoManagedServersEmptyState } from "./components/NoManagedServersEmptyState";
@@ -201,7 +201,8 @@ export default function App() {
   const panelFirstRunPromptedRef = useRef(false);
   const onboardingAutoOpenedRef = useRef(false);
   const provisionSubmitLockRef = useRef(false);
-  const appRefreshInFlightRef = useRef(false);
+  const appRefreshInFlightRef = useRef<Promise<void> | null>(null);
+  const sessionRequestEpochRef = useRef(0);
   const statusRefreshInFlightRef = useRef<Map<string, AbortController>>(new Map());
   const nodeRefreshInFlightRef = useRef(false);
   const consoleReconnectTimeoutRef = useRef<number | null>(null);
@@ -216,6 +217,7 @@ export default function App() {
   const runtimeFeedbackTimeoutRef = useRef<number | null>(null);
 
   const overviewRefreshTimeoutRef = useRef<number | null>(null);
+  const overviewRequestRef = useRef<AbortController | null>(null);
   const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
   const authSubmittingRef = useRef(false);
@@ -251,6 +253,11 @@ export default function App() {
   }
 
   const refreshOverviewData = useCallback(async (serverId: string, options: { showLoading?: boolean; signal?: AbortSignal } = {}) => {
+    if (activeServerIdRef.current !== serverId) return;
+    overviewRequestRef.current?.abort();
+    const controller = new AbortController();
+    overviewRequestRef.current = controller;
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
     if (demoMode && isDemoServerId(serverId)) {
       setOverviewData(demoFixtures().demoOverviewData(demoRunning, serverId));
       setOverviewError("");
@@ -260,19 +267,23 @@ export default function App() {
     if (options.showLoading) setOverviewLoading(true);
     setOverviewError("");
     try {
-      const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`, { timeoutMs: 15_000, signal: options.signal });
+      const data = await api<ServerOverviewData>(`/api/servers/${serverId}/events`, { timeoutMs: 15_000, signal });
+      if (signal.aborted) return;
       if (activeServerIdRef.current === serverId) {
         setOverviewData(data);
         setOverviewError("");
       }
     } catch (error) {
-      if (options.signal?.aborted) return;
+      if (signal.aborted) return;
       if (handleStaleSession(error)) return;
       if (activeServerIdRef.current === serverId) {
         setOverviewError(errorMessage(error, "Could not load overview activity. Previously loaded data is preserved."));
       }
     } finally {
-      if (activeServerIdRef.current === serverId) setOverviewLoading(false);
+      if (overviewRequestRef.current === controller) {
+        overviewRequestRef.current = null;
+        if (activeServerIdRef.current === serverId) setOverviewLoading(false);
+      }
     }
   }, [demoMode, demoRunning, demoSessionVersion]);
 
@@ -353,6 +364,7 @@ export default function App() {
   const managedContent = managedContentTerminology(activeServer?.runtimeProfile.runtimeType ?? "fabric");
   const applicationReady = appStateLoaded || demoMode;
   const permissionUser = appState.currentUser ?? authSession?.user ?? null;
+  const permissionScope = JSON.stringify([demoMode, permissionUser]);
   const canBasic = activeServerIsDemo || hasPermission(permissionUser, "servers.control");
   const canExpanded = activeServerIsDemo || hasPermission(permissionUser, "console.command");
   const canEditServerSettings = activeServerIsDemo || hasPermission(permissionUser, "servers.editSettings");
@@ -427,7 +439,7 @@ export default function App() {
     if (demoMode && isDemoServerId(activeServer.id)) return demoFixtures().demoTimelineData(demoRunning, demoSchedules, from, to, activeServer.id);
     return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`, { timeoutMs: 15_000 });
   }, [activeServer?.id, demoMode, demoRunning, demoSchedules, demoSessionVersion]);
-  const loadActiveStorageSummary = useCallback(async (serverId: string) => {
+  const loadActiveStorageSummary = useCallback(async (serverId: string, signal?: AbortSignal) => {
     if (demoMode && isDemoServerId(serverId)) {
       return {
         worldSizeBytes: 7_566 * 1024 ** 2,
@@ -435,7 +447,7 @@ export default function App() {
         availableBytes: 8 * 1024 ** 3
       };
     }
-    return api<ServerStorageSummary>(`/api/servers/${serverId}/storage`, { timeoutMs: 15_000 });
+    return api<ServerStorageSummary>(`/api/servers/${serverId}/storage`, { timeoutMs: 15_000, signal });
   }, [demoMode]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
@@ -998,6 +1010,7 @@ export default function App() {
 
     socket.onopen = markConsoleLive;
     socket.onmessage = (event) => {
+      if (closedByCleanup || activeServerIdRef.current !== serverId) return;
       let message: ConsoleStreamFrame;
       try {
         message = JSON.parse(event.data);
@@ -1019,6 +1032,8 @@ export default function App() {
           setConsoleLoading(false);
         }
         ingestConsoleLines(message.lines);
+        // Commit a snapshot before the terminal's ready state can reveal an empty buffer.
+        if (message.type === "backlog") flushQueuedConsoleLines();
         if (message.lines.some((line) => hasPotentialEvent(line.text)) && activeServerIdRef.current) {
           triggerOverviewRefreshRef.current(activeServerIdRef.current);
         }
@@ -1059,7 +1074,8 @@ export default function App() {
     socket.onclose = scheduleReconnect;
     return () => {
       closedByCleanup = true;
-      discardQueuedConsoleLines();
+      // The resume cursor already includes queued lines. Keep their scheduled flush on navigation;
+      // resetting the server/epoch owns discarding them, along with that cursor.
       if (consoleReconnectTimeoutRef.current !== null) {
         window.clearTimeout(consoleReconnectTimeoutRef.current);
         consoleReconnectTimeoutRef.current = null;
@@ -1075,18 +1091,20 @@ export default function App() {
 
   useEffect(() => {
     if (!activeServer || activePage !== "files" || activeNodeRuntimeBlocked) return;
-    if (fileWorkspaceServerIdRef.current === activeServer.id) return;
-    fileWorkspaceServerIdRef.current = activeServer.id;
-    filesWorkspace.actions.resetEditorState();
+    const sameWorkspace = fileWorkspaceServerIdRef.current === `${permissionScope}:${activeServer.id}`;
+    fileWorkspaceServerIdRef.current = `${permissionScope}:${activeServer.id}`;
+    if (!sameWorkspace) filesWorkspace.actions.clearWorkspace();
     if (demoMode && isDemoServerId(activeServer.id)) {
       filesWorkspace.actions.initializeDemoRoot(readStoredFileLocation(activeServer.id));
       return;
     }
-    const restoredFilePath = readStoredFileLocation(activeServer.id);
+    const restoredFilePath = sameWorkspace ? filesWorkspace.data.listing.path : readStoredFileLocation(activeServer.id);
+    let cancelled = false;
     void filesWorkspace.actions.loadFiles(activeServer.id, restoredFilePath).then((loaded) => {
-      if (!loaded && restoredFilePath !== "/") void filesWorkspace.actions.loadFiles(activeServer.id, "/");
+      if (!cancelled && loaded === false && restoredFilePath !== "/") void filesWorkspace.actions.loadFiles(activeServer.id, "/");
     });
-  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode]);
+    return () => { cancelled = true; };
+  }, [activeServer?.id, activePage, activeNodeRuntimeBlocked, demoMode, permissionScope]);
 
   useEffect(() => {
     persistCommandHistory(window.localStorage, commandHistory, rememberConsoleHistory);
@@ -1267,7 +1285,12 @@ export default function App() {
   }
 
   function resetSessionRequestGuards() {
-    appRefreshInFlightRef.current = false;
+    sessionRequestEpochRef.current++;
+    nodeRefreshInFlightRef.current = false;
+    setAppRefreshing(false);
+    appRefreshInFlightRef.current = null;
+    overviewRequestRef.current?.abort();
+    overviewRequestRef.current = null;
     for (const controller of statusRefreshInFlightRef.current.values()) controller.abort();
     statusRefreshInFlightRef.current.clear();
     if (overviewRefreshTimeoutRef.current !== null) {
@@ -1419,27 +1442,44 @@ export default function App() {
     staleSessionSuppressUntilRef.current = 0;
   }
 
-  async function refreshApp(options: { silent?: boolean } = {}) {
+  async function refreshApp(options: { silent?: boolean; requireFresh?: boolean } = {}) {
     if (!demoMode && (!authSession || !authSession.authenticated)) {
       return;
     }
-    if (appRefreshInFlightRef.current) return;
-    appRefreshInFlightRef.current = true;
+    const epoch = sessionRequestEpochRef.current;
+    if (appRefreshInFlightRef.current) {
+      await appRefreshInFlightRef.current;
+      if ((options.silent && !options.requireFresh) || epoch !== sessionRequestEpochRef.current) return;
+      // Mutation callers need a read begun after the mutation, not an older poll's snapshot.
+      return refreshApp(options);
+    }
+    const request = performAppRefresh(options, epoch);
+    appRefreshInFlightRef.current = request;
+    try {
+      await request;
+    } finally {
+      if (appRefreshInFlightRef.current === request) appRefreshInFlightRef.current = null;
+    }
+  }
+
+  async function performAppRefresh(options: { silent?: boolean }, epoch: number) {
     setAppRefreshing(true);
     if (!options.silent) setNotice("");
     try {
       const next = await api<AppState>("/api/app", { timeoutMs: 20_000 });
+      if (epoch !== sessionRequestEpochRef.current) return;
       setAppState(next);
       setAppStateLoaded(true);
       setAppLoadError("");
       if (demoMode && !isDemoServerId(activeServerIdRef.current)) {
         setActiveServerId(demoServerId);
-      } else if (activeServerId && !next.servers.some((server) => server.id === activeServerId)) {
+      } else if (activeServerIdRef.current && !next.servers.some((server) => server.id === activeServerIdRef.current)) {
         setActiveServerId(next.servers[0]?.id ?? "");
-      } else if (!activeServerId && next.servers[0]) {
+      } else if (!activeServerIdRef.current && next.servers[0]) {
         setActiveServerId(next.servers[0].id);
       }
     } catch (error) {
+      if (epoch !== sessionRequestEpochRef.current) return;
       if (handleStaleSession(error)) return;
       const message = errorMessage(error, "Could not load the application state. Check the server connection and retry.");
       setAppLoadError(message);
@@ -1448,16 +1488,17 @@ export default function App() {
         notify("error", message);
       }
     } finally {
-      appRefreshInFlightRef.current = false;
-      setAppRefreshing(false);
+      if (epoch === sessionRequestEpochRef.current) setAppRefreshing(false);
     }
   }
 
   async function refreshNodeConnectivity() {
     if (demoMode || nodeRefreshInFlightRef.current || !authSession?.authenticated) return;
     nodeRefreshInFlightRef.current = true;
+    const epoch = sessionRequestEpochRef.current;
     try {
       const result = await api<{ nodes: ManagedNode[] }>("/api/nodes", { timeoutMs: 15_000 });
+      if (epoch !== sessionRequestEpochRef.current) return;
       const currentServer = effectiveAppState.servers.find((server) => server.id === activeServerIdRef.current);
       const currentNode = currentServer ? contextNodes.find((node) => node.id === currentServer.nodeId) : undefined;
       const nextNode = currentServer ? result.nodes.find((node) => node.id === currentServer.nodeId) : undefined;
@@ -1487,9 +1528,10 @@ export default function App() {
         setConsoleStreamVersion((version) => version + 1);
       }
     } catch (error) {
+      if (epoch !== sessionRequestEpochRef.current) return;
       if (handleStaleSession(error)) return;
     } finally {
-      nodeRefreshInFlightRef.current = false;
+      if (epoch === sessionRequestEpochRef.current) nodeRefreshInFlightRef.current = false;
     }
   }
 
@@ -1550,10 +1592,15 @@ export default function App() {
    * dropped here rather than drawn twice.
    */
   function ingestConsoleLines(lines: ConsoleLine[]) {
-    const fresh = lines.filter((line) => line.seq > consoleCursorRef.current.since);
-    if (!fresh.length) return;
-    consoleCursorRef.current = { ...consoleCursorRef.current, since: fresh[fresh.length - 1].seq };
-    queueConsoleLines(toDisplayLines(fresh.map((line) => line.text)));
+    const start = consoleLineStart(lines, consoleCursorRef.current.since);
+    if (start === lines.length) return;
+    consoleCursorRef.current = { ...consoleCursorRef.current, since: lines[lines.length - 1].seq };
+    const displayed: ConsoleLine[] = [];
+    for (let index = Math.max(start, lines.length - consoleScrollbackRef.current); index < lines.length; index++) {
+      const text = lines[index].text;
+      displayed.push({ seq: ++displaySeqRef.current, text: text.endsWith("\n") ? text : `${text}\n` });
+    }
+    queueConsoleLines(displayed);
   }
 
   /**
@@ -1562,21 +1609,28 @@ export default function App() {
    * once per animation frame keeps a burst to a single render and a single write.
    */
   function queueConsoleLines(lines: ConsoleLine[]) {
-    pendingLogLinesRef.current.push(...lines);
     // A background tab never runs animation frames, so cap what can pile up at the same limit
     // the buffer would enforce on flush anyway.
-    const overflow = pendingLogLinesRef.current.length - consoleScrollbackRef.current;
-    if (overflow > 0) pendingLogLinesRef.current.splice(0, overflow);
+    const limit = consoleScrollbackRef.current;
+    if (lines.length >= limit) pendingLogLinesRef.current = lines.slice(-limit);
+    else {
+      const pending = pendingLogLinesRef.current;
+      const overflow = pending.length + lines.length - limit;
+      if (overflow > 0) pending.splice(0, overflow);
+      // Reuse the pending array between frames instead of copying it for every stream message.
+      for (const line of lines) pending.push(line);
+    }
     if (logFlushFrameRef.current !== null) return;
     logFlushFrameRef.current = window.requestAnimationFrame(flushQueuedConsoleLines);
   }
 
   function flushQueuedConsoleLines() {
+    if (logFlushFrameRef.current !== null) window.cancelAnimationFrame(logFlushFrameRef.current);
     logFlushFrameRef.current = null;
     const pending = pendingLogLinesRef.current;
     if (!pending.length) return;
     pendingLogLinesRef.current = [];
-    const next = [...logsRef.current, ...pending].slice(-consoleScrollbackRef.current);
+    const next = appendConsoleLines(logsRef.current, pending, consoleScrollbackRef.current);
     logsRef.current = next;
     setLogs(next);
   }
@@ -1620,6 +1674,7 @@ export default function App() {
       if (activeServerIdRef.current !== serverId) return false;
       if (backlog.epoch !== consoleCursorRef.current.epoch) resetConsoleBuffer(backlog.epoch);
       ingestConsoleLines(backlog.lines);
+      flushQueuedConsoleLines();
       setConsoleSnapshotReadyServerId(serverId);
       return true;
     } catch (error) {
@@ -1895,7 +1950,7 @@ export default function App() {
         method: "POST",
         body: reason === undefined ? undefined : JSON.stringify({ reason })
       });
-      await refreshApp({ silent: true });
+      await refreshApp({ silent: true, requireFresh: true });
       await refreshStatus(activeServer.id);
       setConsoleStreamVersion((version) => version + 1);
       await pollConsoleBacklog(activeServer.id);
@@ -2279,7 +2334,7 @@ export default function App() {
             underneath that full-height skeleton puts it at the viewport bottom, then makes it jump
             to the top when module access resolves. Keep exactly one strip in the layout. */}
         {isServerWorkspacePage(activePage) && activeServer && !activePageModuleAccessPending && (
-          <Fragment key={`server-workspace-${activeServer.id}`}>
+          <Fragment key={`server-workspace-${permissionScope}-${activeServer.id}`}>
             <ActiveServerStrip
               server={activeServer}
               runtimeAction={runtimeAction}
@@ -2322,6 +2377,7 @@ export default function App() {
                 onTimelineLatestSample={setTimelineLatestSample}
                 loadTimeline={loadActiveTimeline}
                 loadStorageSummary={loadActiveStorageSummary}
+                cacheScope={permissionScope}
                 playerSnapshot={playerSnapshots[activeServer.id]}
                 playerHeadsEnabled={playerHeadsEnabled}
                 modUpdatePlan={modsBridge?.updatePlan ?? null}
@@ -2345,6 +2401,7 @@ export default function App() {
 
             {consoleTabMounted && (
               <ServerConsoleTab
+                key={activeServer.id}
                 active={activePage === "console"}
                 snapshotReady={consoleSnapshotReadyServerId === activeServer.id}
                 generation={consoleGeneration}
@@ -2479,6 +2536,7 @@ export default function App() {
         {managedContentAvailable && supportsManagedMods && modsModuleMounted && (
           <Suspense fallback={activePage === "mods" ? <FeaturePageLoadingSkeleton label={`Loading ${managedContent.plural}`} page="mods" /> : null}>
             <ModsModule
+              key={permissionScope}
               active={activePage === "mods"}
               activePage={activePage}
               activeServer={activeServer}
@@ -2504,7 +2562,7 @@ export default function App() {
               setActiveJobs={setActiveJobs}
               handleStaleSession={handleStaleSession}
               refreshFiles={filesWorkspace.actions.loadFiles}
-              refreshServerState={() => refreshApp({ silent: true })}
+              refreshServerState={() => refreshApp({ silent: true, requireFresh: true })}
               requestConfirmation={requestConfirmation}
               onBridgeChange={setModsBridge}
               managedContent={managedContent}

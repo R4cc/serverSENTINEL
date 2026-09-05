@@ -67,12 +67,17 @@ const readOnlyBasicSetup = {
 
 const serverSentinelEditorTheme = EditorView.theme({
   "&": {
+    // The initial gutter uses estimated row heights until CodeMirror measures it.
+    visibility: "hidden",
     height: "100%",
     minHeight: "0",
     backgroundColor: "var(--surface)",
     color: "var(--text)",
     fontFamily: "var(--font-mono)",
     fontSize: "13px"
+  },
+  "&.fileCodeEditor-measured": {
+    visibility: "visible"
   },
   "&.cm-focused": {
     outline: "2px solid var(--accent)",
@@ -142,6 +147,16 @@ const serverSentinelEditorTheme = EditorView.theme({
     color: "var(--text-soft)"
   }
 });
+
+function revealMeasuredEditor(view: EditorView) {
+  view.requestMeasure({
+    read: () => null,
+    write: () => {
+      view.dom.classList.add("fileCodeEditor-measured");
+      view.focus();
+    }
+  });
+}
 
 /**
  * Grammars are the bulk of the editor bundle, and one file needs exactly one of them. Loading them
@@ -271,7 +286,6 @@ export default function CodeEditor({
   return (
     <CodeMirror
       aria-label={`Edit ${fileName}`}
-      autoFocus
       basicSetup={disabled ? readOnlyBasicSetup : editableBasicSetup}
       className={`fileCodeEditor${disabled ? " fileCodeEditor-disabled" : ""}`}
       editable={!disabled}
@@ -280,6 +294,7 @@ export default function CodeEditor({
       indentWithTab
       minHeight="100%"
       onChange={handleChange}
+      onCreateEditor={revealMeasuredEditor}
       readOnly={disabled}
       theme={serverSentinelEditorTheme}
       value={value}

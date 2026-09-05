@@ -1635,8 +1635,7 @@ button.overviewCardRow:focus-visible {
 }
 
 
-/* Server events is a real data table now. Its own viewport contains the minimum-width table so a
-   narrow phone can navigate columns without widening the overview workspace itself. */
+/* Keep tabular columns on desktop and stack each event at phone widths. */
 .overviewPage .eventsPanel .serverEventsBody {
   min-width: 0;
   min-height: 0;
@@ -1715,6 +1714,31 @@ button.overviewCardRow:focus-visible {
 
 .serverEventsTable tbody tr.error {
   background: color-mix(in srgb, var(--sentinel-danger) 3.5%, transparent);
+}
+
+@media (max-width: 720px) {
+  .serverEventsTable { min-width: 0; }
+  .serverEventsTable thead,
+  .serverEventsTable tbody { display: block; }
+  .serverEventsTable thead tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .serverEventsTable thead th:nth-child(n) { width: auto; }
+  .serverEventsTable .uiSortHeaderButton { width: 100%; white-space: normal; text-align: left; }
+  .serverEventsTable .serverEventIdentity .eventCopy strong { white-space: normal; overflow-wrap: anywhere; }
+  .serverEventsTable tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    height: auto;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-2);
+    border-bottom: 1px solid var(--border-row);
+  }
+  .serverEventsTable tbody tr > th,
+  .serverEventsTable tbody tr > td { padding: 0; border: 0; }
+  .serverEventsTable tbody th,
+  .serverEventsTable .serverEventDetails { grid-column: 1 / -1; }
+  .serverEventsTable tbody td:nth-child(2) { grid-row: 3; }
+  .serverEventsTable .serverEventTime { grid-column: 2; grid-row: 3; align-self: center; white-space: normal; }
+  .serverEventsTable .serverEventDetails > span { display: block; white-space: normal; overflow-wrap: anywhere; }
 }
 
 .serverEventIdentity {
@@ -1866,13 +1890,15 @@ button.overviewCardRow:focus-visible {
 
 @media (max-width: 720px) {
   .serverEventFilters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .serverEventFilters .uiButton {
-    flex: 0 0 auto;
+    min-width: 0;
+    white-space: normal;
+    justify-content: space-between;
+    text-align: left;
   }
 
 }

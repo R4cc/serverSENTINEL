@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useRequestScope } from "../../utils/useRequestScope";
 import { api } from "../../api";
 import { defaultNodeDataPath } from "../../app/appConfig";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
@@ -42,7 +43,24 @@ export function useNodesWorkspace({
   requestConfirmation,
   refreshApp
 }: NodesWorkspaceInputs) {
-  const [busyNodeId, setBusyNodeId] = useState("");
+  const detailsRequests = useRequestScope();
+  const installRequests = useRequestScope();
+  const addRequests = useRequestScope();
+  const actionRequests = useRequestScope();
+  const [pendingActions, setPendingActions] = useState<Array<{ nodeId: string; token: symbol }>>([]);
+  const busyNodeId = pendingActions.at(-1)?.nodeId ?? "";
+
+  function beginPending(nodeId: string) {
+    const token = Symbol(nodeId);
+    setPendingActions((current) => [...current, { nodeId, token }]);
+    return () => setPendingActions((current) => current.filter((action) => action.token !== token));
+  }
+
+  function closeDetails() {
+    detailsRequests.invalidate();
+    installRequests.invalidate();
+    setNodeDetails(null);
+  }
   const [nodeDetails, setNodeDetails] = useState<NodeView | null>(null);
   const [nodeOperations, setNodeOperations] = useState<Record<string, NodeOperation>>({});
   const [nodeOperationNow, setNodeOperationNow] = useState(() => Date.now());
@@ -181,48 +199,57 @@ export function useNodesWorkspace({
   }
 
   async function viewNodeDetails(node: NodeView) {
+    detailsRequests.invalidate();
+    installRequests.invalidate();
+    const isCurrent = detailsRequests.begin("details");
     setNodeDetails(node);
     if (demoMode) return;
-    setBusyNodeId(node.id);
+    const finishPending = beginPending(node.id);
     try {
       const details = await api<ManagedNode>(`/api/nodes/${node.id}`);
-      setNodeDetails(details);
+      if (isCurrent()) setNodeDetails(details);
     } catch (error) {
-      notify("error", errorMessage(error, "Could not load node details."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not load node details."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
   async function showNodeInstall(node: NodeView) {
-    setBusyNodeId(node.id);
+    const isCurrent = installRequests.begin("install");
+    const finishPending = beginPending(node.id);
     try {
       const result = await api<NodeInstallResponse>(`/api/nodes/${node.id}/install?panelUrl=${encodeURIComponent(currentPanelUrl())}&dataMount=${encodeURIComponent(defaultNodeDataPath)}`);
-      setInstallMethod("run");
-      setInstallResult(result);
+      if (isCurrent()) {
+        setInstallMethod("run");
+        setInstallResult(result);
+      }
     } catch (error) {
-      notify("error", errorMessage(error, "Could not load install instructions."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not load install instructions."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
   async function rotateNodeToken(node: NodeView) {
     if (node.isInternal || !canManageNodes) return;
-    setBusyNodeId(node.id);
+    const isCurrent = installRequests.begin("install");
+    const finishPending = beginPending(node.id);
     try {
       const result = await api<CreateNodeResponse>(`/api/nodes/${node.id}/rotate-token`, {
         method: "POST",
         body: JSON.stringify({ panelUrl: currentPanelUrl(), dataMount: defaultNodeDataPath })
       });
-      setInstallMethod("run");
-      setInstallResult(result);
+      if (isCurrent()) {
+        setInstallMethod("run");
+        setInstallResult(result);
+      }
       notify("success", `Rotated join token for ${node.name}`);
       await refreshApp();
     } catch (error) {
-      notify("error", errorMessage(error, "Could not rotate the join token."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not rotate the join token."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
@@ -234,6 +261,7 @@ export function useNodesWorkspace({
     const versionText = sameVersion
       ? ` to ${panelVersion}${buildText}`
       : node.agentVersion ? ` from ${node.agentVersion} to ${panelVersion}${buildText}` : ` to ${panelVersion}${buildText}`;
+    const ownsSelection = detailsRequests.capture();
     const confirmed = await requestConfirmation({
       title: `${actionLabel} ${node.name}?`,
       description: `${actionLabel} this node${versionText}.`,
@@ -242,21 +270,22 @@ export function useNodesWorkspace({
       confirmLabel: `${actionLabel} node`,
       variant: "primary"
     });
-    if (!confirmed) return;
-    setBusyNodeId(node.id);
+    if (!confirmed || !ownsSelection()) return;
+    const ownsDetails = detailsRequests.begin("details");
+    const isCurrent = actionRequests.begin(node.id);
+    const finishPending = beginPending(node.id);
     try {
       const result = await api<NodeUpdateResponse>(`/api/nodes/${node.id}/update`, {
         method: "POST",
         body: JSON.stringify({})
       });
+      if (!isCurrent()) return;
       if (result.mode === "offline" || result.mode === "manual") {
         setNodeManualRecoveryById((current) => ({
           ...current,
           [node.id]: { message: result.message, command: result.command, image: result.image }
         }));
-        // Opening the details drawer is what carries the explanation: it is too long for a toast,
-        // and the manual recreate it describes is not something to skim past.
-        setNodeDetails((current) => current?.id === node.id ? current : node);
+        if (ownsDetails()) setNodeDetails((current) => current?.id === node.id ? current : node);
         notify(
           result.mode === "manual" ? "warning" : "info",
           result.mode === "manual" ? `${node.name} cannot update itself. Node details explain the one-time container recreate it needs.` : result.message
@@ -287,47 +316,54 @@ export function useNodesWorkspace({
       }
       window.setTimeout(() => void refreshApp(), 5000);
     } catch (error) {
-      notify("error", errorMessage(error, "Could not start the node update."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not start the node update."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
   async function dismissNodeUpdateFailure(node: NodeView) {
     if (!canManageNodes) return;
-    setBusyNodeId(node.id);
+    const ownsDetails = detailsRequests.begin("details");
+    const isCurrent = actionRequests.begin(node.id);
+    const finishPending = beginPending(node.id);
     try {
       const result = await api<{ ok: boolean; node: ManagedNode }>(`/api/nodes/${node.id}/update-failure`, { method: "DELETE" });
+      if (!isCurrent()) return;
       announcedUpdateFailures.current[node.id] = "";
-      setNodeDetails((current) => current?.id === node.id ? result.node : current);
+      if (ownsDetails()) setNodeDetails((current) => current?.id === node.id ? result.node : current);
       await refreshApp({ silent: true });
     } catch (error) {
-      notify("error", errorMessage(error, "Could not dismiss the update failure."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not dismiss the update failure."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
   async function updateNodeNotifications(node: NodeView, enabled: boolean) {
     if (!canManageNodes) return;
-    setBusyNodeId(node.id);
+    const ownsDetails = detailsRequests.begin("details");
+    const isCurrent = actionRequests.begin(node.id);
+    const finishPending = beginPending(node.id);
     try {
       const result = await api<{ ok: boolean; node: ManagedNode }>(`/api/nodes/${node.id}/update-notifications`, {
         method: "PUT",
         body: JSON.stringify({ enabled })
       });
-      setNodeDetails((current) => current?.id === node.id ? result.node : current);
+      if (!isCurrent()) return;
+      if (ownsDetails()) setNodeDetails((current) => current?.id === node.id ? result.node : current);
       notify("success", `Update notifications ${enabled ? "enabled" : "disabled"} for ${node.name}`);
       await refreshApp({ silent: true });
     } catch (error) {
-      notify("error", errorMessage(error, "Could not update node notification settings."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not update node notification settings."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
   async function restartNode(node: NodeView) {
     if (!canManageNodes) return;
+    const ownsSelection = detailsRequests.capture();
     const confirmed = await requestConfirmation({
       title: node.isInternal ? "Restart the Panel container?" : `Restart ${node.name}?`,
       description: node.isInternal
@@ -340,12 +376,14 @@ export function useNodesWorkspace({
       confirmLabel: node.isInternal ? "Restart Panel" : "Restart node",
       variant: "primary"
     });
-    if (!confirmed) return;
-    setBusyNodeId(node.id);
+    if (!confirmed || !ownsSelection()) return;
+    const isCurrent = actionRequests.begin(node.id);
+    const finishPending = beginPending(node.id);
     try {
       const result = await api<{ ok: boolean; message?: string }>(`/api/nodes/${node.id}/restart`, {
         method: "POST"
       });
+      if (!isCurrent()) return;
       notify("info", result.message || `Node ${node.name} restart started.`);
       if (result.ok) {
         const startedAt = Date.now();
@@ -362,9 +400,9 @@ export function useNodesWorkspace({
       }
       window.setTimeout(() => void refreshApp(), 5000);
     } catch (error) {
-      notify("error", errorMessage(error, "Could not restart the node container."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not restart the node container."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
@@ -375,6 +413,7 @@ export function useNodesWorkspace({
         ? `This will remove ${node.servers.length} assigned server record${node.servers.length === 1 ? "" : "s"} from the panel even if managed container cleanup cannot finish. Remote server files are not deleted.`
         : `This will remove managed containers for ${node.servers.length} assigned server${node.servers.length === 1 ? "" : "s"}, then remove the server record${node.servers.length === 1 ? "" : "s"} from the panel. Remote server files are not deleted.`
       : undefined;
+    const ownsSelection = detailsRequests.capture();
     const confirmed = await requestConfirmation({
       title: `${force ? "Force remove" : "Remove"} ${node.name}?`,
       description: force ? "Force-remove this node from the Panel." : "Remove this node from the Panel.",
@@ -383,8 +422,10 @@ export function useNodesWorkspace({
       confirmLabel: force ? "Force remove node" : "Remove node",
       variant: "critical"
     });
-    if (!confirmed) return;
-    setBusyNodeId(node.id);
+    if (!confirmed || !ownsSelection()) return;
+    const ownsDetails = detailsRequests.begin("details");
+    const isCurrent = actionRequests.begin(node.id);
+    const finishPending = beginPending(node.id);
     try {
       const result = await api<{
         ok: boolean;
@@ -397,6 +438,7 @@ export function useNodesWorkspace({
           skippedReason?: string;
         };
       }>(`/api/nodes/${node.id}${force ? "?force=true" : ""}`, { method: "DELETE" });
+      if (!isCurrent()) return;
       const removedServers = result.deletedServers ?? 0;
       const selfStopSuffix = result.selfRemoval?.ok ? " The node container will stop itself." : result.selfRemoval?.message ? ` ${result.selfRemoval.message}` : "";
       const cleanupFailures = result.serverCleanup?.failed.length ?? 0;
@@ -406,8 +448,8 @@ export function useNodesWorkspace({
           ? ` ${cleanupFailures} server container cleanup ${cleanupFailures === 1 ? "failure was" : "failures were"} reported.`
           : "";
       notify(cleanupWarning ? "warning" : "success", `${removedServers ? `Removed ${node.name} and ${removedServers} server${removedServers === 1 ? "" : "s"}` : `Removed ${node.name}`}.${cleanupWarning}${selfStopSuffix}`);
-      if (nodeDetails?.id === node.id) setNodeDetails(null);
-      if (installResult?.node.id === node.id) setInstallResult(null);
+      if (ownsDetails()) setNodeDetails((current) => current?.id === node.id ? null : current);
+      setInstallResult((current) => current?.node.id === node.id ? null : current);
       setNodeOperations((current) => {
         if (!current[node.id]) return current;
         const next = { ...current };
@@ -417,15 +459,16 @@ export function useNodesWorkspace({
       forgetManualRecovery(node.id);
       await refreshApp();
     } catch (error) {
-      notify("error", errorMessage(error, "Could not remove the node."));
+      if (isCurrent()) notify("error", errorMessage(error, "Could not remove the node."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
   async function createNode(input: { name: string; panelUrl: string; dataMount: string }) {
     if (!canManageNodes) return;
-    setBusyNodeId("create");
+    const isCurrent = addRequests.begin("create");
+    const finishPending = beginPending("create");
     try {
       const result = await api<CreateNodeResponse>("/api/nodes", {
         method: "POST",
@@ -435,19 +478,22 @@ export function useNodesWorkspace({
           dataMount: input.dataMount
         })
       });
-      setInstallMethod("run");
-      setAddNodeResult(result);
+      if (isCurrent()) {
+        setInstallMethod("run");
+        setAddNodeResult(result);
+      }
       notify("success", `Created pending node ${result.node.name}`);
       await refreshApp();
     } catch (error) {
       notify("error", errorMessage(error, "Could not create the node."));
     } finally {
-      setBusyNodeId("");
+      finishPending();
     }
   }
 
   /** Clears any stale install output without opening the dialog. */
   function resetAddNode() {
+    addRequests.invalidate();
     setAddNodeResult(null);
     setInstallMethod("run");
   }
@@ -471,10 +517,12 @@ export function useNodesWorkspace({
     onInstallMethodChange: setInstallMethod,
     onOpenAddNode: openAddNode,
     onCloseAddNode: () => {
+      addRequests.invalidate();
       setAddNodeOpen(false);
       setAddNodeResult(null);
     },
     onDoneAddNode: () => {
+      addRequests.invalidate();
       setAddNodeOpen(false);
       setAddNodeResult(null);
       void refreshApp();
@@ -491,7 +539,10 @@ export function useNodesWorkspace({
     onUpdateNotifications: updateNodeNotifications,
     onRestartNode: restartNode,
     onRemoveNode: removeNode,
-    onCloseDetails: () => setNodeDetails(null),
-    onClearInstall: () => setInstallResult(null)
+    onCloseDetails: closeDetails,
+    onClearInstall: () => {
+      installRequests.invalidate();
+      setInstallResult(null);
+    }
   };
 }

@@ -134,9 +134,9 @@
   /* `xs` is for placeholders and hairline fills that stand in for text rather
      than for a surface; `sm` and up are the control and panel radii. */
   --radius-xs: 5px;
-  --radius-sm: 11px;
-  --radius-md: 18px;
-  --radius-lg: 24px;
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -151,7 +151,7 @@
      shell, but it rides the same curve as everything else. */
   --sidebar-ease: 110ms var(--motion-ease-standard);
   --type-brand-size: 15px;
-  --type-page-title-size: clamp(25px, 2.2vw, 34px);
+  --type-page-title-size: clamp(24px, 2vw, 30px);
   --type-section-title-size: 17px;
   --type-card-title-size: 15px;
   --type-row-title-size: 14px;
@@ -219,19 +219,11 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* The ambient wash is the only thing a glass pane has to refract. It is kept
-   deliberately uneven -- warm on one side, cool on the other -- so a pane
-   dragged across the page picks up a different colour at each corner instead of
-   looking like a flat white card on a flat white page. */
+/* Keep the workspace neutral so operational colours carry the emphasis. */
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at 8% 2%, color-mix(in srgb, var(--accent) 22%, transparent) 0, transparent 38%),
-    radial-gradient(circle at 94% 10%, color-mix(in srgb, var(--sentinel-info) 18%, transparent) 0, transparent 40%),
-    radial-gradient(circle at 66% 48%, color-mix(in srgb, var(--sentinel-warning) 7%, transparent) 0, transparent 34%),
-    radial-gradient(circle at 28% 94%, color-mix(in srgb, var(--sentinel-accent-muted) 20%, transparent) 0, transparent 46%),
-    var(--app-background);
+  background: var(--app-background);
   background-attachment: fixed;
   color: var(--text);
 }

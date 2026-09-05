@@ -7,6 +7,7 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { terminalPreferenceOptions, type ConsoleFontSize, type ConsoleScrollback } from "../features/settings/settingsPreferences";
 import type { ConsoleLine } from "../types";
+import { consoleLineStart } from "../utils/consolePipeline";
 import { consumeTerminalTouchScroll, minecraftLogToTerminalText, terminalViewportAtBottom } from "../utils/minecraftTerminal";
 
 /** What the console page needs of a terminal selection to copy it and to let go of it afterwards. */
@@ -16,6 +17,7 @@ export type TerminalSelection = {
 };
 
 type MinecraftTerminalProps = {
+  snapshotReady: boolean;
   entries: ConsoleLine[];
   /** Changes when the console was replaced rather than extended, which is the cue to clear. */
   generation: number;
@@ -36,7 +38,7 @@ type TerminalTheme = ReturnType<typeof terminalTheme>;
  * {@link ../components/ConsolePrompt} — which leaves this with nothing to draw but the workload's
  * output, and nothing to redraw at all.
  */
-export function MinecraftTerminal({ entries, generation, fontSize, scrollback, onSelectionChange }: MinecraftTerminalProps) {
+export function MinecraftTerminal({ entries, generation, snapshotReady, fontSize, scrollback, onSelectionChange }: MinecraftTerminalProps) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -46,10 +48,14 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
   const lastWrittenSeqRef = useRef(0);
   const writtenGenerationRef = useRef(generation);
   const entriesRef = useRef(entries);
+  const snapshotReadyRef = useRef(snapshotReady);
+  const generationRef = useRef(generation);
   const appliedThemeRef = useRef<TerminalTheme | null>(null);
   const [newOutputAvailable, setNewOutputAvailable] = useState(false);
 
   entriesRef.current = entries;
+  snapshotReadyRef.current = snapshotReady;
+  generationRef.current = generation;
   selectionListenerRef.current = onSelectionChange;
 
   useEffect(() => {
@@ -98,9 +104,8 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     let terminalDisposed = false;
     const activateWebgl = async () => {
       try {
-        // The addon is a quarter of the console chunk and is useless on every device that cannot
-        // run it, so it is fetched here rather than imported at module scope. By this point the
-        // terminal has already painted, so the download is off the interaction path entirely.
+        // Fetch while the snapshot is in flight; the optional renderer and data can prepare
+        // independently, but both must be ready before revealing the output.
         const { WebglAddon } = await import("@xterm/addon-webgl");
         // The import can settle after a fast navigation away; loading an addon into a disposed
         // terminal throws, and constructing one would take a GPU context nothing would release.
@@ -181,7 +186,6 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
         return false;
       }
     };
-    fitRef.current = fit;
 
     // The buffer is written once the terminal has a width to wrap it against. Until then the
     // console stays behind its skeleton: there is no width at which the output would be right, and
@@ -189,19 +193,15 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     let initialized = false;
     let initializationPending = false;
     const initialize = () => {
-      if (initializationPending || !fit()) return;
+      if (initializationPending || !snapshotReadyRef.current || !fit()) return;
       initializationPending = true;
       void rendererReady.then(() => {
         initializationPending = false;
-        if (terminalDisposed || !fit()) return;
+        if (terminalDisposed || !snapshotReadyRef.current || !fit()) return;
         initialized = true;
         initialRenderCompleteRef.current = true;
+        writtenGenerationRef.current = generationRef.current;
         writeEntries(entriesRef.current, true);
-        terminal.write("", () => {
-          if (terminalRef.current !== terminal) return;
-          terminal.scrollToBottom();
-          shellRef.current?.classList.remove("initializing");
-        });
       });
     };
 
@@ -214,6 +214,7 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
         else initialize();
       });
     };
+    fitRef.current = scheduleFit;
 
     const visualViewport = window.visualViewport;
     visualViewport?.addEventListener("resize", scheduleFit);
@@ -253,6 +254,10 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     };
   }, []);
 
+  useEffect(() => {
+    if (snapshotReady) fitRef.current();
+  }, [snapshotReady]);
+
   // The palette lives in CSS variables, so there is no prop to depend on. Reading it means
   // `getComputedStyle` plus four `getPropertyValue` calls, which force the browser to flush
   // pending style recalculation — so this must not run per render. Every log flush is a render,
@@ -287,14 +292,14 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    if (!terminal || !initialRenderCompleteRef.current) return;
+    if (!terminal) return;
     terminal.options.fontSize = fontSize;
-    window.requestAnimationFrame(() => fitRef.current());
+    fitRef.current();
   }, [fontSize]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
-    if (!terminal || !initialRenderCompleteRef.current) return;
+    if (!terminal) return;
     terminal.options.scrollback = scrollback;
   }, [scrollback]);
 
@@ -317,24 +322,32 @@ export function MinecraftTerminal({ entries, generation, fontSize, scrollback, o
     const terminal = terminalRef.current;
     if (!terminal) return;
 
-    const fresh = reset ? nextEntries : nextEntries.filter((line) => line.seq > lastWrittenSeqRef.current);
+    const fresh = reset ? nextEntries : nextEntries.slice(consoleLineStart(nextEntries, lastWrittenSeqRef.current));
     if (!fresh.length && !reset) return;
 
-    const wasAtBottom = terminalViewportAtBottom(terminal.buffer.active.viewportY, terminal.buffer.active.baseY);
+    const previousViewport = terminal.buffer.active.viewportY;
+    const wasAtBottom = terminalViewportAtBottom(previousViewport, terminal.buffer.active.baseY);
     if (reset) {
       setNewOutputAvailable(false);
-      terminal.reset();
     }
 
     // One write for the whole batch: thousands of lines cost a single parser pass rather than one
     // queued write each.
-    terminal.write(minecraftLogToTerminalText(fresh.map((line) => line.text).join("")));
+    const writeGeneration = generationRef.current;
+    // RIS resets in parser order. Calling reset() synchronously can leave an older queued write
+    // to parse afterwards and contaminate a replacement snapshot.
+    terminal.write(`${reset ? "\x1bc" : ""}${minecraftLogToTerminalText(fresh.map((line) => line.text).join(""))}`, () => {
+      if (terminalRef.current !== terminal || generationRef.current !== writeGeneration) return;
+      if (reset || (wasAtBottom && terminal.buffer.active.viewportY >= previousViewport)) {
+        terminal.scrollToBottom();
+      }
+      shellRef.current?.classList.remove("initializing");
+    });
     lastWrittenSeqRef.current = fresh[fresh.length - 1]?.seq ?? lastWrittenSeqRef.current;
 
     // Reading a log line is not a reason to yank someone who scrolled up back to the newest
     // output; only follow the tail when they were already pinned to it.
-    if (wasAtBottom) terminal.scrollToBottom();
-    else if (!reset && fresh.length) setNewOutputAvailable(true);
+    if (!wasAtBottom && !reset && fresh.length) setNewOutputAvailable(true);
   }
 
   function jumpToBottom() {

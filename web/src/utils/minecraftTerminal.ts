@@ -98,63 +98,23 @@ export function shouldCopyTerminalSelection(event: ConsoleCopyKeystroke, selecte
 }
 
 export function minecraftFormattingToAnsi(text: string) {
-  let output = "";
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (char !== "\u00a7" && char !== "&") {
-      output += char;
-      continue;
+  // Copy ordinary text in spans instead of allocating a string for every character of a backlog.
+  return text.replace(/[§&]([0-9a-fl-or]|#[0-9a-f]{6})/gi, (_token, code: string) => {
+    const normalized = code.toLowerCase();
+    if (minecraftAnsiColors[normalized]) return minecraftAnsiColors[normalized];
+    if (normalized[0] === "#") {
+      const red = Number.parseInt(normalized.slice(1, 3), 16);
+      const green = Number.parseInt(normalized.slice(3, 5), 16);
+      const blue = Number.parseInt(normalized.slice(5, 7), 16);
+      return `\x1b[38;2;${red};${green};${blue}m`;
     }
-
-    const next = text[index + 1]?.toLowerCase();
-    if (!next) {
-      output += char;
-      continue;
-    }
-
-    if (minecraftAnsiColors[next]) {
-      output += minecraftAnsiColors[next];
-      index += 1;
-      continue;
-    }
-    if (next === "l") {
-      output += "\x1b[1m";
-      index += 1;
-      continue;
-    }
-    if (next === "o") {
-      output += "\x1b[3m";
-      index += 1;
-      continue;
-    }
-    if (next === "n") {
-      output += "\x1b[4m";
-      index += 1;
-      continue;
-    }
-    if (next === "m") {
-      output += "\x1b[9m";
-      index += 1;
-      continue;
-    }
-    if (next === "r") {
-      output += "\x1b[0m";
-      index += 1;
-      continue;
-    }
-    if (next === "#" && isHexColor(text.slice(index + 2, index + 8))) {
-      const red = Number.parseInt(text.slice(index + 2, index + 4), 16);
-      const green = Number.parseInt(text.slice(index + 4, index + 6), 16);
-      const blue = Number.parseInt(text.slice(index + 6, index + 8), 16);
-      output += `\x1b[38;2;${red};${green};${blue}m`;
-      index += 7;
-      continue;
-    }
-
-    output += char;
-  }
-  return output;
+    return minecraftAnsiStyles[normalized];
+  });
 }
+
+const minecraftAnsiStyles: Record<string, string> = {
+  l: "\x1b[1m", o: "\x1b[3m", n: "\x1b[4m", m: "\x1b[9m", r: "\x1b[0m"
+};
 
 /**
  * Turns console lines into what xterm should draw: Minecraft's section codes become ANSI, and bare
@@ -166,8 +126,4 @@ export function minecraftFormattingToAnsi(text: string) {
  */
 export function minecraftLogToTerminalText(text: string) {
   return minecraftFormattingToAnsi(text).replace(/\r?\n/g, "\r\n");
-}
-
-function isHexColor(value: string) {
-  return /^[0-9a-fA-F]{6}$/.test(value);
 }

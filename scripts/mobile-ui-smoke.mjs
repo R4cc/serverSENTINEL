@@ -7,6 +7,7 @@ const harness = await startDemoHarness({
   env: { MODRINTH_API_KEY: "demo-token" }
 });
 const { baseUrl } = harness;
+const navigationOnly = process.argv.includes("--navigation-only");
 
 async function openPage(page, title) {
   const target = page.locator(`.sideNav button[title="Open ${title}"]`);
@@ -160,7 +161,6 @@ async function assertNearestVisibleMapPopupContained(page, label) {
 }
 
 async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
-  requirePingLabels = false,
   exerciseScopeSwitch = false
 } = {}) {
   const assertScreenSized = async (phase) => {
@@ -174,15 +174,11 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
         };
       };
       return {
-        avatars: Array.from(document.querySelectorAll(".playerMapMarker .playerMapAvatar")).map(visualScale),
-        pingLabels: Array.from(document.querySelectorAll(".playerMapPingLabel")).map(visualScale)
+        avatars: Array.from(document.querySelectorAll(".playerMapMarker .playerMapAvatar")).map(visualScale)
       };
     });
     assert(measurements.avatars.length > 0, `${label} ${phase}: fixed-size player heads are missing`);
-    if (requirePingLabels) {
-      assert(measurements.pingLabels.length > 0, `${label} ${phase}: fixed-size map ping labels are missing`);
-    }
-    const drifting = [...measurements.avatars, ...measurements.pingLabels]
+    const drifting = measurements.avatars
       .filter(({ x, y }) => Math.abs(x - 1) > 0.04 || Math.abs(y - 1) > 0.04);
     assert(drifting.length === 0, `${label} ${phase}: map annotations inherited the map zoom: ${JSON.stringify(drifting)}`);
   };
@@ -374,11 +370,10 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   ], `${label} map controls`);
   const mapMarker = page.locator(".playerMapViewport .playerMapAvatar").first();
   const initialMarker = await mapMarker.boundingBox();
-  assert(initialMarker && initialMarker.width <= 20.5 && initialMarker.height <= 20.5, `${label}: mobile player marker is still too large: ${JSON.stringify(initialMarker)}`);
+  assert(initialMarker && initialMarker.width <= 24.5 && initialMarker.height <= 24.5, `${label}: mobile player head exceeds its fixed size: ${JSON.stringify(initialMarker)}`);
   await assertPlayerMarkerAnchorsAcrossTransforms(page, label);
 
-  const serverCluster = page.locator(".playerMapClusterMarker--server");
-  const cluster = await serverCluster.count() ? serverCluster : page.locator(".playerMapClusterMarker").first();
+  const cluster = page.locator(".playerMapClusterMarker").first();
   await cluster.waitFor();
   await cluster.click();
 
@@ -388,14 +383,13 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(await cluster.getAttribute("aria-expanded") === "true", `${label}: player cluster did not expand`);
   const geometry = await page.evaluate(() => {
     const marker = document.querySelector('.playerMapClusterMarker[aria-expanded="true"]');
-    const serverMarker = document.querySelector(".playerMapMarkerWrap--server .playerMapMarker");
-    const serverBadge = document.querySelector(".playerMapSharedServer");
+    const locationDot = document.querySelector(".playerMapLocations--active .playerMapLocationDot");
     const standaloneServer = document.querySelector(".playerMapServer");
     const halo = document.querySelector(".playerMapAccuracy--active");
     const popup = document.querySelector(".playerMapClusterPopup");
     const list = popup?.querySelector(".playerMapClusterList");
-    if (!(marker instanceof HTMLElement) || !(halo instanceof SVGGraphicsElement) || !(popup instanceof HTMLElement) || !(list instanceof HTMLElement)) return { missing: true };
-    const markerRect = marker.getBoundingClientRect();
+    if (!(marker instanceof HTMLElement) || !(locationDot instanceof SVGGraphicsElement) || !(halo instanceof SVGGraphicsElement) || !(popup instanceof HTMLElement) || !(list instanceof HTMLElement)) return { missing: true };
+    const markerRect = locationDot.getBoundingClientRect();
     const viewportRect = document.querySelector(".playerMapViewport")?.getBoundingClientRect();
     const haloRect = halo.getBoundingClientRect();
     const popupRect = popup.getBoundingClientRect();
@@ -412,9 +406,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
       standaloneServerMarkers: document.querySelectorAll(".playerMapServer").length,
       sharedServerIcons: document.querySelectorAll(".playerMapSharedServerIcon").length,
       runningServerMarkers: document.querySelectorAll(".playerMapSharedServer--running, .playerMapServer--running").length,
-      serverBadgeAbovePlayers: serverBadge instanceof HTMLElement && serverMarker instanceof HTMLElement
-        ? serverBadge.getBoundingClientRect().bottom <= serverMarker.getBoundingClientRect().top + 3
-        : standaloneServer instanceof SVGGraphicsElement,
+      independentServer: standaloneServer instanceof HTMLElement && !standaloneServer.closest(".playerMapMarkerWrap"),
       popupOverflow: popup.scrollWidth - popup.clientWidth,
       popupFrameInset: viewportRect
         ? Math.min(popupRect.left - viewportRect.left, viewportRect.right - popupRect.right, popupRect.top - viewportRect.top, viewportRect.bottom - popupRect.bottom)
@@ -432,9 +424,9 @@ async function assertPlayerClusterPopupDismisses(page, label) {
     };
   });
   assert(!geometry.missing, `${label}: player cluster marker surfaces are missing`);
-  assert(geometry.centreDelta <= 1.5, `${label}: active accuracy halo is offset from the combined marker by ${geometry.centreDelta}px`);
+  assert(geometry.centreDelta <= 1.5, `${label}: active accuracy halo is offset from its reported location by ${geometry.centreDelta}px`);
   assert(geometry.standaloneServerMarkers + geometry.sharedServerIcons === 1, `${label}: server marker representation is missing or duplicated`);
-  assert(geometry.runningServerMarkers === 1 && geometry.serverBadgeAbovePlayers, `${label}: running server marker is not visually distinct`);
+  assert(geometry.runningServerMarkers === 1 && geometry.independentServer, `${label}: running server marker is not visually distinct`);
   assert(geometry.popupOverflow <= 1 && geometry.overflowingRows === 0, `${label}: cluster popup content overflows horizontally`);
   assert(geometry.popupFrameInset >= 6, `${label}: cluster popup crosses the visible map frame (${geometry.popupFrameInset}px inset)`);
   assert(geometry.pingScrollbarClearance >= 12, `${label}: popup scrollbar overlaps player ping values (${geometry.pingScrollbarClearance}px clearance)`);
@@ -667,7 +659,7 @@ async function assertModsRowsAligned(page, label) {
       const element = row.querySelector(selector);
       if (!(element instanceof HTMLElement)) return null;
       const bounds = element.getBoundingClientRect();
-      return { left: bounds.left, right: bounds.right, centerX: bounds.left + bounds.width / 2, centerY: bounds.top + bounds.height / 2 };
+      return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, centerX: bounds.left + bounds.width / 2, centerY: bounds.top + bounds.height / 2 };
     };
     return {
       columns: getComputedStyle(row).gridTemplateColumns,
@@ -685,8 +677,8 @@ async function assertModsRowsAligned(page, label) {
     const centers = rows.map((row) => row[key].centerX);
     assert(Math.max(...centers) - Math.min(...centers) <= 1, `${label}: ${key} controls do not share a column: ${JSON.stringify(centers)}`);
   }
-  assert(rows.every((row) => Math.abs(row.status.centerY - row.version.centerY) <= 1), `${label}: status and installed version are not vertically aligned`);
-  assert(rows.every((row) => row.status.right <= row.version.left + 1), `${label}: status and installed version overlap`);
+  assert(rows.every((row) => row.status.bottom <= row.version.top), `${label}: status and installed version overlap`);
+  assert(rows.every((row) => row.metadata.right <= row.enabled.left), `${label}: metadata overlaps the enable control`);
 }
 
 async function assertPageDocumentScroll(page, title, label) {
@@ -1059,7 +1051,6 @@ async function runDesktopMapAndRestorationProfile() {
     await openPage(page, "players");
     await page.getByRole("group", { name: "Players shown on map" }).getByRole("button", { name: "All time", exact: true }).click();
     await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`, {
-      requirePingLabels: true,
       exerciseScopeSwitch: true
     });
 
@@ -1112,7 +1103,8 @@ async function runProfile(engine, profile, label) {
     const page = await context.newPage();
     await page.addInitScript(() => {
       localStorage.setItem("serversentinel-theme", "light");
-      localStorage.setItem("serversentinel-active-page", "overview");
+      // Seed a fresh context without overwriting the page under test on reload.
+      if (!localStorage.getItem("serversentinel-active-page")) localStorage.setItem("serversentinel-active-page", "overview");
 
       // A stand-in for the software keyboard, which a headless browser has no way to raise. It
       // reports the real viewport, and forwards the real events, until a test gives it an inset or
@@ -1140,6 +1132,18 @@ async function runProfile(engine, profile, label) {
     assertNativeScrollShell(await shellMetrics(page), `${label} initial`);
     await assertOverviewDensity(page, profile, label);
     await assertNavigationOverlay(page, label);
+    if (navigationOnly) {
+      for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings"]) {
+        await assertPageDocumentScroll(page, title, `${label} ${title}`);
+      }
+      await assertConsoleViewportOwnership(page, `${label} console`);
+      await assertConsoleSurvivesTheKeyboard(page, `${label} console keyboard`);
+      await assertPageRestoresOnReload(page, "schedules", "schedule", ".schedulePage", `${label} schedules`);
+      await assertPageRestoresOnReload(page, "files", "files", ".filesPage", `${label} files`);
+      await context.close();
+      console.log(`mobile navigation smoke passed: ${label}`);
+      return;
+    }
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .refreshStatusButton"], label);
     await assertFloatingSurfaces(page, label);
     await assertPlayerClusterPopupDismisses(page, `${label} players`);
@@ -1263,9 +1267,9 @@ async function runTabletProfile() {
 }
 
 try {
-  await runDesktopMapAndRestorationProfile();
+  if (!navigationOnly) await runDesktopMapAndRestorationProfile();
   await runTabletProfile();
-  await assertConfiguredPlayerAddressEditor();
+  if (!navigationOnly) await assertConfiguredPlayerAddressEditor();
   await runProfile(chromium, {
     ...devices["Pixel 7"],
     viewport: { width: 390, height: 844 }

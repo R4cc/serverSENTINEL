@@ -293,7 +293,7 @@ export const Surface = forwardRef<HTMLElement, HTMLAttributes<HTMLElement> & {
   as = "section",
   density = "default",
   tone = "default",
-  material = "glass",
+  material = "solid",
   className,
   children,
   ...props

@@ -136,6 +136,52 @@ export type PlayerMapArc = {
   distance: number;
 };
 
+/** Only badges move to make space. Geographic anchors and the server never participate in layout. */
+export function layoutPlayerMapBadges(
+  marks: readonly PlayerMapMark[],
+  server: { x: number; y: number } | undefined,
+  scale: number,
+  width = 720,
+  height = 360
+) {
+  const pixelsPerUnit = Math.max(scale, 0.01);
+  const occupied = marks.flatMap((mark) => mark.entries.map((entry) => {
+    const point = projectToMap(entry.location!.longitude!, entry.location!.latitude!, width, height);
+    return { x: point.x * pixelsPerUnit, y: point.y * pixelsPerUnit, halfWidth: 6, halfHeight: 6 };
+  }));
+  // Stable ordering prevents changes to the roster order from shuffling the labels.
+  return [...marks].sort((a, b) => a.id.localeCompare(b.id)).map((mark) => {
+    const anchor = projectToMap(mark.longitude, mark.latitude, width, height);
+    const halfWidth = mark.entries.length > 1 ? 30 : 16;
+    const halfHeight = 16;
+    let best = { x: anchor.x * pixelsPerUnit, y: anchor.y * pixelsPerUnit };
+    let bestScore = Infinity;
+    for (let radius = 28; radius <= 160; radius += 12) {
+      for (let direction = 0; direction < 8; direction++) {
+        const angle = -Math.PI / 2 + direction * Math.PI / 4;
+        const candidate = clampPlayerMapPoint({
+          x: anchor.x * pixelsPerUnit + Math.cos(angle) * radius,
+          y: anchor.y * pixelsPerUnit + Math.sin(angle) * radius
+        }, 1, { left: halfWidth + 4, right: halfWidth + 4, top: halfHeight + 4, bottom: halfHeight + 4 }, width * pixelsPerUnit, height * pixelsPerUnit);
+        // The server is a hard exclusion, even when a crowded map has no perfect badge layout.
+        if (server && Math.abs(candidate.x - server.x * pixelsPerUnit) < halfWidth + 26
+          && Math.abs(candidate.y - server.y * pixelsPerUnit) < halfHeight + 26) continue;
+        const overlap = occupied.reduce((sum, box) => sum +
+          Math.max(0, halfWidth + box.halfWidth + 4 - Math.abs(candidate.x - box.x)) *
+          Math.max(0, halfHeight + box.halfHeight + 4 - Math.abs(candidate.y - box.y)), 0);
+        const score = overlap * 1000 + Math.hypot(candidate.x - anchor.x * pixelsPerUnit, candidate.y - anchor.y * pixelsPerUnit);
+        if (score < bestScore) {
+          best = candidate;
+          bestScore = score;
+        }
+      }
+      if (bestScore < 1000) break;
+    }
+    occupied.push({ ...best, halfWidth, halfHeight });
+    return { mark, anchor, point: { x: best.x / pixelsPerUnit, y: best.y / pixelsPerUnit } };
+  });
+}
+
 /** A restrained northward cubic arc between the server and a player marker. */
 export function playerMapArc(
   start: { x: number; y: number },
@@ -161,19 +207,6 @@ export function playerMapArc(
     path: `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${controls[0].x.toFixed(1)} ${controls[0].y.toFixed(1)} ${controls[1].x.toFixed(1)} ${controls[1].y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
     controls,
     distance
-  };
-}
-
-/** Places a ping label a stable rendered distance above its player marker. */
-export function playerMapLabelPoint(
-  end: { x: number; y: number },
-  renderedScale: number,
-  offsetPx = 27
-) {
-  if (renderedScale <= 0) return end;
-  return {
-    x: end.x,
-    y: end.y - offsetPx / renderedScale
   };
 }
 

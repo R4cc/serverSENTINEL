@@ -150,6 +150,7 @@ textarea:not(.xterm-helper-textarea),
   font-weight: var(--weight-title);
   letter-spacing: 0;
   text-transform: none;
+  line-height: 1.2;
 }
 
 .muted {
@@ -217,7 +218,6 @@ textarea:not(.xterm-helper-textarea),
 .emptyInline span,
 .eventEmpty,
 .eventEmpty span,
-.fileDetailsEmpty,
 .inlineState:not(.uiBanner) span,
 .modalBody p,
 .notice {
@@ -229,7 +229,6 @@ textarea:not(.xterm-helper-textarea),
 
 .emptyInline strong,
 .eventEmpty strong,
-.fileDetailsEmpty strong,
 .inlineState:not(.uiBanner) strong,
 .notice strong {
   color: var(--text);
@@ -381,16 +380,6 @@ textarea:not(.xterm-helper-textarea),
 @media (max-width: 1366px) {
   .workspaceHeader {
     min-height: 56px;
-  }
-
-  .workspaceHeader h2 {
-    font-size: clamp(24px, 2.8vw, 32px);
-  }
-}
-
-@media (max-width: 720px) {
-  .workspaceHeader h2 {
-    font-size: clamp(22px, 7vw, 30px);
   }
 
 }

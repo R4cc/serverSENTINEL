@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.9.7 - 2026-09-05
+
+- Unified page headings, compact corners, and calmer work surfaces across desktop and mobile while keeping operational status colours distinct.
+- Added searchable node/server, player/location, and user/role lists with clear no-results states and keyboard-friendly reset controls.
+- Replaced the empty file-details rail with folder context and selection guidance, and tightened Settings navigation.
+- Kept player-map popups positioned correctly when reduced motion is enabled.
+
 ## 26.9.6 - 2026-09-03
 
 - Prevented slow Players and Mods requests from showing data from a previous server, range, or search after the operator moves on.

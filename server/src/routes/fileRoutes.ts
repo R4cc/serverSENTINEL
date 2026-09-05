@@ -136,7 +136,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   return runtime.previewFile(server, target);
 });
 
-app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/download", async (request, reply) => {
+app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/download", { compress: false }, async (request, reply) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
@@ -197,7 +197,7 @@ app.post<{ Params: { id: string }; Body: { paths?: unknown } }>("/api/servers/:i
   };
 });
 
-app.get<{ Params: { id: string; token: string } }>("/api/servers/:id/files/download/archive/:token", async (request, reply) => {
+app.get<{ Params: { id: string; token: string } }>("/api/servers/:id/files/download/archive/:token", { compress: false }, async (request, reply) => {
   cleanupArchiveDownloadTokens();
   const token = archiveDownloadTokens.get(request.params.token);
   if (!token || token.serverId !== request.params.id) throw new Error("Download archive is no longer available");

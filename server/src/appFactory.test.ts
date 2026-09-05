@@ -291,6 +291,81 @@ describe("Fastify application factory", () => {
     }
   });
 
+  it("streams file and archive downloads without custom headers while rechecking permissions", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-file-download-"));
+    temporaryDirectories.push(dataDir);
+    process.env = {
+      ...originalEnv, SS_MODE: "all-in-one", SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false", SERVERSENTINEL_TRUST_PROXY: "false",
+      SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef", LOG_LEVEL: "silent", TZ: "UTC"
+    };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    const app = await buildApp();
+    try {
+      const login = await app.inject({
+        method: "POST", url: "/api/auth/register-first",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" }
+      });
+      expect(login.statusCode, login.body).toBe(200);
+      const cookie = sessionCookieFrom(login);
+      const now = new Date().toISOString();
+      const id = "11111111-1111-4111-8111-111111111111";
+      const serverDir = join(dataDir, "servers", id);
+      await mkdir(join(serverDir, "world"), { recursive: true });
+      const content = "download payload\n".repeat(1024);
+      await writeFile(join(serverDir, "world", "test.txt"), content);
+      services.serversRepository.create({
+        id, nodeId: "local", displayName: "Download test", serverDir, storageName: id,
+        runtimeProfile: {
+          minecraftVersion: "1.21.4", runtimeType: "fabric", runtimeVersion: "0.16.10",
+          javaMajorVersion: 21, jarProvider: "mcjars", jarArtifact: { filename: "server.jar" },
+          compatibilityStatus: "compatible", resolvedAt: now
+        },
+        dockerContainer: "download-test", dockerPorts: "25565:25565/tcp", javaArgs: "-Xmx1G",
+        startOnNodeStart: false, runtimeIntent: "stopped", schedules: [], createdAt: now, updatedAt: now
+      });
+      const base = `/api/servers/${id}`;
+      const intent = await app.inject({
+        method: "POST", url: `${base}/files/download/intent`,
+        headers: { cookie, "x-requested-with": "XMLHttpRequest" }, payload: { paths: ["/world"] }
+      });
+      expect(intent.statusCode, intent.body).toBe(200);
+      expect(intent.json().mode).toBe("archive");
+      const urls = [`${base}/file/download?path=%2Fworld%2Ftest.txt`, intent.json().url as string];
+      for (const url of urls) {
+        const download = await app.inject({ method: "GET", url, headers: { cookie, "accept-encoding": "gzip" } });
+        expect(download.statusCode, download.body).toBe(200);
+        expect(download.headers["content-disposition"]).toContain("attachment");
+        expect(download.headers["content-encoding"]).toBeUndefined();
+        if (url === urls[0]) {
+          expect(download.body).toBe(content);
+          expect(Number(download.headers["content-length"])).toBe(Buffer.byteLength(content));
+        } else {
+          expect(download.rawPayload.subarray(0, 2).toString()).toBe("PK");
+        }
+        expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+      }
+      for (const url of [`${base}/files`, `${base}/file/preview?path=/world/test.txt`, `${base}/file/download/extra`]) {
+        expect((await app.inject({ method: "GET", url, headers: { cookie } })).statusCode).toBe(400);
+      }
+      expect((await app.inject({
+        method: "POST", url: `${base}/files/download/intent`, headers: { cookie }, payload: { paths: ["/world"] }
+      })).statusCode).toBe(400);
+      // A prepared archive is not a bearer credential: revocation applies to its entries too.
+      const user = services.usersRepository.list()[0];
+      services.usersRepository.create({ ...user, id: "backup-admin", username: "backup-admin" });
+      services.usersRepository.updateById(user.id, (current) => ({ ...current, rolePreset: "custom", permissions: [] }));
+      for (const url of urls) {
+        expect((await app.inject({ method: "GET", url, headers: { cookie } })).statusCode).toBe(403);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
   it("queues export preflight failures instead of holding the create request open", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-export-preflight-"));
     temporaryDirectories.push(dataDir);
@@ -1330,6 +1405,8 @@ describe("Fastify application factory", () => {
 
       const scopedGeo = vi.spyOn(services.playerGeoRepository, "listForServer");
       const allGeo = vi.spyOn(services.playerGeoRepository, "list");
+      const latencyHistory = vi.spyOn(services.resourceStatsRepository, "listRange");
+      const activityHistory = vi.spyOn(services.resourceStatsRepository, "activitySamples");
       const scopedInsights = await app.inject({
         method: "GET",
         url: `${insightsUrl}?serverId=11111111-1111-4111-8111-111111111111`,
@@ -1339,6 +1416,17 @@ describe("Fastify application factory", () => {
       expect(scopedInsights.json().players).toMatchObject([{ player: "SullyTheSnak" }]);
       expect(scopedGeo).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
       expect(allGeo).not.toHaveBeenCalled();
+
+      const shortInsights = await app.inject({
+        method: "GET",
+        url: `${insightsUrl}?serverId=11111111-1111-4111-8111-111111111111&windowMs=300000`,
+        headers: { ...csrf, cookie }
+      });
+      expect(shortInsights.statusCode, shortInsights.body).toBe(200);
+      const generatedAt = Date.parse(shortInsights.json().generatedAt);
+      expect(latencyHistory).toHaveBeenLastCalledWith("11111111-1111-4111-8111-111111111111", generatedAt - 300_000, generatedAt);
+      expect(activityHistory).toHaveBeenCalledTimes(1);
+      expect(shortInsights.json().activityHours).toEqual(scopedInsights.json().activityHours);
 
       const missingServer = await app.inject({
         method: "GET",
