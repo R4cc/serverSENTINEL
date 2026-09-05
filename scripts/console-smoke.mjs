@@ -277,12 +277,14 @@ async function assertTerminalSelectionCopiesOnCtrlC(page) {
 
   // Clipboard writes are asynchronous; Linux CI can still return the previous copy here.
   // Wait for selected output, not merely a nonempty clipboard left by the shortcut test.
-  const clipboardResult = await page.waitForFunction(async (text) => {
-    const copied = await navigator.clipboard.readText();
-    return copied.trim().length > 0 && text.includes(copied) ? copied : false;
-  }, rowText, { timeout: 5_000 });
-  const copied = await clipboardResult.jsonValue();
-  await clipboardResult.dispose();
+  // Poll from Node: waitForFunction treats an async predicate's Promise as truthy.
+  let copied = "";
+  const deadline = Date.now() + 5_000;
+  do {
+    copied = await page.evaluate(() => navigator.clipboard.readText());
+    if (copied.trim().length > 0 && rowText.includes(copied)) break;
+    await page.waitForTimeout(50);
+  } while (Date.now() < deadline);
   assert(copied.trim().length > 0, "Ctrl+C copied nothing after selecting console output");
   assert(
     rowText.includes(copied),
