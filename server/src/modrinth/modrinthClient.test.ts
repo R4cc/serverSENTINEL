@@ -140,6 +140,7 @@ describe("Modrinth client", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       await vi.advanceTimersByTimeAsync(1);
 
+      await vi.advanceTimersByTimeAsync(300);
       await expect(Promise.all([first, second])).resolves.toHaveLength(2);
       expect(fetchMock).toHaveBeenCalledTimes(3);
     } finally {
@@ -160,6 +161,49 @@ describe("Modrinth client", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       await vi.advanceTimersByTimeAsync(1);
       await expect(next).resolves.toMatchObject({ status: 200 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rechecks the allowance for requests already waiting for a concurrency slot", async () => {
+    vi.useFakeTimers();
+    try {
+      const releases: Array<(response: Response) => void> = [];
+      fetchMock.mockImplementation(() => new Promise<Response>((resolve) => releases.push(resolve)));
+      const requests = Array.from({ length: 10 }, (_, index) => modrinthFetch(`https://api.modrinth.com/v2/project/queued-${index}`));
+      await vi.advanceTimersByTimeAsync(2_100);
+      expect(fetchMock).toHaveBeenCalledTimes(8);
+      releases.splice(0).forEach((resolve) => resolve(new Response("{}", {
+        headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1" }
+      })));
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetchMock).toHaveBeenCalledTimes(8);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetchMock).toHaveBeenCalledTimes(9);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(fetchMock).toHaveBeenCalledTimes(10);
+      releases.splice(0).forEach((resolve) => resolve(new Response("{}")));
+      await Promise.all(requests);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("paces a 500-project scan without expiring requests in the queue", async () => {
+    vi.useFakeTimers();
+    try {
+      const starts: number[] = [];
+      fetchMock.mockImplementation(async () => {
+        starts.push(Date.now());
+        return new Response("{}");
+      });
+      const results = Promise.all(Array.from({ length: 500 }, (_, index) =>
+        modrinthFetch(`https://api.modrinth.com/v2/project/large-${index}`, { deadlineMs: 20 })));
+      await vi.advanceTimersByTimeAsync(150_000);
+      await expect(results).resolves.toHaveLength(500);
+      expect(starts).toHaveLength(500);
+      expect(starts.slice(1).every((at, index) => at - starts[index] >= 300)).toBe(true);
     } finally {
       vi.useRealTimers();
     }

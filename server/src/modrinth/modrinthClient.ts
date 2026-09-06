@@ -6,10 +6,13 @@ let apiKeyProvider = async () => process.env.MODRINTH_API_KEY || "";
 const defaultModrinthTimeoutMs = 15_000;
 const defaultModrinthDeadlineMs = 35_000;
 const defaultModrinthConcurrency = 8;
+// Leave headroom below Modrinth's per-IP allowance for other clients on the host.
+const modrinthRequestSpacingMs = 300;
 const maxRateLimitDelayMs = 60_000;
 const maxTransientRetryDelayMs = 10_000;
 let activeRequests = 0;
 let rateLimitedUntil = 0;
+let nextApiRequestAt = 0;
 const requestWaiters: Array<() => void> = [];
 const inFlightGetRequests = new Map<string, Promise<Awaited<ReturnType<typeof fetch>>>>();
 
@@ -117,7 +120,23 @@ async function waitWithinDeadline(delayMs: number, deadlineAt: number, code = "M
 }
 
 async function waitForRateLimitCooldown(deadlineAt: number) {
-  await waitWithinDeadline(Math.max(0, rateLimitedUntil - Date.now()), deadlineAt, "MODRINTH_RATE_LIMITED");
+  while (rateLimitedUntil > Date.now()) {
+    await waitWithinDeadline(rateLimitedUntil - Date.now(), deadlineAt, "MODRINTH_RATE_LIMITED");
+  }
+}
+
+async function waitForApiTurn(deadlineAt: number) {
+  while (true) {
+    const now = Date.now();
+    const delayMs = Math.max(nextApiRequestAt, rateLimitedUntil) - now;
+    if (delayMs <= 0) {
+      nextApiRequestAt = now + modrinthRequestSpacingMs;
+      return;
+    }
+    await waitWithinDeadline(delayMs, deadlineAt, "MODRINTH_RATE_LIMITED");
+    // Recheck after waking: another caller may have started, or a response may
+    // have extended the cooldown. Delayed timers must not cause catch-up bursts.
+  }
 }
 
 function upstreamDetails(response: Awaited<ReturnType<typeof fetch>>, attempt: number) {
@@ -145,7 +164,9 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
   if (options.json !== undefined) headers["Content-Type"] = "application/json";
   const timeoutMs = options.timeoutMs ?? defaultModrinthTimeoutMs;
   const deadlineMs = options.deadlineMs ?? defaultModrinthDeadlineMs;
-  const deadlineAt = Date.now() + deadlineMs;
+  // Queueing a large scan is expected. The request deadline starts at admission,
+  // rather than expiring later mods before their first network request.
+  let deadlineAt = Number.POSITIVE_INFINITY;
   const retryAttempts = 3;
   let canRetryPublicGetWithoutAuthorization = (options.method ?? "GET") === "GET" && options.json === undefined && Boolean(headers.Authorization);
   for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
@@ -153,9 +174,13 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
     let acquiredSlot = false;
     try {
       options.signal?.throwIfAborted();
-      await waitForRateLimitCooldown(deadlineAt);
       await acquireRequestSlot();
       acquiredSlot = true;
+      if (isModrinthApiUrl(url)) await waitForApiTurn(deadlineAt);
+      if (!Number.isFinite(deadlineAt)) deadlineAt = Date.now() + deadlineMs;
+      // CDN downloads do not consume the API allowance.
+      if (isModrinthApiUrl(url)) await waitForRateLimitCooldown(deadlineAt);
+      options.signal?.throwIfAborted();
       const remainingMs = deadlineAt - Date.now();
       if (remainingMs <= 0) throw modrinthPublicError("Modrinth request exceeded its overall deadline", 424, "MODRINTH_REQUEST_TIMED_OUT", { deadlineMs });
       const attemptTimeoutMs = Math.max(1, Math.min(timeoutMs, remainingMs));
@@ -186,7 +211,7 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
       if (acquiredSlot) releaseRequestSlot();
     }
     if (response.ok) {
-      observeRateLimitHeaders(response);
+      if (isModrinthApiUrl(url)) observeRateLimitHeaders(response);
       return response;
     }
     if (canRetryPublicGetWithoutAuthorization && (response.status === 401 || response.status === 403)) {
@@ -196,13 +221,15 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
       attempt -= 1;
       continue;
     }
+    if (response.status === 429 && isModrinthApiUrl(url)) {
+      rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + retryDelayMs(response, attempt));
+    }
     const retryable = response.status === 429 || (response.status >= 500 && response.status < 600);
     if (!retryable || attempt === retryAttempts - 1) {
       const code = response.status === 429 ? "MODRINTH_RATE_LIMITED" : "MODRINTH_REQUEST_FAILED";
       throw modrinthPublicError(`Modrinth request failed: ${response.status} ${response.statusText}`, 424, code, upstreamDetails(response, attempt));
     }
     const delayMs = response.status === 429 ? retryDelayMs(response, attempt) : transientRetryDelayMs(attempt);
-    if (response.status === 429) rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + delayMs);
     await response.arrayBuffer().catch(() => undefined);
     await waitWithinDeadline(delayMs, deadlineAt, response.status === 429 ? "MODRINTH_RATE_LIMITED" : "MODRINTH_REQUEST_TIMED_OUT");
   }
@@ -212,6 +239,7 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
 export function resetModrinthClientStateForTests() {
   activeRequests = 0;
   rateLimitedUntil = 0;
+  nextApiRequestAt = 0;
   requestWaiters.splice(0);
   inFlightGetRequests.clear();
 }
