@@ -92,6 +92,7 @@ type TextAlignment = "left" | "center" | "right";
 
 type PlayerTimelineLabelLayout = {
   durationX: number;
+  showDuration: boolean;
   startX: number;
   startAlign: TextAlignment;
   endX: number;
@@ -186,6 +187,19 @@ export function preservePlayerTimelineLanePosition(
   return { startKey: nextLanes[0].key, startIndex: 0 };
 }
 
+export function movePlayerTimelineLaneWindow(
+  lanes: PlayerTimelineLane[],
+  position: PlayerTimelineLanePosition,
+  visibleCount: number,
+  direction: -1 | 1
+): PlayerTimelineLanePosition {
+  const current = resolvePlayerTimelineLaneWindow(lanes, position, visibleCount);
+  const next = resolvePlayerTimelineLaneWindow(lanes, {
+    startIndex: current.startIndex + direction * Math.max(1, current.visibleCount - 1)
+  }, visibleCount);
+  return { startKey: next.startKey, startIndex: next.startIndex };
+}
+
 export function playerTimelineLanePositionFromZoom(
   event: { dataZoomId?: string; start?: number; startValue?: unknown; batch?: Array<{ dataZoomId?: string; start?: number; startValue?: unknown }> },
   lanes: PlayerTimelineLane[]
@@ -259,12 +273,14 @@ export function playerTimelineLabelLayout({
 }): PlayerTimelineLabelLayout {
   const segmentWidth = Math.max(0, endX - startX);
   const durationHalfWidth = durationWidth / 2;
+  const showDuration = durationWidth <= plotRight - plotLeft;
   const durationX = Math.max(plotLeft + durationHalfWidth, Math.min(plotRight - durationHalfWidth, (startX + endX) / 2));
   const roomy = segmentWidth >= startWidth + endWidth + 20;
 
   if (roomy) {
     return {
       durationX,
+      showDuration,
       startX,
       startAlign: startX - startWidth / 2 < plotLeft ? "left" : "center",
       endX,
@@ -276,14 +292,23 @@ export function playerTimelineLabelLayout({
 
   const startFitsOutside = hasStart && startX - startWidth - 7 >= plotLeft;
   const endFitsOutside = hasEnd && endX + endWidth + 7 <= plotRight;
+  const startLabelX = startFitsOutside ? startX - 7 : startX;
+  const endLabelX = endFitsOutside ? endX + 7 : endX;
+  const startLabelRight = startFitsOutside ? startLabelX : startLabelX + startWidth;
+  const endLabelLeft = endFitsOutside ? endLabelX : endLabelX - endWidth;
+  const showEnd = hasEnd
+    && endLabelLeft >= plotLeft && (endFitsOutside ? endLabelX + endWidth : endLabelX) <= plotRight;
   return {
     durationX,
-    startX: startFitsOutside ? startX - 7 : startX,
+    showDuration,
+    startX: startLabelX,
     startAlign: startFitsOutside ? "right" : "left",
-    endX: endFitsOutside ? endX + 7 : endX,
+    endX: endLabelX,
     endAlign: endFitsOutside ? "left" : "right",
-    showStart: hasStart && (startFitsOutside || !hasEnd),
-    showEnd: hasEnd && (endFitsOutside || !hasStart || !startFitsOutside)
+    showStart: hasStart && (startFitsOutside || !hasEnd)
+      && startLabelRight <= plotRight && (startFitsOutside ? startLabelX - startWidth : startLabelX) >= plotLeft
+      && (!showEnd || startLabelRight + 8 <= endLabelLeft),
+    showEnd
   };
 }
 
@@ -537,7 +562,7 @@ function rowChromeRenderItem(
             align: "left",
             verticalAlign: "middle",
             fill: palette.text,
-            font: `600 11px ${palette.fontFamily}`
+            font: `600 12px ${palette.fontFamily}`
           },
           silent: true
         }
@@ -547,6 +572,17 @@ function rowChromeRenderItem(
 }
 
 function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePalette): CustomSeriesRenderItem {
+  const adjacent = new Map<PlayerTimelineChartItem, { previous?: PlayerTimelineChartItem; next?: PlayerTimelineChartItem }>();
+  const rows = new Map<string, PlayerTimelineChartItem[]>();
+  for (const item of items) {
+    const row = rows.get(item.laneKey) ?? [];
+    row.push(item);
+    rows.set(item.laneKey, row);
+  }
+  for (const row of rows.values()) {
+    row.sort((left, right) => left.visibleStart - right.visibleStart);
+    row.forEach((item, index) => adjacent.set(item, { previous: row[index - 1], next: row[index + 1] }));
+  }
   return (params, api): CustomSeriesRenderItemReturn => {
     const item = items[Number(api.value(3))];
     if (!item) return null;
@@ -566,13 +602,22 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
     const open = item.endBoundary === "online" && rawEndX >= plotLeft && rawEndX <= plotRight;
     const startLabel = exactStart ? item.fullStartLabel : null;
     const endLabel = open || exactEnd ? item.fullEndLabel : null;
-    const durationFont = `600 9px ${palette.fontFamily}`;
-    const endpointFont = `9px ${palette.fontFamily}`;
+    const durationFont = `600 11px ${palette.fontFamily}`;
+    const endpointFont = `11px ${palette.fontFamily}`;
+    // Give neighboring sessions separate label space at long time ranges. Their
+    // exact times remain in the chart description when a label cannot fit.
+    const neighbors = adjacent.get(item);
+    const labelLeft = neighbors?.previous
+      ? Math.max(plotLeft, (api.coord([neighbors.previous.visibleEnd, item.laneKey])[0] + startX) / 2 + 4)
+      : plotLeft;
+    const labelRight = neighbors?.next
+      ? Math.min(plotRight, (endX + api.coord([neighbors.next.visibleStart, item.laneKey])[0]) / 2 - 4)
+      : plotRight;
     const labels = playerTimelineLabelLayout({
       startX,
       endX,
-      plotLeft,
-      plotRight,
+      plotLeft: labelLeft,
+      plotRight: labelRight,
       durationWidth: format.getTextRect(item.durationLabel, durationFont).width + 10,
       startWidth: startLabel ? format.getTextRect(startLabel, endpointFont).width : 0,
       endWidth: endLabel ? format.getTextRect(endLabel, endpointFont).width : 0,
@@ -646,11 +691,11 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
       });
     }
 
-    children.push({
+    if (labels.showDuration) children.push({
       type: "text",
       style: {
         x: labels.durationX,
-        y: y - 8,
+        y: y - 6,
         text: item.durationLabel,
         align: "center",
         verticalAlign: "bottom",
@@ -667,7 +712,7 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
         type: "text",
         style: {
           x: labels.startX,
-          y: y + 8,
+          y: y + 6,
           text: startLabel,
           align: labels.startAlign,
           verticalAlign: "top",
@@ -682,7 +727,7 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
         type: "text",
         style: {
           x: labels.endX,
-          y: y + 8,
+          y: y + 6,
           text: endLabel,
           align: labels.endAlign,
           verticalAlign: "top",
@@ -788,13 +833,13 @@ export function buildPlayerTimelineChartOption({
         right: 4,
         top: playerTimelineAxisHeight + 4,
         bottom: 4,
-        width: 8,
+        width: 12,
         showDataShadow: false,
         showDetail: false,
         brushSelect: false,
         borderColor: "transparent",
-        backgroundColor: "transparent",
-        fillerColor: palette.border,
+        backgroundColor: palette.surface,
+        fillerColor: palette.textMuted,
         handleSize: 0,
         moveHandleSize: 0
       }

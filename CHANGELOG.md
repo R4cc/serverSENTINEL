@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.11 - 2026-09-05
+
+- Fixed overlapping player details in expanded map region lists by preserving row height and scrolling the roster.
+
 ## 26.9.10 - 2026-09-05
 
 - Made player-map connections nearly straight for nearby locations while preserving curved routes over longer distances.

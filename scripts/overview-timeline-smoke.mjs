@@ -364,8 +364,11 @@ async function assertTimelineNavigation(page) {
   await page.getByRole("button", { name: "Jump to now", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".serverTimelineMode")?.textContent?.trim() === "Live");
   const beforeHeights = await timelineHeights(page);
-  const startX = box.x + box.width * 0.62;
-  const startY = box.y + Math.min(90, box.height / 2);
+  await scroller.scrollIntoViewIfNeeded();
+  const dragBox = await scroller.boundingBox();
+  assert(dragBox, "Player timeline disappeared before dragging");
+  const startX = dragBox.x + dragBox.width * 0.62;
+  const startY = dragBox.y + Math.min(90, dragBox.height / 2);
   const beforeVisualState = await timelineVisualState(page);
   await page.mouse.move(startX, startY);
   await page.mouse.down();
@@ -426,6 +429,7 @@ async function assertTimelineNavigation(page) {
   await page.getByRole("button", { name: "Jump to now", exact: true }).click();
   await page.waitForFunction(() => document.querySelector(".serverTimelineMode")?.textContent?.trim() === "Live");
   const liveBeforeZoom = await timelineWindow(page);
+  await scroller.scrollIntoViewIfNeeded();
   const liveScrollerBox = await scroller.boundingBox();
   assert(liveScrollerBox, "Player timeline disappeared before wheel zoom");
   await page.mouse.move(liveScrollerBox.x + liveScrollerBox.width * 0.7, liveScrollerBox.y + Math.min(80, liveScrollerBox.height / 2));
@@ -850,8 +854,133 @@ async function assertActiveSchedulePresentation(context, viewport) {
   }
 }
 
+async function assertTimelinePolish(context, viewport, captureDirectory) {
+  const { page, browserErrors } = await createOverviewPage(context, viewport);
+  try {
+    const visible = await page.evaluate(() => matchMedia("(min-width: 981px), (orientation: landscape)").matches);
+    if (!visible) {
+      assert.equal(await page.locator(".serverTimelinePanel").count(), 0, "Portrait overview should retain its player cards");
+      for (const theme of ["dark", "light"]) {
+        await page.emulateMedia({ colorScheme: theme });
+        await page.waitForFunction((name) => document.querySelector(".appShell")?.classList.contains(name), theme === "dark" ? "themeDark" : "themeLight");
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "Portrait overview overflows horizontally");
+        if (captureDirectory) await page.screenshot({ path: `${captureDirectory}/timeline-after-${viewport.width}-${theme}.png` });
+      }
+      return;
+    }
+    const panel = await waitForTimeline(page);
+    const navigation = panel.getByRole("group", { name: "Player row navigation" });
+    const previous = navigation.getByRole("button", { name: "Previous player rows" });
+    const next = navigation.getByRole("button", { name: "Next player rows" });
+    const initialRange = await navigation.locator("span").innerText();
+    assert(await previous.isDisabled(), "Previous rows should be disabled at the beginning");
+    const timeBefore = await timelineWindow(page);
+    await next.focus();
+    await page.keyboard.press("Enter");
+    assert.notEqual(await navigation.locator("span").innerText(), initialRange, "Keyboard row navigation did not advance");
+    assert.deepEqual(await timelineWindow(page), timeBefore, "Row navigation changed the time window");
+    for (let index = 0; index < 20 && await next.isEnabled(); index += 1) await next.click();
+    assert(await next.isDisabled(), "Next rows did not stop at the last window");
+    for (let index = 0; index < 20 && await previous.isEnabled(); index += 1) await previous.click();
+    assert.equal(await navigation.locator("span").innerText(), initialRange, "Row navigation did not return to the first window");
+    if (await page.evaluate(() => matchMedia("(pointer: coarse)").matches)) {
+      await next.tap();
+      assert.notEqual(await navigation.locator("span").innerText(), initialRange, "Touch row navigation did not advance");
+      await previous.tap();
+    }
+
+    const metrics = panel.getByRole("group", { name: "Metric layers", exact: true });
+    const annotations = panel.getByRole("group", { name: "Event layers", exact: true });
+    while (await metrics.getByRole("button", { pressed: true }).count()) await metrics.getByRole("button", { pressed: true }).first().click();
+    assert.equal(await panel.locator(".serverTimelineLayerHint").innerText(), "Metrics hidden");
+    assert.equal(await panel.locator(".serverTimelineEmpty").count(), 0, "Activity-only mode should not show an empty metric chart");
+
+    for (const theme of ["dark", "light"]) {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.waitForFunction((name) => document.querySelector(".appShell")?.classList.contains(name), theme === "dark" ? "themeDark" : "themeLight");
+      if (captureDirectory) {
+        if (viewport.height < 600) {
+          await panel.locator(".uiPanelHeader").scrollIntoViewIfNeeded();
+          await page.screenshot({ path: `${captureDirectory}/timeline-after-${viewport.width}-${theme}.png` });
+        } else await panel.screenshot({ path: `${captureDirectory}/timeline-after-${viewport.width}-${theme}.png` });
+      }
+      const targets = await panel.locator(".serverTimelineToolbar button, .serverTimelineHeaderControls button, .serverTimelinePlayerNavigation button").evaluateAll((buttons) => buttons.map((button) => ({
+        label: button.textContent, height: button.getBoundingClientRect().height, width: button.getBoundingClientRect().width
+      })));
+      const minimum = await page.evaluate(() => matchMedia("(pointer: coarse)").matches ? 44 : 32);
+      assert(targets.every((target) => target.height >= minimum && target.width >= minimum), `Small control targets: ${JSON.stringify(targets)}`);
+    }
+
+    await annotations.getByRole("button", { name: "Server events", exact: true }).click();
+    const automation = annotations.getByRole("button", { name: "Automation runs", exact: true });
+    if (await automation.count()) await automation.click();
+    assert((await panel.locator(".serverTimelineEventRail").innerText()).includes("Layers hidden"));
+    await annotations.getByRole("button", { name: "Player activity", exact: true }).click();
+    assert.equal(await panel.locator(".serverTimelineEmpty").innerText(), "Enable a metric or event layer to display the timeline.");
+    assert.equal(await panel.locator(".serverTimelineEventRail").count(), 0, "All-hidden mode should have one instruction");
+    for (const button of await annotations.getByRole("button").all()) await button.click();
+    for (const button of await metrics.getByRole("button").all()) await button.click();
+    assert.equal(await panel.locator(".serverTimelineMetricBand").count(), 4);
+    await selectRange(page, "5m");
+    for (let index = 0; index < 40 && await panel.locator(".serverTimelineEventRailGutter span").innerText() !== "None in this range"; index += 1) {
+      await panel.getByRole("button", { name: "Earlier timeline window" }).click();
+    }
+    assert.equal(await panel.locator(".serverTimelineEventRailGutter span").innerText(), "None in this range");
+    const jump = panel.getByRole("button", { name: "Jump to now", exact: true });
+    if (await jump.count()) await jump.click();
+    await selectRange(page, "3h");
+    if (viewport.width === 1440) {
+      for (const label of rangeSpans.keys()) await selectRange(page, label);
+      // Wait for ECharts' lazy render after the range controls have committed.
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await panel.locator('.serverTimelineRangeControls button[aria-pressed="true"]').innerText(), "7d");
+      const durations = await panel.locator(".serverTimelinePlayerChart svg text").evaluateAll((elements) => elements
+        .filter((element) => /^(\d+h \d+m|\d+m|<1m)$/.test(element.textContent?.trim() ?? ""))
+        .map((element) => { const box = element.getBoundingClientRect(); return { text: element.textContent, left: box.left, right: box.right, top: box.top }; }));
+      for (let index = 0; index < durations.length; index += 1) {
+        for (const other of durations.slice(index + 1)) {
+          const current = durations[index];
+          assert(Math.abs(current.top - other.top) > 1 || current.right <= other.left || other.right <= current.left,
+            `Long-range session labels overlap: ${JSON.stringify([current, other])}`);
+        }
+      }
+      if (captureDirectory) await panel.screenshot({ path: `${captureDirectory}/timeline-after-1440-all-metrics.png` });
+      const capturedWindow = await timelineWindow(page);
+      assertNear(capturedWindow.to - capturedWindow.from, rangeSpans.get("7d"), 2, "Long-range view changed while capturing the chart");
+      await selectRange(page, "3h");
+    }
+    await assertTimelineNavigation(page);
+    if (viewport.width === 1440) {
+      await assertPlayerSessionStateColors(page);
+      await assertPlayerSectionDisclosure(page);
+      await assertSchedulePopoverIconContrast(page);
+    }
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert(overflow <= 0, `Timeline causes horizontal overflow at ${viewport.width}px`);
+  } finally {
+    assert.deepEqual(browserErrors, [], `Timeline polish browser errors: ${browserErrors.join("\n")}`);
+    await page.close();
+  }
+}
+
 try {
   browser = await launchBrowser(chromium);
+  if (process.env.SERVERSENTINEL_OVERVIEW_MATERIAL_ONLY !== "true") {
+  const polishContext = await browser.newContext({ locale: "en-US", timezoneId: "UTC", colorScheme: "dark", reducedMotion: "reduce" });
+  try {
+    await signInThroughApi(polishContext, baseUrl);
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 3247, height: 1000 }, { width: 768, height: 900 }, { width: 390, height: 844 }]) {
+      await assertTimelinePolish(polishContext, viewport, process.env.SERVERSENTINEL_TIMELINE_CAPTURE_DIR);
+    }
+  } finally { await polishContext.close(); }
+  const touchContext = await browser.newContext({ locale: "en-US", timezoneId: "UTC", hasTouch: true, reducedMotion: "reduce" });
+  try {
+    await signInThroughApi(touchContext, baseUrl);
+    await assertTimelinePolish(touchContext, { width: 844, height: 390 }, process.env.SERVERSENTINEL_TIMELINE_CAPTURE_DIR);
+  } finally { await touchContext.close(); }
+  console.log("Timeline polish smoke passed: keyboard row navigation, layer states, all metric bands, synchronized navigation, dark/light themes, touch targets, and responsive layout.");
+  }
+  if (process.env.SERVERSENTINEL_TIMELINE_POLISH_ONLY !== "true") {
   const materialOnly = process.env.SERVERSENTINEL_OVERVIEW_MATERIAL_ONLY === "true";
   if (materialOnly) {
     const materialContext = await browser.newContext({
@@ -941,6 +1070,7 @@ try {
   }
 
   console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline and server-strip geometry; aligned liquid-glass contours; visible file-editor scrolling; active schedule ranges and card previews; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
+  }
   }
 } finally {
   if (browser) await browser.close();

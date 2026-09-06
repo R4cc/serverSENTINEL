@@ -19,6 +19,7 @@ import {
   playerTimelineLanePositionFromZoom,
   playerTimelineLanes,
   playerTimelineLaneWindowSize,
+  movePlayerTimelineLaneWindow,
   preservePlayerTimelineLanePosition,
   resolvePlayerTimelineLaneWindow,
   type PlayerTimelineLanePosition,
@@ -699,6 +700,9 @@ function PlayerSessionSection({
   const previousLanesRef = useRef(lanes);
   const anchoredPosition = preservePlayerTimelineLanePosition(previousLanesRef.current, lanes, verticalPosition, laneWindowSize);
   const resolvedPosition = resolvePlayerTimelineLaneWindow(lanes, anchoredPosition, laneWindowSize);
+  const visiblePlayers = lanes.slice(resolvedPosition.startIndex, resolvedPosition.endIndex + 1).filter((lane) => lane.kind === "player");
+  const precedingPlayerCount = lanes.slice(0, resolvedPosition.startIndex).filter((lane) => lane.kind === "player").length;
+  const hasRowOverflow = playerTimelineHasLaneOverflow(lanes.length, expanded);
   const onlineCount = displayRows.filter((row) => row.online).length;
   const offlineCount = displayRows.length - onlineCount;
   useEffect(() => {
@@ -758,6 +762,15 @@ function PlayerSessionSection({
           </Button>
         )}
       </header>
+      {hasRowOverflow && (
+        <div className="serverTimelinePlayerNavigation" role="group" aria-label="Player row navigation">
+          <span aria-live="polite">Players {precedingPlayerCount + 1}–{precedingPlayerCount + visiblePlayers.length} of {displayRows.length}</span>
+          <Button variant="ghost" compact aria-label="Previous player rows" disabled={resolvedPosition.startIndex === 0}
+            onClick={() => setVerticalPosition(movePlayerTimelineLaneWindow(lanes, resolvedPosition, laneWindowSize, -1))}>↑</Button>
+          <Button variant="ghost" compact aria-label="Next player rows" disabled={resolvedPosition.endIndex >= lanes.length - 1}
+            onClick={() => setVerticalPosition(movePlayerTimelineLaneWindow(lanes, resolvedPosition, laneWindowSize, 1))}>↓</Button>
+        </div>
+      )}
       {lanes.length ? (
         <>
           <div
@@ -1079,6 +1092,8 @@ export function ServerTimeline({
     }] : []),
     ...(enabled.playersOnline ? [{ key: "players" as const, label: "Players", series: ["playersOnline" as const], prominent: false }] : [])
   ], [enabled]);
+  const eventLayersEnabled = annotationEnabled.server || Boolean(annotationEnabled.automation && data?.scheduleAnnotationsAvailable);
+  const allLayersHidden = !metricBands.length && !annotationEnabled.player && !eventLayersEnabled;
   const resourceState = useMemo(() => {
     if (!data?.samples.length) return "empty";
     const available = data.samples.filter((point) => point.available && point.running && (point.cpuUtilizationPercent !== null || point.memoryUsageBytes !== null)).length;
@@ -1310,6 +1325,7 @@ export function ServerTimeline({
                   <span aria-hidden="true" />{series.label}
                 </button>
               ))}
+              {!metricBands.length && <span className="serverTimelineLayerHint">Metrics hidden</span>}
             </div>
           </div>
           <div className="serverTimelineLayerGroup" role="group" aria-label="Event layers">
@@ -1349,7 +1365,7 @@ export function ServerTimeline({
         aria-label="Server resource and event timeline"
         style={{ "--timeline-label-gutter": `${labelGutter}px` } as React.CSSProperties}
       >
-        <section
+        {!allLayersHidden && <section
           className={`serverTimelineEventRail${visibleEventCount ? "" : " is-empty"}`}
           aria-label="Timeline events"
           style={{ height: annotationGridTop }}
@@ -1360,7 +1376,9 @@ export function ServerTimeline({
               ? `${activeScheduleRanges.length} active · ${visibleEventCount} total`
               : visibleEventCount
                 ? `${visibleEventCount} in this range`
-                : "None in this range"}</span>
+                : !eventLayersEnabled
+                  ? "Layers hidden"
+                  : "None in this range"}</span>
           </div>
           <div className="serverTimelineEventRailTrack" style={{ marginRight: metricGrid.right }}>
             <div ref={annotationRailRef} className="serverTimelineAnnotations" aria-label="Timeline annotations">
@@ -1435,7 +1453,9 @@ export function ServerTimeline({
               </div>
             )}
             {!visibleEventCount && !loading && (
-              <span className="serverTimelineEventRailEmpty">No server events or automation runs here</span>
+              <span className="serverTimelineEventRailEmpty">{!eventLayersEnabled
+                ? "Enable an event layer to show events"
+                : "No events in the enabled layers for this range"}</span>
             )}
             {selectedCluster && selectedPosition && (
               <section
@@ -1465,7 +1485,7 @@ export function ServerTimeline({
               </section>
             )}
           </div>
-        </section>
+        </section>}
         {annotationEnabled.player && (
           <PlayerSessionSection
             rows={playerRows}
@@ -1487,7 +1507,7 @@ export function ServerTimeline({
         {annotationEnabled.player && data && (data.playerActivity?.snapshotState ?? "unavailable") === "unavailable" && (
           <Banner tone="warning" compact className="serverTimelinePlayerAlert" title="Current player status is unavailable" message="Retained sessions are shown as offline." />
         )}
-        <div className="serverTimelineMetricBands">
+        {(metricBands.length > 0 || allLayersHidden) && <div className="serverTimelineMetricBands">
           {metricBands.map((band) => (
             <section className={`serverTimelineMetricBand${band.prominent ? " is-prominent" : " is-compact"}`} key={band.key} aria-label={`${band.label} timeline`}>
               <strong className={`serverTimelineMetricBandLabel tone-${band.key}`}>{band.label}</strong>
@@ -1502,8 +1522,10 @@ export function ServerTimeline({
               />
             </section>
           ))}
-          {!metricBands.length && <div className="serverTimelineEmpty">Enable a metric to display its chart.</div>}
-        </div>
+          {allLayersHidden && (
+            <div className="serverTimelineEmpty">Enable a metric or event layer to display the timeline.</div>
+          )}
+        </div>}
         {sharedGuide && <span
           className={`serverTimelineSharedGuide${sharedGuide.pinned ? " is-pinned" : ""}${sharedGuide.tone ? ` tone-${sharedGuide.tone}` : ""}`}
           style={{ left: sharedGuide.x, top: sharedGuide.top }}
@@ -1518,7 +1540,7 @@ export function ServerTimeline({
           />
         )}
       </div>
-      {!loading && !data?.samples.length && !markers.length && <div className="serverTimelineEmpty">No timeline data is available for this window.</div>}
+      {!loading && !allLayersHidden && !data?.samples.length && !markers.length && !playerRows.length && <div className="serverTimelineEmpty">No timeline data is available for this window.</div>}
     </section>
   );
 }

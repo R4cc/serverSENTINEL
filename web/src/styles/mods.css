@@ -111,7 +111,46 @@
 .modsActionSkeleton { justify-self: center; }
 .modsDrawerBackdrop { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: var(--overlay); -webkit-backdrop-filter: var(--glass-filter-scrim); backdrop-filter: var(--glass-filter-scrim); animation: modsFadeIn 75ms ease-out; }
 .modsWorkflowDrawer, .modsDetailsDrawer { display: flex; flex-direction: column; width: min(620px, 96vw); height: 100%; border-left: var(--border-subtle) solid var(--border-row); box-shadow: var(--shadow-elevated); animation: modsSlideIn 100ms ease-out; }
-.modsDetailsDrawer { width: min(440px, 96vw); }
+.modsDetailsDrawer { width: min(960px, max(640px, 48vw), 96vw); }
+/* Details keep shared controls and surfaces, with room to review. */
+.modsDetailsDrawer { --mods-details-padding: clamp(24px, 2.5vw, 40px); }
+.modsDetailsDrawer .modsDrawerHeader,
+.modsDetailsDrawer .modsDrawerFooter { flex-shrink: 0; padding: var(--space-5) var(--mods-details-padding); }
+.modsDetailsDrawer .modsDrawerBody { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--mods-details-padding); }
+.modsDetailsDrawer .modsDrawerBody > * { flex-shrink: 0; margin: 0; min-width: 0; }
+.modsDetailsDrawer .modsDetailsTitle { gap: var(--space-4); }
+.modsDetailsDrawer .modsDetailsTitle h2 { margin: var(--space-2) 0; font-size: var(--type-page-title-size); }
+.modsDetailsDrawer .modsDetailsTitle img,
+.modsDetailsDrawer .modsDetailsTitle > .modsWorkspaceFallback { width: 56px; height: 56px; flex-shrink: 0; border-radius: var(--radius-md); }
+.modsVersionComparison { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
+.modsVersionComparison > div { min-width: 0; padding: var(--space-5); border: 1px solid var(--border-panel); border-radius: var(--radius-md); background: var(--surface-raised); }
+.modsVersionComparison > div:nth-child(2) { border-color: var(--accent); background: var(--sentinel-accent-soft); }
+.modsVersionComparison dt { color: var(--text-muted); font-size: var(--type-meta-size); }
+.modsVersionComparison dd { margin: var(--space-2) 0 0; overflow-wrap: anywhere; font-size: var(--type-section-title-size); font-weight: var(--weight-heading); }
+.modsDetailsDrawer .modsCompatibilityCard { padding: var(--space-5); }
+.modsDetailsDrawer .modsCompatibilityCard h3,
+.modsDetailsDrawer .modsUpdateReview h4 { margin: 0; font-size: var(--type-section-title-size); }
+.modsDetailsDrawer .modsCompatibilityCard p,
+.modsDetailsDrawer .modsDetailsDescription { font-size: var(--type-body-size); line-height: 1.6; }
+.modsDetailsDrawer .modsUpdateReview { padding: var(--space-5) 0 0; margin-top: var(--space-5); border: 0; border-top: 1px solid var(--border-row); border-radius: 0; background: transparent; gap: var(--space-3); }
+.modsDetailsDrawer .modsRiskAcknowledgement { padding: var(--space-4); }
+.modsDetailsDrawer .modsRiskAcknowledgement > span { font-size: var(--type-body-size); }
+.modsDetailsDrawer .modsTechnicalDetails { padding: var(--space-5); border: 1px solid var(--border-panel); border-radius: var(--radius-md); background: var(--surface-raised); }
+.modsDetailsDrawer summary { padding-block: var(--space-2); }
+.modsDetailsDrawer .modsDetailsFacts > div { padding-block: var(--space-3); }
+.modsDetailsDrawer .modsDrawerFooter { justify-content: flex-end; }
+.modsDetailsDrawer .modsDrawerFooter > button:first-child { flex: initial; margin-right: auto; }
+@media (max-width: 720px) {
+  .modsDetailsDrawer { --mods-details-padding: var(--space-4); }
+  .modsDetailsDrawer .modsDrawerHeader { padding-top: max(var(--space-4), env(safe-area-inset-top)); }
+  .modsDetailsDrawer .modsDrawerFooter { padding-bottom: max(var(--space-4), env(safe-area-inset-bottom)); }
+  .modsDetailsDrawer .modsDrawerBody { gap: var(--space-4); }
+  .modsDetailsDrawer .modsCompatibilityCard,
+  .modsDetailsDrawer .modsTechnicalDetails { padding: var(--space-4); }
+  .modsDetailsDrawer .uiButton { min-height: 44px; white-space: normal; }
+  .modsDetailsDrawer .modsDetailsFacts > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+  .modsDetailsDrawer .modsDrawerFooter > button { flex: 1 1 auto; }
+}
 .modsAddWorkflow { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; height: 100%; }
 .modsDrawerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-5); border-bottom: 1px solid var(--border); }
 .modsDrawerHeader h2 { margin: 2px 0 0; }

@@ -27,6 +27,40 @@ afterEach(() => {
 });
 
 describe("ModUpdatePlanCoordinator", () => {
+  it("rolls five servers across an hour instead of checking them all at once", async () => {
+    vi.useFakeTimers();
+    const servers = Array.from({ length: 5 }, (_, index) => ({ id: `server-${index}` } as ManagedServer));
+    const buildPlan = vi.fn(async (current: ManagedServer) => createModUpdatePlan(current.id, []));
+    const coordinator = new ModUpdatePlanCoordinator({ intervalMs: 3_600_000, readServers: async () => servers, buildPlan });
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(buildPlan).toHaveBeenCalledTimes(1);
+    for (let index = 1; index < 5; index += 1) {
+      await vi.advanceTimersByTimeAsync(720_000);
+      expect(buildPlan).toHaveBeenCalledTimes(index + 1);
+      expect(buildPlan.mock.calls[index][0].id).toBe(`server-${index}`);
+    }
+    await vi.advanceTimersByTimeAsync(720_000);
+    expect(buildPlan.mock.calls[5][0].id).toBe("server-0");
+    coordinator.stop();
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    expect(buildPlan).toHaveBeenCalledTimes(6);
+  });
+
+  it("does not overlap slow scans or restart the timer after stopping mid-scan", async () => {
+    vi.useFakeTimers();
+    let finish!: (plan: ReturnType<typeof createModUpdatePlan>) => void;
+    const buildPlan = vi.fn(() => new Promise<ReturnType<typeof createModUpdatePlan>>((resolve) => { finish = resolve; }));
+    const coordinator = new ModUpdatePlanCoordinator({ intervalMs: 60_000, readServers: async () => [server], buildPlan });
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(buildPlan).toHaveBeenCalledTimes(1);
+    coordinator.stop();
+    finish(createModUpdatePlan(server.id, []));
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(buildPlan).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes immediately and periodically without a page request", async () => {
     vi.useFakeTimers();
     const buildPlan = vi.fn(async () => createModUpdatePlan(server.id, []));

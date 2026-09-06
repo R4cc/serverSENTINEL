@@ -26,13 +26,17 @@ describe("Modrinth metadata caches", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toContain("/v2/projects?ids=");
   });
 
-  it("reuses version reviews but supports authoritative force refreshes", async () => {
+  it("coalesces refresh bursts but fetches again after the short reuse window", async () => {
+    vi.useFakeTimers();
     fetchMock.mockImplementation(async () => new Response(JSON.stringify([version]), { status: 200 }) as never);
 
     await fetchProjectVersions("project-a");
     await fetchProjectVersions("project-a");
     await fetchProjectVersions("project-a", undefined, { forceRefresh: true });
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await fetchProjectVersions("project-a", undefined, { forceRefresh: true });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

@@ -46,7 +46,7 @@ export function modrinthSearchFacets(loaders: string | readonly string[], minecr
   }
   return facets;
 }
-const remoteModListRequests = new Map<string, Promise<unknown>>();
+const modListRequests = new Map<string, Promise<unknown>>();
 const remoteHashBatchRequests = new Map<string, Promise<Map<string, ModrinthVersion>>>();
 const localModHashCache = new ModHashCache();
 
@@ -351,23 +351,6 @@ export function requireNoActiveModMutation(serverId: string) {
   if (activeModMutations.has(serverId)) operationInProgress("A mod change is already running for this server", "MOD_OPERATION_IN_PROGRESS");
 }
 
-async function enrichInstalledModUpdates(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
-  if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
-  const base = result as { mods: Array<Record<string, unknown>> };
-  const mods = await Promise.all(base.mods.map(async (mod) => {
-    const metadata = remoteModMetadata(mod.modrinth);
-    if (!metadata) return mod;
-    const preferredChannel = normalizeReleaseChannel(typeof mod.preferredChannel === "string" ? mod.preferredChannel : undefined);
-    try {
-      const versionInfo = await lookupModrinthUpdateFromMetadata(server, metadata, preferredChannel, options);
-      return versionInfo ? { ...mod, versionInfo } : mod;
-    } catch {
-      return mod;
-    }
-  }));
-  return { ...base, mods };
-}
-
 export async function batchVersionsFromSha1(hashes: string[]) {
   const requestKey = [...hashes].sort().join(",");
   const pending = remoteHashBatchRequests.get(requestKey);
@@ -535,19 +518,16 @@ export async function enrichInstalledModDependencies(result: unknown, options: {
 }
 
 export async function listModsWithPanelMetadata(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
+  const requestKey = `${server.id}|${options.forceRefresh === true}`;
+  const pending = modListRequests.get(requestKey);
+  if (pending) return pending;
   const runtime = runtimeForServer(server);
-  if (runtime instanceof RemoteNodeRuntime) {
-    const requestKey = `${server.id}|${options.forceRefresh === true}`;
-    const pending = remoteModListRequests.get(requestKey);
-    if (pending) return pending;
-    const request = runtime.listMods(server, options)
-      .then((result) => reconcileRemoteInstalledMods(server, result, options))
-      .finally(() => remoteModListRequests.delete(requestKey));
-    remoteModListRequests.set(requestKey, request);
-    return request;
-  }
-  const result = await runtime.listMods(server, options);
-  return options.forceRefresh ? enrichInstalledModUpdates(server, result, options) : result;
+  // Local listing already resolves updates. Only remote results need panel enrichment.
+  const request = runtime.listMods(server, options)
+    .then((result) => runtime instanceof RemoteNodeRuntime ? reconcileRemoteInstalledMods(server, result, options) : result)
+    .finally(() => modListRequests.delete(requestKey));
+  modListRequests.set(requestKey, request);
+  return request;
 }
 
 export async function localListMods(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
@@ -861,7 +841,7 @@ export async function updateModrinthMod(server: ManagedServer, input: unknown) {
   const selectedChannel = optionalReleaseChannel(body.channel);
   const runtime = runtimeForServer(server);
   try {
-    const listResult = await listModsWithPanelMetadata(server, { forceRefresh: true });
+    const listResult = await listModsWithPanelMetadata(server);
     const mods = modsFromListResult(listResult);
     const currentMod = mods.find((mod) => mod.filename === filename);
     const metadata = remoteModMetadata(currentMod?.modrinth);
@@ -946,7 +926,7 @@ export async function switchModrinthModVersion(server: ManagedServer, input: unk
   const startedAt = Date.now();
   const request = parseModrinthSwitchVersionRequest(input);
   try {
-    const listResult = await listModsWithPanelMetadata(server, { forceRefresh: true });
+    const listResult = await listModsWithPanelMetadata(server);
     const mods = modsFromListResult(listResult);
     const currentMod = mods.find((mod) => mod.filename === request.filename);
     const metadata = remoteModMetadata(currentMod?.modrinth);
@@ -1068,7 +1048,7 @@ export async function switchModrinthModVersion(server: ManagedServer, input: unk
 export async function acknowledgeInstalledModReview(server: ManagedServer, input: unknown) {
   const body = asObject(input, "mod review acknowledgement request");
   const filename = safeInstalledModFilename(requiredString(body.filename, "filename"));
-  const listResult = await listModsWithPanelMetadata(server, { forceRefresh: true });
+  const listResult = await listModsWithPanelMetadata(server);
   const currentMod = modsFromListResult(listResult).find((mod) => mod.filename === filename);
   if (!currentMod) {
     throw new Error("Installed mod could not be found");

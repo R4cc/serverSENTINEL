@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { InstalledMod, ModUpdatePlanEntry } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
-import { Button } from "../../components/UiPrimitives";
+import { Button, StatusBadge } from "../../components/UiPrimitives";
 import { formatBytes } from "../../utils/format";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
@@ -38,6 +38,7 @@ type Props = {
 export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, locked, reviewAcknowledgementLocked, dependencyInstallLocked = locked, formatDate, onClose, onToggle, onUpdate, onInstallDependencies, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
   const health = getInstalledModHealth(applyUpdatePlanEntry(mod, updatePlanEntry ?? null), terminology);
   const icon = modIconSource(mod.iconUrl);
+  const reviewRef = useRef<HTMLElement>(null);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
   const [updateAcknowledged, setUpdateAcknowledged] = useState(false);
   const [reviewingInstalledVersion, setReviewingInstalledVersion] = useState(false);
@@ -70,6 +71,13 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
     setAcknowledgingInstalledReview(false);
   }, [mod.filename, mod.modrinth?.versionId]);
 
+  useEffect(() => {
+    if (reviewingUpdate || reviewingInstalledVersion) {
+      reviewRef.current?.scrollIntoView({ block: "nearest" });
+      reviewRef.current?.querySelector("input")?.focus({ preventScroll: true });
+    }
+  }, [reviewingUpdate, reviewingInstalledVersion]);
+
   async function confirmInstalledReviewAcknowledgement() {
     if (!installedReviewAcknowledged || acknowledgingInstalledReview || reviewAcknowledgementLocked) return;
     setAcknowledgingInstalledReview(true);
@@ -87,16 +95,16 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
       <div className="modsDrawerHeader">
         <div className="modsDetailsTitle">
           <ModIconImage src={icon} fallback="JAR" />
-          <div><h2 id="mod-details-title">{mod.displayName}</h2><span>{mod.enabled ? "Enabled" : "Disabled"}</span></div>
+          <div><small>{terminology.singularTitle} details</small><h2 id="mod-details-title">{mod.displayName}</h2><StatusBadge tone={mod.enabled ? "success" : "neutral"}>{mod.enabled ? "Enabled" : "Disabled"}</StatusBadge></div>
         </div>
         <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label={`Close ${terminology.singular} details`} title={`Close ${terminology.singular} details`}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}
-        <section className={`modsHealthReasonBanner ${reasonTone}`} aria-label="Compatibility reason">
+        {hasPlannedUpdate && health.key === "missing_dependencies" && <section className={`modsHealthReasonBanner ${reasonTone}`} aria-label="Compatibility reason">
           <strong>{health.label}</strong>
           <span>{health.detailDescription}</span>
-        </section>
+        </section>}
         {mod.dependencyHealth?.status === "missing" && (
           <section className="modsReviewSection" aria-labelledby="missing-dependencies-title">
             <h3 id="missing-dependencies-title">Required dependencies</h3>
@@ -108,13 +116,13 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
             ))}
           </section>
         )}
-        <dl className="modsDetailsFacts">
+        <dl className="modsVersionComparison" aria-label="Version comparison">
           <div><dt>Installed version</dt><dd>{modVersion(mod)}</dd></div>
           {hasPlannedUpdate && updatePlanEntry?.targetVersion && <div><dt>Available version</dt><dd>{updatePlanEntry.targetVersion}</dd></div>}
         </dl>
         <section className={`modsCompatibilityCard ${statusTone}`}>
-          <strong>{statusTitle}</strong>
-          <p>{statusDescription}</p>
+          <h3>{statusTitle}</h3>
+          <p>{hasPlannedUpdate ? statusDescription : health.detailDescription}</p>
           <details>
             <summary>Technical compatibility details</summary>
             <dl className="modsCompatibilityFacts">
@@ -130,11 +138,9 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
               )}
             </dl>
           </details>
-        </section>
         {reviewingUpdate && updatePlanEntry?.status === "needs_review" && (
-          <section className="modsUpdateReview" aria-labelledby="review-update-title">
-            <strong id="review-update-title">Review update{updatePlanEntry.targetVersion ? ` to ${updatePlanEntry.targetVersion}` : ""}</strong>
-            <p>{updatePlanEntry.reason}</p>
+          <section ref={reviewRef} className="modsUpdateReview" aria-labelledby="review-update-title">
+            <h4 id="review-update-title">Confirm this update</h4>
             <label className="modsRiskAcknowledgement">
               <input type="checkbox" checked={updateAcknowledged} onChange={(event) => setUpdateAcknowledged(event.target.checked)} />
               <span><strong>Compatibility is not fully verified.</strong>I understand this update may not be safe for this server.</span>
@@ -146,9 +152,8 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
           </section>
         )}
         {reviewingInstalledVersion && canAcknowledgeInstalledReview && (
-          <section className="modsUpdateReview" aria-labelledby="review-installed-title">
-            <strong id="review-installed-title">Acknowledge review</strong>
-            <p>{health.detailDescription}</p>
+          <section ref={reviewRef} className="modsUpdateReview" aria-labelledby="review-installed-title">
+            <h4 id="review-installed-title">Acknowledge installed version</h4>
             <label className="modsRiskAcknowledgement">
               <input type="checkbox" checked={installedReviewAcknowledged} onChange={(event) => setInstalledReviewAcknowledged(event.target.checked)} disabled={reviewAcknowledgementLocked || acknowledgingInstalledReview} />
               <span><strong>Compatibility is not fully verified.</strong> I reviewed this installed version and want to mark it healthy until the version changes.</span>
@@ -159,6 +164,7 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
             </div>
           </section>
         )}
+        </section>
         <details className="modsTechnicalDetails">
             <summary>File and source details</summary>
             <dl className="modsDetailsFacts">

@@ -47,6 +47,8 @@ type TimedCacheEntry<T> = {
 
 const projectCacheTtlMs = 60 * 60 * 1000;
 const projectVersionsCacheTtlMs = 5 * 60 * 1000;
+// A refresh after each mutation must not refetch the same catalog for every installed mod.
+const projectVersionsRefreshReuseMs = 60_000;
 const modrinthMetadataCacheMaxEntries = 500;
 
 const projectCache = new Map<string, TimedCacheEntry<ModrinthProject>>();
@@ -376,7 +378,8 @@ export async function fetchProjectVersions(projectId: string, filters?: { loader
   const loaders = filters ? compatibilityLoaders(filters) : [];
   const cacheKey = `${projectId}|${loaders.slice().sort().join(",")}|${filters?.minecraftVersion ?? ""}`;
   const cached = projectVersionsCache.get(cacheKey);
-  if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+  const reuseUntil = cached ? cached.expiresAt - projectVersionsCacheTtlMs + projectVersionsRefreshReuseMs : 0;
+  if (cached && (options.forceRefresh ? reuseUntil : cached.expiresAt) > Date.now()) return cached.value;
   const pending = projectVersionsRequestCache.get(cacheKey);
   if (pending) return pending;
   const url = new URL(`https://api.modrinth.com/v2/project/${encodeURIComponent(projectId)}/version`);

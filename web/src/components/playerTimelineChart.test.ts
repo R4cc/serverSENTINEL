@@ -9,6 +9,7 @@ import {
   playerTimelineLabelLayout,
   playerTimelineLanes,
   playerTimelineLaneWindowSize,
+  movePlayerTimelineLaneWindow,
   playerTimelineReconnectWindowMs,
   playerTimelineRowsDataZoomId,
   playerTimelineRowsSliderId,
@@ -154,6 +155,28 @@ describe("player timeline chart items", () => {
 });
 
 describe("player timeline label placement", () => {
+  it("omits labels when neighboring sessions leave insufficient space", () => {
+    const layout = playerTimelineLabelLayout({
+      startX: 100, endX: 103, plotLeft: 99, plotRight: 104,
+      durationWidth: 30, startWidth: 64, endWidth: 24, hasStart: true, hasEnd: true
+    });
+    expect(layout).toMatchObject({ showDuration: false, showStart: false, showEnd: false });
+  });
+  it("keeps larger endpoint labels within the plot and prevents overlap on short edge sessions", () => {
+    for (const [startX, endX] of [[0, 3], [85, 100], [1, 99]]) {
+      const layout = playerTimelineLabelLayout({
+        startX, endX, plotLeft: 0, plotRight: 100,
+        durationWidth: 42, startWidth: 64, endWidth: 64, hasStart: true, hasEnd: true
+      });
+      const bounds = (x: number, align: string) => align === "right" ? [x - 64, x] : align === "left" ? [x, x + 64] : [x - 32, x + 32];
+      const start = bounds(layout.startX, layout.startAlign);
+      const end = bounds(layout.endX, layout.endAlign);
+      for (const [shown, range] of [[layout.showStart, start], [layout.showEnd, end]] as const) {
+        if (shown) { expect(range[0]).toBeGreaterThanOrEqual(0); expect(range[1]).toBeLessThanOrEqual(100); }
+      }
+      if (layout.showStart && layout.showEnd) expect(start[1] + 8).toBeLessThanOrEqual(end[0]);
+    }
+  });
   it("moves short-session endpoints outside the segment when space permits", () => {
     const layout = playerTimelineLabelLayout({
       startX: 100,
@@ -189,6 +212,20 @@ describe("player timeline label placement", () => {
 });
 
 describe("player timeline lanes", () => {
+  it("pages through row windows with overlap and clamps both navigation boundaries", () => {
+    const lanes = playerTimelineLanes(Array.from({ length: 12 }, (_, index) => ({ player: `Player ${index}`, online: true, sessions: [] })));
+    const first = { startIndex: 0 };
+    expect(movePlayerTimelineLaneWindow(lanes, first, 6, -1).startIndex).toBe(0);
+    const next = movePlayerTimelineLaneWindow(lanes, first, 6, 1);
+    expect(next.startIndex).toBe(5);
+    const last = movePlayerTimelineLaneWindow(lanes, next, 6, 1);
+    expect(last.startIndex).toBe(7);
+    expect(movePlayerTimelineLaneWindow(lanes, last, 6, 1)).toEqual(last);
+    expect(movePlayerTimelineLaneWindow(lanes, next, 6, -1).startIndex).toBe(0);
+    expect(movePlayerTimelineLaneWindow([], first, 6, 1).startIndex).toBe(0);
+    const reordered = [lanes[0], lanes[2], lanes[1], ...lanes.slice(3)];
+    expect(resolvePlayerTimelineLaneWindow(reordered, next, 6).startKey).toBe(next.startKey);
+  });
   it("uses dedicated group lanes and stable online-first player keys", () => {
     expect(playerTimelineLanes(rows()).map((lane) => lane.key)).toEqual([
       "group:online",

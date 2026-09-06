@@ -23,6 +23,9 @@ export class ModUpdatePlanCoordinator {
   private readonly plans = new Map<string, ModUpdatePlan>();
   private readonly inFlight = new Map<string, Promise<ModUpdatePlan>>();
   private interval: NodeJS.Timeout | undefined;
+  private running = false;
+  private generation = 0;
+  private nextServerIndex = 0;
 
   constructor(private readonly options: {
     intervalMs: number;
@@ -33,15 +36,15 @@ export class ModUpdatePlanCoordinator {
   }) {}
 
   start() {
-    if (this.interval) return;
-    void this.refreshAll();
-    this.interval = setInterval(() => void this.refreshAll(), this.options.intervalMs);
-    this.interval.unref?.();
+    if (this.running) return;
+    this.running = true;
+    void this.refreshNext(++this.generation);
   }
 
   stop() {
-    if (!this.interval) return;
-    clearInterval(this.interval);
+    this.running = false;
+    this.generation += 1;
+    clearTimeout(this.interval);
     this.interval = undefined;
   }
 
@@ -83,19 +86,28 @@ export class ModUpdatePlanCoordinator {
     return request;
   }
 
-  async refreshAll() {
-    let servers: ManagedServer[];
+  private async refreshNext(generation: number) {
+    let delayMs = this.options.intervalMs;
     try {
-      servers = await this.options.readServers();
+      const servers = await this.options.readServers();
+      if (!this.running || generation !== this.generation) return;
+      if (servers.length) {
+        delayMs = Math.max(1, Math.floor(this.options.intervalMs / servers.length));
+        const server = servers[this.nextServerIndex % servers.length];
+        this.nextServerIndex = (this.nextServerIndex + 1) % servers.length;
+        try {
+          await this.refresh(server);
+        } catch (error) {
+          this.options.onError?.(error, server);
+        }
+      }
     } catch (error) {
       this.options.onError?.(error);
-      return;
-    }
-    for (const server of servers) {
-      try {
-        await this.refresh(server);
-      } catch (error) {
-        this.options.onError?.(error, server);
+    } finally {
+      if (this.running && generation === this.generation) {
+        // Spread servers across the interval and never overlap background scans.
+        this.interval = setTimeout(() => void this.refreshNext(generation), delayMs);
+        this.interval.unref?.();
       }
     }
   }

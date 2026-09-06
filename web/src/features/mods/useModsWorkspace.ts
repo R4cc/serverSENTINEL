@@ -260,7 +260,10 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       return;
     }
     try {
-      const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods${options.forceRefresh ? "?forceRefresh=true" : ""}`);
+      const result = await api<{ mods: InstalledMod[] }>(`/api/servers/${serverId}/mods${options.forceRefresh ? "?forceRefresh=true" : ""}`, {
+        // Large metadata scans wait in the panel's paced Modrinth queue.
+        timeoutMs: options.forceRefresh ? 5 * 60_000 : undefined
+      });
       if (isCurrent()) {
         setInstalledMods((current) => mergeStableModMetadata(current, result.mods));
         setInstalledModsServerId(serverId);
@@ -306,7 +309,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       return plan;
     }
     try {
-      const plan = await api<ModUpdatePlan | null>(`/api/servers/${serverId}/mods/update-plan${options.forceRefresh ? "?forceRefresh=true" : ""}`);
+      const plan = await api<ModUpdatePlan | null>(`/api/servers/${serverId}/mods/update-plan${options.forceRefresh ? "?forceRefresh=true" : ""}`, {
+        timeoutMs: options.forceRefresh ? 5 * 60_000 : undefined
+      });
       if (isCurrent()) {
         setUpdatePlan(plan);
         setUpdatePlanError("");
