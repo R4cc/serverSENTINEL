@@ -258,6 +258,7 @@ export function NodeDetailsDrawer({
         <div className="nodeDrawerTitle">
           <NodeGlyph />
           <div>
+            <small className="nodeDrawerEyebrow">Node details</small>
             <div className="nodeDrawerTitleLine">
               <h2 id="node-details-title" title={node.name}>{node.name}</h2>
               <StatusBadge tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : node.status === "online" ? "success" : node.status === "offline" ? "danger" : "neutral"}>
@@ -318,13 +319,16 @@ export function NodeDetailsDrawer({
           </Banner>
         )}
 
+        <dl className="nodeVersionComparison" aria-label="Version comparison">
+          <div><dt>Agent version</dt><dd>{node.agentVersion || "Unknown"}</dd></div>
+          <div><dt>Panel version</dt><dd>{panelVersion || "Unknown"}</dd></div>
+        </dl>
+
         <section className="nodeDrawerSection" aria-labelledby="node-health-title">
           <h3 id="node-health-title">Health and runtime</h3>
           <dl className="nodeDrawerFacts">
             <div><dt>Docker</dt><dd className={valueTone(node.dockerStatus)}>{nodeDockerLabel(node)}</dd></div>
             <div><dt>Data path</dt><dd className={valueTone(node.dataPathStatus)}>{nodeDataPathLabel(node)}</dd></div>
-            <div><dt>Agent version</dt><dd>{node.agentVersion || "Unknown"}</dd></div>
-            <div><dt>Panel version</dt><dd>{panelVersion || "Unknown"}</dd></div>
             <div><dt>Host memory</dt><dd>{node.totalMemory ? formatBytes(node.totalMemory) : "Unknown"}</dd></div>
             <div><dt>Last seen</dt><dd>{formatNodeDate(node.lastSeenAt ?? node.connectedAt, formatDate)}</dd></div>
           </dl>
