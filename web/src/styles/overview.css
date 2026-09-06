@@ -469,10 +469,13 @@ button.overviewCardRow:focus-visible {
 }
 
 .serverTimelineRangeControls .uiButton.active {
-  color: var(--accent);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-xs);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-raised));
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
+
+.serverTimelinePanel .uiButton { min-height: 32px; min-width: 32px; }
+.serverTimelinePanel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .serverTimelineCustomRange {
   min-height: 30px;
@@ -501,11 +504,11 @@ button.overviewCardRow:focus-visible {
   flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-3) var(--space-5);
 }
 
 .serverTimelineLayerGroup {
-  flex: 1 1 420px;
+  flex: 0 1 auto;
   align-items: flex-start;
   gap: var(--space-2);
 }
@@ -525,8 +528,10 @@ button.overviewCardRow:focus-visible {
 .serverTimelineSeries {
   min-width: 0;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-2);
 }
+
+.serverTimelineLayerHint { align-self: center; color: var(--text-muted); font-size: 12px; }
 
 .timelineSeriesToggle {
   --timeline-toggle-color: var(--text-muted);
@@ -664,7 +669,7 @@ button.overviewCardRow:focus-visible {
 
 .serverTimelineEventRailGutter > span {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .serverTimelineEventRailTrack {
@@ -678,7 +683,7 @@ button.overviewCardRow:focus-visible {
   bottom: 15px;
   left: 0;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   pointer-events: none;
 }
 
@@ -699,7 +704,7 @@ button.overviewCardRow:focus-visible {
   gap: var(--space-3);
   padding: 0 var(--space-2) 0 18px;
   border-bottom: var(--border-subtle) solid color-mix(in srgb, var(--timeline-join) 38%, var(--border-muted));
-  background: color-mix(in srgb, var(--timeline-join) 14%, var(--surface-raised));
+  background: color-mix(in srgb, var(--timeline-join) 5%, var(--surface-raised));
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--timeline-join) 78%, transparent);
   color: var(--text);
   font-size: 12px;
@@ -710,6 +715,7 @@ button.overviewCardRow:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .serverTimelinePlayerHeading > strong {
@@ -729,7 +735,7 @@ button.overviewCardRow:focus-visible {
   align-items: center;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: var(--weight-title);
 }
 
@@ -745,7 +751,26 @@ button.overviewCardRow:focus-visible {
 .serverTimelinePlayerToggle {
   gap: 5px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
+}
+
+.serverTimelinePlayerNavigation {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--border-subtle) solid var(--border-row);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.serverTimelinePlayerNavigation > span { margin-right: auto; }
+
+@media (pointer: coarse) {
+  .serverTimelinePanel .uiButton,
+  .serverTimelinePanel .timelineSeriesToggle,
+  .serverTimelinePanel .timelineAnnotationCluster { min-height: 44px; min-width: 44px; }
 }
 
 .serverTimelinePlayerToggleGlyph { font-size: 9px; line-height: 1; }
@@ -755,13 +780,11 @@ button.overviewCardRow:focus-visible {
   width: 100%;
   min-width: 0;
   min-height: 70px;
-  max-height: 270px;
   overflow: hidden;
   background: var(--surface-raised);
   touch-action: pan-y;
 }
 
-.serverTimelinePlayerChart.is-expanded { max-height: none; }
 
 .serverTimelinePlayerEmpty {
   min-height: 64px;
@@ -1323,7 +1346,6 @@ button.overviewCardRow:focus-visible {
     height: 360px;
   }
 
-  .serverTimelinePlayerChart { max-height: 228px; }
   .serverTimelineMetricBand.is-prominent { height: 176px; }
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }
@@ -2077,7 +2099,6 @@ button.overviewCardRow:focus-visible {
     min-height: 320px;
   }
 
-  .serverTimelinePlayerChart { max-height: 220px; }
   .serverTimelineMetricBand.is-prominent { height: 176px; }
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }

@@ -34,10 +34,11 @@ export function buildTimelineTimeAxisOption({
     axisTick: { show: false },
     axisLabel: {
       color: palette.textMuted,
+      fontSize: 11,
       hideOverlap: true,
       formatter: (value: number) => viewport.to - viewport.from >= 60 * 60 * 1000 ? formatShortTime(value) : formatTime(value)
     },
-    splitLine: { show: false }
+    splitLine: { show: true, lineStyle: { color: palette.border, type: "dashed", opacity: 0.4 } }
   };
 }
 
