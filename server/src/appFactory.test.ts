@@ -1275,7 +1275,7 @@ describe("Fastify application factory", () => {
       expect(registered.statusCode, registered.body).toBe(200);
       const cookie = sessionCookieFrom(registered);
 
-      // The hourly update check is the module's background work, and it only exists while the
+      // The twelve-hour update check is the module's background work, and it only exists while the
       // module does: nothing builds it at boot when the module is off.
       expect(services.modUpdatePlanCoordinator).toBeDefined();
 
@@ -1291,6 +1291,7 @@ describe("Fastify application factory", () => {
       for (const url of [
         `/api/servers/${serverId}/mods`,
         `/api/servers/${serverId}/mods/update-plan`,
+        `/api/servers/${serverId}/mods/update-plan/progress`,
         "/api/modrinth/search?query=sodium"
       ]) {
         const response = await app.inject({ method: "GET", url, headers: { ...csrf, cookie } });

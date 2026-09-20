@@ -1,7 +1,16 @@
 import type { ManagedServer } from "../types.js";
 import type { ModUpdatePlan } from "./updatePlan.js";
 
-type BuildModUpdatePlan = (server: ManagedServer, options: { forceRefresh: boolean }) => Promise<ModUpdatePlan>;
+export type ModUpdateCheckProgress = {
+  active: boolean;
+  checked: number;
+  total: number;
+};
+
+type BuildModUpdatePlan = (server: ManagedServer, options: {
+  forceRefresh: boolean;
+  onProgress: (progress: Omit<ModUpdateCheckProgress, "active">) => void;
+}) => Promise<ModUpdatePlan>;
 
 type ModUpdatePlanCache = {
   get: (serverId: string) => ModUpdatePlan | null;
@@ -22,6 +31,7 @@ function regressedKnownUpdates(previous: ModUpdatePlan | null, next: ModUpdatePl
 export class ModUpdatePlanCoordinator {
   private readonly plans = new Map<string, ModUpdatePlan>();
   private readonly inFlight = new Map<string, Promise<ModUpdatePlan>>();
+  private readonly progress = new Map<string, Omit<ModUpdateCheckProgress, "active">>();
   private interval: NodeJS.Timeout | undefined;
   private running = false;
   private generation = 0;
@@ -61,11 +71,20 @@ export class ModUpdatePlanCoordinator {
     }
   }
 
+  getProgress(serverId: string): ModUpdateCheckProgress {
+    const progress = this.progress.get(serverId);
+    return progress ? { active: true, ...progress } : { active: false, checked: 0, total: 0 };
+  }
+
   refresh(server: ManagedServer) {
     const pending = this.inFlight.get(server.id);
     if (pending) return pending;
     const previous = this.get(server.id);
-    const request = this.options.buildPlan(server, { forceRefresh: true })
+    this.progress.set(server.id, { checked: 0, total: previous?.counts.totalInstalled ?? 0 });
+    const request = this.options.buildPlan(server, {
+      forceRefresh: true,
+      onProgress: (progress) => this.progress.set(server.id, progress)
+    })
       .then((plan) => {
         const unresolved = regressedKnownUpdates(previous, plan);
         if (unresolved.length) {
@@ -81,6 +100,7 @@ export class ModUpdatePlanCoordinator {
       })
       .finally(() => {
         this.inFlight.delete(server.id);
+        this.progress.delete(server.id);
       });
     this.inFlight.set(server.id, request);
     return request;
@@ -92,13 +112,31 @@ export class ModUpdatePlanCoordinator {
       const servers = await this.options.readServers();
       if (!this.running || generation !== this.generation) return;
       if (servers.length) {
-        delayMs = Math.max(1, Math.floor(this.options.intervalMs / servers.length));
-        const server = servers[this.nextServerIndex % servers.length];
-        this.nextServerIndex = (this.nextServerIndex + 1) % servers.length;
-        try {
-          await this.refresh(server);
-        } catch (error) {
-          this.options.onError?.(error, server);
+        const now = Date.now();
+        const orderedServers = Array.from(
+          { length: servers.length },
+          (_, offset) => servers[(this.nextServerIndex + offset) % servers.length]
+        );
+        const next = orderedServers
+          .map((server) => {
+            const generatedAt = Date.parse(this.get(server.id)?.generatedAt ?? "");
+            const lastGeneratedAt = Number.isFinite(generatedAt) ? Math.min(generatedAt, now) : 0;
+            return { server, dueAt: lastGeneratedAt ? lastGeneratedAt + this.options.intervalMs : 0 };
+          })
+          .reduce((earliest, candidate) => candidate.dueAt < earliest.dueAt ? candidate : earliest);
+
+        if (next.dueAt <= now) {
+          this.nextServerIndex = (servers.indexOf(next.server) + 1) % servers.length;
+          // A full pass still spans the configured interval, avoiding a startup burst when several
+          // servers have no plan yet. Fresh persisted plans stay available and are not rechecked.
+          delayMs = Math.max(1, Math.floor(this.options.intervalMs / servers.length));
+          try {
+            await this.refresh(next.server);
+          } catch (error) {
+            this.options.onError?.(error, next.server);
+          }
+        } else {
+          delayMs = Math.max(1, next.dueAt - now);
         }
       }
     } catch (error) {

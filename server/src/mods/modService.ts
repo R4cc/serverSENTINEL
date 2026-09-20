@@ -46,9 +46,29 @@ export function modrinthSearchFacets(loaders: string | readonly string[], minecr
   }
   return facets;
 }
-const modListRequests = new Map<string, Promise<unknown>>();
 const remoteHashBatchRequests = new Map<string, Promise<Map<string, ModrinthVersion>>>();
 const localModHashCache = new ModHashCache();
+
+type ModListOptions = {
+  forceRefresh?: boolean;
+  onProgress?: (progress: { checked: number; total: number }) => void;
+};
+
+type ModListRequest = {
+  promise: Promise<unknown>;
+  progress?: { checked: number; total: number };
+  listeners: Set<NonNullable<ModListOptions["onProgress"]>>;
+};
+
+const modListRequests = new Map<string, ModListRequest>();
+
+async function withProgress<T>(task: Promise<T>, onSettled: () => void) {
+  try {
+    return await task;
+  } finally {
+    onSettled();
+  }
+}
 
 export async function modrinthApiKey() {
   return services.settingsRepository.get().modrinthApiKey || process.env.MODRINTH_API_KEY || "";
@@ -374,7 +394,7 @@ async function loadBatchVersionsFromSha1(hashes: string[]) {
   return resolved;
 }
 
-async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: { forceRefresh?: boolean } = {}) {
+async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: ModListOptions = {}) {
   if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
   const base = result as { mods: Array<Record<string, unknown>> };
   const prefs = await readModPreferences(server);
@@ -405,7 +425,9 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
   }
 
   let prefsModified = false;
-  const mods = await Promise.all(base.mods.map(async (mod) => {
+  let checked = 0;
+  options.onProgress?.({ checked, total: base.mods.length });
+  const mods = await Promise.all(base.mods.map((mod) => withProgress((async () => {
     const filename = typeof mod.filename === "string" ? mod.filename : "";
     const sha1 = typeof mod.sha1 === "string" ? mod.sha1 : "";
     const existingPreference = prefs[filename];
@@ -460,7 +482,10 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
       modrinth: metadata,
       versionInfo
     };
-  }));
+  })(), () => {
+    checked += 1;
+    options.onProgress?.({ checked, total: base.mods.length });
+  })));
   if (prefsModified) await writeModPreferences(server, prefs);
   return { ...base, mods };
 }
@@ -517,20 +542,35 @@ export async function enrichInstalledModDependencies(result: unknown, options: {
   };
 }
 
-export async function listModsWithPanelMetadata(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
+export async function listModsWithPanelMetadata(server: ManagedServer, options: ModListOptions = {}) {
   const requestKey = `${server.id}|${options.forceRefresh === true}`;
   const pending = modListRequests.get(requestKey);
-  if (pending) return pending;
+  if (pending) {
+    if (options.onProgress) {
+      pending.listeners.add(options.onProgress);
+      if (pending.progress) options.onProgress(pending.progress);
+    }
+    return pending.promise;
+  }
   const runtime = runtimeForServer(server);
+  const listeners = new Set<NonNullable<ModListOptions["onProgress"]>>();
+  if (options.onProgress) listeners.add(options.onProgress);
+  const requestState: ModListRequest = { promise: Promise.resolve(undefined), listeners };
+  const reportProgress = (progress: { checked: number; total: number }) => {
+    requestState.progress = progress;
+    for (const listener of listeners) listener(progress);
+  };
+  const requestOptions = { ...options, onProgress: reportProgress };
   // Local listing already resolves updates. Only remote results need panel enrichment.
-  const request = runtime.listMods(server, options)
-    .then((result) => runtime instanceof RemoteNodeRuntime ? reconcileRemoteInstalledMods(server, result, options) : result)
+  const request = runtime.listMods(server, requestOptions)
+    .then((result) => runtime instanceof RemoteNodeRuntime ? reconcileRemoteInstalledMods(server, result, requestOptions) : result)
     .finally(() => modListRequests.delete(requestKey));
-  modListRequests.set(requestKey, request);
+  requestState.promise = request;
+  modListRequests.set(requestKey, requestState);
   return request;
 }
 
-export async function localListMods(server: ManagedServer, options: { forceRefresh?: boolean } = {}) {
+export async function localListMods(server: ManagedServer, options: ModListOptions = {}) {
   const { directory } = managedContentRuntime(server);
   await mkdir(ensureInsideServer(server, directory), { recursive: true });
   const modsDir = await validateExistingInsideServer(server, directory);
@@ -538,11 +578,14 @@ export async function localListMods(server: ManagedServer, options: { forceRefre
   const prefs = await readModPreferences(server);
   let prefsModified = false;
 
+  const modEntries = entries
+    .filter((entry) => entry.isFile() && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled")))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  let checked = 0;
+  options.onProgress?.({ checked, total: modEntries.length });
   const mods = await Promise.all(
-    entries
-      .filter((entry) => entry.isFile() && (entry.name.endsWith(".jar") || entry.name.endsWith(".jar.disabled")))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(async (entry) => {
+    modEntries
+      .map((entry) => withProgress((async () => {
         const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
         const modStat = await stat(modPath);
         const sha1 = await localModHashCache.sha1(`${server.id}:${entry.name}`, modStat.size, modStat.mtimeMs, () => readFile(modPath));
@@ -601,7 +644,10 @@ export async function localListMods(server: ManagedServer, options: { forceRefre
           modrinth: metadata,
           versionInfo
         };
-      })
+      })(), () => {
+        checked += 1;
+        options.onProgress?.({ checked, total: modEntries.length });
+      }))
   );
 
   if (prefsModified) {
@@ -815,8 +861,8 @@ export function modsFromListResult(result: unknown) {
   return (result as { mods: Array<Record<string, unknown>> }).mods;
 }
 
-export async function buildModUpdatePlan(server: ManagedServer, options: { forceRefresh?: boolean; channel?: ReleaseChannel } = {}): Promise<ModUpdatePlan> {
-  const listed = await listModsWithPanelMetadata(server, { forceRefresh: options.forceRefresh });
+export async function buildModUpdatePlan(server: ManagedServer, options: ModListOptions & { channel?: ReleaseChannel } = {}): Promise<ModUpdatePlan> {
+  const listed = await listModsWithPanelMetadata(server, { forceRefresh: options.forceRefresh, onProgress: options.onProgress });
   let mods = modsFromListResult(listed);
   if (options.channel) {
     mods = await Promise.all(mods.map(async (mod) => {

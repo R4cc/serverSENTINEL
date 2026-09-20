@@ -12,6 +12,7 @@ import { modUpdateRefreshResultMessage } from "../../pages/OverviewPage";
 import type { ManagedContentTerminology } from "./contentTerminology";
 import { resolveModGuards } from "./modAccess";
 import { useModsWorkspace } from "./useModsWorkspace";
+import { modUpdateCheckProgressLabel, modUpdateCheckProgressPercent } from "./modUpdatePlan";
 
 /**
  * The managed-content module's browser surface: the mods workspace and its page, behind one dynamic
@@ -133,7 +134,17 @@ export function ModsModule(props: ModsModuleProps) {
     updateCheckInFlightRef.current = true;
     const managedContent = contentRef.current;
     const toastId = `overview-mod-update-check:${serverIdRef.current ?? "current"}`;
-    toast.loading("Checking for updates", { id: toastId, description: <ToastProgress />, duration: Infinity, dismissible: false });
+    const updateToast = () => {
+      const progress = workspaceRef.current.state.updatePlanProgress;
+      toast.loading(modUpdateCheckProgressLabel(progress, managedContent.plural), {
+        id: toastId,
+        description: <ToastProgress progress={modUpdateCheckProgressPercent(progress)} />,
+        duration: Infinity,
+        dismissible: false
+      });
+    };
+    updateToast();
+    const progressTimer = window.setInterval(updateToast, 250);
     try {
       const updatePlan = await workspaceRef.current.actions.refresh(true, false);
       if (!updatePlan) {
@@ -150,6 +161,7 @@ export function ModsModule(props: ModsModuleProps) {
         dismissible: true
       });
     } finally {
+      window.clearInterval(progressTimer);
       updateCheckInFlightRef.current = false;
     }
   }, []);

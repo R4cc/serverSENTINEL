@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe("ModUpdatePlanCoordinator", () => {
-  it("rolls five servers across an hour instead of checking them all at once", async () => {
+  it("rolls five servers across the configured interval instead of checking them all at once", async () => {
     vi.useFakeTimers();
     const servers = Array.from({ length: 5 }, (_, index) => ({ id: `server-${index}` } as ManagedServer));
     const buildPlan = vi.fn(async (current: ManagedServer) => createModUpdatePlan(current.id, []));
@@ -80,6 +80,30 @@ describe("ModUpdatePlanCoordinator", () => {
     coordinator.stop();
   });
 
+  it("serves a persisted plan and waits until it is due before refreshing after startup", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-09-20T12:00:00.000Z");
+    const previous = createModUpdatePlan(server.id, [], "2026-09-20T01:00:00.000Z");
+    const buildPlan = vi.fn(async () => createModUpdatePlan(server.id, []));
+    const coordinator = new ModUpdatePlanCoordinator({
+      intervalMs: 12 * 60 * 60 * 1000,
+      readServers: async () => [server],
+      buildPlan,
+      cache: { get: () => previous, set: vi.fn() }
+    });
+
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(coordinator.get(server.id)).toBe(previous);
+    expect(buildPlan).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000);
+    expect(buildPlan).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60 * 1000);
+    expect(buildPlan).toHaveBeenCalledTimes(1);
+    coordinator.stop();
+  });
+
   it("keeps the last successful plan when a later refresh fails", async () => {
     const plan = createModUpdatePlan(server.id, []);
     const buildPlan = vi.fn()
@@ -94,6 +118,23 @@ describe("ModUpdatePlanCoordinator", () => {
     await coordinator.refresh(server);
     await expect(coordinator.refresh(server)).rejects.toThrow("Modrinth unavailable");
     expect(coordinator.get(server.id)).toBe(plan);
+  });
+
+  it("publishes per-mod progress while a refresh is running", async () => {
+    let finish!: () => void;
+    const buildPlan = vi.fn(async (_server: ManagedServer, options: { onProgress: (progress: { checked: number; total: number }) => void }) => {
+      options.onProgress({ checked: 12, total: 28 });
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return createModUpdatePlan(server.id, []);
+    });
+    const coordinator = new ModUpdatePlanCoordinator({ intervalMs: 60_000, readServers: async () => [server], buildPlan });
+
+    const refresh = coordinator.refresh(server);
+    await vi.waitFor(() => expect(coordinator.getProgress(server.id)).toEqual({ active: true, checked: 12, total: 28 }));
+    finish();
+    await refresh;
+
+    expect(coordinator.getProgress(server.id)).toEqual({ active: false, checked: 0, total: 0 });
   });
 
   it("keeps the last complete plan when a later scan only resolves some known mods", async () => {

@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { createManagedContentModuleRuntime } from "./managedContentModule.js";
+import { createManagedContentModuleRuntime, modUpdateCheckIntervalMs } from "./managedContentModule.js";
 
 function testCoordinator() {
   return { start: vi.fn(), stop: vi.fn() };
 }
 
 describe("managed content module runtime", () => {
+  it("checks every managed server for updates within each twelve-hour interval", () => {
+    expect(modUpdateCheckIntervalMs).toBe(12 * 60 * 60 * 1000);
+  });
+
   it("builds nothing until the module is started, so a disabled installation opens no update checker", () => {
     const createCoordinator = vi.fn(testCoordinator);
     const published: Array<ReturnType<typeof testCoordinator> | undefined> = [];

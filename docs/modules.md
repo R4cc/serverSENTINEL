@@ -11,14 +11,16 @@ Three modules ship today:
 | Module | Owns | Governed by |
 | --- | --- | --- |
 | `schedules` | The Schedules workspace, the schedule API, and the poll that decides what is due | `schedules.view` |
-| `managedContent` | The Mods/Plugins workspace, the mod and Modrinth API, and the hourly update check | `mods.view` |
+| `managedContent` | The Mods/Plugins workspace, the mod and Modrinth API, and the twelve-hour update check | `mods.view` |
 | `playerInsights` | The Players workspace, insights API, GeoLite2 lookup, and live TCP ping measurement | `players.view` |
 
 ## Managed-content update traffic
 
-Background checks rotate through servers across an hour instead of scanning every server at startup
-and on the same hourly tick. For five servers, the next scan starts 12 minutes after the previous
-scan finishes. Idle browser polling reads the saved plan and does not start another upstream scan.
+Background checks rotate through servers across twelve hours instead of scanning every server at
+startup and on the same tick. For five servers without saved plans, the next scan starts about 2 hours
+24 minutes after the previous scan finishes. A plan is persisted after every successful scan, served
+while a new scan runs, and reused after a panel restart until it is due. Idle browser polling reads
+that saved plan and does not start another upstream scan.
 
 Modrinth API calls, including retries and manual actions, share a process-wide queue with starts
 spaced at least 300 ms apart (about 200 requests per minute). Rate-limit responses pause the queue.
@@ -28,7 +30,8 @@ the public IP still share Modrinth's upstream limit; this queue coordinates one 
 Concurrent installed-mod scans share their work, and successful project-version lookups are reused
 for one minute even during explicit refreshes. Updating or switching a mod checks its project without
 first checking every other installed mod. Explicit browser refreshes allow five minutes for large
-queued scans; ordinary cached reads retain their normal timeout.
+queued scans; the previous plan stays visible until that refresh succeeds, and ordinary cached reads
+retain their normal timeout. Manual checks report completed and total mod/plugin counts while running.
 
 ## The two gates
 

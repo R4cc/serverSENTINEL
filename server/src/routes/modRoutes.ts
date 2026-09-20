@@ -87,6 +87,13 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?
   return updatePlanCoordinator().get(server.id);
 });
 
+app.get<{ Params: { id: string } }>("/api/servers/:id/mods/update-plan/progress", async (request) => {
+  await requireRequestPermission(request, "mods.view");
+  const server = await getServer(request.params.id);
+  requireManagedModsRuntime(server);
+  return updatePlanCoordinator().getProgress(server.id);
+});
+
 app.get<{ Params: { id: string }; Querystring: { filename?: string; v?: string } }>("/api/servers/:id/mods/icon", async (request, reply) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
