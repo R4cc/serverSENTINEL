@@ -6,7 +6,7 @@ import type { ModInstallModalState } from "../../app/uiState";
 import { errorMessage } from "../../utils/appHelpers";
 import { getInstallVersionHealth } from "./modHealth";
 import { buildModrinthSearchPath, fallbackReleaseChannel, filterDemoSearchResults, hasInstallVersions, installedModKey, pendingRequiredDependencies, preferredInstallVersionId, safeBatchUpdateFeedback, selectedInstallFlags, uploadedManualMod, validateModUploadSelection } from "./modsWorkspaceHelpers";
-import { createDemoUpdatePlan, safeUpdateRequestGroups } from "./modUpdatePlan";
+import { createDemoUpdatePlan, retainNewestUpdatePlan, safeUpdateRequestGroups, type ModUpdateCheckProgress } from "./modUpdatePlan";
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { managedContentTerminology } from "./contentTerminology";
@@ -204,6 +204,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [updatePlan, setUpdatePlan] = useState<ModUpdatePlan | null>(null);
   const [updatePlanLoading, setUpdatePlanLoading] = useState(false);
   const [updatePlanError, setUpdatePlanError] = useState("");
+  const [updatePlanProgress, setUpdatePlanProgress] = useState<ModUpdateCheckProgress | null>(null);
   const [batchUpdateRunning, setBatchUpdateRunning] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const activeServerIdRef = useRef("");
@@ -293,6 +294,21 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setUpdatePlanLoading(true);
       setUpdatePlanError("");
     }
+    let progressTimer: number | undefined;
+    let progressFinished = false;
+    if (options.forceRefresh && !(activeServerIsDemo || (demoMode && serverId === demoServerId))) {
+      setUpdatePlanProgress({ active: true, checked: 0, total: currentInstalledMods.length });
+      const pollProgress = async () => {
+        try {
+          const progress = await api<ModUpdateCheckProgress>(`/api/servers/${serverId}/mods/update-plan/progress`);
+          if (!progressFinished && isCurrent() && progress.active) setUpdatePlanProgress(progress);
+        } catch {
+          // Progress is supplemental; the update-plan request reports the actionable error.
+        }
+      };
+      void pollProgress();
+      progressTimer = window.setInterval(() => void pollProgress(), 500);
+    }
     if (activeServerIsDemo || (demoMode && serverId === demoServerId)) {
       const fixtureError = demoFixtureFailureMessage(demoFixture, "update-plan");
       if (fixtureError) {
@@ -313,7 +329,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         timeoutMs: options.forceRefresh ? 5 * 60_000 : undefined
       });
       if (isCurrent()) {
-        setUpdatePlan(plan);
+        setUpdatePlan((current) => retainNewestUpdatePlan(current, plan));
         setUpdatePlanError("");
       }
       return plan;
@@ -326,6 +342,9 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       }
       return null;
     } finally {
+      progressFinished = true;
+      if (progressTimer !== undefined) window.clearInterval(progressTimer);
+      if (isCurrent()) setUpdatePlanProgress(null);
       if (isCurrent()) setUpdatePlanLoading(false);
     }
   }
@@ -390,6 +409,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     refreshUpdatesInFlightRef.current = new Set();
     setBatchUpdateRunning(false);
     setUpdatePlanLoading(false);
+    setUpdatePlanProgress(null);
     const serverId = activeServer?.id ?? "";
     if (workspaceServerIdRef.current !== serverId) {
       workspaceServerIdRef.current = serverId;
@@ -427,7 +447,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (!activeServer || activeNodeRuntimeBlocked || (activePage !== "mods" && activePage !== "overview")) return;
     let inFlight = false;
     const interval = window.setInterval(() => {
-      if (document.hidden || inFlight) return;
+      if (document.hidden || inFlight || refreshUpdatesInFlightRef.current.has(activeServer.id)) return;
       inFlight = true;
       void loadUpdatePlan(activeServer.id, { forceRefresh: false, notifyOnError: false }).finally(() => {
         inFlight = false;
@@ -1102,7 +1122,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   return {
     data: { installedMods: currentInstalledMods, searchResults, searchTotal, updatePlan: currentUpdatePlan },
-    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, batchUpdateRunning },
+    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, updatePlanProgress, batchUpdateRunning },
     derived: { selectedVersion, pendingDependencies: effectivePendingDependencies, canContinueInstall },
     refs: { sentinelRef },
     actions: {

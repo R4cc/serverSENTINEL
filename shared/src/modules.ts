@@ -43,7 +43,7 @@ export const MODULE_DESCRIPTORS = [
     id: "managedContent",
     label: "Managed content",
     summary: "Mods and plugins: the installed list, Modrinth search and installs, and automatic update checks.",
-    disabledEffect: "The Mods workspace, Modrinth browsing, and the hourly update check all stop. Installed mods and plugins are left exactly where they are — servers keep loading them, and they are managed again as soon as this is switched back on.",
+    disabledEffect: "The Mods workspace, Modrinth browsing, and the twelve-hour update check all stop. Installed mods and plugins are left exactly where they are — servers keep loading them, and they are managed again as soon as this is switched back on.",
     accessPermission: "mods.view",
     permissions: ["mods.view", "mods.install", "mods.upload", "mods.enableDisable", "mods.remove", "mods.update"]
   },

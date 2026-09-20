@@ -2,6 +2,12 @@ import { modUpdatePlanCounts } from "@serversentinel/contracts";
 import type { InstalledMod, ModUpdatePlan, ModUpdatePlanEntry } from "../../types";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 
+export type ModUpdateCheckProgress = {
+  active: boolean;
+  checked: number;
+  total: number;
+};
+
 function modFilenameIdentity(filename: string) {
   return filename.replace(/\.disabled$/, "");
 }
@@ -25,6 +31,28 @@ export function updatePlanEntryLookup(plan: ModUpdatePlan | null) {
     }
   }
   return (mod: InstalledMod) => byFilename.get(modFilenameIdentity(mod.filename)) ?? null;
+}
+
+/** Keep visible update data until an equally new or newer successful scan is available. */
+export function retainNewestUpdatePlan(current: ModUpdatePlan | null, incoming: ModUpdatePlan | null) {
+  if (!incoming) return current;
+  if (!current || current.serverId !== incoming.serverId) return incoming;
+  const currentGeneratedAt = Date.parse(current.generatedAt);
+  const incomingGeneratedAt = Date.parse(incoming.generatedAt);
+  if (Number.isFinite(currentGeneratedAt) && Number.isFinite(incomingGeneratedAt) && incomingGeneratedAt < currentGeneratedAt) {
+    return current;
+  }
+  return incoming;
+}
+
+export function modUpdateCheckProgressLabel(progress: ModUpdateCheckProgress | null, plural: "mods" | "plugins") {
+  if (!progress?.total) return `Checking ${plural}…`;
+  return `Checking ${Math.min(progress.checked, progress.total)}/${progress.total} ${plural}`;
+}
+
+export function modUpdateCheckProgressPercent(progress: ModUpdateCheckProgress | null) {
+  if (!progress?.total) return undefined;
+  return Math.min(100, Math.max(0, progress.checked / progress.total * 100));
 }
 
 export function applyUpdatePlanEntry(mod: InstalledMod, entry: ModUpdatePlanEntry | null) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InstalledMod, ModUpdatePlan } from "../../types";
-import { applyUpdatePlanEntry, canUpdateAllSafe, createDemoUpdatePlan, safeUpdateRequestGroups, updatePlanEntryForMod } from "./modUpdatePlan";
+import { applyUpdatePlanEntry, canUpdateAllSafe, createDemoUpdatePlan, modUpdateCheckProgressLabel, modUpdateCheckProgressPercent, retainNewestUpdatePlan, safeUpdateRequestGroups, updatePlanEntryForMod } from "./modUpdatePlan";
 
 function mod(overrides: Partial<InstalledMod> = {}): InstalledMod {
   return {
@@ -50,6 +50,23 @@ describe("frontend mod update plan helpers", () => {
       versionInfo: { currentVersion: "1", latestVersion: "2", latestChannel: "release", upToDate: false }
     })]);
     expect(plan.updates[0].channel).toBe("beta");
+  });
+
+  it("retains visible results until a newer successful plan is available", () => {
+    const current = createDemoUpdatePlan("demo", [mod()], "2026-09-20T12:00:00.000Z");
+    const older = createDemoUpdatePlan("demo", [], "2026-09-20T11:00:00.000Z");
+    const newer = createDemoUpdatePlan("demo", [], "2026-09-20T13:00:00.000Z");
+
+    expect(retainNewestUpdatePlan(current, null)).toBe(current);
+    expect(retainNewestUpdatePlan(current, older)).toBe(current);
+    expect(retainNewestUpdatePlan(current, newer)).toBe(newer);
+  });
+
+  it("formats measured manual-check progress", () => {
+    const progress = { active: true, checked: 12, total: 28 };
+    expect(modUpdateCheckProgressLabel(progress, "mods")).toBe("Checking 12/28 mods");
+    expect(modUpdateCheckProgressPercent(progress)).toBeCloseTo(42.86, 2);
+    expect(modUpdateCheckProgressLabel(null, "plugins")).toBe("Checking plugins…");
   });
 
   it("groups safe batch requests by planned channel", () => {

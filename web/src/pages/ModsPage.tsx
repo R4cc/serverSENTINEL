@@ -7,7 +7,7 @@ import { InstalledModsList } from "../features/mods/InstalledModsList";
 import { ModDetailsPanel } from "../features/mods/ModDetailsPanel";
 import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace";
 import type { RestartRequiredChange } from "../types";
-import { canUpdateAllSafe, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
+import { canUpdateAllSafe, modUpdateCheckProgressLabel, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
 import { DialogSurface } from "../components/DialogSurface";
 import { formatRelativeTimestamp } from "../utils/format";
 import { managedContentTerminology } from "../features/mods/contentTerminology";
@@ -64,7 +64,7 @@ export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serve
         primary={<div className="modsWorkspacePrimaryActions"><Button onClick={actions.openAdd} disabled={access.addDisabled} title={access.addDisabledReason}><AppIcon name="plus" /> Add {terminology.plural}</Button><Button variant="secondary" onClick={() => uploadRef.current?.click()} disabled={access.uploadDisabled} title={access.uploadDisabledReason}><AppIcon name="fileUp" /> Upload jar</Button>{onHistory && <Button variant="secondary" onClick={onHistory}><AppIcon name="history" /> Update history</Button>}</div>}
         meta={<span className="modsWorkspaceLastChecked">Last checked: {data.updatePlan ? <time dateTime={data.updatePlan.generatedAt} title={relativeTimestamps ? formatters.date(data.updatePlan.generatedAt) : undefined}>{relativeTimestamps ? formatRelativeTimestamp(data.updatePlan.generatedAt) : formatters.date(data.updatePlan.generatedAt)}</time> : "Never"}</span>}
         secondary={<div className="modsWorkspaceUpdateActions">
-          <Button variant="secondary" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? `Waiting for the current ${terminology.singular} change to finish.` : state.updatePlanLoading ? `Checking installed ${terminology.plural} for updates.` : `Check installed ${terminology.plural} for updates.`} reserveLabel={<><AppIcon name="refresh" />Check updates</>}><AppIcon name="refresh" /> {state.updatePlanLoading ? "Checking…" : "Check updates"}</Button>
+          <Button variant="secondary" onClick={() => { if (!updateCheckWaitingForMods) void actions.refresh(); }} disabled={updateCheckWaitingForMods || state.updatePlanLoading} title={updateCheckWaitingForMods ? `Waiting for the current ${terminology.singular} change to finish.` : state.updatePlanLoading ? `Checking installed ${terminology.plural} for updates.` : `Check installed ${terminology.plural} for updates.`} reserveLabel={<><AppIcon name="refresh" />{state.updatePlanProgress?.total ? `Checking ${state.updatePlanProgress.total}/${state.updatePlanProgress.total} ${terminology.plural}` : "Check updates"}</>}><AppIcon name="refresh" /> {state.updatePlanLoading ? modUpdateCheckProgressLabel(state.updatePlanProgress, terminology.plural) : "Check updates"}</Button>
           {showSafeBatch && <Button className="modsWorkspaceBatchAction" onClick={() => void actions.updateAllSafe()} disabled={!canRunSafeBatch} reserveLabel={`Updating safe ${terminology.plural}…`}>{state.batchUpdateRunning ? `Updating safe ${terminology.plural}…` : `Update all safe (${data.updatePlan?.counts.safeUpdates})`}</Button>}
         </div>}
       />

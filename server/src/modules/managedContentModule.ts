@@ -1,6 +1,6 @@
 import type { ModuleRuntime } from "./moduleRegistry.js";
 
-export const modUpdateCheckIntervalMs = 60 * 60 * 1000;
+export const modUpdateCheckIntervalMs = 12 * 60 * 60 * 1000;
 
 /**
  * The managed-content module's background work: the periodic Modrinth update check.

@@ -41,6 +41,29 @@ describe("managed content request counts", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("shares live progress with callers that join an existing scan", async () => {
+    let finish!: () => void;
+    listMods.mockImplementation(async (_server, options) => {
+      options.onProgress({ checked: 0, total: mods.length });
+      await new Promise<void>((resolve) => { finish = resolve; });
+      options.onProgress({ checked: mods.length, total: mods.length });
+      return { mods };
+    });
+    const firstProgress: Array<{ checked: number; total: number }> = [];
+    const joinedProgress: Array<{ checked: number; total: number }> = [];
+
+    const first = listModsWithPanelMetadata(server, { forceRefresh: true, onProgress: (progress) => firstProgress.push(progress) });
+    await vi.waitFor(() => expect(firstProgress).toEqual([{ checked: 0, total: mods.length }]));
+    const joined = listModsWithPanelMetadata(server, { forceRefresh: true, onProgress: (progress) => joinedProgress.push(progress) });
+    expect(joinedProgress).toEqual([{ checked: 0, total: mods.length }]);
+    finish();
+    await Promise.all([first, joined]);
+
+    expect(firstProgress.at(-1)).toEqual({ checked: mods.length, total: mods.length });
+    expect(joinedProgress.at(-1)).toEqual({ checked: mods.length, total: mods.length });
+    expect(listMods).toHaveBeenCalledTimes(1);
+  });
+
   it("checks only the three selected projects in a forty-mod installation", async () => {
     fetchMock.mockImplementation(async (url) => {
       const index = String(url).match(/project-(\d+)/)?.[1];

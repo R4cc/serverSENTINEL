@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.12 - 2026-09-20
+
+- Kept the last successful mod update results visible while automatic or manual checks run, added per-mod progress to manual checks, and moved automatic checks to a persistent twelve-hour background schedule that does not depend on visiting the UI.
+
 ## 26.9.11 - 2026-09-05
 
 - Fixed overlapping player details in expanded map region lists by preserving row height and scrolling the roster.
