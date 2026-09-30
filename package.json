@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "26.9.12",
+  "version": "26.9.13",
   "private": true,
   "packageManager": "npm@11.17.0",
   "workspaces": [
@@ -17,6 +17,7 @@
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
     "test:modules": "npm run build && node scripts/module-gating-smoke.mjs",
     "test:overview": "npm run build && node scripts/overview-timeline-smoke.mjs",
+    "test:overview-mods": "npm run build && node scripts/overview-mods-polish-smoke.mjs",
     "test:search": "npm run build && node scripts/search-workflows-smoke.mjs",
     "test:mod-history": "npm run build && node scripts/mod-history-smoke.mjs",
     "test:loading": "npm run build && node scripts/loading-workflows-smoke.mjs",

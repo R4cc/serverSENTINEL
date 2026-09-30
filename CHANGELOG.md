@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.9.13 - 2026-09-30
+
+- Polished Overview and Mods feedback, search reset controls, mobile touch targets, and keyboard focus through mod search and installation.
+- Fixed recommended-version reviews using a previous selection, cancelled outdated searches sooner, and exposed update-check failures with retry actions.
+
 ## 26.9.12 - 2026-09-20
 
 - Kept the last successful mod update results visible while automatic or manual checks run, added per-mod progress to manual checks, and moved automatic checks to a persistent twelve-hour background schedule that does not depend on visiting the UI.

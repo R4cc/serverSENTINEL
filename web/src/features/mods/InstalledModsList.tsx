@@ -8,6 +8,7 @@ import { applyUpdatePlanEntry, updatePlanEntryLookup } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
 import { ModStatusBadge } from "./ModStatusBadge";
+import { SearchField } from "../../components/SearchField";
 import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
 
 type Props = {
@@ -78,13 +79,11 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
       <div className="modsWorkspaceListHeader">
         <div>
           <h2 id="installed-mods-title">Installed {terminology.plural}</h2>
-          <span>{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : `${mods.length} total`}</span>
+          <span role="status">{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : deferredQuery.trim() ? `${visible.length} of ${mods.length}` : `${mods.length} total`}</span>
         </div>
-        <label className="modsWorkspaceSearch">
-          <AppIcon name="search" />
-          <span className="srOnly">Search installed {terminology.plural}</span>
-          <input type="search" autoComplete="off" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={`Search installed ${terminology.plural}`} disabled={initialLoading} />
-        </label>
+        <div className="modsWorkspaceSearch">
+          <SearchField label={`Search installed ${terminology.plural}`} value={query} onChange={onQueryChange} disabled={initialLoading} />
+        </div>
       </div>
 
       <div

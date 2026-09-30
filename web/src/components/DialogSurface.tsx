@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { GlassEffect } from "./GlassEffect";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -7,6 +7,7 @@ export function DialogSurface({
   labelledBy,
   describedBy,
   onClose,
+  initialFocusRef,
   allowDocumentScrollOnPhone = false,
   backdrop,
   dismissible = true,
@@ -17,6 +18,7 @@ export function DialogSurface({
   labelledBy: string;
   describedBy?: string;
   onClose: () => void;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   allowDocumentScrollOnPhone?: boolean;
   /** Wraps the dialog in `.modalBackdrop`; pass a string to add a modifier class. Drawers omit it. */
   backdrop?: true | string;
@@ -32,7 +34,7 @@ export function DialogSurface({
   const closeOnBackdrop = () => {
     if (backdropDismiss ?? dismissible) onClose();
   };
-  const dialogRef = useDialogFocus<HTMLElement>({ onClose: closeOnEscape, allowDocumentScrollOnPhone });
+  const dialogRef = useDialogFocus<HTMLElement>({ onClose: closeOnEscape, initialFocusRef, allowDocumentScrollOnPhone });
 
   const surface = (
     <section

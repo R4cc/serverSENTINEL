@@ -8,7 +8,8 @@ const suites = [
   ["console-loading", "scripts/console-loading-smoke.mjs"],
   ["mobile-navigation", "scripts/mobile-ui-smoke.mjs", "--navigation-only"],
   ["console", "scripts/console-smoke.mjs"],
-  ["loading-workflows", "scripts/loading-workflows-smoke.mjs"]
+  ["loading-workflows", "scripts/loading-workflows-smoke.mjs"],
+  ["overview-mods", "scripts/overview-mods-polish-smoke.mjs"]
 ];
 
 export async function runSuites(entries, { concurrency = 2, cwd = repositoryRoot } = {}) {
