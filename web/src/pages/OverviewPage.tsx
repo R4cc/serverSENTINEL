@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
+  useTable,
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
+import { sortableTableFeatures, type SortableTableFeatures } from "../utils/tableFeatures";
 import { Activity, Blocks, Clock, Cpu, Globe, HardDrive, MemoryStick, TriangleAlert } from 'lucide-react';
 import type {
   ManagedServer,
@@ -983,7 +982,7 @@ export function RecentEventsPanel({
   const filteredEvents = useMemo(() => filter === "all"
     ? groupedEvents
     : groupedEvents.filter((group) => serverEventCategory(group.events[0]) === filter), [filter, groupedEvents]);
-  const columns = useMemo<ColumnDef<RecentEventGroup>[]>(() => [
+  const columns = useMemo<ColumnDef<SortableTableFeatures, RecentEventGroup>[]>(() => [
     {
       id: "event",
       accessorFn: (group) => {
@@ -1009,7 +1008,8 @@ export function RecentEventsPanel({
     }
   ], [now]);
   const tableData = useMemo(() => [...filteredEvents], [filteredEvents]);
-  const table = useReactTable({
+  const table = useTable({
+    features: sortableTableFeatures,
     data: tableData,
     columns,
     getRowId: (group) => group.id,
@@ -1017,9 +1017,7 @@ export function RecentEventsPanel({
     onSortingChange: (updater) => {
       setSorting(updater);
       setPage(0);
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
+    }
   });
   const rows = table.getRowModel().rows;
   const pages = Math.max(1, Math.ceil(rows.length / serverEventsPageSize));

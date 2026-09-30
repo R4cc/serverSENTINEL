@@ -1,4 +1,5 @@
-import type { Header } from "@tanstack/react-table";
+import type { Header, RowData } from "@tanstack/react-table";
+import type { SortableTableFeatures } from "../utils/tableFeatures";
 import type { ReactNode } from "react";
 import { Button } from "./UiPrimitives";
 
@@ -6,17 +7,17 @@ import { Button } from "./UiPrimitives";
  * `aria-sort` belongs on the header cell, not on the control inside it, so the
  * cell wrapper takes it and the button stays a plain button.
  */
-export function headerAriaSort<TData, TValue>(header: Header<TData, TValue>) {
+export function headerAriaSort<TData extends RowData, TValue>(header: Header<SortableTableFeatures, TData, TValue>) {
   if (!header.column.getCanSort()) return undefined;
   const sorted = header.column.getIsSorted();
   return sorted === "asc" ? "ascending" as const : sorted === "desc" ? "descending" as const : "none" as const;
 }
 
-export function SortHeaderButton<TData, TValue>({
+export function SortHeaderButton<TData extends RowData, TValue>({
   header,
   children
 }: {
-  header: Header<TData, TValue>;
+  header: Header<SortableTableFeatures, TData, TValue>;
   children: ReactNode;
 }) {
   const sorted = header.column.getIsSorted();

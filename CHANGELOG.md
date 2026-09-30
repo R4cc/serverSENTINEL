@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.9.14 - 2026-09-30
+
+- Updated application and development dependencies to the latest stable releases, including React, Fastify, Vite, Playwright, Vitest, and TanStack Table.
+
 ## 26.9.13 - 2026-09-30
 
 - Polished Overview and Mods feedback, search reset controls, mobile touch targets, and keyboard focus through mod search and installation.

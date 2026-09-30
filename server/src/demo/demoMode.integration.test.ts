@@ -146,7 +146,7 @@ afterEach(async () => {
   }));
 });
 
-describe.sequential("demo-mode startup and authentication", () => {
+describe("demo-mode startup and authentication", { concurrent: false }, () => {
   it("does not seed or expose demo mode when the production-default flag is disabled", async () => {
     const instance = await startDemo(undefined, false);
     const database = new Database(join(instance.dataDir, "serversentinel.sqlite"), { readonly: true });

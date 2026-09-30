@@ -1,12 +1,11 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import {
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
+  useTable,
   type ColumnDef,
   type SortingState
 } from "@tanstack/react-table";
+import { sortableTableFeatures, type SortableTableFeatures } from "../utils/tableFeatures";
 import { Activity, ChevronDown, Globe, MapPin, Wrench } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerRegionSummary } from "../types";
 import { SearchField } from "../components/SearchField";
@@ -192,7 +191,7 @@ function PlayerRoster({
   // reading page three back to page one for no reason they could see. A page that no longer exists
   // is clamped below instead.
   useEffect(() => setPage(0), [serverId]);
-  const columns = useMemo<ColumnDef<PlayerInsightsEntry>[]>(() => [
+  const columns = useMemo<ColumnDef<SortableTableFeatures, PlayerInsightsEntry>[]>(() => [
     { id: "player", accessorKey: "player", header: "Player" },
     { id: "location", accessorFn: (entry) => formatLocation(entry.location), header: "Location" },
     { id: "distanceKm", accessorKey: "distanceKm", header: "Distance" },
@@ -200,7 +199,8 @@ function PlayerRoster({
     { id: "lastSeenAt", accessorKey: "lastSeenAt", header: "Last seen" }
   ], []);
   const tableData = useMemo(() => players.filter((entry) => `${entry.player} ${formatLocation(entry.location)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [players, query]);
-  const table = useReactTable({
+  const table = useTable({
+    features: sortableTableFeatures,
     data: tableData,
     columns,
     getRowId: (entry) => `${entry.serverId}:${entry.player}`,
@@ -208,9 +208,7 @@ function PlayerRoster({
     onSortingChange: (updater) => {
       setSorting(updater);
       setPage(0);
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
+    }
   });
   if (players.length === 0) {
     return <EmptyState compact title="No players recorded yet" />;
