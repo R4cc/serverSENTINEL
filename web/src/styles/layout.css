@@ -795,8 +795,6 @@ button .buttonIcon {
   }
 }
 
-.appForm label,
-.keyForm label,
 .summaryTile span {
   color: var(--text-muted);
   font-size: 11px;
@@ -820,11 +818,6 @@ button .buttonIcon {
   align-items: end;
 }
 
-.keyForm label {
-  display: grid;
-  flex: 1;
-  gap: var(--space-2);
-}
 
 .keyFormActions {
   display: flex;
@@ -1099,7 +1092,7 @@ button .buttonIcon {
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 150;
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--overlay) 68%, transparent);
@@ -1339,7 +1332,7 @@ button .buttonIcon {
   min-width: 0;
 }
 
-.appForm label {
+.appForm label:not(.uiFormFieldLabel) {
   display: grid;
   gap: var(--space-2);
 }
@@ -1874,24 +1867,7 @@ button .buttonIcon {
   min-width: 0;
 }
 
-.userModalForm label {
-  display: grid;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-}
 
-.userModalForm label input,
-.userModalForm label select,
-.userModalForm label textarea {
-  color: var(--text);
-  font-size: 14px;
-  font-weight: var(--weight-body);
-  letter-spacing: 0;
-  text-transform: none;
-}
 
 .userModalForm label.checkLine {
   display: flex;

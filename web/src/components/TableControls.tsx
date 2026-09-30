@@ -69,13 +69,17 @@ export function TablePagination({
   pageSize,
   totalItems,
   itemLabel,
-  onPageChange
+  onPageChange,
+  disabled = false,
+  className = ""
 }: {
   pageIndex: number;
   pageSize: number;
   totalItems: number;
   itemLabel: string;
   onPageChange: (pageIndex: number) => void;
+  disabled?: boolean;
+  className?: string;
 }) {
   if (totalItems <= 0) return null;
   const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -84,12 +88,12 @@ export function TablePagination({
   const lastItem = Math.min(totalItems, firstItem + pageSize - 1);
 
   return (
-    <div className="uiTablePagination">
+    <div className={`uiTablePagination ${className}`.trim()}>
       <span className="uiTableRange" aria-live="polite">Showing {firstItem}–{lastItem} of {totalItems} {itemLabel}</span>
       <nav className="uiTablePager" aria-label={`${itemLabel} pagination`}>
-        <Button variant="ghost" compact disabled={currentPage === 0} onClick={() => onPageChange(currentPage - 1)}>Previous</Button>
+        <Button variant="ghost" compact disabled={disabled || currentPage === 0} onClick={() => onPageChange(currentPage - 1)}>Previous</Button>
         <span>Page {currentPage + 1} of {pageCount}</span>
-        <Button variant="ghost" compact disabled={currentPage >= pageCount - 1} onClick={() => onPageChange(currentPage + 1)}>Next</Button>
+        <Button variant="ghost" compact disabled={disabled || currentPage >= pageCount - 1} onClick={() => onPageChange(currentPage + 1)}>Next</Button>
       </nav>
     </div>
   );

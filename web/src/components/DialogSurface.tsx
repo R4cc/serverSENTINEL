@@ -1,4 +1,5 @@
 import type { ReactNode, RefObject } from "react";
+import { createPortal } from "react-dom";
 import { GlassEffect } from "./GlassEffect";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -53,7 +54,7 @@ export function DialogSurface({
 
   if (!backdrop) return surface;
 
-  return (
+  const overlay = (
     <div
       className={backdrop === true ? "modalBackdrop" : `modalBackdrop ${backdrop}`}
       role="presentation"
@@ -64,4 +65,6 @@ export function DialogSurface({
       {surface}
     </div>
   );
+  // Fixed overlays belong outside page stacking contexts and clipped scroll containers.
+  return typeof document === "undefined" ? overlay : createPortal(overlay, document.body);
 }

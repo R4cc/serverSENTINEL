@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "26.9.14",
+  "version": "26.9.15",
   "private": true,
   "packageManager": "npm@12.1.0",
   "workspaces": [
@@ -29,7 +29,8 @@
     "check:versions": "node scripts/check-version-consistency.mjs",
     "demo:reset": "npm --workspace server run demo:reset",
     "screenshots:update": "node scripts/update-readme-screenshots.mjs",
-    "start": "npm --workspace server run start"
+    "start": "npm --workspace server run start",
+    "test:ui-consistency": "npm run build && node scripts/ui-consistency-smoke.mjs"
   },
   "devDependencies": {
     "@fontsource-variable/cascadia-code": "^5.3.0",

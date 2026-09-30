@@ -81,6 +81,7 @@ export function PanelHeader({
   help,
   actions,
   className,
+  headingId,
   headingLevel = 2,
   compact = false
 }: {
@@ -89,6 +90,7 @@ export function PanelHeader({
   help?: ReactNode;
   actions?: ReactNode;
   className?: string;
+  headingId?: string;
   headingLevel?: 2 | 3;
   compact?: boolean;
 }) {
@@ -97,7 +99,7 @@ export function PanelHeader({
   return (
     <header className={classes("uiPanelHeader", compact && "uiPanelHeader--compact", className)}>
       <div className="uiPanelHeaderCopy">
-        <div className="uiPanelHeaderTitle"><Heading>{title}</Heading>{help}</div>
+        <div className="uiPanelHeaderTitle"><Heading id={headingId}>{title}</Heading>{help}</div>
         {description && <p>{description}</p>}
       </div>
       {actions && <div className="uiPanelHeaderActions">{actions}</div>}
@@ -340,6 +342,7 @@ export function Toolbar({
 export function FormField({
   label,
   description,
+  descriptionPlacement = "before",
   help,
   error,
   required = false,
@@ -350,6 +353,7 @@ export function FormField({
 }: HTMLAttributes<HTMLDivElement> & {
   label: ReactNode;
   description?: ReactNode;
+  descriptionPlacement?: "before" | "after";
   help?: ReactNode;
   error?: ReactNode;
   required?: boolean;
@@ -364,8 +368,9 @@ export function FormField({
         </label>
         {help}
       </div>
-      {description && <span className="uiFormFieldDescription">{description}</span>}
+      {description && descriptionPlacement === "before" && <span className="uiFormFieldDescription">{description}</span>}
       <div className="uiFormFieldControl">{children}</div>
+      {description && descriptionPlacement === "after" && <span className="uiFormFieldDescription">{description}</span>}
       {error && <span className="uiFormFieldError" role="alert">{error}</span>}
     </div>
   );

@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import type { ModInstallModalState } from "../../app/uiState";
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
+import { SearchField } from "../../components/SearchField";
 import { Banner, Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getSearchResultHealth } from "./modHealth";
@@ -51,7 +52,6 @@ type Props = {
 
 export function AddModsWorkflow(props: Props) {
   const terminology = props.terminology ?? fabricContentTerminology;
-  const searchInputId = useId();
   const localSearchInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = props.searchInputRef ?? localSearchInputRef;
   const reviewing = Boolean(props.installState);
@@ -71,7 +71,7 @@ export function AddModsWorkflow(props: Props) {
       </div>
       <div className="modsDrawerBody">
         <div className="modsAddSearch">
-          <div className="modsAddSearchControl"><AppIcon name="search" /><label htmlFor={searchInputId} className="srOnly">Search Modrinth for {terminology.plural}</label><input id={searchInputId} ref={searchInputRef} type="search" autoComplete="off" value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder={`Search by ${terminology.singular} name…`} disabled={!props.configured || props.versionsUnknown} />{props.query && <Button variant="ghost" iconOnly compact aria-label={`Clear search Modrinth for ${terminology.plural}`} onClick={() => { props.onQueryChange(""); searchInputRef.current?.focus(); }}><AppIcon name="x" /></Button>}</div>
+          <SearchField className="modsAddSearchControl" inputRef={searchInputRef} label={`Search Modrinth for ${terminology.plural}`} placeholder={`Search by ${terminology.singular} name…`} value={props.query} onChange={props.onQueryChange} disabled={!props.configured || props.versionsUnknown} />
           <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? `${props.formatNumber(props.total)} ${props.total === 1 ? "result" : "results"}` : ""}</span>
         </div>
         {props.showIncompatibleResults ? (

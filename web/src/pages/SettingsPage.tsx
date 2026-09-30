@@ -9,7 +9,7 @@ import { themeOptions } from "../features/settings/themePreferences";
 import { IntegrationControlField, MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
-import { Button, HelpTooltip, StatusBadge } from "../components/UiPrimitives";
+import { Button, HelpTooltip, PanelHeader, StatusBadge } from "../components/UiPrimitives";
 import { resolveRegionalFormatLocale } from "../utils/format";
 
 type SettingsCategory = "appearance" | "console" | "integrations" | "modules" | "users" | "system";
@@ -152,13 +152,12 @@ function Toggle({ checked, onChange, label, stateLabel, disabled = false, title 
 function CategoryHeader({ category, actions }: { category: SettingsCategory; actions?: ReactNode }) {
   const details = categoryDetails[category];
   return (
-    <header className="settingsHubSectionHeader">
-      <span className="settingsHubSectionIcon"><SettingsGlyph name={category} /></span>
-      <div>
-        <h3>{details.label}</h3>
-      </div>
-      {actions && <div className="settingsHubSectionActions">{actions}</div>}
-    </header>
+    <PanelHeader
+      className="settingsHubSectionHeader"
+      headingLevel={3}
+      title={<><span className="settingsHubSectionIcon" aria-hidden="true"><SettingsGlyph name={category} /></span>{details.label}</>}
+      actions={actions}
+    />
   );
 }
 

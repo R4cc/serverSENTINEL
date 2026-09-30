@@ -169,10 +169,10 @@ describe("SettingsPage", () => {
       ]
     })} />);
 
-    expect((html.match(/class="settingsHubIntegrationField"/g) ?? [])).toHaveLength(3);
-    expect(html).toContain('class="settingsHubIntegrationControlLabel">Modrinth API key</span>');
-    expect(html).toContain('class="settingsHubIntegrationControlLabel">MaxMind credentials</span>');
-    expect(html).toContain('class="settingsHubIntegrationControlLabel">Player head display</span>');
+    expect((html.match(/class="uiFormField settingsHubIntegrationField"/g) ?? [])).toHaveLength(3);
+    expect(html).toContain('class="uiFormFieldLabel"><span>Modrinth API key</span></label>');
+    expect(html).toContain('class="uiFormFieldLabel"><span>MaxMind credentials</span></label>');
+    expect(html).toContain('class="uiFormFieldLabel"><span>Player head display</span></label>');
     expect(html).toContain("Replace key");
     expect(html).toContain("Replace credentials");
     expect(html).toContain("Clear cache");

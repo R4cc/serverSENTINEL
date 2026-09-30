@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.9.15 - 2026-09-30
+
+- Standardized search, section headers, form labels, pagination, and empty states across Mods, Settings, Users, Nodes, and server setup and exports using shared UI components.
+- Removed duplicate spacing and typography overrides and kept disabled searches and loading pagination consistently locked.
+- Kept shared dialogs above mobile navigation so their titles and close controls remain visible.
+
 ## 26.9.14 - 2026-09-30
 
 - Updated application and development dependencies to the latest stable releases, including React, Fastify, Vite, Playwright, Vitest, and TanStack Table.

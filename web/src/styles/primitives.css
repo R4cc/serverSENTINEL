@@ -1104,7 +1104,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   }
 }
 
-.uiSearchField { display: flex; align-items: center; gap: var(--space-2); width: min(100%, 360px); min-width: 0; border: 1px solid var(--border-muted); border-radius: var(--radius-sm); padding-inline: var(--space-2); background: var(--surface); }
+.uiSearchField { display: flex; align-items: center; gap: var(--space-2); width: min(100%, 360px); min-width: 0; border: 1px solid var(--border-muted); border-radius: var(--radius-sm); padding-inline: var(--space-2); background: var(--solid-control-surface); }
 .uiSearchField > svg { width: 16px; height: 16px; flex: none; color: var(--text-muted); }
 .uiSearchField input { width: 100%; min-width: 0; border: 0; background: transparent; box-shadow: none; padding-inline: 0; }
 .uiSearchField input::-webkit-search-cancel-button { appearance: none; }

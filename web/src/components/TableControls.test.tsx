@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { TablePagination, TableSortButton } from "./TableControls";
 
 describe("shared table controls", () => {
+  it("locks both paging directions while a request is pending", () => {
+    const html = renderToStaticMarkup(
+      <TablePagination pageIndex={1} pageSize={10} totalItems={30} itemLabel="changes" disabled onPageChange={() => undefined} />
+    );
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Previous<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Next<\/button>/);
+  });
+
   it("renders a framework-neutral sort control without claiming header semantics", () => {
     const html = renderToStaticMarkup(
       <TableSortButton sorted="asc" onClick={() => undefined} label="Name">Name</TableSortButton>

@@ -172,7 +172,7 @@ try {
       await modrinthSearch.fill("no-such-modrinth-project");
       await drawer.getByText("No compatible mods found", { exact: true }).waitFor();
       assert.equal(await drawer.locator(".modsResultCard:not(.isSkeleton)").count(), 0, "Previous-query results remained clickable");
-      await drawer.getByRole("button", { name: "Clear search Modrinth for mods", exact: true }).click();
+      await drawer.getByRole("button", { name: "Clear search modrinth for mods", exact: true }).click();
       await assertFocused(modrinthSearch, "Clearing Modrinth search lost focus");
       await modrinthSearch.fill("s");
       await drawer.getByRole("button", { name: "Review and install: Fabric Mod Helper 1", exact: true }).click();

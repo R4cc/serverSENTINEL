@@ -1,6 +1,6 @@
 {
   "name": "@serversentinel/server",
-  "version": "26.9.14",
+  "version": "26.9.15",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "prebuild": "npm --prefix ../shared run build",
     "build": "tsc -p tsconfig.json",
     "pretest": "npm --prefix ../shared run build",
-    "test": "vitest run --clearMocks=false",
+    "test": "vitest run",
     "pretypecheck": "npm --prefix ../shared run build",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "demo:reset": "tsx src/demo/resetDemo.ts",
@@ -22,7 +22,7 @@
     "@fastify/static": "^10.1.5",
     "@fastify/websocket": "^11.3.1",
     "@maxmind/geoip2-node": "^7.1.0",
-    "@serversentinel/contracts": "26.9.14",
+    "@serversentinel/contracts": "26.9.15",
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.5",
     "ws": "^8.22.0",

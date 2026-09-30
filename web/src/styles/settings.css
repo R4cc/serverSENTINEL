@@ -112,10 +112,6 @@
 
 .settingsHubSectionHeader {
   min-height: 64px;
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-4);
   border-bottom: 1px solid var(--border-row);
   background: color-mix(in srgb, var(--surface-muted) 58%, var(--surface-raised));
   padding: var(--space-4) var(--space-5);
@@ -132,14 +128,8 @@
   height: 24px;
 }
 
-.settingsHubSectionHeader h3 {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--type-section-title-size);
-  line-height: 1.2;
-}
+.settingsHubSectionHeader h3 { display: flex; align-items: center; gap: var(--space-3); }
 
-.settingsHubSectionActions,
 .settingsHubSystemActions {
   display: flex;
   align-items: center;
@@ -462,20 +452,6 @@
 
 .settingsHubIntegrationRow .settingsHubControl {
   width: 100%;
-}
-
-.settingsHubIntegrationField {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-2);
-}
-
-.settingsHubIntegrationControlLabel {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-  line-height: 1.2;
 }
 
 .playerHeadsSettingsControl {
@@ -830,7 +806,6 @@
 
   .settingsHubSectionHeader {
     min-height: 70px;
-    grid-template-columns: 40px minmax(0, 1fr);
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
   }
@@ -840,12 +815,9 @@
     height: 40px;
   }
 
-  .settingsHubSectionActions {
-    grid-column: 1 / -1;
-    justify-content: stretch;
-  }
+  .settingsHubSectionHeader .uiPanelHeaderActions { width: 100%; justify-content: stretch; }
 
-  .settingsHubSectionActions > .uiButton,
+  .settingsHubSectionHeader .uiPanelHeaderActions > .uiButton,
   .settingsHubSystemActions,
   .settingsHubSystemActions > .uiButton {
     width: 100%;
@@ -988,9 +960,6 @@
   border: 0;
 }
 
-.keyForm label {
-  min-width: 0;
-}
 
 .keyFormActions {
   display: grid;
@@ -1154,23 +1123,6 @@
 
 .keyForm {
   min-width: 0;
-}
-
-.keyForm label {
-  display: grid;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-label);
-}
-
-.keyForm label input {
-  color: var(--text);
-  font-size: 14px;
-  font-weight: var(--weight-body);
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .settingsHubContent { border-color: var(--border-panel); }

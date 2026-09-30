@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
-import { Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
+import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { applyUpdatePlanEntry, updatePlanEntryLookup } from "./modUpdatePlan";
@@ -76,15 +76,15 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
 
   return (
     <section className="modsWorkspaceInstalled" aria-labelledby="installed-mods-title">
-      <div className="modsWorkspaceListHeader">
-        <div>
-          <h2 id="installed-mods-title">Installed {terminology.plural}</h2>
-          <span role="status">{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : deferredQuery.trim() ? `${visible.length} of ${mods.length}` : `${mods.length} total`}</span>
-        </div>
-        <div className="modsWorkspaceSearch">
+      <PanelHeader
+        className="modsWorkspaceListHeader"
+        headingId="installed-mods-title"
+        title={`Installed ${terminology.plural}`}
+        description={<span role="status">{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : deferredQuery.trim() ? `${visible.length} of ${mods.length}` : `${mods.length} total`}</span>}
+        actions={<div className="modsWorkspaceSearch">
           <SearchField label={`Search installed ${terminology.plural}`} value={query} onChange={onQueryChange} disabled={initialLoading} />
-        </div>
-      </div>
+        </div>}
+      />
 
       <div
         className={`modsWorkspaceTable ${draggingFiles ? "isDragTarget" : ""}`}

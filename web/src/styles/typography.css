@@ -239,9 +239,8 @@ textarea:not(.xterm-helper-textarea),
   text-transform: none;
 }
 
-.appForm label,
-.userModalForm label,
-.keyForm label,
+.appForm label:not(.uiFormFieldLabel),
+.userModalForm label:not(.uiFormFieldLabel),
 .fieldLabel,
 .fileDetailsContent dt {
   color: var(--text-muted);

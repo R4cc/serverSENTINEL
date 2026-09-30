@@ -695,7 +695,7 @@ export function NodesPage({
                       })}
                     </div>
                   ) : (
-                    <p className="nodeServersEmpty">No servers on this node yet.</p>
+                    <EmptyState compact title="No servers on this node yet." />
                   )}
                   {node.servers.length > collapsedServerLimit && !search && (
                     <Button
