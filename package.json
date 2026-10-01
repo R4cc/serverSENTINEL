@@ -1,8 +1,8 @@
 {
   "name": "serversentinel",
-  "version": "26.9.12",
+  "version": "26.9.15",
   "private": true,
-  "packageManager": "npm@11.17.0",
+  "packageManager": "npm@12.1.0",
   "workspaces": [
     "shared",
     "server",
@@ -17,6 +17,7 @@
     "test:mobile": "npm run build && node scripts/mobile-ui-smoke.mjs",
     "test:modules": "npm run build && node scripts/module-gating-smoke.mjs",
     "test:overview": "npm run build && node scripts/overview-timeline-smoke.mjs",
+    "test:overview-mods": "npm run build && node scripts/overview-mods-polish-smoke.mjs",
     "test:search": "npm run build && node scripts/search-workflows-smoke.mjs",
     "test:mod-history": "npm run build && node scripts/mod-history-smoke.mjs",
     "test:loading": "npm run build && node scripts/loading-workflows-smoke.mjs",
@@ -28,11 +29,12 @@
     "check:versions": "node scripts/check-version-consistency.mjs",
     "demo:reset": "npm --workspace server run demo:reset",
     "screenshots:update": "node scripts/update-readme-screenshots.mjs",
-    "start": "npm --workspace server run start"
+    "start": "npm --workspace server run start",
+    "test:ui-consistency": "npm run build && node scripts/ui-consistency-smoke.mjs"
   },
   "devDependencies": {
     "@fontsource-variable/cascadia-code": "^5.3.0",
-    "@types/node": "22.20.0",
-    "playwright": "1.62.1"
+    "@types/node": "26.6.3",
+    "playwright": "1.63.0"
   }
 }

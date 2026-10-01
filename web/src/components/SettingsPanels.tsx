@@ -1,12 +1,9 @@
-import { FormEvent, ReactNode, useState } from 'react';
-import { Button, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
+import { FormEvent, ReactNode, useId, useState } from 'react';
+import { Button, FormField, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 
 export function IntegrationControlField({ label, children, ariaHidden = false }: { label: string; children: ReactNode; ariaHidden?: boolean }) {
   return (
-    <div className="settingsHubIntegrationField" aria-hidden={ariaHidden || undefined}>
-      <span className="settingsHubIntegrationControlLabel">{label}</span>
-      {children}
-    </div>
+    <FormField className="settingsHubIntegrationField" label={label} aria-hidden={ariaHidden || undefined}>{children}</FormField>
   );
 }
 
@@ -30,6 +27,7 @@ export function MaxmindCredentialsForm({
   loading?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const fieldId = useId();
 
   function submitCredentials(event: FormEvent<HTMLFormElement>) {
     onSubmit(event);
@@ -72,9 +70,9 @@ export function MaxmindCredentialsForm({
   return (
     <form onSubmit={submitCredentials} className="keyForm keyForm--credentials">
       <fieldset disabled={disabled} title={disabled ? "Manage integrations permission is required" : undefined}>
-        <label>
-          MaxMind account ID
+        <FormField label="MaxMind account ID" htmlFor={`${fieldId}-account`} required>
           <input
+            id={`${fieldId}-account`}
             name="maxmindAccountId"
             type="text"
             inputMode="numeric"
@@ -84,10 +82,10 @@ export function MaxmindCredentialsForm({
             required
             autoFocus={editing}
           />
-        </label>
-        <label>
-          {configured ? "New MaxMind license key" : "MaxMind license key"}
+        </FormField>
+        <FormField label={configured ? "New MaxMind license key" : "MaxMind license key"} htmlFor={`${fieldId}-license`} required>
           <input
+            id={`${fieldId}-license`}
             name="maxmindLicenseKey"
             type="password"
             autoComplete="off"
@@ -95,7 +93,7 @@ export function MaxmindCredentialsForm({
             placeholder="Paste license key"
             required
           />
-        </label>
+        </FormField>
         <div className="keyFormActions">
           {configured && <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>}
           <Button type="submit">{configured ? "Save replacement" : "Save credentials"}</Button>
@@ -117,6 +115,7 @@ export function ModrinthKeyForm({
   loading?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const fieldId = useId();
 
   function submitKey(event: FormEvent<HTMLFormElement>) {
     onSubmit(event);
@@ -159,9 +158,9 @@ export function ModrinthKeyForm({
   return (
     <form onSubmit={submitKey} className="keyForm">
       <fieldset disabled={disabled} title={disabled ? "Manage integrations permission is required" : undefined}>
-        <label>
-          {configured ? "New Modrinth API key" : "Modrinth API key"}
+        <FormField label={configured ? "New Modrinth API key" : "Modrinth API key"} htmlFor={fieldId} required>
           <input
+            id={fieldId}
             name="modrinthApiKey"
             type="password"
             autoComplete="off"
@@ -172,7 +171,7 @@ export function ModrinthKeyForm({
             // itself never opens with the caret in a credential field.
             autoFocus={editing}
           />
-        </label>
+        </FormField>
         <div className="keyFormActions">
           {configured && <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>}
           <Button type="submit">{configured ? "Save replacement" : "Save key"}</Button>

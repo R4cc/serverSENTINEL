@@ -1,8 +1,9 @@
-import type { RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import type { ModInstallModalState } from "../../app/uiState";
 import type { InstalledMod, ModrinthHit, ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { InlineState } from "../../components/InlineState";
+import { SearchField } from "../../components/SearchField";
 import { Banner, Button, EmptyState, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
 import { modIconSource } from "../../utils/appHelpers";
 import { getSearchResultHealth } from "./modHealth";
@@ -12,6 +13,7 @@ import { ModStatusBadge } from "./ModStatusBadge";
 import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
 
 type Props = {
+  searchInputRef?: RefObject<HTMLInputElement | null>;
   terminology?: ManagedContentTerminology;
   query: string;
   results: ModrinthHit[];
@@ -43,13 +45,19 @@ type Props = {
   onSelectVersion: (version: ModrinthInstallVersion) => void;
   onToggleAdvanced: () => void;
   onAcknowledge: (checked: boolean) => void;
-  onContinue: () => void;
+  onContinue: (version?: ModrinthInstallVersion) => void;
   onBack: () => void;
   onInstall: () => void;
 };
 
 export function AddModsWorkflow(props: Props) {
   const terminology = props.terminology ?? fabricContentTerminology;
+  const localSearchInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = props.searchInputRef ?? localSearchInputRef;
+  const reviewing = Boolean(props.installState);
+  useEffect(() => {
+    if (!reviewing && !searchInputRef.current?.disabled) searchInputRef.current?.focus({ preventScroll: true });
+  }, [reviewing, searchInputRef]);
   if (props.installState) {
     return <ModInstallReview terminology={terminology} state={props.installState} selected={props.selectedVersion} requiredDependencies={props.installState.mode === "switch" ? [] : props.requiredDependencies} canContinue={props.canContinue} locked={props.locked} lockedReason={props.installState.mode === "switch" ? `${terminology.singularTitle} version changes require the server to be stopped.` : `${terminology.singularTitle} changes require the server to be stopped.`} formatDate={props.formatDate} onClose={props.onInstallClose} onChannelChange={(channel) => props.onChannelChange(props.installState!.mod, channel)} onRetry={() => props.onChannelChange(props.installState!.mod, props.installState!.channel)} onSelect={props.onSelectVersion} onToggleAdvanced={props.onToggleAdvanced} onAcknowledge={props.onAcknowledge} onContinue={props.onContinue} onBack={props.onBack} onInstall={props.onInstall} />;
   }
@@ -63,8 +71,8 @@ export function AddModsWorkflow(props: Props) {
       </div>
       <div className="modsDrawerBody">
         <div className="modsAddSearch">
-          <label><AppIcon name="search" /><span className="srOnly">Search Modrinth for {terminology.plural}</span><input type="search" autoComplete="off" autoFocus value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder={`Search by ${terminology.singular} name…`} disabled={!props.configured || props.versionsUnknown} /></label>
-          <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? "Results update as you type" : ""}</span>
+          <SearchField className="modsAddSearchControl" inputRef={searchInputRef} label={`Search Modrinth for ${terminology.plural}`} placeholder={`Search by ${terminology.singular} name…`} value={props.query} onChange={props.onQueryChange} disabled={!props.configured || props.versionsUnknown} />
+          <span className="modsSearchActivity" aria-live="polite">{props.searching ? "Searching…" : props.query.trim() ? `${props.formatNumber(props.total)} ${props.total === 1 ? "result" : "results"}` : ""}</span>
         </div>
         {props.showIncompatibleResults ? (
           <Banner

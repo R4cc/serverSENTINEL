@@ -17,7 +17,8 @@ import {
   versionValue
 } from "../utils/format";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, FormField, HelpTooltip, PanelHeader, Spinner, StatusBadge, Surface } from "../components/UiPrimitives";
+import { Banner, Button, EmptyState, FormField, HelpTooltip, PanelHeader, Spinner, StatusBadge, Surface } from "../components/UiPrimitives";
+import { InlineState } from "../components/InlineState";
 import type { ServerExportArtifact, ServerExportState } from "../features/exports/useExportWorkspace";
 import {
   clampNumber,
@@ -652,11 +653,11 @@ export function ExportServerPanel({
           )}
         </div>
       ) : loading ? (
-        <p className="exportTaskEmpty">Loading export status…</p>
+        <InlineState tone="loading" title="Loading export status…" />
       ) : error ? (
         <Banner tone="error" compact title="Could not load exports" message={error} />
       ) : (
-        <p className="exportTaskEmpty">No export has been created yet.</p>
+        <EmptyState compact title="No export has been created yet." />
       )}
 
       {artifact && (

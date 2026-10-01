@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
+  useTable,
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
+import { sortableTableFeatures, type SortableTableFeatures } from "../utils/tableFeatures";
 import {
   cronFromSchedulePlan,
   schedulePlanFromCron,
@@ -255,7 +254,7 @@ export function SchedulePage({
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
   const recentRunsKey = scheduleRunFeedKey(runItems);
-  const scheduleColumns = useMemo<ColumnDef<ScheduledExecution>[]>(() => [
+  const scheduleColumns = useMemo<ColumnDef<SortableTableFeatures, ScheduledExecution>[]>(() => [
     {
       id: "name",
       accessorKey: "name"
@@ -281,16 +280,15 @@ export function SchedulePage({
       enableSorting: false
     }
   ], []);
-  const scheduleTable = useReactTable({
+  const scheduleTable = useTable({
+    features: sortableTableFeatures,
     data: schedules,
     columns: scheduleColumns,
     getRowId: (schedule) => schedule.id,
     state: {
       sorting: scheduleSorting
     },
-    onSortingChange: setScheduleSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
+    onSortingChange: setScheduleSorting
   });
   const scheduleRows = scheduleTable.getRowModel().rows;
 

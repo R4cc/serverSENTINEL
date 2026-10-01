@@ -5,8 +5,8 @@
 .modHistorySurface { min-width: 0; overflow: hidden; }
 .modHistoryTableScroll { overflow-x: auto; }
 .modHistoryTable { width: 100%; border-collapse: collapse; text-align: left; }
-.modHistoryTable th, .modHistoryTable td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); vertical-align: top; }
-.modHistoryTable th { color: var(--text-muted); font-size: .78rem; white-space: nowrap; }
+.modHistoryTable th, .modHistoryTable td { font-size: var(--type-body-size); overflow-wrap: anywhere; min-width: 120px; }
+.modHistoryTable th { color: var(--text-muted); font-size: var(--type-meta-size); white-space: nowrap; }
 .modHistoryTable td { font-size: .85rem; overflow-wrap: anywhere; min-width: 120px; }
 .modHistoryTable td:first-child { min-width: 180px; }
 .modHistoryTable small { display: block; color: var(--text-muted); margin-top: var(--space-1); max-width: 260px; }
@@ -17,10 +17,8 @@
 .modHistoryIdentity > div { min-width: 0; }
 .modHistoryIdentity img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: var(--radius-sm); object-fit: cover; }
 .modHistoryArrow { color: var(--text-muted); margin-inline: .25em; }
-.modHistoryPagination { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); color: var(--text-muted); }
-.modHistoryPagination > div { display: flex; gap: var(--space-2); }
+.modHistoryPagination { padding: var(--space-3) var(--space-4); }
 @media (max-width: 700px) {
-  .modHistoryPagination { flex-wrap: wrap; }
   .modHistoryTable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .modHistoryTable, .modHistoryTable tbody { display: block; width: 100%; }
   .modHistoryTable tr { display: grid; gap: var(--space-2); padding: var(--space-4) 0; border-bottom: 1px solid var(--border); }
@@ -45,14 +43,10 @@
 .modsWorkspaceInstalled { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); }
 /* Inline padding matches the table head and rows below, so the heading starts on
    the same edge as the mod icons rather than one pixel off it. */
-.modsWorkspaceListHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
-.modsWorkspaceListHeader > div { display: flex; align-items: baseline; gap: var(--space-2); }
-.modsWorkspaceListHeader h2 { margin: 0; }
-.modsWorkspaceSearch, .modsAddSearch label { display: flex; align-items: center; gap: var(--space-2); min-width: 250px; padding: 0 var(--space-3); border: 1px solid var(--border-muted); }
-.modsWorkspaceSearch { width: clamp(280px, 34vw, 440px); }
-.modsWorkspaceSearch:focus-within, .modsAddSearch label:focus-within { border-color: var(--accent); box-shadow: var(--shadow-xs), 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
-.modsWorkspaceSearch svg, .modsAddSearch svg { width: 16px; color: var(--text-muted); }
-.modsWorkspaceSearch input, .modsAddSearch input { width: 100%; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; }
+.modsWorkspaceListHeader { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); }
+.modsWorkspaceSearch { width: clamp(280px, 34vw, 440px); min-width: 0; }
+.modsWorkspaceSearch > .uiSearchField { width: 100%; }
+.modsAddSearch svg { width: 16px; color: var(--text-muted); }
 .modsWorkspaceTable { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; }
 .modsWorkspaceTable.isDragTarget { outline: 2px solid var(--sentinel-accent); outline-offset: -2px; }
 .modsWorkspaceDropOverlay { position: absolute; z-index: 5; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; min-height: 150px; color: var(--text); background: color-mix(in srgb, var(--surface-raised) 88%, transparent); pointer-events: none; }
@@ -97,8 +91,6 @@
 .modsWorkspaceSwitch { justify-content: center; }
 .modsWorkspaceSwitchVersionButton { display: grid; place-items: center; width: 34px; height: 34px; min-height: 34px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; }
 .modsWorkspaceSwitchVersionButton:hover:not(:disabled) { transform: none; color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.modsWorkspaceEmpty { display: grid; place-items: center; min-height: 150px; padding: 28px; text-align: center; }
-.modsWorkspaceEmpty span { margin-top: 5px; color: var(--text-muted); font-size: .85rem; }
 .modsMetricValueSkeleton { width: 82px; height: 17px; margin: 0; }
 .modsTotalSkeleton { display: inline-block; width: 52px; height: 11px; vertical-align: middle; }
 .modsWorkspaceSkeletonRow { pointer-events: none; }
@@ -159,7 +151,7 @@
 .modsDrawerFooter { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border); }
 .modsDrawerFooter > button:first-child { flex: 1; }
 .modsAddSearch { display: grid; gap: var(--space-1); }
-.modsAddSearch label { width: 100%; min-width: 0; }
+.modsAddSearchControl { width: 100%; }
 .modsSearchActivity { min-height: 1em; text-align: right; }
 .modsSafeSearchAlert { margin: var(--space-2) 0 var(--space-4); }
 .modsCompatibilityToggle { display: flex; align-items: flex-start; gap: var(--space-2); margin: calc(var(--space-2) * -1) 0 var(--space-4); color: var(--text-muted); font-size: .78rem; }
@@ -366,8 +358,9 @@
   .modsWorkspaceUpdate .modsUpdateAction { padding-block: var(--space-2); }
   .modsWorkspaceUpdate .modsReviewAction { min-height: 44px; }
   .modsWorkspaceEnabled { grid-area: enabled; display: flex; justify-content: center; align-items: center; width: 44px; height: 44px; }
-  .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: center; align-self: center; }
+  .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: center; align-self: center; width: 44px; height: 44px; }
   .modsSearchActivity { text-align: left; }
+  .modsCompatibilityToggle { min-height: 44px; align-items: center; margin-top: 0; }
   .modsResultCard { grid-template-columns: 40px minmax(0, 1fr); }
   .modsResultCard > button { grid-column: 1 / -1; }
   .modsRecommendedVersion, .modsReviewLine { align-items: stretch; flex-direction: column; }
@@ -459,7 +452,6 @@
   border-color: var(--border-row);
 }
 
-.modsWorkspaceListHeader h2,
 .modsDrawerHeader h2,
 .nodeInstallHeader h3,
 .nodeModalHeader h2 {
@@ -471,7 +463,6 @@
   text-transform: none;
 }
 
-.modsWorkspaceListHeader > div span,
 .modsDrawerHeader p,
 .modsDrawerHeader small,
 .modsSearchActivity {
@@ -487,27 +478,8 @@
   text-transform: uppercase;
 }
 
-.modsWorkspaceSearch,
-.modsAddSearch label {
-  min-height: var(--control-height);
-  border-color: var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--solid-control-surface);
-  box-shadow: var(--shadow-xs);
-}
 
-.modsWorkspaceSearch .buttonIcon,
-.modsAddSearch .buttonIcon {
-  width: var(--control-icon-size);
-  height: var(--control-icon-size);
-}
 
-.modsWorkspaceSearch input,
-.modsAddSearch input {
-  min-height: calc(var(--control-height) - 2px);
-  font-size: var(--type-body-size);
-  font-weight: var(--weight-body);
-}
 
 .modsWorkspaceRow {
   border-color: var(--border-row);
@@ -592,7 +564,6 @@
 }
 
 .modsWorkspaceEmpty.uiEmptyState {
-  min-height: 140px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -750,6 +721,9 @@
     height: var(--visual-viewport-height, 100dvh);
     min-height: 0;
     border-left: 0;
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   .modsDrawerHeader,

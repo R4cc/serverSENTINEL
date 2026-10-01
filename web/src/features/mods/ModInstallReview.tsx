@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { ModInstallModalState } from "../../app/uiState";
 import type { ModrinthInstallVersion, ReleaseChannel } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
@@ -25,13 +26,15 @@ type Props = {
   onSelect: (version: ModrinthInstallVersion) => void;
   onToggleAdvanced: () => void;
   onAcknowledge: (checked: boolean) => void;
-  onContinue: () => void;
+  onContinue: (version?: ModrinthInstallVersion) => void;
   onBack: () => void;
   onInstall: () => void;
 };
 
 export function ModInstallReview({ terminology = fabricContentTerminology, state, selected, requiredDependencies, canContinue, locked = false, lockedReason = "", formatDate, onClose, onChannelChange, onRetry, onSelect, onToggleAdvanced, onAcknowledge, onContinue, onBack, onInstall }: Props) {
   const switchMode = state.mode === "switch";
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { headingRef.current?.focus({ preventScroll: true }); }, [state.step]);
   const title = state.data?.project.title || state.mod.title;
   const versions = state.data?.compatibleVersions || [];
   const otherVersions = state.data?.otherVersions || [];
@@ -52,7 +55,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
   return (
     <div className="modsInstallReview">
       <div className="modsDrawerHeader">
-        <div><Button variant="ghost" compact onClick={state.step === 2 ? onBack : onClose}><AppIcon name="chevronLeft" /> {state.step === 2 ? "Back" : switchMode ? `Installed ${terminology.plural}` : "Search"}</Button><h2>{state.step === 2 ? switchMode ? "Review switch" : "Review installation" : "Choose a version"}</h2></div>
+        <div><Button variant="ghost" compact onClick={state.step === 2 ? onBack : onClose} disabled={state.installing}><AppIcon name="chevronLeft" /> {state.step === 2 ? "Back" : switchMode ? `Installed ${terminology.plural}` : "Search"}</Button><h2 ref={headingRef} tabIndex={-1}>{state.step === 2 ? switchMode ? "Review switch" : "Review installation" : "Choose a version"}</h2></div>
         <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} disabled={state.installing} aria-label="Close install review" title={state.installing ? "Installation is still in progress." : "Close install review"}><AppIcon name="x" /></Button>
       </div>
       <div className="modsDrawerBody">
@@ -67,7 +70,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
           <>
             <section className="modsRecommendedVersion">
               <div><small>Recommended for this server</small><strong>{recommendedVersion?.versionNumber || "No verified release found"}</strong><span>{recommendedVersion ? "Compatible with this server" : "Open advanced options to review other versions"}</span></div>
-              {recommendedVersion && <Button onClick={() => { onSelect(recommendedVersion); onContinue(); }} disabled={locked}>{switchMode ? "Review switch" : "Review and install"}</Button>}
+              {recommendedVersion && <Button onClick={() => onContinue(recommendedVersion)} disabled={locked}>{switchMode ? "Review switch" : "Review and install"}</Button>}
             </section>
             <details className="modsAdvancedOptions" open={state.showOtherVersions} onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open !== state.showOtherVersions) onToggleAdvanced(); }}>
               <summary>Advanced options</summary>
@@ -85,7 +88,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
                   );
                 })}
               </div>
-              {selected && <Button onClick={onContinue} disabled={locked || !canContinue}>Review selected version</Button>}
+              {selected && <Button onClick={() => onContinue()} disabled={locked || !canContinue}>Review selected version</Button>}
             </details>
             {selectedHealth?.requiresAcknowledgement && (
               <label className="modsRiskAcknowledgement"><input type="checkbox" checked={state.acknowledgeMinecraftMismatch} onChange={(event) => onAcknowledge(event.target.checked)} disabled={locked} /><span><strong>{selectedHealth.label}.</strong>{selectedIncompatible ? ` This version is not marked compatible with the server Minecraft version (${state.data.target.minecraftVersion}).` : " serverSENTINEL cannot verify this version as safe for this server."} I understand the risk.</span></label>

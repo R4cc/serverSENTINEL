@@ -504,7 +504,7 @@ describe("mod health", () => {
       onRefresh: () => undefined
     }));
 
-    const loadingHtml = render(null);
+    const loadingHtml = render(null, true, true);
     expect(loadingHtml).toContain("modsHealthPanel");
     expect(loadingHtml).toContain("modUpdatesCardSkeleton");
     expect(loadingHtml).toContain("Loading mod updates");
@@ -543,11 +543,10 @@ describe("mod health", () => {
     expect(healthyHtml).not.toContain("modUpdatesHealthyState");
     expect(healthyHtml).toContain("Open Mods, no mod updates available");
     const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
-    expect(attentionHtml).toContain("modUpdatesCard--healthy");
-    expect(attentionHtml).not.toContain("No updates available");
-    expect(attentionHtml).not.toContain("attention");
-    expect(attentionHtml).not.toContain("review");
-    expect(attentionHtml).not.toContain("installed");
+    expect(attentionHtml).not.toContain("modUpdatesCard--healthy");
+    expect(attentionHtml).not.toContain("Everything is up to date");
+    expect(attentionHtml).toContain("Some versions could not be checked");
+    expect(attentionHtml).toContain("Open Mods to review unchecked versions");
     expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
   });
 
@@ -588,6 +587,22 @@ describe("mod health", () => {
     expect(modUpdateRefreshResultMessage(updatePlan({ totalInstalled: 4, upToDate: 4 }), "mods")).toBe("Everything is up to date");
     expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 1 }), "mods")).toBe("1 mod update available");
     expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 2, reviewUpdates: 1 }), "plugins")).toBe("3 plugin updates available");
+    expect(modUpdateRefreshResultMessage(updatePlan({ unknown: 1, upToDate: 3 }), "mods")).toBe("Some versions could not be checked");
+    expect(modUpdateRefreshResultMessage(updatePlan({ blockedUpdates: 1, upToDate: 3 }), "mods")).toBe("No recommended updates");
+    expect(modUpdateRefreshResultMessage(updatePlan({ totalInstalled: 0, upToDate: 0 }), "plugins")).toBe("No plugins installed");
+  });
+
+  it("offers navigation and a recheck when no update plan is available", () => {
+    const html = renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: null,
+      loading: false,
+      onOpenMods: () => undefined,
+      onRefresh: () => undefined
+    }));
+    expect(html).toContain("Updates not checked");
+    expect(html).toContain('aria-label="Recheck mods for updates"');
+    expect(html).not.toContain("modUpdatesCardSkeleton");
+    expect(html).not.toContain('disabled=""');
   });
 
   it("includes individually navigable update rows with icons and version transitions", () => {

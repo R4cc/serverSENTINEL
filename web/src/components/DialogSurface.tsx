@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
+import { createPortal } from "react-dom";
 import { GlassEffect } from "./GlassEffect";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -7,6 +8,7 @@ export function DialogSurface({
   labelledBy,
   describedBy,
   onClose,
+  initialFocusRef,
   allowDocumentScrollOnPhone = false,
   backdrop,
   dismissible = true,
@@ -17,6 +19,7 @@ export function DialogSurface({
   labelledBy: string;
   describedBy?: string;
   onClose: () => void;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   allowDocumentScrollOnPhone?: boolean;
   /** Wraps the dialog in `.modalBackdrop`; pass a string to add a modifier class. Drawers omit it. */
   backdrop?: true | string;
@@ -32,7 +35,7 @@ export function DialogSurface({
   const closeOnBackdrop = () => {
     if (backdropDismiss ?? dismissible) onClose();
   };
-  const dialogRef = useDialogFocus<HTMLElement>({ onClose: closeOnEscape, allowDocumentScrollOnPhone });
+  const dialogRef = useDialogFocus<HTMLElement>({ onClose: closeOnEscape, initialFocusRef, allowDocumentScrollOnPhone });
 
   const surface = (
     <section
@@ -51,7 +54,7 @@ export function DialogSurface({
 
   if (!backdrop) return surface;
 
-  return (
+  const overlay = (
     <div
       className={backdrop === true ? "modalBackdrop" : `modalBackdrop ${backdrop}`}
       role="presentation"
@@ -62,4 +65,6 @@ export function DialogSurface({
       {surface}
     </div>
   );
+  // Fixed overlays belong outside page stacking contexts and clipped scroll containers.
+  return typeof document === "undefined" ? overlay : createPortal(overlay, document.body);
 }

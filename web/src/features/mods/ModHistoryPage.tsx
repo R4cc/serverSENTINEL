@@ -1,3 +1,4 @@
+import { TablePagination } from "../../components/TableControls";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ModHistoryEntry, ModHistoryResponse } from "@serversentinel/contracts";
 import { api } from "../../api";
@@ -113,7 +114,7 @@ export function ModHistoryPage({ serverId, terminology, installedMods = [], lock
             </tr>; })}</tbody>
           </table>
         </div>
-        <div className="modHistoryPagination"><span>{data.offset + 1}–{data.offset + data.entries.length} of {data.total} changes</span><div><Button variant="secondary" compact disabled={busy || offset === 0} onClick={() => setOffset(Math.max(0, offset - data.limit))}>Previous</Button><Button variant="secondary" compact disabled={busy || offset + data.limit >= data.total} onClick={() => setOffset(offset + data.limit)}>Next</Button></div></div>
+        <TablePagination className="modHistoryPagination" pageIndex={Math.floor(data.offset / data.limit)} pageSize={data.limit} totalItems={data.total} itemLabel="changes" disabled={busy} onPageChange={(page) => setOffset(page * data.limit)} />
       </>}
     </Surface>
   </section>;

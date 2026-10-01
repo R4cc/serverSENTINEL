@@ -1,7 +1,7 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useId, useMemo, useState } from 'react';
 import type { PermissionKey, PublicUser, RolePreset } from '../types';
 import { AppIcon } from './FileTypeIcon';
-import { Banner, Button, EmptyState, HelpTooltip, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
+import { Banner, Button, EmptyState, FormField, HelpTooltip, LoadingLabel, SkeletonBlock, StatusBadge } from './UiPrimitives';
 import { DialogSurface } from './DialogSurface';
 import { ActionMenu } from './ActionMenu';
 import { SearchField } from "./SearchField";
@@ -182,6 +182,7 @@ function UserPermissionModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const fieldId = useId();
   const initialPermissions = useMemo(() => userPermissions(user), [user]);
   const [permissions, setPermissions] = useState<PermissionKey[]>(initialPermissions);
   const [selectedPreset, setSelectedPreset] = useState<RolePreset>(inferRolePreset(initialPermissions));
@@ -252,9 +253,9 @@ function UserPermissionModal({
           <input type="hidden" name="permissions" value={JSON.stringify(permissions)} />
 
           <div className="userModalFields">
-            <label>
-              Username
+            <FormField label="Username" htmlFor={`${fieldId}-username`} required descriptionPlacement="after" description={<span id="user-modal-username-hint">3 to 32 characters: letters, numbers, dots, dashes, and underscores.</span>}>
               <input
+                id={`${fieldId}-username`}
                 name="username"
                 autoComplete="off"
                 required
@@ -265,17 +266,14 @@ function UserPermissionModal({
                 aria-describedby="user-modal-username-hint"
                 title="Letters, numbers, dots, dashes, and underscores."
               />
-              <small id="user-modal-username-hint" className="fieldHint">3 to 32 characters: letters, numbers, dots, dashes, and underscores.</small>
-            </label>
+            </FormField>
             {!user && (
-              <label>
-                Password
-                <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
-              </label>
+              <FormField label="Password" htmlFor={`${fieldId}-password`} required>
+                <input id={`${fieldId}-password`} name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
+              </FormField>
             )}
-            <label>
-              Role preset
-              <select name="presetPicker" value={selectedPreset} onChange={changePreset} disabled={adminPermissionsLocked}>
+            <FormField label="Role preset" htmlFor={`${fieldId}-preset`}>
+              <select id={`${fieldId}-preset`} name="presetPicker" value={selectedPreset} onChange={changePreset} disabled={adminPermissionsLocked}>
                 <option value="viewer">Viewer</option>
                 <option value="operator">Operator</option>
                 <option value="maintainer">Maintainer</option>
@@ -283,7 +281,7 @@ function UserPermissionModal({
                 <option value="admin">Admin</option>
                 <option value="custom">Custom</option>
               </select>
-            </label>
+            </FormField>
             <div className="presetSummary" aria-live="polite">
               Current preset: <strong>{rolePresetLabel(inferredPreset)}</strong>
             </div>
@@ -360,6 +358,7 @@ function ResetPasswordModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const fieldId = useId();
   // Escape closes this form, but a stray backdrop click must not discard in-progress edits.
   return (
     <DialogSurface backdrop dismissible={!busy} backdropDismiss={false} className="modalPanel userModalPanel" labelledBy="reset-password-title" onClose={onClose}>
@@ -380,18 +379,15 @@ function ResetPasswordModal({
         </div>
         <fieldset disabled={busy} className="userModalBody">
           <div className="userModalFields">
-            <label>
-              User
-              <input value={user.username} readOnly />
-            </label>
-            <label>
-              New password
-              <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
-            </label>
-            <label>
-              Confirm password
-              <input name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="Repeat password" />
-            </label>
+            <FormField label="User" htmlFor={`${fieldId}-user`}>
+              <input id={`${fieldId}-user`} value={user.username} readOnly />
+            </FormField>
+            <FormField label="New password" htmlFor={`${fieldId}-password`} required>
+              <input id={`${fieldId}-password`} name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
+            </FormField>
+            <FormField label="Confirm password" htmlFor={`${fieldId}-confirmPassword`} required>
+              <input id={`${fieldId}-confirmPassword`} name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="Repeat password" />
+            </FormField>
           </div>
         </fieldset>
         <div className="userModalFooter">

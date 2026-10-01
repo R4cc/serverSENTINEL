@@ -13,7 +13,7 @@ import {
 } from "../utils/format";
 import { isNodeRuntimeUsable, nodeBlockReason } from "../utils/nodes";
 import { AppIcon } from "../components/FileTypeIcon";
-import { Banner, Button, HelpTooltip } from "../components/UiPrimitives";
+import { Banner, Button, EmptyState, HelpTooltip } from "../components/UiPrimitives";
 import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from "../utils/validation";
 import {
   clampNumber,
@@ -1240,7 +1240,7 @@ function AdditionalPortBindingsPanel({
               </div>
             ))}
           </div>
-          {bindings.length === 0 && <div className="additionalPortsEmpty">No additional ports have been added.</div>}
+          {bindings.length === 0 && <EmptyState compact title="No additional ports have been added." />}
           {!valid && bindings.length > 0 && <span className="fieldError">Each additional binding needs unique, valid host and container ports that do not reuse the server port, Query port, or another port on this node.</span>}
           <Button variant="secondary" className="addPortBindingButton" onClick={onAdd}>
             <AppIcon name="plus" />

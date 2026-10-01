@@ -12,7 +12,7 @@ import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { managedContentTerminology } from "./contentTerminology";
 import { useRequestScope } from "../../utils/useRequestScope";
 
-const modSearchDebounceMs = 650;
+const modSearchDebounceMs = 350;
 
 type ModrinthSearchPage = {
   hits: ModrinthHit[];
@@ -189,6 +189,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   const [detailsModKey, setDetailsModKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const currentSearchQuery = query.trim();
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [showIncompatibleResults, setShowIncompatibleResults] = useState(false);
   const [searchRequestVersion, setSearchRequestVersion] = useState(0);
@@ -474,7 +475,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       setSearching(false);
       return;
     }
-    const trimmedQuery = query.trim();
+    const trimmedQuery = currentSearchQuery;
     setSearchError("");
     if (!trimmedQuery) {
       setDebouncedQuery("");
@@ -490,7 +491,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setSearching(true);
     const timeout = window.setTimeout(() => setDebouncedQuery(trimmedQuery), modSearchDebounceMs);
     return () => window.clearTimeout(timeout);
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, query, Boolean(installState)]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, currentSearchQuery, Boolean(installState)]);
 
   function updateShowIncompatibleResults(value: boolean) {
     showIncompatibleResultsRef.current = value;
@@ -508,7 +509,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   useEffect(() => {
     if (!activeServer || activeNodeRuntimeBlocked || activePage !== "mods" || !addOpen || !modrinthConfigured || installState) return;
     const trimmedQuery = debouncedQuery.trim();
-    if (!trimmedQuery) return;
+    if (!trimmedQuery || currentSearchQuery !== trimmedQuery) return;
     setSearchResults([]);
     setSearchTotal(0);
     setSearchError("");
@@ -557,7 +558,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
       abortController.abort();
       if (searchAbortControllerRef.current === abortController) searchAbortControllerRef.current = null;
     };
-  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, debouncedQuery, searchRequestVersion, activeServerIsDemo, showIncompatibleResults]);
+  }, [activeServer?.id, activeNodeRuntimeBlocked, activePage, addOpen, modrinthConfigured, currentSearchQuery, debouncedQuery, searchRequestVersion, activeServerIsDemo, showIncompatibleResults]);
 
   async function loadMoreMods() {
     if (loadMoreInFlightRef.current || loadingMore || searching || !activeServer || installState) return;
@@ -696,9 +697,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setInstallState((current) => current ? { ...current, selectedVersionId: version.id, acknowledgeMinecraftMismatch: getInstallVersionHealth(version).requiresAcknowledgement ? current.acknowledgeMinecraftMismatch : false } : current);
   }
 
-  function continueInstallReview() {
-    if (!installState || !selectedVersion || !canContinueInstall) return;
-    setInstallState((current) => current ? { ...current, step: 2 } : current);
+  function continueInstallReview(version = selectedVersion) {
+    if (!installState || !version?.selectable) return;
+    const health = getInstallVersionHealth(version);
+    if (!health.safeToRunDirectly && !(installState.showOtherVersions && health.requiresAcknowledgement && installState.acknowledgeMinecraftMismatch && installState.selectedVersionId === version.id)) return;
+    setInstallState((current) => current ? { ...current, selectedVersionId: version.id, acknowledgeMinecraftMismatch: health.requiresAcknowledgement && current.acknowledgeMinecraftMismatch, step: 2 } : current);
   }
 
   function patchJob(id: string, patch: Partial<GeneralJob>) {
@@ -1026,7 +1029,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           if (!isCurrent()) return;
           const nextFilename = result.filename || currentFilename;
           const responseFilename = currentFilename;
-          setInstalledMods((current) => current.map((mod) => mod.filename === responseFilename ? { ...mod, filename: nextFilename, displayName: nextFilename.replace(/\.jar\.disabled$/, ".jar"), enabled: result.enabled } : mod));
+          setInstalledMods((current) => current.map((mod) => mod.filename === responseFilename ? { ...mod, filename: nextFilename, enabled: result.enabled } : mod));
           currentFilename = nextFilename;
           void Promise.all([refreshFiles(activeServer.id, `/${terminology.directory}`), refreshServerState()]);
         } catch (error) {
@@ -1122,7 +1125,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
 
   return {
     data: { installedMods: currentInstalledMods, searchResults, searchTotal, updatePlan: currentUpdatePlan },
-    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching, loadingMore, searchError, installState, updatePlanLoading, updatePlanError, updatePlanProgress, batchUpdateRunning },
+    state: { modsLoading, modsError, installedQuery, detailsMod, addOpen, query, showIncompatibleResults, searching: searching || Boolean(query.trim() && query.trim() !== debouncedQuery.trim()), loadingMore, searchError, installState, updatePlanLoading, updatePlanError, updatePlanProgress, batchUpdateRunning },
     derived: { selectedVersion, pendingDependencies: effectivePendingDependencies, canContinueInstall },
     refs: { sentinelRef },
     actions: {

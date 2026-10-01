@@ -406,16 +406,12 @@
 
 .exportTaskCopy small,
 .exportTaskSummary > small,
-.exportArtifactRow small,
-.exportTaskEmpty {
+.exportArtifactRow small {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   line-height: 1.4;
 }
 
-.exportTaskEmpty {
-  margin: 0;
-}
 
 .exportTaskProgress {
   display: grid;

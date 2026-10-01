@@ -1383,14 +1383,6 @@
   padding: 0;
 }
 
-.additionalPortsEmpty {
-  border: var(--border-subtle) dashed var(--border-muted);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  padding: var(--space-3);
-  font-size: 13px;
-  font-weight: var(--weight-heading);
-}
 
 .addPortBindingButton {
   width: 100%;

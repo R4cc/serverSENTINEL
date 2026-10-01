@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
+  useTable,
   type ColumnDef,
   type SortingState
 } from '@tanstack/react-table';
+import { sortableTableFeatures, type SortableTableFeatures } from "../utils/tableFeatures";
 import { Activity, Blocks, Clock, Cpu, Globe, HardDrive, MemoryStick, TriangleAlert } from 'lucide-react';
 import type {
   ManagedServer,
@@ -398,11 +397,21 @@ export function ModHealthPanel({
   contentPluralTitle?: "Mods" | "Plugins";
 }) {
   if (!canView) return null;
-  if (!updatePlan) return <ModHealthPanelSkeleton contentPlural={contentPlural} />;
+  if (!updatePlan && loading) return <ModHealthPanelSkeleton contentPlural={contentPlural} />;
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
   const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
+  if (!updatePlan) return (
+    <OverviewCard
+      className="modsHealthPanel modUpdatesCard"
+      title={`${contentSingularTitle} updates`}
+      actions={<ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} />}
+    >
+      <OverviewCardState title="Updates not checked" message={`Check for updates or open ${contentPluralTitle} for details.`} icon={<AppIcon name="refresh" />} onClick={onOpenMods} ariaLabel={`Open ${contentPluralTitle}, updates not checked`} />
+    </OverviewCard>
+  );
 
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
+  const fullyChecked = updatePlan.counts.totalInstalled > 0 && updatePlan.counts.unknown === 0 && updatePlan.counts.blockedUpdates === 0;
   const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
   const visibleUpdates = availableUpdates.slice(0, overviewSupportCardSlotCount);
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
@@ -414,7 +423,7 @@ export function ModHealthPanel({
 
   return (
     <OverviewCard
-      className={`modsHealthPanel modUpdatesCard${updateCount === 0 ? " modUpdatesCard--healthy" : ""}`}
+      className={`modsHealthPanel modUpdatesCard${updateCount === 0 && fullyChecked ? " modUpdatesCard--healthy" : ""}`}
       title={`${contentSingularTitle} updates`}
       actions={actions}
       loading={loading}
@@ -423,11 +432,12 @@ export function ModHealthPanel({
         {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
         {updateCount === 0 ? (
           <OverviewCardState
-            title="Everything is up to date"
-            icon={<AppIcon name="check" />}
-            tone="success"
+            title={modUpdateRefreshResultMessage(updatePlan, contentPlural)}
+            message={updatePlan.counts.unknown > 0 ? `Open ${contentPluralTitle} to review unchecked versions.` : updatePlan.counts.blockedUpdates > 0 ? "Available versions are not recommended for this server." : undefined}
+            icon={<AppIcon name={fullyChecked ? "check" : "search"} />}
+            tone={fullyChecked ? "success" : "neutral"}
             onClick={onOpenMods}
-            ariaLabel={`Open ${contentPluralTitle}, no ${contentSingular} updates available`}
+            ariaLabel={fullyChecked ? `Open ${contentPluralTitle}, no ${contentSingular} updates available` : `Open ${contentPluralTitle}, ${modUpdateRefreshResultMessage(updatePlan, contentPlural).toLowerCase()}`}
           />
         ) : visibleUpdates.map((entry) => (
           <button
@@ -514,8 +524,13 @@ function ModHealthPanelSkeleton({
 
 export function modUpdateRefreshResultMessage(updatePlan: ModUpdatePlan, contentPlural: "mods" | "plugins") {
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
-  if (updateCount === 0) return "Everything is up to date";
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
+  if (updatePlan.counts.totalInstalled === 0) return `No ${contentPlural} installed`;
+  if (updateCount === 0) {
+    if (updatePlan.counts.unknown > 0) return "Some versions could not be checked";
+    if (updatePlan.counts.blockedUpdates > 0) return "No recommended updates";
+    return "Everything is up to date";
+  }
   return `${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`;
 }
 
@@ -967,7 +982,7 @@ export function RecentEventsPanel({
   const filteredEvents = useMemo(() => filter === "all"
     ? groupedEvents
     : groupedEvents.filter((group) => serverEventCategory(group.events[0]) === filter), [filter, groupedEvents]);
-  const columns = useMemo<ColumnDef<RecentEventGroup>[]>(() => [
+  const columns = useMemo<ColumnDef<SortableTableFeatures, RecentEventGroup>[]>(() => [
     {
       id: "event",
       accessorFn: (group) => {
@@ -993,7 +1008,8 @@ export function RecentEventsPanel({
     }
   ], [now]);
   const tableData = useMemo(() => [...filteredEvents], [filteredEvents]);
-  const table = useReactTable({
+  const table = useTable({
+    features: sortableTableFeatures,
     data: tableData,
     columns,
     getRowId: (group) => group.id,
@@ -1001,9 +1017,7 @@ export function RecentEventsPanel({
     onSortingChange: (updater) => {
       setSorting(updater);
       setPage(0);
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
+    }
   });
   const rows = table.getRowModel().rows;
   const pages = Math.max(1, Math.ceil(rows.length / serverEventsPageSize));
