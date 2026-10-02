@@ -119,7 +119,7 @@ export function FileEditorModal({
   return (
     <>
       {selectedPath && (
-        <DialogSurface backdrop="fileEditorBackdrop" dismissible={canCloseEditor} className="modalPanel fileEditorModal" labelledBy="file-editor-title" onClose={onRequestClose}>
+        <DialogSurface mobileFullscreen backdrop="fileEditorBackdrop" dismissible={canCloseEditor} className="modalPanel fileEditorModal" labelledBy="file-editor-title" onClose={onRequestClose}>
           <header className="fileEditorHeader">
             <div>
               <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
@@ -149,6 +149,7 @@ export function FileEditorModal({
                 </Button>
               </div>
             </div>
+            {editingRestriction && <p className="fileEditorRestrictionReason" role="status">{editingRestriction}</p>}
             <div className={`fileEditorMainArea${fileReadError && !fileOpenFailed ? " hasReadError" : ""}`}>
               {fileOpening ? (
                 <div className="fileEditorStateFill">
@@ -187,7 +188,7 @@ export function FileEditorModal({
             </div>
           </div>
           <footer className="fileEditorFooter">
-            <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>Cancel</Button>
+            <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>{editing ? "Cancel" : "Close"}</Button>
             {editing ? (
               <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"} reserveLabel="Saving">
                 {fileSaving ? "Saving" : "Save"}

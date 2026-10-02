@@ -20,6 +20,7 @@ try {
       await nav.waitFor({state:"attached"});
       if(!await nav.isVisible()) await page.getByRole('button',{name:'Expand navigation'}).click();
       await nav.click();
+      if (width <= 720) await page.getByRole('button', {name:'Player geography', exact:true}).click();
       await page.locator('.playerMapMarker').first().waitFor();
       await page.getByRole('group',{name:'Players shown on map'}).getByRole('button',{name:'All time',exact:true}).click();
       await page.locator('.playerMap').scrollIntoViewIfNeeded();

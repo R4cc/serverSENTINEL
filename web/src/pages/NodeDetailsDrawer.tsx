@@ -253,7 +253,7 @@ export function NodeDetailsDrawer({
   }
 
   return (
-    <DialogSurface className="nodeDetailsDrawer" labelledBy="node-details-title" describedBy="node-details-description" onClose={onClose} allowDocumentScrollOnPhone>
+    <DialogSurface mobileFullscreen className="nodeDetailsDrawer" labelledBy="node-details-title" describedBy="node-details-description" onClose={onClose}>
       <header className="nodeDrawerHeader">
         <div className="nodeDrawerTitle">
           <NodeGlyph />

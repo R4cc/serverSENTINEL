@@ -59,7 +59,8 @@ try {
       await page.locator(".appShell").waitFor();
 
       await openPage(page, "settings");
-      await page.getByRole("tab", { name: "Integrations", exact: true }).click();
+      if (width <= 720) await page.getByRole("combobox", {name:"Settings category"}).selectOption("integrations");
+      else await page.getByRole("tab", { name: "Integrations", exact: true }).click();
       await page.locator('input[name="modrinthApiKey"], .keyFormConfigured .keyFormActions button').first().waitFor();
       const replace = page.getByRole("button", { name: "Replace key", exact: true });
       if (await replace.count()) await replace.click();
@@ -69,7 +70,8 @@ try {
       const keyForm = key.locator("xpath=ancestor::form");
       if (await keyForm.getByRole("button", { name: "Cancel", exact: true }).count()) await keyForm.getByRole("button", { name: "Cancel", exact: true }).click();
 
-      await page.getByRole("tab", { name: "Users", exact: true }).click();
+      if (width <= 720) await page.getByRole("combobox", {name:"Settings category"}).selectOption("users");
+      else await page.getByRole("tab", { name: "Users", exact: true }).click();
       await page.getByRole("button", { name: "New user", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "New user", exact: true });
       const close = dialog.getByRole("button", { name: "Close user dialog", exact: true });

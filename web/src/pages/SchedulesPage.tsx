@@ -722,7 +722,7 @@ export function SchedulePage({
       </div>
 
       {formMode && (
-        <DialogSurface backdrop="scheduleModalBackdrop" dismissible={!saveRunning} className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => setFormMode(null)}>
+        <DialogSurface mobileFullscreen backdrop="scheduleModalBackdrop" dismissible={!saveRunning} className="modalPanel userModalPanel scheduleModalPanel" labelledBy="schedule-modal-title" onClose={() => setFormMode(null)}>
           <form className="userModalForm scheduleModalForm" onSubmit={submitSchedule}>
             <div className="userModalHeader scheduleModalHeader">
               <h2 id="schedule-modal-title">{modalTitle}</h2>
@@ -1057,7 +1057,7 @@ export function ScheduleRunHistoryDialog({
 }) {
   const runs = [...(schedule.recentRuns ?? [])].sort((a, b) => new Date(b.ranAt).getTime() - new Date(a.ranAt).getTime());
   return (
-    <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel scheduleHistoryPanel" labelledBy="schedule-history-title" onClose={onClose}>
+    <DialogSurface mobileFullscreen backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel scheduleHistoryPanel" labelledBy="schedule-history-title" onClose={onClose}>
       <div className="userModalHeader scheduleRunModalHeader">
         <div>
           <h2 id="schedule-history-title">{schedule.name}</h2>
@@ -1139,7 +1139,7 @@ export function ScheduleRunDetailsDialog({
 
   const steps = resolved.details?.steps;
   return (
-    <DialogSurface backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel" labelledBy="schedule-run-modal-title" describedBy="schedule-run-modal-description" onClose={onClose}>
+    <DialogSurface mobileFullscreen backdrop="scheduleModalBackdrop" className="modalPanel scheduleRunModalPanel" labelledBy="schedule-run-modal-title" describedBy="schedule-run-modal-description" onClose={onClose}>
       <div className="userModalHeader scheduleRunModalHeader">
         <div>
           <h2 id="schedule-run-modal-title">{run.scheduleName}</h2>

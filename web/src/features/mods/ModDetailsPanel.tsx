@@ -91,7 +91,7 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
   }
 
   return (
-    <DialogSurface className="modsDetailsDrawer" labelledBy="mod-details-title" onClose={onClose}>
+    <DialogSurface mobileFullscreen className="modsDetailsDrawer" labelledBy="mod-details-title" onClose={onClose}>
       <div className="modsDrawerHeader">
         <div className="modsDetailsTitle">
           <ModIconImage src={icon} fallback="JAR" />

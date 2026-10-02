@@ -5,6 +5,14 @@
   gap: var(--space-4);
 }
 
+.settingsMobileCategory { display: none; }
+@media (max-width: 720px) {
+  .settingsHubShell .settingsHubCategories { display: none; }
+  .settingsHubShell .settingsMobileCategory { display: grid; gap: var(--space-1); color: var(--text-muted); font-size: var(--type-meta-size); }
+  .settingsMobileCategory select { width: 100%; min-height: 44px; }
+  .settingsHub .settingsHubShell { grid-template-columns: minmax(0, 1fr); }
+}
+
 .settingsHubShell {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);

@@ -1,6 +1,10 @@
 /* Canonical file-manager layout and interaction rules. Keep this import last. */
+.fileMobileNavigation { display: none; }
+@media (min-width: 981px) {
+  .filesPage.filesPage--withInspector { grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width)); }
+}
 .filesPage {
-  grid-template-columns: minmax(0, 1fr) clamp(var(--side-rail-min-width), 20vw, var(--side-rail-max-width));
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: var(--space-4);
   height: max(560px, calc(100vh - 238px));
@@ -910,20 +914,19 @@
 
   .workspacePage-files .filesPage .fileNavBar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "navigation"
-      "breadcrumbs"
-      "actions";
+      "breadcrumbs navigation"
+      "actions actions";
     gap: var(--space-2);
     padding: var(--space-2);
-    overflow: hidden;
+    overflow: visible;
   }
 
   .workspacePage-files .fileNavButtons {
     grid-area: navigation;
     display: grid;
-    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    grid-template-columns: repeat(3, 44px);
     gap: var(--space-2);
   }
 
@@ -939,7 +942,7 @@
   .workspacePage-files .filesPage .fileNavBar .fileToolbar {
     grid-area: actions;
     display: grid;
-    grid-template-columns: repeat(3, minmax(44px, 1fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
     gap: var(--space-2);
     width: 100%;
   }
@@ -957,10 +960,8 @@
     flex-basis: auto;
   }
 
-  .workspacePage-files .fileToolbarLabel {
-    display: none;
-  }
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .fileToolbarLabel { display: inline; }
+  .workspacePage-files .filesPage .fileNavBar .fileToolbar .uiButton:last-child .fileToolbarLabel { display: none; }
+  .workspacePage-files .fileNavButtons .fileDesktopNavigation { display: none; }
+  .fileMobileNavigation { display: block; }
 }
-
-.fileFolderHelp { border-top: 1px solid var(--border-row); padding-top: var(--space-4); }
-.fileFolderHelp p { color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.5; }

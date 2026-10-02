@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import type { ManagedServer, PlayerSnapshot, ServerStatus } from "../types";
 import { Box, UserRound } from "lucide-react";
 import { AppIcon } from "./FileTypeIcon";
@@ -17,6 +18,7 @@ function playerCountLabel(snapshot: PlayerSnapshot | undefined) {
 
 export function ActiveServerStrip({
   server,
+  pageTitle,
   runtimeAction,
   runtimeFeedbackAction,
   serverCommandTone,
@@ -41,6 +43,7 @@ export function ActiveServerStrip({
   refreshDisabledReason
 }: {
   server: ManagedServer;
+  pageTitle?: string;
   runtimeAction: "start" | "stop" | "restart" | null;
   runtimeFeedbackAction: "start" | "restart" | null;
   serverCommandTone: string;
@@ -65,8 +68,11 @@ export function ActiveServerStrip({
   refreshDisabledReason: string;
 }) {
   const playerCount = playerCountLabel(playerSnapshot);
+  const [expandedServerId, setExpandedServerId] = useState<string | null>(null);
+  const controlsId = useId();
+  const controlsOpen = expandedServerId === server.id || Boolean(runtimeAction) || Boolean(status && ["starting", "stopping", "restarting"].includes(status.lifecycle.state));
   return (
-    <div className={`activeServerStrip uiGlassSurface uiGlassSurface--chrome ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
+    <div className={`activeServerStrip uiGlassSurface uiGlassSurface--chrome ${controlsOpen ? "serverControlsExpanded" : ""} ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
       <GlassEffect variant="chrome" />
       <div className="serverStripPrimary">
         <div className="serverStripLeft">
@@ -74,6 +80,7 @@ export function ActiveServerStrip({
             <Box className="server-icon-cube" strokeWidth={2.2} aria-hidden="true" />
           </div>
           <div className="serverStripInfo">
+            {pageTitle && <h2 className="serverStripPageTitle">{pageTitle}</h2>}
             <div className="serverStripTitleRow">
               <span className={`serverCommandStatusDot ${serverCommandTone}`} aria-hidden="true" />
               <strong title={server.displayName}>{server.displayName}</strong>
@@ -115,8 +122,8 @@ export function ActiveServerStrip({
             </div>
           </div>
         </div>
-        <div className="serverStripRight">
-          {nodeOffline && <Banner tone="error" title="Node offline" compact className="serverRuntimeAlert compact" />}
+        <Button variant="secondary" className="serverControlsToggle" aria-expanded={controlsOpen} aria-controls={controlsId} onClick={() => setExpandedServerId(controlsOpen ? null : server.id)}><AppIcon name="chevronDown" /> Server controls</Button>
+        <div className="serverStripRight" id={controlsId}>
           <RuntimeControls
             status={status}
             controlAvailableFallback={controlAvailableFallback}
@@ -140,6 +147,10 @@ export function ActiveServerStrip({
           </Button>
         </div>
       </div>
+      {nodeOffline && !alert && <Banner tone="error" title="Node offline" compact className="serverRuntimeAlert compact" />}
+      {health && <p className={`serverStripMobileHealth ${health.tone}`} role={health.tone === "error" ? "alert" : "status"}>{healthDetail || health.message}</p>}
+      {runtimeAction && <p className="serverStripOperation" role="status"><Spinner size="xs" /> Server {runtimeAction} in progress</p>}
+      {controlsOpen && controlsDisabledReason && <p className="serverStripControlsReason">{controlsDisabledReason}</p>}
       {alert && <Banner
         tone="error"
         className="serverRuntimeAlert"

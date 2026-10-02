@@ -5,6 +5,7 @@ import { useDialogFocus } from "./useDialogFocus";
 
 export function DialogSurface({
   className,
+  mobileFullscreen = false,
   labelledBy,
   describedBy,
   onClose,
@@ -16,6 +17,8 @@ export function DialogSurface({
   children
 }: {
   className: string;
+  /** Editing and detail workflows share a viewport-sized mobile surface. */
+  mobileFullscreen?: boolean;
   labelledBy: string;
   describedBy?: string;
   onClose: () => void;
@@ -40,7 +43,7 @@ export function DialogSurface({
   const surface = (
     <section
       ref={dialogRef}
-      className={`uiGlassSurface uiGlassSurface--modal ${className}`}
+      className={`uiGlassSurface uiGlassSurface--modal ${mobileFullscreen ? "uiDialog--mobileFullscreen" : ""} ${className}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}

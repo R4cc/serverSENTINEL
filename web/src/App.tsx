@@ -2341,6 +2341,7 @@ export default function App() {
             <ActiveServerStrip
               server={activeServer}
               runtimeAction={runtimeAction}
+              pageTitle={currentPageTitle}
               runtimeFeedbackAction={runtimeFeedbackAction}
               serverCommandTone={serverCommandTone}
               lastKnownRuntimeLabel={lastKnownRuntimeLabel}

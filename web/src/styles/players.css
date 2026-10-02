@@ -21,7 +21,7 @@
 }
 
 .playerSummaryGrid .uiMetricTileCopy strong {
-  font-size: var(--type-card-title-size);
+  font-size: var(--type-metric-value-size);
 }
 
 .playerSummarySkeleton {
@@ -609,7 +609,7 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   grid-auto-rows: max-content;
   align-content: start;
   max-height: 280px;
-  padding-inline-end: 4px;
+  padding-inline-end: var(--space-3);
 }
 
 .playerMapRegionPanel .playerMapClusterRow {

@@ -520,9 +520,6 @@ export function NodesPage({
   const selectedManualRecovery = selectedDetailsNode ? nodeManualRecoveryById[selectedDetailsNode.id] : undefined;
 
   const openNodeDetails = (node: NodeView) => {
-    if (window.matchMedia("(max-width: 720px)").matches && document.scrollingElement) {
-      document.scrollingElement.scrollTop = 0;
-    }
     onViewDetails(node);
   };
 

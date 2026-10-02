@@ -19,6 +19,7 @@ export function ActionMenu({
   label,
   items,
   trigger,
+  iconOnly = true,
   disabled = false,
   className = "",
   triggerClassName = "",
@@ -28,6 +29,7 @@ export function ActionMenu({
   label: string;
   items: ActionMenuItem[];
   trigger: ReactNode;
+  iconOnly?: boolean;
   disabled?: boolean;
   className?: string;
   triggerClassName?: string;
@@ -72,7 +74,7 @@ export function ActionMenu({
       <Button
         ref={triggerRef}
         variant="secondary"
-        iconOnly
+        iconOnly={iconOnly}
         className={`actionMenuTrigger ${triggerClassName}`.trim()}
         onClick={() => setOpen((current) => !current)}
         disabled={disabled || items.length === 0}

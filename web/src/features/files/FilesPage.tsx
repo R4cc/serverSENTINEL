@@ -339,7 +339,7 @@ export function FilesPage({
   });
 
   return (
-    <section className="tabPage filesPage layoutWide">
+    <section className={`tabPage filesPage layoutWide${selectedEntries.length ? " filesPage--withInspector" : ""}`}>
       <section className="filesExplorer">
         <section className="panel filesPanel">
           <div className="fileNavBar">
@@ -347,15 +347,19 @@ export function FilesPage({
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
                 <AppIcon name="chevronLeft" />
               </Button>
-              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
+              <Button variant="secondary" iconOnly className="iconOnlyButton fileDesktopNavigation" onClick={actions.navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
                 <AppIcon name="chevronRight" />
               </Button>
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateFilesUp} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go up one folder"} aria-label="Go up one folder">
                 <AppIcon name="arrowUp" />
               </Button>
-              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={() => void actions.navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
+              <Button variant="secondary" iconOnly className="iconOnlyButton fileDesktopNavigation" onClick={() => void actions.navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
                 <AppIcon name="home" />
               </Button>
+              <ActionMenu className="fileMobileNavigation" label="More folder navigation" trigger={<AppIcon name="moreHorizontal" />} items={[
+                { id: "forward", label: "Forward", icon: <AppIcon name="chevronRight" />, onSelect: actions.navigateForwardFiles, disabled: isProvisioning || fileForwardStack.length === 0 },
+                { id: "root", label: "Go to server root", icon: <AppIcon name="home" />, onSelect: () => void actions.navigateFiles("/"), disabled: isProvisioning || listing.path === "/" }
+              ]} />
             </div>
             <div className="fileBreadcrumbs uiToolbarMeta" aria-label="Current folder" ref={breadcrumbRef}>
               {fileBreadcrumbs.map((crumb) => (
@@ -548,21 +552,7 @@ export function FilesPage({
         </section>
       </section>
 
-      <aside className="panel fileDetailsPanel">
-        {!selectedEntry && selectedEntries.length === 0 && (
-          <div className="fileDetailsContent">
-            <h2>Current folder</h2>
-            <dl>
-              <div><dt>Location</dt><dd>{listing.path}</dd></div>
-              <div><dt>Items</dt><dd>{filesLoading ? "Loading…" : filesError ? "Unavailable" : listing.entries.length}</dd></div>
-            </dl>
-            <div className="fileFolderHelp">
-              <h3>Working with files</h3>
-              <p>Select an item to see its details and preview.</p>
-              <p>Double-click or press Enter to open. Use Shift to select a range.</p>
-            </div>
-          </div>
-        )}
+      {selectedEntries.length > 0 && <aside className="panel fileDetailsPanel">
         {selectedEntries.length > 1 && (
           <div className="fileDetailsContent">
             <h2>{selectedEntries.length} items selected</h2>
@@ -611,7 +601,7 @@ export function FilesPage({
             </section>
           </div>
         )}
-      </aside>
+      </aside>}
 
       {fileContextMenu && (
         <ContextMenu
