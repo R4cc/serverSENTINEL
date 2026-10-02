@@ -540,7 +540,7 @@ button.overviewCardRow:focus-visible {
   align-items: center;
   gap: 7px;
   padding: 4px 8px;
-  border: var(--border-subtle) solid var(--border-muted);
+  border: var(--border-subtle) solid var(--border-row);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--text-muted);
@@ -571,7 +571,7 @@ button.overviewCardRow:focus-visible {
 }
 
 .timelineSeriesToggle > span::after { content: "✓"; opacity: 0; }
-.timelineSeriesToggle.active { border-color: color-mix(in srgb, var(--timeline-toggle-color) 48%, var(--border-muted)); background: color-mix(in srgb, var(--timeline-toggle-color) 8%, var(--surface-raised)); color: var(--text); }
+.timelineSeriesToggle.active { border-color: color-mix(in srgb, var(--timeline-toggle-color) 32%, var(--border-row)); background: color-mix(in srgb, var(--timeline-toggle-color) 8%, var(--surface-raised)); color: var(--text); }
 .timelineSeriesToggle.active > span { background: var(--timeline-toggle-color); }
 .timelineSeriesToggle.active > span::after { opacity: 1; }
 .timelineSeriesToggle.series-cpuUtilizationPercent { --timeline-toggle-color: var(--timeline-cpu); }
@@ -646,7 +646,7 @@ button.overviewCardRow:focus-visible {
   min-width: 0;
   display: flex;
   align-items: stretch;
-  border: var(--border-subtle) solid var(--border-muted);
+  border: var(--border-subtle) solid var(--border-row);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
 }
@@ -691,7 +691,7 @@ button.overviewCardRow:focus-visible {
 .serverTimelineMetricBand {
   min-width: 0;
   overflow: hidden;
-  border: var(--border-subtle) solid var(--border-muted);
+  border: var(--border-subtle) solid var(--border-row);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
 }
@@ -2180,7 +2180,20 @@ button.overviewCardRow:focus-visible {
 /* CPU, memory and uptime resample while the page is open. Fixed-advance digits
    keep the six tiles from twitching against each other between samples. */
 .overviewSummary .uiMetricTileCopy > strong {
+  font-size: var(--type-metric-value-size);
   font-variant-numeric: tabular-nums;
+}
+
+/* Resource collection and stopped servers show text rather than a numeric
+   reading. Keep the full phrase legible in the same narrow metric tile. */
+.overviewSummary .overviewSummaryTextState {
+  display: block;
+  color: inherit;
+  font-size: var(--type-row-title-size);
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: 1.15;
+  white-space: normal;
 }
 
 /* Typography gives generic summary spans the compact metadata size. Byte
@@ -2347,14 +2360,14 @@ button.overviewCardRow:focus-visible {
     display: block;
     overflow: hidden;
     padding-bottom: 2px;
-    font-size: clamp(14px, 1.3cqi, 17px);
+    font-size: clamp(16px, 1.6cqi, 20px);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .overviewSummary .summaryStatusText {
     color: var(--text);
-    font-size: clamp(14px, 1.3cqi, 17px);
+    font-size: clamp(16px, 1.6cqi, 20px);
     text-transform: uppercase;
   }
 
@@ -2362,6 +2375,10 @@ button.overviewCardRow:focus-visible {
      ellipsing a value as short as "Not running", which is what the whole row shows once a server
      stops. */
   @container (max-width: 980px) {
+    .overviewSummary .summaryTile {
+      --metric-tile-marker-size: 24px;
+    }
+
     .overviewSummary .uiMetricTileCopy > strong,
     .overviewSummary .summaryStatusText {
       font-size: var(--type-helper-size);
@@ -2545,7 +2562,7 @@ button.overviewCardRow:focus-visible {
   .overviewSummary > .summaryTile .uiMetricTileCopy > strong,
   .overviewSummary > .summaryTile .summaryStatusText {
     overflow: hidden;
-    font-size: 15px;
+    font-size: clamp(15px, 4vw, 17px);
     line-height: 1.15;
     text-overflow: ellipsis;
     white-space: nowrap;

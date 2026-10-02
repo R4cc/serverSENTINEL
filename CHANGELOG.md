@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.10.2 - 2026-10-02
+
+- Softened the light-theme background and panel outlines, added subtle ambient color to dark glass, and enlarged Overview metric values for easier scanning.
+
 ## 26.10.1 - 2026-10-02
 
 - Fixed interrupted database upgrades and stale crash recovery overriding an intentional server stop.

@@ -154,6 +154,7 @@
   --type-page-title-size: clamp(24px, 2vw, 30px);
   --type-section-title-size: 17px;
   --type-card-title-size: 15px;
+  --type-metric-value-size: 18px;
   --type-row-title-size: 14px;
   --type-body-size: 14px;
   --type-helper-size: 13px;
