@@ -9,6 +9,9 @@ if (screenshots) await mkdir(screenshots, { recursive: true });
 
 async function navigate(page, name) {
   const target = page.locator(`[data-nav-page="${name}"]`);
+  // Optional module navigation mounts after the shell while settings load.
+  // Check its responsive visibility only after the item exists.
+  await target.waitFor({ state: "attached" });
   if (!await target.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
   await target.click();
   await page.locator(`.workspacePage-${name}`).waitFor();
