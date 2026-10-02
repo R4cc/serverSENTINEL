@@ -54,7 +54,7 @@ try {
         };
         requestAnimationFrame(frame);
       });
-      let lines = payload(count), epoch = "loading-epoch", socket, onConnect;
+      let lines = payload(count), epoch = "loading-epoch", socket, onConnect, backlogDelay = 0;
       const connections = [];
       await page.routeWebSocket("**/ws/console?*", ws => {
         socket = ws;
@@ -67,7 +67,11 @@ try {
         }
         connections.push(Number(cursor.get("since") || 0));
         const since = cursor.get("epoch") === epoch ? Number(cursor.get("since")) : 0;
-        ws.send(JSON.stringify({ type: "backlog", epoch, lines: lines.filter(line => line.seq > since), nextSeq: (lines.at(-1)?.seq ?? 0) + 1, truncated: false }));
+        const backlog = JSON.stringify({ type: "backlog", epoch, lines: lines.filter(line => line.seq > since), nextSeq: (lines.at(-1)?.seq ?? 0) + 1, truncated: false });
+        if (backlogDelay) {
+          const delayed = setTimeout(() => ws.send(backlog), backlogDelay);
+          ws.onClose(() => clearTimeout(delayed));
+        } else ws.send(backlog);
         onConnect?.();
       });
       await page.route("**/api/**", route => {
@@ -120,7 +124,20 @@ try {
       await navigate("console");
       await page.waitForFunction(() => window.consoleTiming.visible > 0);
       if (count) await waitForTail(count);
-      const initial = await page.evaluate(() => ({ visibleMs: window.consoleTiming.visible - window.consoleTiming.started, maxFrameGapMs: Math.max(0, ...window.consoleTiming.gaps) }));
+      const initial = await page.evaluate(() => ({ visibleMs: window.consoleTiming.visible - window.consoleTiming.started, readyMs: performance.now() - window.consoleTiming.started, maxFrameGapMs: Math.max(0, ...window.consoleTiming.gaps) }));
+      // Observe the visible rows themselves: clearing/rebuilding the same text would otherwise
+      // pass a final-content comparison despite flashing or moving after the first visible frame.
+      await page.evaluate(() => {
+        window.consoleRowMutations = 0;
+        window.consoleRowObserver = new MutationObserver(records => { window.consoleRowMutations += records.length; });
+        window.consoleRowObserver.observe(document.querySelector(".xterm-rows"), { subtree: true, childList: true, characterData: true });
+      });
+      await page.waitForTimeout(180);
+      const mutations = await page.evaluate(() => {
+        window.consoleRowObserver.disconnect();
+        return window.consoleRowMutations;
+      });
+      assert.equal(mutations, 0, "loaded rows were redrawn after reveal");
       await page.locator(".consolePromptInput").fill("say unfinished draft");
       await page.evaluate(() => { window.retainedTerminal = document.querySelector(".xterm"); });
       await navigate("files");
@@ -208,6 +225,16 @@ try {
         await jump.waitFor();
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         assert.equal(await page.locator(".xterm-rows").textContent(), reading, "arriving output moved the reader");
+        // A slow resume must display the retained viewport immediately, then leave those rows
+        // stationary when the empty catch-up arrives. This also preserves the unseen-output action.
+        backlogDelay = 180;
+        await navigate("files");
+        await navigate("console");
+        assert.equal(await page.locator(".xterm-rows").textContent(), reading, "revisit moved the reader before catch-up");
+        await page.waitForTimeout(220);
+        assert.equal(await page.locator(".xterm-rows").textContent(), reading, "resume moved the reader after catch-up");
+        assert.equal(await jump.isVisible(), true, "revisit lost the unseen-output action");
+        backlogDelay = 0;
         await jump.click();
         await waitForTail(count + 103);
         // A new epoch replaces, rather than appends to, the old history.

@@ -1,19 +1,23 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { lazyPage } from "../app/lazyPage";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
 import type { ConsoleLine } from "../types";
 import type { TerminalSelection } from "../components/MinecraftTerminal";
+import { loadTerminalFonts, loadTerminalRenderer } from "../components/terminalResources";
 import { ConsolePrompt } from "../components/ConsolePrompt";
 import { TerminalLoadingSkeleton } from "../components/LoadingSkeletons";
 import { Surface } from "../components/UiPrimitives";
 import { copyToClipboard } from "../utils/clipboard";
 import { shouldCopyTerminalSelection } from "../utils/minecraftTerminal";
 
-const { Component: MinecraftTerminal, preload: loadMinecraftTerminal } = lazyPage(
+const { Component: MinecraftTerminal, preload: loadTerminalComponent } = lazyPage(
   () => import("../components/MinecraftTerminal"),
   (module) => module.MinecraftTerminal
 );
-export { loadMinecraftTerminal };
+export function loadMinecraftTerminal() {
+  void loadTerminalRenderer();
+  return Promise.all([loadTerminalComponent(), loadTerminalFonts()]).then(() => {});
+}
 
 /**
  * The console page: an output surface with a command line under it. The terminal stays behind a
@@ -49,6 +53,9 @@ export function ServerConsoleTab({
 }) {
   const selectionRef = useRef<TerminalSelection | null>(null);
   const [terminalCodeReady, setTerminalCodeReady] = useState(false);
+  const handleSelectionChange = useCallback((selection: TerminalSelection) => {
+    selectionRef.current = selection;
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -103,7 +110,7 @@ export function ServerConsoleTab({
                   generation={generation}
                   fontSize={fontSize}
                   scrollback={scrollback}
-                  onSelectionChange={(selection) => { selectionRef.current = selection; }}
+                  onSelectionChange={handleSelectionChange}
                 />
               </Suspense>
             ) : <TerminalLoadingSkeleton />}
