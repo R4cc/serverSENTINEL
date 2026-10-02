@@ -18,6 +18,48 @@ function event(timestamp?: string): ServerEvent {
 }
 
 describe("TimelineEventCollector", () => {
+  it.each(["stop", "delete"])("discards pending log observations after %s", async (action) => {
+    let release!: (value: unknown) => void;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const appendMany = vi.fn();
+    const prune = vi.fn();
+    const observer = vi.fn();
+    let active = true;
+    const collector = new TimelineEventCollector({
+      intervalMs: 10_000, retentionMs: 60_000, readServers: async () => [{ id: "a" } as ManagedServer],
+      isServerActive: () => active, readLogs: () => pending,
+      parseLine: () => event(new Date().toISOString()), repository: { appendMany, prune } as never
+    });
+    collector.observeLogs(observer);
+    const collection = collector.collectServer({ id: "a" } as ManagedServer);
+    if (action === "stop") collector.stop();
+    else active = false;
+    release({ text: "Alex joined", source: "logs/latest.log" });
+    await collection;
+    expect(appendMany).not.toHaveBeenCalled();
+    expect(observer).not.toHaveBeenCalled();
+    expect(prune).not.toHaveBeenCalled();
+  });
+
+  it("does not persist events when stopped during an asynchronous log observer", async () => {
+    const appendMany = vi.fn();
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const collector = new TimelineEventCollector({
+      intervalMs: 10_000, retentionMs: 60_000, readServers: async () => [],
+      readLogs: async () => ({ text: "Alex joined" }), parseLine: () => event(new Date().toISOString()),
+      repository: { appendMany } as never
+    });
+    collector.observeLogs(() => { entered(); return blocked; });
+    const collection = collector.collectServer({ id: "a" } as ManagedServer);
+    await started;
+    collector.stop();
+    release();
+    await collection;
+    expect(appendMany).not.toHaveBeenCalled();
+  });
   it("persists timestamped events and lets repository identity deduplicate repeated tails", async () => {
     const stored = new Map<string, ServerTimelineEvent>();
     const timestamp = new Date().toISOString();

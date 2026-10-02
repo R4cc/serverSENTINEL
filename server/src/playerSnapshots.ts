@@ -32,6 +32,7 @@ type CoordinatorOptions = {
   pollMs: number;
   staleMs: number;
   readServers: () => Promise<ManagedServer[]>;
+  isServerActive?: (serverId: string) => boolean;
   runtimeForServer: (server: ManagedServer) => NodeRuntime;
   now?: () => number;
 };
@@ -119,30 +120,34 @@ export class PlayerSnapshotCoordinator {
   private readonly inFlight = new Map<string, Promise<PlayerSnapshot>>();
   private readonly generations = new Map<string, number>();
   private interval: NodeJS.Timeout | undefined;
+  private closed = false;
 
   constructor(private readonly options: CoordinatorOptions) {}
 
   start() {
-    if (this.interval) return;
+    if (this.interval || this.closed) return;
     void this.collectAll().catch(() => undefined);
     this.interval = setInterval(() => void this.collectAll().catch(() => undefined), this.options.pollMs);
     this.interval.unref?.();
   }
 
   stop() {
-    if (!this.interval) return;
-    clearInterval(this.interval);
+    this.closed = true;
+    if (this.interval) clearInterval(this.interval);
     this.interval = undefined;
   }
 
   invalidate(serverId: string) {
     this.generations.set(serverId, (this.generations.get(serverId) ?? 0) + 1);
+    this.inFlight.delete(serverId);
     this.snapshotsByServer.delete(serverId);
     this.verifiedByServer.delete(serverId);
   }
 
   async collectAll() {
+    if (this.closed) return;
     const servers = await this.options.readServers();
+    if (this.closed) return;
     const serverIds = new Set(servers.map((server) => server.id));
     for (const serverId of this.snapshotsByServer.keys()) {
       if (!serverIds.has(serverId)) this.invalidate(serverId);
@@ -151,10 +156,13 @@ export class PlayerSnapshotCoordinator {
   }
 
   collect(server: ManagedServer) {
+    if (this.closed || this.options.isServerActive?.(server.id) === false) return Promise.resolve(unavailable("NODE_UNAVAILABLE", "Player collection stopped"));
     const existing = this.inFlight.get(server.id);
     if (existing) return existing;
     const generation = this.generations.get(server.id) ?? 0;
-    const request = this.collectOnce(server, generation).finally(() => this.inFlight.delete(server.id));
+    const request = this.collectOnce(server, generation).finally(() => {
+      if (this.inFlight.get(server.id) === request) this.inFlight.delete(server.id);
+    });
     this.inFlight.set(server.id, request);
     return request;
   }
@@ -178,7 +186,7 @@ export class PlayerSnapshotCoordinator {
   private async collectOnce(server: ManagedServer, generation: number): Promise<PlayerSnapshot> {
     try {
       const observation = normalizeObservation(await this.options.runtimeForServer(server).readPlayerObservation(server));
-      if ((this.generations.get(server.id) ?? 0) !== generation) {
+      if (this.closed || this.options.isServerActive?.(server.id) === false || (this.generations.get(server.id) ?? 0) !== generation) {
         return this.snapshotsByServer.get(server.id) ?? unavailable("NODE_UNAVAILABLE", "Player snapshot was invalidated during collection");
       }
       if (observation.state === "live") {
@@ -203,7 +211,7 @@ export class PlayerSnapshotCoordinator {
       }
       return this.failed(server.id, observation.code, observation.message, observation.attemptedAt, observation.maxPlayers, observation.instanceId);
     } catch (error) {
-      if ((this.generations.get(server.id) ?? 0) !== generation) {
+      if (this.closed || this.options.isServerActive?.(server.id) === false || (this.generations.get(server.id) ?? 0) !== generation) {
         return this.snapshotsByServer.get(server.id) ?? unavailable("NODE_UNAVAILABLE", "Player snapshot was invalidated during collection");
       }
       return this.failed(server.id, "NODE_UNAVAILABLE", error instanceof Error ? error.message : "Node is unavailable", new Date(this.now()).toISOString());

@@ -7,6 +7,7 @@ const harness = await startDemoHarness({ dataDirectoryPrefix: "serversentinel-ov
 
 async function openPage(page, name) {
   const nav = page.locator(`[data-nav-page="${name}"]`);
+  await nav.waitFor({ state: "attached" });
   if (!await nav.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
   await nav.click();
   await page.locator(`.workspacePage-${name}`).waitFor();
@@ -40,8 +41,22 @@ async function assertRequestRecovery(browser) {
   const nodes = [{ id: "local", name: "Panel Host", type: "local", status: "online", isInternal: true, dockerStatus: "available", dataPathStatus: "ready" }];
   const mod = { filename: "polished-library.jar", displayName: "Polished Library", enabled: true, size: 1, modifiedAt: now, compatibility: { status: "compatible", compatible: true, reason: "Compatible", serverSide: "required" }, modrinth: { projectId: "polished-library", versionId: "v1", filename: "polished-library.jar", versionNumber: "1.0.0", gameVersions: ["1.21.4"], loaders: ["fabric"], installedAt: now, installedWithForceIncompatible: false } };
   const plan = { serverId: server.id, generatedAt: now, counts: { totalInstalled: 1, safeUpdates: 0, reviewUpdates: 0, blockedUpdates: 0, unknown: 1, upToDate: 0 }, updates: [] };
-  let checked = false, failing = false, installedDelay = 0;
+  let checked = false, failing = false, cold = false, installedDelay = 0;
+  const snapshotRequests = [];
   const page = await context.newPage();
+  await page.addInitScript(() => {
+    // Drive a saved-snapshot polling tick without making this regression wait a full minute.
+    const minutePolls = new Map();
+    const setInterval = window.setInterval.bind(window);
+    const clearInterval = window.clearInterval.bind(window);
+    window.setInterval = (callback, delay, ...args) => {
+      const timer = setInterval(callback, delay, ...args);
+      if (delay === 60_000 && typeof callback === "function") minutePolls.set(timer, () => callback(...args));
+      return timer;
+    };
+    window.clearInterval = (timer) => { minutePolls.delete(timer); clearInterval(timer); };
+    window.pollSavedModSnapshots = () => { for (const poll of minutePolls.values()) poll(); };
+  });
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.route("**/api/**", async route => {
@@ -54,8 +69,9 @@ async function assertRequestRecovery(browser) {
     if (path.endsWith("/status")) return json({ server, docker: { configured: true, available: true, controllable: true, running: false, state: "exited" }, lifecycle: { state: "stopped", intent: "stopped" }, fileLogsAvailable: true });
     if (path.endsWith("/mods/update-plan/progress")) return json({ active: false, checked: 1, total: 1 });
     if (path.endsWith("/mods/update-plan")) {
+      snapshotRequests.push({ kind: "plan", forced: url.searchParams.get("forceRefresh") === "true" });
       if (failing) return json({ error: { message: "Modrinth request failed: 503 temporarily unavailable." } }, 503);
-      if (url.searchParams.has("forceRefresh")) checked = true;
+      if (url.searchParams.get("forceRefresh") === "true") { checked = true; cold = false; }
       return json(checked ? plan : null);
     }
     if (path.endsWith("/mods")) {
@@ -64,9 +80,10 @@ async function assertRequestRecovery(browser) {
         mod.filename = `polished-library.jar${mod.enabled ? "" : ".disabled"}`;
         return json({ filename: mod.filename, enabled: mod.enabled });
       }
+      snapshotRequests.push({ kind: "installed", forced: url.searchParams.get("forceRefresh") === "true" });
       await new Promise(resolve => setTimeout(resolve, installedDelay));
       if (failing) return json({ error: { message: "Modrinth request failed: 503 temporarily unavailable." } }, 503);
-      return json({ mods: [mod] });
+      return json({ mods: cold ? [] : [mod], scannedAt: cold ? null : now });
     }
     if (path.endsWith("/events")) return json({ events: [], activity: {} });
     if (path.endsWith("/storage")) return json({ worldSizeBytes: 1, totalBytes: 100, availableBytes: 80 });
@@ -79,18 +96,39 @@ async function assertRequestRecovery(browser) {
     await page.locator(".appShell").waitFor();
     await openPage(page, "overview");
     await page.getByText("Updates not checked", { exact: true }).waitFor();
+    await openPage(page, "mods");
+    await page.locator(".modsWorkspaceIdentity strong").waitFor();
+    assert.deepEqual(snapshotRequests, [{ kind: "installed", forced: false }, { kind: "plan", forced: false }], "Overview did not preload both saved snapshots, or opening Mods restarted a scan");
+    await openPage(page, "settings");
+    await openPage(page, "mods");
+    assert.equal(await page.locator(".modsWorkspaceIdentity strong").innerText(), "Polished Library", "Revisiting Mods discarded its loaded list");
+    assert.equal(snapshotRequests.length, 2, "Revisiting Mods refetched its snapshots");
+    mod.displayName = "Background Updated Library";
+    await page.evaluate(() => window.pollSavedModSnapshots());
+    await page.getByText("Background Updated Library", { exact: true }).waitFor();
+    assert.deepEqual(snapshotRequests.slice(2), [{ kind: "installed", forced: false }, { kind: "plan", forced: false }], "Periodic synchronization did not read both saved snapshots without an upstream scan");
+    mod.displayName = "Polished Library";
+    installedDelay = 500;
+    await page.evaluate(() => window.pollSavedModSnapshots());
+    await openPage(page, "overview");
+    const manualList = page.waitForResponse(response => response.url().endsWith("/mods") && response.request().method() === "GET");
     await page.getByRole("button", { name: "Recheck mods for updates", exact: true }).click();
     await page.getByText("Some versions could not be checked", { exact: true }).first().waitFor();
+    await manualList;
+    installedDelay = 0;
+    assert.equal(snapshotRequests.filter(request => request.forced && request.kind === "plan").length, 1, "A manual update check did not request exactly one upstream scan");
+    assert.equal(snapshotRequests.filter(request => request.forced && request.kind === "installed").length, 0, "The installed-list reload triggered a second upstream scan");
     assert.equal(await page.getByText("Everything is up to date", { exact: true }).count(), 0);
     await openPage(page, "mods");
     const identity = page.locator(".modsWorkspaceIdentity strong");
-    await identity.waitFor();
+    await page.waitForFunction(() => document.querySelector(".modsWorkspaceIdentity strong")?.textContent === "Polished Library");
     installedDelay = 1000;
     const patched = page.waitForResponse(response => response.request().method() === "PATCH" && response.url().endsWith("/mods"));
     await page.locator(".modsWorkspaceSwitch").click();
     await patched;
     await page.waitForTimeout(100);
     assert.equal(await identity.innerText(), "Polished Library", "Toggle response replaced the display name with a filename");
+    assert.equal(snapshotRequests.filter(request => request.forced).length, 1, "A mutation triggered another browser update scan");
     installedDelay = 0;
     await page.locator(".modsWorkspaceSwitch").click();
     await page.waitForFunction(() => document.querySelector('.modsWorkspaceSwitch input')?.checked);
@@ -104,8 +142,45 @@ async function assertRequestRecovery(browser) {
     await updateError.getByRole("button", { name: "Retry", exact: true }).click();
     await page.getByText("Could not check updates", { exact: true }).waitFor({ state: "hidden" });
     await page.getByText("Could not load installed mods", { exact: true }).waitFor({ state: "hidden" });
+
+    cold = true;
+    checked = false;
+    const coldStart = snapshotRequests.length;
+    const scansBeforeCold = snapshotRequests.filter(request => request.forced).length;
+    await page.reload();
+    await page.locator(".appShell").waitFor();
+    await openPage(page, "mods");
+    const pendingCache = page.getByText("The first background check has not completed yet. Use Check updates to refresh now.", { exact: true });
+    await pendingCache.waitFor();
+    assert.equal(await page.getByText("No mods installed yet", { exact: true }).count(), 0, "A cold cache claimed that no mods were installed");
+    assert(snapshotRequests.slice(coldStart).every(request => !request.forced), "Opening a cold cache triggered an upstream scan");
+    await page.getByRole("button", { name: "Check updates", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".modsWorkspaceIdentity strong")?.textContent === "Polished Library");
+    await pendingCache.waitFor({ state: "hidden" });
+    assert.equal(snapshotRequests.filter(request => request.forced).length, scansBeforeCold + 1, "Refreshing a cold cache did not use exactly one manual scan");
+
+    nodes[0].status = "offline";
+    const offlineStart = snapshotRequests.length;
+    await page.reload();
+    await page.locator(".appShell").waitFor();
+    await openPage(page, "mods");
+    await page.waitForFunction(() => document.querySelector(".modsWorkspaceIdentity strong")?.textContent === "Polished Library");
+    assert.equal(await page.locator(".modsWorkspaceSwitch input").isDisabled(), true, "Offline cache reads enabled mutations");
+    assert(snapshotRequests.slice(offlineStart).every(request => !request.forced), "Offline preloading triggered an upstream scan");
+    mod.displayName = "Offline Saved Library";
+    await page.evaluate(() => window.pollSavedModSnapshots());
+    await page.getByText("Offline Saved Library", { exact: true }).waitFor();
+    const offlineLoaded = snapshotRequests.length;
+    nodes[0].status = "unknown";
+    const appRefreshed = page.waitForResponse(response => new URL(response.url()).pathname === "/api/app");
+    await openPage(page, "settings");
+    await appRefreshed;
+    await openPage(page, "mods");
+    assert.equal(await identity.innerText(), "Offline Saved Library", "A changed node block reason discarded saved mods");
+    assert.equal(snapshotRequests.length, offlineLoaded, "A changed node block reason or page revisit refetched saved snapshots");
+    assert(snapshotRequests.slice(offlineStart).every(request => !request.forced), "Offline synchronization triggered an upstream scan");
     assert.deepEqual(errors, []);
-    console.log("Mod request recovery passed: unchecked overview, partial checks, stable toggle names, visible 503 failures, retained data, and retry");
+    console.log("Mod cache and recovery passed: Overview preload, no revisit scans, saved-snapshot polling, one manual scan, cached mutations, cold cache guidance, offline reads, retained data, and retry");
   } finally {
     await context.close();
   }

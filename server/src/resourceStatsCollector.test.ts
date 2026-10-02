@@ -6,6 +6,38 @@ import type { ManagedServer } from "./types.js";
 
 afterEach(() => vi.useRealTimers());
 
+it.each(["stop", "delete"])("discards pending stats after %s", async (action) => {
+  const server = { id: "a" } as ManagedServer;
+  let release!: (value: unknown) => void;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const append = vi.fn();
+  let active = true;
+  const collector = new ResourceStatsCollector({
+    pollMs: 5_000, historyWindowMs: 60_000, readServers: async () => [server],
+    isServerActive: () => active,
+    runtimeForServer: () => ({ serverStats: () => pending }) as unknown as NodeRuntime,
+    statsRepository: { append } as unknown as ResourceStatsRepository
+  });
+  const collection = collector.collectServer(server);
+  if (action === "stop") collector.stop();
+  else active = false;
+  release({ available: true, running: true });
+  await collection;
+  expect(append).not.toHaveBeenCalled();
+  expect(collector.latest(server)).toBeUndefined();
+});
+
+it("does not retry a failed repository write as an unavailable sample", async () => {
+  const append = vi.fn(() => { throw new Error("database closed"); });
+  const collector = new ResourceStatsCollector({
+    pollMs: 5_000, historyWindowMs: 60_000, readServers: async () => [],
+    runtimeForServer: () => ({ serverStats: async () => ({ available: true }) }) as unknown as NodeRuntime,
+    statsRepository: { append } as unknown as ResourceStatsRepository
+  });
+  await expect(collector.collectServer({ id: "a" } as ManagedServer)).rejects.toThrow("database closed");
+  expect(append).toHaveBeenCalledTimes(1);
+});
+
 it("bounds live history by age and count while retaining the full database window", async () => {
   vi.useFakeTimers();
   const server = { id: "a" } as ManagedServer;

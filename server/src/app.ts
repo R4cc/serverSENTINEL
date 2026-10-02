@@ -9,7 +9,7 @@ import { config } from "./config.js";
 import { panelNodeConnections, runtimeForServer, services } from "./appServices.js";
 import { dockerAction, dockerResourceStats, serverLogFields } from "./runtime/local/dockerContainers.js";
 import { parseLogEvent } from "./servers/logEvents.js";
-import { findScheduledRun, getServer, listManagedServers, normalizeManagedServer, publicSchedule, readServers } from "./servers/store.js";
+import { findScheduledRun, getServer, listManagedServers, listRuntimeServers, normalizeManagedServer, publicSchedule } from "./servers/store.js";
 import { publicServer } from "./servers/publicViews.js";
 import { supportsManagedMods } from "./servers/versions.js";
 import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExistingPath, localResolveWritablePath, toPublicPath } from "./files/fileService.js";
@@ -18,7 +18,7 @@ import { localNodeId, readNodes } from "./nodes/nodeService.js";
 import { buildUserPermissions, currentUserFromCookie, isDemoModeRequest, normalizeRolePreset, parseCookies, publicUser, readUsers, requireRequestPermission, sessionCookie, sessionCookieName, sessionMaxAgeSeconds, validatePassword } from "./auth/sessionService.js";
 import { isFullAccessUser } from "./permissions.js";
 import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logError, logInfo, logWarn, routeLogFields, runWithRequestLogContext } from "./logging.js";
-import { hashPassword, verifyPassword } from "./auth/passwords.js";
+import { hashPassword, hashPasswordAsync, verifyPasswordAsync } from "./auth/passwords.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
 import { initializeOnboarding } from "./onboarding.js";
@@ -238,10 +238,9 @@ const recoveredOperations = services.operationsRepository.failIncompleteOnStartu
 if (recoveredOperations > 0) {
   logWarn({ operationCount: recoveredOperations }, "Recovered incomplete operations after startup");
 }
-let exportMaintenanceRunning = false;
-const runExportMaintenance = async () => {
-  if (exportMaintenanceRunning) return;
-  exportMaintenanceRunning = true;
+let exportMaintenanceStopped = false;
+let exportMaintenancePending: Promise<void> | undefined;
+const maintainExports = async () => {
   try {
     const result = await services.exportArtifactMaintenance.maintain();
     const abandonedImports = (await sweepAbandonedImports()).removed;
@@ -253,14 +252,20 @@ const runExportMaintenance = async () => {
     }
   } catch (error) {
     logWarn({ errorDetails: detailedErrorMessage(error) }, "Export artifact maintenance failed; the next scheduled run will retry");
-  } finally {
-    exportMaintenanceRunning = false;
   }
+};
+const runExportMaintenance = () => {
+  if (exportMaintenanceStopped) return Promise.resolve();
+  return exportMaintenancePending ??= maintainExports().finally(() => { exportMaintenancePending = undefined; });
 };
 await runExportMaintenance();
 const exportMaintenanceTimer = setInterval(() => void runExportMaintenance(), exportMaintenanceIntervalMs);
 exportMaintenanceTimer.unref();
-app.addHook("onClose", async () => { clearInterval(exportMaintenanceTimer); });
+app.addHook("onClose", async () => {
+  exportMaintenanceStopped = true;
+  clearInterval(exportMaintenanceTimer);
+  await exportMaintenancePending;
+});
 const prunedLeases = services.fileEditLeasesRepository.pruneExpired();
 if (prunedLeases > 0) {
   logInfo({ leaseCount: prunedLeases }, "Pruned expired file edit leases");
@@ -360,8 +365,8 @@ registerAuthRoutes(app, {
   validatePassword,
   normalizeRolePreset,
   buildUserPermissions,
-  hashPassword,
-  verifyPassword,
+  hashPassword: hashPasswordAsync,
+  verifyPassword: verifyPasswordAsync,
   publicUser,
   demoEnabled: config.enableDemo,
   isDemoUser,
@@ -597,7 +602,8 @@ const localRuntime = config.runtimeMode === "all-in-one" ? new LocalNodeRuntime(
   installMod: localInstallMod
 }) : undefined;
 services.remoteObservationCoordinator = new RemoteObservationCoordinator({
-  readServers: listManagedServers,
+  readServers: listRuntimeServers,
+  isServerActive: (serverId) => services.serversRepository.exists(serverId),
   lookupNode: async (nodeId) => (await readNodes()).find((node) => node.id === nodeId),
   connections: panelNodeConnections
 });
@@ -624,14 +630,16 @@ services.remoteObservationCoordinator.start();
 services.playerSnapshotCoordinator = new PlayerSnapshotCoordinator({
   pollMs: 10_000,
   staleMs: 5 * 60 * 1000,
-  readServers: listManagedServers,
+  readServers: listRuntimeServers,
+  isServerActive: (serverId) => services.serversRepository.exists(serverId),
   runtimeForServer
 });
 services.playerSnapshotCoordinator.start();
 services.runtimeStateCoordinator = new RuntimeStateCoordinator({
   pollMs: 5_000,
   exitConfirmationMs: 5_000,
-  readServers: readServers,
+  readServers: listRuntimeServers,
+  isServerActive: (serverId) => services.serversRepository.exists(serverId),
   serverStatus: (server) => runtimeForServer(server).serverStatus(server),
   connectionEpoch: async (server) => {
     if (server.nodeId === localNodeId) return "local";
@@ -647,7 +655,7 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
     task: "Restoring server after runtime reconnect",
     successTask: "Server runtime restored",
     restartEffect: (status) => runtimeResultRunning(status) ? "clear" : undefined
-  }, () => startServerWithIntent(server)),
+  }, () => startServerWithIntent(server, { recovery: true })),
   restartServer: (server) => recordOperation({
     type: "server.restart",
     serverId: server.id,
@@ -666,7 +674,7 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
   setLifecycle: (serverId, patch) => {
     // Indexed lookup rather than a full list scan: this runs on the five-second reconcile poll, and
     // `list()` loads every server's ports, schedules, and retained runs to reach one row.
-    const server = services.serversRepository.find(serverId);
+    const server = services.serversRepository.findForRuntime(serverId);
     if (!server) return;
     setRuntimeLifecycle(server, patch);
   },
@@ -685,8 +693,8 @@ services.runtimeStateCoordinator.start();
 services.moduleRegistry.registerRuntime("managedContent", createManagedContentModuleRuntime({
   createCoordinator: () => new ModUpdatePlanCoordinator({
     intervalMs: modUpdateCheckIntervalMs,
-    readServers: async () => (await readServers()).filter(supportsManagedMods),
-    buildPlan: (server, options) => buildModUpdatePlan(server, options),
+    readServers: async () => (await listRuntimeServers()).filter(supportsManagedMods),
+    buildPlan: (server, options) => buildModUpdatePlan(server, { ...options, includeInstalled: true }),
     cache: new ModUpdatePlanRepository(services.storageDatabase),
     onError: (error, server) => {
       logDebug({ ...(server ? serverLogFields(server) : {}), ...errorLogFields(error), category: "mod_update_check" }, "Automatic mod update check deferred");
@@ -701,7 +709,8 @@ services.timelineEventsRepository = new TimelineEventsRepository(services.storag
 services.resourceStatsCollector = new ResourceStatsCollector({
   pollMs: resourceStatsPollMs,
   historyWindowMs: resourceStatsHistoryWindow,
-  readServers: listManagedServers,
+  readServers: listRuntimeServers,
+  isServerActive: (serverId) => services.serversRepository.exists(serverId),
   runtimeForServer,
   statsRepository: services.resourceStatsRepository,
   decorateSample: (server, sample) => {
@@ -718,7 +727,8 @@ services.resourceStatsCollector.start();
 services.timelineEventCollector = new TimelineEventCollector({
   intervalMs: timelineEventPollMs,
   retentionMs: timelineHistoryWindow,
-  readServers: listManagedServers,
+  readServers: listRuntimeServers,
+  isServerActive: (serverId) => services.serversRepository.exists(serverId),
   readLogs: (server) => runtimeForServer(server).serverLogs(server),
   parseLine: parseLogEvent,
   repository: services.timelineEventsRepository,
@@ -738,7 +748,7 @@ services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsMo
       onWarn: logWarn
     });
     const pingCollector = new PlayerPingCollector({
-      readServers: listManagedServers,
+      readServers: listRuntimeServers,
       snapshot: (serverId) => services.playerSnapshotCoordinator?.latest(serverId),
       readConnections: (server) => runtimeForServer(server).readPlayerConnections(server),
       recordAverages: (serverId, entries) => services.playerGeoRepository.recordPingAverages(serverId, entries),
@@ -759,7 +769,7 @@ services.moduleRegistry.registerRuntime("playerInsights", createPlayerInsightsMo
           if (!collector) throw new Error("Player Insights needs the timeline event collector to read console output");
           return collector.observeLogs(({ server, text }) => observer({ server, text }));
         },
-        readServers: listManagedServers,
+        readServers: listRuntimeServers,
         repository: services.playerGeoRepository,
         cityReader: () => geoDatabase.cityReader,
         observeLogin: (server, login) => pingCollector.observeLogin(server, login),
@@ -788,6 +798,7 @@ app.addHook("onClose", async () => {
   services.resourceStatsCollector?.stop();
   services.timelineEventCollector?.stop();
   services.playerSnapshotCoordinator?.stop();
+  await services.operationService.drain();
 });
 
 const resumedScheduleWaits = resumeWaitingScheduleExecutions(resumableScheduleWaits);

@@ -712,7 +712,19 @@ async function assertLiquidGlassAndEditorScrollbar(context) {
     await page.getByRole("rowheader", { name: "serversentinel-demo.toml", exact: true }).dblclick();
     await page.getByRole("dialog").waitFor();
     await page.getByRole("button", { name: "Edit file", exact: true }).click();
-    await page.locator(".fileCodeEditor .cm-content").fill(Array.from({ length: 180 }, (_, index) => `setting_${index}=true`).join("\n"));
+    // Acquiring the edit lease is asynchronous; wait for the editable view before typing.
+    const content = page.locator('.fileCodeEditor:not(.fileCodeEditor-disabled) .cm-content[contenteditable="true"]');
+    await content.click();
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.evaluate((text) => navigator.clipboard.writeText(text),
+      Array.from({ length: 180 }, (_, index) => `setting_${index}=true`).join("\n"));
+    await content.press("ControlOrMeta+a");
+    await content.press("ControlOrMeta+v");
+    // CodeMirror measures its updated document on the next animation frame.
+    await page.waitForFunction(() => {
+      const scroller = document.querySelector(".fileCodeEditor .cm-scroller");
+      return scroller && scroller.scrollHeight > scroller.clientHeight;
+    });
     const scrollbar = await page.locator(".fileCodeEditor .cm-scroller").evaluate((scroller) => {
       const style = getComputedStyle(scroller);
       const webkitScrollbar = getComputedStyle(scroller, "::-webkit-scrollbar");

@@ -45,6 +45,34 @@ describe("node reconnect backoff", () => {
 });
 
 describe("node lifecycle action exclusion", () => {
+  it("isolates a failed inspection from independent sections and healthy servers in a batch", async () => {
+    const failed = { ...testServer("failed"), dockerContainer: "failed-container" };
+    const healthy = { ...testServer("healthy"), id: "00000000-0000-4000-8000-000000000002", dockerContainer: "healthy-container" };
+    for (const server of [failed, healthy]) {
+      await mkdir(join(server.serverDir, "logs"), { recursive: true });
+      await writeFile(join(server.serverDir, "logs/latest.log"), `${server.displayName} log\n`);
+      await writeFile(join(server.serverDir, "server.properties"), "level-name=world\n");
+      await writeFile(join(server.serverDir, "eula.txt"), "eula=true\n");
+    }
+    mockDockerAvailable = true;
+    mockDockerRequest.mockImplementation(async (_method: string, path: string) => {
+      if (path.includes("failed-container")) throw new Error("Docker inspect timed out");
+      throw new Error("No such container");
+    });
+    const response = await hooks.handleCommand("server.observe", {
+      items: [failed, healthy].map((server) => ({ server, sections: ["status", "stats", "players", "logs", "overviewFiles"] }))
+    }) as { items: Array<{ serverId: string; errors?: Record<string, unknown>; status?: unknown; stats?: unknown; players?: unknown; logs?: { text: string }; overviewFiles?: unknown }> };
+    expect(response.items).toHaveLength(2);
+    expect(response.items[0].errors).toMatchObject({
+      status: { message: "Docker inspect timed out" }, stats: { message: "Docker inspect timed out" }, players: { message: "Docker inspect timed out" }
+    });
+    expect(response.items[0].logs?.text).toBe("Survival log\n");
+    expect(response.items[0].overviewFiles).toEqual({ properties: "level-name=world\n", eula: "eula=true\n" });
+    expect(response.items[1].errors).toBeUndefined();
+    expect(response.items[1].status).toBeDefined();
+    expect(response.items[1].stats).toBeDefined();
+    expect(response.items[1].players).toBeDefined();
+  });
   it("reserves the update slot before asynchronous preparation and releases it on failure", async () => {
     mockDockerAvailable = true;
     process.env.HOSTNAME = "node-container-id";

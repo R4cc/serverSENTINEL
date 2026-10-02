@@ -192,7 +192,7 @@ export function ModsModule(props: ModsModuleProps) {
     onChanged={async () => {
       // Demo changes flow through the fixture prop; an in-flight refresh would replay the old array.
       if (!props.activeServerIsDemo && props.activeServer) await Promise.all([
-        workspace.actions.refresh(true, false),
+        workspace.actions.refresh(false, false),
         props.refreshFiles(props.activeServer.id, `/${props.managedContent.directory}`)
       ]);
     }}

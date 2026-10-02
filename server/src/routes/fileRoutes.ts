@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, posix, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import { runtimeForServer, services } from "../appServices.js";
 
@@ -19,8 +19,10 @@ import { type ZipExtractionPlan } from "../zipArchive.js";
 import { detailedErrorMessage } from "../logging.js";
 import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer, Permission } from "../types.js";
+import { FileEditCoordinator } from "../files/fileEditCoordinator.js";
 
 export function registerFileRoutes(app: FastifyInstance) {
+const fileEdits = new FileEditCoordinator();
 const withFileMutation = <T>(server: ManagedServer, action: () => Promise<T>) => services.exportCoordinator.withMutation(server.id, action);
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
   const server = await getServer(request.params.id);
@@ -228,16 +230,18 @@ app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
   const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
-  const file = await readFileWithRevision(runtime, server, target);
-  if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
   const path = await fileEditLockPath(runtime, server, target);
-  const lease = services.fileEditLeasesRepository.acquire({
-    serverId: server.id,
-    path,
-    fileRevision: file.revision,
-    owner: fileLeaseOwner(request, user)
+  return fileEdits.run(server.id, path, async () => {
+    const file = await readFileWithRevision(runtime, server, target);
+    if (!request.body.revision || request.body.revision !== file.revision) fileRevisionConflict();
+    const lease = services.fileEditLeasesRepository.acquire({
+      serverId: server.id,
+      path,
+      fileRevision: file.revision,
+      owner: fileLeaseOwner(request, user)
+    });
+    return { lease: publicFileEditLease(lease) };
   });
-  return { lease: publicFileEditLease(lease) };
 });
 
 app.post<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lease/:leaseId/heartbeat", async (request) => {
@@ -252,10 +256,14 @@ app.post<{ Params: { id: string; leaseId: string } }>("/api/servers/:id/file/lea
 app.delete<{ Params: { id: string; leaseId: string }; Querystring: { force?: string } }>("/api/servers/:id/file/lease/:leaseId", async (request) => {
   if (request.query.force === "true") {
     await requireRequestPermission(request, "users.manage");
-    return { ok: services.fileEditLeasesRepository.forceRelease(request.params.leaseId, request.params.id) };
+    const lease = services.fileEditLeasesRepository.findForServer(request.params.leaseId, request.params.id);
+    if (!lease) return { ok: false };
+    return fileEdits.run(lease.serverId, lease.path, () => ({ ok: services.fileEditLeasesRepository.forceRelease(lease.leaseId, lease.serverId) }));
   }
   const user = await requireRequestPermission(request);
-  return { ok: services.fileEditLeasesRepository.release(request.params.leaseId, fileLeaseOwner(request, user)) };
+  const lease = services.fileEditLeasesRepository.findForServer(request.params.leaseId, request.params.id);
+  if (!lease) return { ok: false };
+  return fileEdits.run(lease.serverId, lease.path, () => ({ ok: services.fileEditLeasesRepository.release(lease.leaseId, fileLeaseOwner(request, user)) }));
 });
 
 app.put<{ Params: { id: string }; Body: { path?: string; content?: string; leaseId?: string; revision?: string } }>("/api/servers/:id/file", destructiveRateLimit, async (request) => {
@@ -270,12 +278,17 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   }
   const path = await fileEditLockPath(runtime, server, target);
   const owner = fileLeaseOwner(request, user);
-  const lease = services.fileEditLeasesRepository.requireOwned(request.body.leaseId, server.id, path, owner);
-  const current = await readFileWithRevision(runtime, server, target);
-  assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
-  const result = await withFileMutation(server, () => runtime.writeFile(server, target, request.body.content)) as Record<string, unknown>;
-  services.fileEditLeasesRepository.release(lease.leaseId, owner);
-  return { ...result, revision: fileContentRevision(request.body.content ?? "") };
+  const leaseId = request.body.leaseId;
+  return fileEdits.run(server.id, path, async () => {
+    const lease = services.fileEditLeasesRepository.requireOwned(leaseId, server.id, path, owner);
+    const current = await readFileWithRevision(runtime, server, target);
+    assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
+    // A slow remote read may have outlived the lease or its session.
+    services.fileEditLeasesRepository.requireOwned(leaseId, server.id, path, owner);
+    const result = await withFileMutation(server, () => runtime.writeFile(server, target, request.body.content)) as Record<string, unknown>;
+    services.fileEditLeasesRepository.release(lease.leaseId, owner);
+    return { ...result, revision: fileContentRevision(request.body.content ?? "") };
+  });
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
@@ -356,10 +369,15 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const source = await runtime.resolveExistingPath(server, request.body.path ?? "");
+  const targetName = safeFileManagerName(request.body.name);
+  const targetInput = server.nodeId === localNodeId ? join(dirname(source), targetName) : posix.join(posix.dirname(source), targetName);
+  const target = await runtime.resolveWritableResolvedPath(server, targetInput);
+  const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
   await requireFilePathPermission(request, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
-  const touchesMods = runtime.isModsPath(server, source);
-  if (runtime.isServerSettingsFile(server, source)) await requireServerStoppedForMutableConfiguration(server);
-  const duplicate = () => runtime.duplicateFile(server, source, request.body.name);
+  await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.upload");
+  const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
+  if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
+  const duplicate = () => runtime.duplicateFile(server, source, targetName);
   return touchesMods ? withTrackedModMutation(server, duplicate, await requireRequestPermission(request)) : withFileMutation(server, duplicate);
 });
 

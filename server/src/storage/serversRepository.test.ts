@@ -119,6 +119,42 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
 }
 
 describe("ServersRepository", () => {
+  it("reads current runtime configuration without schedule history and preserves detailed reads", async () => {
+    const { servers, storage } = await createRepositories();
+    const server = managedServer();
+    server.schedules![0].recentRuns![0].details = {
+      stepCount: 1,
+      completedStepCount: 1,
+      steps: [{ stepIndex: 0, type: "command", command: "say Backup starting", delaySeconds: 0,
+        status: "success", startedAt: server.createdAt, logs: ["captured output"] }]
+    };
+    servers.create(server);
+    servers.setRuntimeIntent(server.id, "running");
+
+    const full = servers.find(server.id)!;
+    const expected = { ...full, schedules: [] };
+    expect(servers.listForRuntime()).toEqual([expected]);
+    expect(servers.findForRuntime(server.id)).toEqual(expected);
+    expect(servers.findForRuntime("missing")).toBeUndefined();
+    expect(servers.exists(server.id)).toBe(true);
+    expect(servers.exists("missing")).toBe(false);
+
+    // A broken historical payload must not prevent health/lifecycle pollers reading this server.
+    storage.connection.prepare("UPDATE scheduled_runs SET details_json = ?").run("invalid history JSON");
+    expect(servers.listForRuntime()).toEqual([expected]);
+    expect(servers.findForRuntime(server.id)).toEqual(expected);
+    storage.connection.prepare("UPDATE scheduled_runs SET details_json = ?").run(JSON.stringify(server.schedules![0].recentRuns![0].details));
+    expect(servers.list()[0].schedules).toEqual(full.schedules);
+    storage.setMetadata(`mod-update-plan:${server.id}`, "cached plan");
+    storage.setMetadata(`mod-preferences-revision:${server.id}`, "2");
+    storage.setMetadata(`mod-installed-snapshot:${server.id}`, "{}");
+    expect(servers.delete(server.id)).toBe(true);
+    expect(servers.exists(server.id)).toBe(false);
+    expect(storage.metadata(`mod-update-plan:${server.id}`)).toBeUndefined();
+    expect(storage.metadata(`mod-preferences-revision:${server.id}`)).toBeUndefined();
+    expect(storage.metadata(`mod-installed-snapshot:${server.id}`)).toBeUndefined();
+  });
+
   it("marks opted-in servers to start when their node starts", async () => {
     const { servers } = await createRepositories();
     const server = managedServer();

@@ -126,12 +126,30 @@ export class ServersRepository {
   ) {}
 
   list(): ManagedServer[] {
+    return this.listRecords(true);
+  }
+
+  /** Runtime pollers need current configuration and intent, but never captured schedule logs. */
+  listForRuntime(): ManagedServer[] {
+    return this.listRecords(false);
+  }
+
+  exists(id: string): boolean {
+    return Boolean(this.storage.connection.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(id));
+  }
+
+  private listRecords(includeSchedules: boolean): ManagedServer[] {
     const database = this.storage.connection;
     const portsByServer = new Map<string, ManagedServerPort[]>();
     for (const row of database.prepare<[], PortRow>("SELECT * FROM managed_ports ORDER BY rowid").all()) {
       const ports = portsByServer.get(row.server_id) ?? [];
       ports.push(portFromRow(row));
       portsByServer.set(row.server_id, ports);
+    }
+
+    if (!includeSchedules) {
+      return database.prepare<[], ServerRow>("SELECT * FROM servers ORDER BY created_at, id").all()
+        .map((row) => this.serverFromRow(row, portsByServer.get(row.id) ?? [], []));
     }
 
     const runsBySchedule = new Map<string, ScheduledRun[]>();
@@ -157,11 +175,20 @@ export class ServersRepository {
   }
 
   find(id: string): ManagedServer | undefined {
+    return this.findRecord(id, true);
+  }
+
+  findForRuntime(id: string): ManagedServer | undefined {
+    return this.findRecord(id, false);
+  }
+
+  private findRecord(id: string, includeSchedules: boolean): ManagedServer | undefined {
     const database = this.storage.connection;
     const row = database.prepare<[string], ServerRow>("SELECT * FROM servers WHERE id = ?").get(id);
     if (!row) return undefined;
 
     const ports = database.prepare<[string], PortRow>("SELECT * FROM managed_ports WHERE server_id = ? ORDER BY rowid").all(id).map(portFromRow);
+    if (!includeSchedules) return this.serverFromRow(row, ports, []);
 
     const runsBySchedule = new Map<string, ScheduledRun[]>();
     for (const runRow of database.prepare<[string], RunRow>(`
@@ -241,7 +268,14 @@ export class ServersRepository {
   }
 
   delete(id: string) {
-    return this.storage.connection.prepare("DELETE FROM servers WHERE id = ?").run(id).changes > 0;
+    return this.storage.transaction((database) => {
+      const deleted = database.prepare("DELETE FROM servers WHERE id = ?").run(id).changes > 0;
+      if (deleted) {
+        database.prepare("DELETE FROM storage_metadata WHERE key IN (?, ?, ?)")
+          .run(`mod-update-plan:${id}`, `mod-preferences-revision:${id}`, `mod-installed-snapshot:${id}`);
+      }
+      return deleted;
+    });
   }
 
   markRestartRequired(serverId: string, now = new Date().toISOString()) {

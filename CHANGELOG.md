@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.10.1 - 2026-10-02
+
+- Fixed interrupted database upgrades and stale crash recovery overriding an intentional server stop.
+- Preserved newer mod changes during update scans, kept automatic checks fair when a server fails, and prevented duplicate schedule polling after module toggles.
+- Discarded outdated remote observations, isolated node observation failures, and prevented background collectors from writing after shutdown.
+- Serialized file editor saves and checked duplicate destinations for server-settings permissions and stopped state.
+- Kept the file editor visible when switching edit mode or loading syntax highlighting.
+- Reduced background polling overhead and Modrinth lookup requests, and moved authentication password hashing off the main event loop.
+- Loaded Mods/Plugins from persistent cached inventories and update plans, with background checks and explicit manual rechecks instead of page-triggered scans.
+
 ## 26.9.15 - 2026-09-30
 
 - Standardized search, section headers, form labels, pagination, and empty states across Mods, Settings, Users, Nodes, and server setup and exports using shared UI components.

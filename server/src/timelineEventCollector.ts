@@ -8,6 +8,7 @@ type TimelineEventCollectorOptions = {
   intervalMs: number;
   retentionMs: number;
   readServers: () => Promise<ManagedServer[]>;
+  isServerActive?: (serverId: string) => boolean;
   readLogs: (server: ManagedServer) => Promise<unknown>;
   parseLine: (line: string, source: ServerEvent["source"], index: number, referenceDate: Date) => ServerEvent | null;
   repository: TimelineEventsRepository;
@@ -52,6 +53,7 @@ export class TimelineEventCollector {
   private readonly inFlight = new Map<string, Promise<void>>();
   private readonly logObservers = new Set<ServerLogObserver>();
   private interval: NodeJS.Timeout | undefined;
+  private closed = false;
 
   constructor(private readonly options: TimelineEventCollectorOptions) {}
 
@@ -64,7 +66,7 @@ export class TimelineEventCollector {
   }
 
   start() {
-    if (this.interval) return;
+    if (this.interval || this.closed) return;
     this.options.repository.prune(Date.now() - this.options.retentionMs);
     void this.collectAll();
     this.interval = setInterval(() => void this.collectAll(), this.options.intervalMs);
@@ -72,22 +74,25 @@ export class TimelineEventCollector {
   }
 
   stop() {
-    if (!this.interval) return;
-    clearInterval(this.interval);
+    this.closed = true;
+    if (this.interval) clearInterval(this.interval);
     this.interval = undefined;
   }
 
   async collectAll() {
+    if (this.closed) return;
     try {
       const servers = await this.options.readServers();
+      if (this.closed) return;
       await Promise.allSettled(servers.map((server) => this.collectServer(server)));
-      this.options.repository.prune(Date.now() - this.options.retentionMs);
+      if (!this.closed) this.options.repository.prune(Date.now() - this.options.retentionMs);
     } catch (error) {
       this.options.onError?.(error);
     }
   }
 
   async collectServer(server: ManagedServer) {
+    if (!this.current(server.id)) return;
     const existing = this.inFlight.get(server.id);
     if (existing) return existing;
     const request = this.collectServerOnce(server).finally(() => this.inFlight.delete(server.id));
@@ -95,21 +100,28 @@ export class TimelineEventCollector {
     return request;
   }
 
+  private current(serverId: string) {
+    return !this.closed && this.options.isServerActive?.(serverId) !== false;
+  }
+
   private async collectServerOnce(server: ManagedServer) {
     try {
       const result = await this.options.readLogs(server) as RecentLogs;
+      if (!this.current(server.id)) return;
       const text = typeof result?.text === "string" ? result.text : "";
       const source = result?.source === "logs/latest.log" ? "logs/latest.log" : "docker";
       const referenceDate = new Date();
       // Before parsing, and never allowed to interfere with it: an observer that throws is its own
       // problem, and must not cost this server its timeline events for the pass.
       for (const observer of this.logObservers) {
+        if (!this.current(server.id)) return;
         try {
           await observer({ server, text, source, referenceDate });
         } catch (error) {
           this.options.onError?.(error, server);
         }
       }
+      if (!this.current(server.id)) return;
       const referenceTime = referenceDate.getTime();
       const cutoff = referenceTime - this.options.retentionMs;
       const events: Array<{ eventKey: string; event: ServerEvent & { occurredAt: number } }> = [];

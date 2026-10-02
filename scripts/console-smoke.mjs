@@ -67,13 +67,16 @@ async function openConsole(page, { mobile = false } = {}) {
   // alone lets the first assertion read a console that is merely still empty.
   await page.waitForFunction(() => [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
     .some((row) => row.textContent.trim().length > 0));
+  await page.locator(".minecraftTerminal:not(.initializing)").waitFor();
   await page.locator(".consolePromptInput").waitFor();
 }
 
 async function assertTerminalDrawsOutputOnly(page) {
   const rows = await terminalRows(page);
   assert(rows.length > 0, "The console drew no output at all");
-  const promptRows = rows.filter((row) => row.trimStart().startsWith(">"));
+  // The command draft is empty here. A wrapped player chat line can legitimately begin with
+  // `>` (the closing player-name bracket), so only a bare prompt signals the input regression.
+  const promptRows = rows.filter((row) => row.trim() === ">");
   assert.deepEqual(
     promptRows,
     [],
@@ -167,10 +170,15 @@ async function assertOutputIsAppendedInOrder(page) {
   // that names the problem instead of as an anonymous timeout.
   await page.waitForFunction(
     () => [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
-      .map((row) => row.textContent.replace(/[\s ]+$/, ""))
+      // Preserve spaces at soft-wrap boundaries (for example, "players " / "online").
+      .map((row) => row.textContent)
       .join("")
+      .replace(/\s+/g, " ")
       .includes("players online")
-  );
+  ).catch(async (error) => {
+    console.error(`Rendered console rows: ${JSON.stringify(await terminalRows(page))}`);
+    throw error;
+  });
 
   const after = await terminalRows(page);
   assert.equal(await input.inputValue(), "", "Submitting a command left it in the command line");
@@ -225,8 +233,9 @@ async function assertJumpToBottomForUnseenOutput(page) {
   await jump.waitFor({ state: "detached" });
   await page.waitForFunction(() => {
     return [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
-      .map((row) => row.textContent.replace(/[\sÂ ]+$/, ""))
+      .map((row) => row.textContent)
       .join("")
+      .replace(/\s+/g, " ")
       .includes("players online");
   });
 }

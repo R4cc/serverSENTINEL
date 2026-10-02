@@ -24,6 +24,7 @@ type AuthRoutesContext = {
   };
   users: {
     list(): StoredUser[];
+    findById(id: string): StoredUser | undefined;
     createFirst(user: StoredUser, session: Session): void;
     create(user: StoredUser): void;
     updateById(id: string, updater: (user: StoredUser) => StoredUser): StoredUser;
@@ -41,8 +42,8 @@ type AuthRoutesContext = {
   validatePassword(password?: string): string;
   normalizeRolePreset(rolePreset?: unknown): RolePreset | undefined;
   buildUserPermissions(input: { rolePreset?: RolePreset; permissions?: unknown[] }, fallback?: StoredUser): UserPermissionData;
-  hashPassword(password: string): { salt: string; passwordHash: string };
-  verifyPassword(password: string, user: StoredUser): boolean;
+  hashPassword(password: string): Promise<{ salt: string; passwordHash: string }>;
+  verifyPassword(password: string, user: StoredUser): Promise<boolean>;
   publicUser(user: StoredUser): PublicUser;
   demoEnabled: boolean;
   isDemoUser(user: Pick<StoredUser, "username"> | null | undefined): boolean;
@@ -82,7 +83,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const username = context.validateUsername(body.username);
     const password = context.validatePassword(body.password);
     const now = new Date().toISOString();
-    const passwordData = context.hashPassword(password);
+    const passwordData = await context.hashPassword(password);
     const user: StoredUser = {
       id: randomUUID(),
       username,
@@ -114,10 +115,14 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const username = typeof body.username === "string" ? body.username.trim() : "";
     const password = typeof body.password === "string" && body.password.length <= 256 ? body.password : "";
     const users = context.users.list();
-    const user = users.find((candidate) => candidate.username.toLowerCase() === username.toLowerCase());
+    const candidate = users.find((user) => user.username.toLowerCase() === username.toLowerCase());
     // Both branches run one scrypt, so an unknown username costs the same as a wrong password.
-    const credentialsValid = user ? context.verifyPassword(password, user) : verifyPasswordAgainstDecoy(password);
-    if (!user || !credentialsValid) {
+    const credentialsValid = candidate ? await context.verifyPassword(password, candidate) : await verifyPasswordAgainstDecoy(password);
+    // Hashing yields to other requests. A password reset/deletion during verification must not
+    // create a new session for the old credentials, and permission changes must be reflected.
+    const user = candidate ? context.users.findById(candidate.id) : undefined;
+    if (!candidate || !user || !credentialsValid || user.passwordHash !== candidate.passwordHash || user.salt !== candidate.salt
+      || user.username.toLowerCase() !== username.toLowerCase()) {
       context.logWarn({
         attemptedUsername: username.slice(0, 64),
         usernameTruncated: username.length > 64 || undefined,
@@ -209,10 +214,11 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       permissions: body.permissions
     });
     const now = new Date().toISOString();
+    const passwordData = await context.hashPassword(password);
     const createdUser: StoredUser = {
       id: randomUUID(), username, rolePreset: permissionData.rolePreset,
       permissions: permissionData.permissions, createdAt: now, updatedAt: now,
-      ...context.hashPassword(password)
+      ...passwordData
     };
     context.users.create(createdUser);
     context.logInfo({
@@ -235,21 +241,24 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     }
     const body = request.body ?? {};
     const passwordChanged = typeof body.password === "string" && Boolean(body.password.trim());
+    const passwordData = passwordChanged ? await context.hashPassword(context.validatePassword(body.password)) : undefined;
     const updatedUser = context.users.updateById(request.params.id, (current) => {
+      if (context.demoEnabled && context.isDemoUser(current)) {
+        throwHttp(403, "The demo user is managed by demo-mode startup and cannot be changed", { code: "VALIDATION_ERROR" });
+      }
       const username = body.username === undefined ? current.username : context.validateUsername(body.username);
       const rolePreset = context.normalizeRolePreset(body.rolePreset);
       const permissionData = context.buildUserPermissions({
         rolePreset,
         permissions: body.permissions
       }, current);
-      const password = passwordChanged ? context.validatePassword(body.password) : undefined;
       return {
         ...current,
         username,
         rolePreset: permissionData.rolePreset,
         permissions: permissionData.permissions,
         updatedAt: new Date().toISOString(),
-        ...(password ? context.hashPassword(password) : {})
+        ...passwordData
       };
     });
     const sessionsRevoked = passwordChanged ? context.sessions.deleteForUser(updatedUser.id) : 0;

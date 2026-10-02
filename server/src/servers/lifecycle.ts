@@ -59,10 +59,11 @@ export function setRuntimeLifecycle(server: ManagedServer, patch: Partial<Pick<M
   services.serversRepository.setRuntimeLifecycle(server.id, server);
 }
 
-async function withLifecycleLock<T>(server: ManagedServer, operation: () => Promise<T>) {
+async function withLifecycleLock<T>(server: ManagedServer, operation: () => Promise<T>, recovery = false) {
   return services.exportCoordinator.withMutation(server.id, async () => {
     if (activeLifecycleActions.has(server.id)) throw new Error("Another lifecycle action is already running for this server");
     activeLifecycleActions.add(server.id);
+    if (!recovery) services.runtimeStateCoordinator?.invalidate(server.id);
     try {
       return await operation();
     } finally {
@@ -83,7 +84,7 @@ async function waitForRuntimeState(server: ManagedServer, running: boolean, time
 
 function requireResolvedServerPorts(server: ManagedServer) {
   if (!server.portConflictUnresolved) return;
-  const issues = unresolvedServerPortIssues(server, services.serversRepository.list());
+  const issues = unresolvedServerPortIssues(server, services.serversRepository.listForRuntime());
   if (issues.length === 0) {
     server.portConflictUnresolved = false;
     services.serversRepository.clearPortConflictUnresolved(server.id);
@@ -96,7 +97,9 @@ function requireResolvedServerPorts(server: ManagedServer) {
   );
 }
 
-export async function startServerWithIntent(server: ManagedServer) {
+export async function startServerWithIntent(server: ManagedServer, options: { recovery?: boolean } = {}) {
+  // Recovery keeps the coordinator's retry budget and lets it settle its own observation.
+  // An explicit start clears that budget and supersedes any outstanding reconciliation.
   return withLifecycleLock(server, async () => {
     requireResolvedServerPorts(server);
     services.playerSnapshotCoordinator?.invalidate(server.id);
@@ -104,23 +107,22 @@ export async function startServerWithIntent(server: ManagedServer) {
     setRuntimeLifecycle(server, {
       runtimeIntent: "running",
       restartPhase: undefined,
-      crashAttemptTimestamps: [],
-      crashNextRetryAt: undefined,
-      crashLoopSince: undefined,
-      crashStableSince: undefined
+      ...(!options.recovery ? { crashAttemptTimestamps: [], crashNextRetryAt: undefined, crashLoopSince: undefined, crashStableSince: undefined } : {})
     });
     try {
       const result = await runtimeForServer(server).lifecycle(server, "start");
-      services.runtimeStateCoordinator?.noteRunning(server.id);
+      if (!options.recovery) services.runtimeStateCoordinator?.noteRunning(server.id);
       return result;
     } catch (error) {
       const observed = await runtimeForServer(server).serverStatus(server).then(runtimeStatusRunning).catch(() => undefined);
       setRuntimeLifecycle(server, { runtimeIntent: observed === true ? "running" : previous === "restarting" ? "running" : previous });
-      if (observed === true) services.runtimeStateCoordinator?.noteRunning(server.id);
-      else services.runtimeStateCoordinator?.noteStopped(server.id);
+      if (!options.recovery) {
+        if (observed === true) services.runtimeStateCoordinator?.noteRunning(server.id);
+        else services.runtimeStateCoordinator?.noteStopped(server.id);
+      }
       throw error;
     }
-  });
+  }, options.recovery);
 }
 
 export async function stopServerWithIntent(server: ManagedServer) {

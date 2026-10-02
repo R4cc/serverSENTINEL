@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ManagedNode, ManagedServer } from "../types.js";
 import type { PanelNodeConnections } from "./panelConnections.js";
 import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
@@ -25,6 +25,76 @@ function server(index: number): ManagedServer {
 }
 
 describe("RemoteObservationCoordinator", () => {
+  it("discards background log deltas and cursors invalidated by a mutation", async () => {
+    const observedServer = server(0);
+    const source = "logs/latest.log";
+    const seedCursor = { source, identity: "old", offset: 5 };
+    const calls: Array<{ items: Array<{ logCursor?: unknown }> }> = [];
+    let release!: (value: unknown) => void;
+    const connections = {
+      isConnected: () => true,
+      request: async (_node: ManagedNode, _command: string, payload: { items: Array<{ logCursor?: unknown }> }) => {
+        calls.push(payload);
+        if (calls.length === 1) return { observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, logs: { text: "seed\n", source, reset: true, cursor: seedCursor } }] };
+        if (calls.length === 2) return new Promise((resolve) => { release = resolve; });
+        return { observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, logs: { text: "new\n", source, reset: true, cursor: { source, identity: "new", offset: 4 } } }] };
+      }
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => [observedServer], lookupNode: async () => node(), connections });
+    await coordinator.read(observedServer, "logs", 60_000);
+    const background = (coordinator as unknown as { collectAll: () => Promise<void> }).collectAll();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1].items[0].logCursor).toEqual(seedCursor);
+    coordinator.invalidate(observedServer.id, ["logs"]);
+    await coordinator.read(observedServer, "logs", 60_000);
+    expect(calls[2].items[0].logCursor).toBeUndefined();
+    release({ observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, status: { docker: { running: true } }, logs: { text: "stale\n", source, reset: false, cursor: { ...seedCursor, offset: 11 } } }] });
+    await background;
+    await expect(coordinator.read(observedServer, "logs", 60_000)).resolves.toEqual({ text: "new\n", source });
+    await expect(coordinator.read(observedServer, "status", 60_000)).resolves.toEqual({ docker: { running: true } });
+    coordinator.stop();
+  });
+  it("starts a new foreground read after invalidation and ignores its pending predecessor", async () => {
+    const observedServer = server(0);
+    const releases: Array<(value: unknown) => void> = [];
+    const connections = {
+      isConnected: () => true,
+      request: () => new Promise((resolve) => { releases.push(resolve); })
+    } as unknown as PanelNodeConnections;
+    const coordinator = new RemoteObservationCoordinator({ readServers: async () => [observedServer], lookupNode: async () => node(), connections });
+    const older = coordinator.read(observedServer, "status", 60_000);
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    coordinator.invalidate(observedServer.id, ["status"]);
+    const newer = coordinator.read(observedServer, "status", 60_000);
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    const response = (running: boolean) => ({ observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, status: { docker: { running } } }] });
+    releases[1](response(false));
+    await expect(newer).resolves.toEqual({ docker: { running: false } });
+    releases[0](response(true));
+    await older;
+    await expect(coordinator.read(observedServer, "status", 60_000)).resolves.toEqual({ docker: { running: false } });
+    coordinator.stop();
+  });
+
+  it.each(["stop", "delete"])("does not recreate cached state after %s", async (action) => {
+    const observedServer = server(0);
+    let release!: (value: unknown) => void;
+    let active = true;
+    const request = vi.fn(() => new Promise((resolve) => { release = resolve; }));
+    const coordinator = new RemoteObservationCoordinator({
+      readServers: async () => [observedServer], lookupNode: async () => node(), isServerActive: () => active,
+      connections: { isConnected: () => true, request } as unknown as PanelNodeConnections
+    });
+    const pending = coordinator.read(observedServer, "status", 60_000);
+    const rejected = expect(pending).rejects.toMatchObject({ code: "observation_unavailable" });
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    if (action === "stop") coordinator.stop();
+    else active = false;
+    release({ observedAt: new Date().toISOString(), items: [{ serverId: observedServer.id, status: { docker: { running: true } } }] });
+    await rejected;
+    await expect(coordinator.read(observedServer, "status", 60_000)).rejects.toMatchObject({ code: "observation_unavailable" });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
   it("batches a node fleet into one shared observation and serves consumers from cache", async () => {
     const servers = Array.from({ length: 10 }, (_, index) => server(index));
     const calls: Array<{ items: Array<{ server: ManagedServer; sections: string[] }> }> = [];

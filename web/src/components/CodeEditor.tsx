@@ -76,7 +76,7 @@ const serverSentinelEditorTheme = EditorView.theme({
     fontFamily: "var(--font-mono)",
     fontSize: "13px"
   },
-  "&.fileCodeEditor-measured": {
+  "&[data-file-code-editor-measured='true']": {
     visibility: "visible"
   },
   "&.cm-focused": {
@@ -152,7 +152,9 @@ function revealMeasuredEditor(view: EditorView) {
   view.requestMeasure({
     read: () => null,
     write: () => {
-      view.dom.classList.add("fileCodeEditor-measured");
+      // CodeMirror owns and replaces the class attribute when edit mode or the grammar changes.
+      // An independent marker keeps the already-measured editor visible across reconfiguration.
+      view.dom.setAttribute("data-file-code-editor-measured", "true");
       view.focus();
     }
   });
