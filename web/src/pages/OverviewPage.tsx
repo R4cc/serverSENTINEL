@@ -175,7 +175,7 @@ export function OverviewSummary({
   const state = dockerStateLabel(status, dockerSocketMounted);
   const minecraftVersion = minecraftVersionInfo(server);
   const hasResourceStats = Boolean(latestResourceSample?.available && latestResourceSample.running);
-  const resourceFallback = running ? "Collecting" : "Not running";
+  const resourceFallback = <span className="overviewSummaryTextState">{running ? "Collecting" : "Not running"}</span>;
   const normalizedCpu = latestResourceSample?.cpuUtilizationPercent
     ?? (latestResourceSample?.cpuCapacityCores && latestResourceSample.cpuPercent !== null
       ? latestResourceSample.cpuPercent / latestResourceSample.cpuCapacityCores
@@ -205,7 +205,7 @@ export function OverviewSummary({
         value={<span className="summaryStatusText">{state}</span>}
       />
       <MetricTile className="summaryTile" label="Minecraft" icon={<Blocks />} iconPlacement="leading" value={versionValue(minecraftVersion)} />
-      <MetricTile className="summaryTile" label="Uptime" icon={<Clock />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : "Not running"} />
+      <MetricTile className="summaryTile" label="Uptime" icon={<Clock />} iconPlacement="leading" value={loading ? <SkeletonBlock className="overviewSummaryValueSkeleton" /> : running ? formatUptime(activity.lastStartedAt, running) : <span className="overviewSummaryTextState">Not running</span>} />
       <MetricTile
         className="summaryTile"
         label="World Size"

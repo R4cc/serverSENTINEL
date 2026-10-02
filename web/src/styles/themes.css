@@ -14,8 +14,8 @@
   --text-soft: #9da6b5;
   --border: #596170;
   --border-muted: color-mix(in srgb, var(--border) 34%, var(--surface) 66%);
-  --border-panel: color-mix(in srgb, var(--border) 46%, var(--surface) 54%);
-  --border-row: color-mix(in srgb, var(--border) 28%, var(--surface) 72%);
+  --border-panel: color-mix(in srgb, var(--border) 32%, var(--surface) 68%);
+  --border-row: color-mix(in srgb, var(--border) 20%, var(--surface) 80%);
   --sentinel-accent: #a5b4ff;
   --sentinel-accent-strong: #c8d2ff;
   --sentinel-accent-soft: #272d44;
@@ -49,9 +49,9 @@
   --glass-tint-strong: rgb(29 33 44 / 0.74);
   --glass-tint-soft: rgb(35 39 51 / 0.46);
   --glass-tint-menu: rgb(30 34 45 / 0.94);
-  --glass-border: rgb(255 255 255 / 0.2);
-  --glass-rim-top: rgb(255 255 255 / 0.26);
-  --glass-rim-side: rgb(255 255 255 / 0.11);
+  --glass-border: rgb(255 255 255 / 0.14);
+  --glass-rim-top: rgb(255 255 255 / 0.2);
+  --glass-rim-side: rgb(255 255 255 / 0.08);
   --glass-rim-base: rgb(255 255 255 / 0.06);
   --glass-rim-bloom: rgb(255 255 255 / 0.14);
   --glass-shadow:
@@ -67,6 +67,9 @@
   --solid-control-surface: rgb(25 28 37 / 0.9);
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.32);
   --shadow-elevated: 0 18px 52px rgb(0 0 0 / 0.36);
+}
+
+:root.themeDark {
   background: var(--app-background);
 }
 
@@ -89,26 +92,28 @@
   --surface-raised: #f8faff;
   --surface-muted: #dfe8fa;
   --surface-read-only: #eaf0fc;
-  --app-background: #d3e1f7;
+  --app-background: #e7edf7;
   --text: #142443;
   --text-muted: #405273;
   --text-soft: #526482;
   --border: #355584;
   --border-muted: color-mix(in srgb, var(--border) 27%, var(--surface));
-  --border-panel: color-mix(in srgb, var(--border) 32%, var(--surface));
-  --border-row: color-mix(in srgb, var(--border) 17%, var(--surface));
+  --border-panel: color-mix(in srgb, var(--border) 22%, var(--surface));
+  --border-row: color-mix(in srgb, var(--border) 12%, var(--surface));
   /* Cool optical glass keeps the ambient color visible without tinting menus
      or input fields enough to compete with their content. */
   --glass-tint: rgb(242 248 255 / 0.56);
   --glass-tint-strong: rgb(240 246 255 / 0.72);
   --glass-tint-soft: rgb(225 237 255 / 0.46);
   --glass-tint-menu: rgb(246 249 255 / 0.96);
-  --glass-border: rgb(255 255 255 / 0.88);
-  --glass-rim-base: rgb(133 164 234 / 0.36);
+  --glass-border: rgb(255 255 255 / 0.72);
+  --glass-rim-top: rgb(255 255 255 / 0.8);
+  --glass-rim-side: rgb(255 255 255 / 0.32);
+  --glass-rim-base: rgb(133 164 234 / 0.24);
   --glass-shadow:
-    0 0 0 0.5px rgb(48 73 143 / 0.12),
-    0 16px 40px -14px rgb(52 73 153 / 0.24),
-    0 3px 10px -4px rgb(32 86 151 / 0.14);
+    0 0 0 0.5px rgb(48 73 143 / 0.08),
+    0 16px 40px -14px rgb(52 73 153 / 0.16),
+    0 3px 10px -4px rgb(32 86 151 / 0.09);
   --glass-shadow-floating:
     0 0 0 0.5px rgb(48 73 143 / 0.14),
     0 26px 60px -18px rgb(52 73 153 / 0.32),
@@ -121,7 +126,13 @@
    wash fixed so scrolling does not create seams between short and long pages. */
 :root:not(.themeDark) body {
   background-image:
-    radial-gradient(ellipse at 12% 8%, rgb(92 143 255 / 0.48), transparent 52%),
-    radial-gradient(ellipse at 96% 18%, rgb(86 213 225 / 0.44), transparent 48%),
-    radial-gradient(ellipse at 66% 96%, rgb(170 138 247 / 0.4), transparent 56%);
+    radial-gradient(ellipse at 12% 8%, rgb(92 143 255 / 0.32), transparent 52%),
+    radial-gradient(ellipse at 96% 18%, rgb(86 213 225 / 0.29), transparent 48%),
+    radial-gradient(ellipse at 66% 96%, rgb(170 138 247 / 0.26), transparent 56%);
+}
+
+:root.themeDark body {
+  background-image:
+    radial-gradient(ellipse at 24% 8%, rgb(52 82 151 / 0.18), transparent 52%),
+    radial-gradient(ellipse at 92% 28%, rgb(100 75 153 / 0.12), transparent 54%);
 }

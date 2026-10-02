@@ -390,6 +390,9 @@ export function PlayersPage({
   formatDate: (value: string | number | Date) => string;
   formatNumber: (value: number) => string;
 }) {
+  const [geographyExpanded, setGeographyExpanded] = useState(false);
+  const geographyId = useId();
+  useEffect(() => setGeographyExpanded(false), [server.id]);
   const [mapScope, setMapScope] = useState<PlayerMapScope>("online");
   if (!active) return null;
   if (loading) {
@@ -411,6 +414,26 @@ export function PlayersPage({
   const mapPlayers = mapScope === "online"
     ? insights?.players.filter((entry) => entry.online) ?? []
     : insights?.players ?? [];
+  const roster = (
+    <Surface className="playerCard playerRosterCard">
+      <PanelHeader
+        title="Players"
+        help={<HelpTooltip label="player data">Locations are approximate. Ping is measured from the player's active TCP connection and is unavailable for offline or unmatched players.</HelpTooltip>}
+        actions={summary && (
+          <StatusBadge tone={summary.onlinePlayers ? "success" : "neutral"}>
+            {summary.onlinePlayers} online · {summary.knownPlayers} known
+          </StatusBadge>
+        )}
+      />
+      <PlayerRoster
+        players={insights?.players ?? []}
+        serverId={server.id}
+        playerHeadsEnabled={playerHeadsEnabled}
+        formatDate={formatDate}
+        formatNumber={formatNumber}
+      />
+    </Surface>
+  );
   return (
     <section className="tabPage playersPage layoutWide">
       {error && (
@@ -437,6 +460,7 @@ export function PlayersPage({
         />
       )}
 
+      {compactLayout && roster}
       <div className="playerSummaryGrid">
         <MetricTile
           variant="summary"
@@ -475,57 +499,62 @@ export function PlayersPage({
         />
       </div>
 
-      <div className="playerGeographyRow">
-        <Surface className="playerCard playerGeographyCard">
-          <PanelHeader
-            title="Player geography"
-            description={serverLocation?.location
-              ? `Measured from ${serverLocation.location.country ?? serverLocation.location.label}`
-              : serverLocation?.address
-                ? `${serverLocation.address} could not be placed; distances are unavailable.`
-                : "Set the server address for distance estimates."}
-            help={<HelpTooltip label="player geography">Locations are approximate. Player heads mark locations, stacked heads are clusters, the server badge marks the host, and rings show GeoLite2 accuracy. Zooming separates nearby clusters.</HelpTooltip>}
-            actions={(
-              <div className="playerMapScopeSwitch" role="group" aria-label="Players shown on map">
-                <Button
-                  variant={mapScope === "online" ? "secondary" : "ghost"}
-                  compact
-                  aria-pressed={mapScope === "online"}
-                  onClick={() => setMapScope("online")}
-                >
-                  <span className="playerMapOnlineDot" aria-hidden="true" /> Online
-                </Button>
-                <Button
-                  variant={mapScope === "all" ? "secondary" : "ghost"}
-                  compact
-                  aria-pressed={mapScope === "all"}
-                  onClick={() => setMapScope("all")}
-                >
-                  All time
-                </Button>
-              </div>
-            )}
-          />
-          <PlayerGeographyMap
-            players={mapPlayers}
-            serverLocation={serverLocation?.location}
-            serverName={server.displayName}
-            serverRunning={serverRunning}
-            playerHeadsEnabled={playerHeadsEnabled}
-          />
-          <ServerLocationForm
-            address={serverLocation?.address ?? ""}
-            error={serverLocation?.error}
-            canManage={canManage}
-            busy={busy}
-            onSave={onSaveServerAddress}
-          />
-        </Surface>
+      {compactLayout && <Button variant="secondary" className="playerGeographyToggle" aria-expanded={geographyExpanded} aria-controls={geographyId} onClick={() => setGeographyExpanded(current => !current)}><Globe aria-hidden="true" /> Player geography <ChevronDown aria-hidden="true" /></Button>}
+      <div id={geographyId} hidden={compactLayout && !geographyExpanded} className="playerGeographyDisclosure">
+        {(!compactLayout || geographyExpanded) && (
+          <div className="playerGeographyRow">
+            <Surface className="playerCard playerGeographyCard">
+              <PanelHeader
+                title="Player geography"
+                description={serverLocation?.location
+                  ? `Measured from ${serverLocation.location.country ?? serverLocation.location.label}`
+                  : serverLocation?.address
+                    ? `${serverLocation.address} could not be placed; distances are unavailable.`
+                    : "Set the server address for distance estimates."}
+                help={<HelpTooltip label="player geography">Locations are approximate. Player heads mark locations, stacked heads are clusters, the server badge marks the host, and rings show GeoLite2 accuracy. Zooming separates nearby clusters.</HelpTooltip>}
+                actions={(
+                  <div className="playerMapScopeSwitch" role="group" aria-label="Players shown on map">
+                    <Button
+                      variant={mapScope === "online" ? "secondary" : "ghost"}
+                      compact
+                      aria-pressed={mapScope === "online"}
+                      onClick={() => setMapScope("online")}
+                    >
+                      <span className="playerMapOnlineDot" aria-hidden="true" /> Online
+                    </Button>
+                    <Button
+                      variant={mapScope === "all" ? "secondary" : "ghost"}
+                      compact
+                      aria-pressed={mapScope === "all"}
+                      onClick={() => setMapScope("all")}
+                    >
+                      All time
+                    </Button>
+                  </div>
+                )}
+              />
+              <PlayerGeographyMap
+                players={mapPlayers}
+                serverLocation={serverLocation?.location}
+                serverName={server.displayName}
+                serverRunning={serverRunning}
+                playerHeadsEnabled={playerHeadsEnabled}
+              />
+              <ServerLocationForm
+                address={serverLocation?.address ?? ""}
+                error={serverLocation?.error}
+                canManage={canManage}
+                busy={busy}
+                onSave={onSaveServerAddress}
+              />
+            </Surface>
 
-        <Surface className="playerCard playerRegionCard">
-          <PanelHeader title="Region overview" />
-          <RegionTable regions={insights?.regions ?? []} />
-        </Surface>
+            <Surface className="playerCard playerRegionCard">
+              <PanelHeader title="Region overview" />
+              <RegionTable regions={insights?.regions ?? []} />
+            </Surface>
+          </div>
+        )}
       </div>
 
       <div className="playerAnalysisRow">
@@ -558,24 +587,7 @@ export function PlayersPage({
         </Surface>
       </div>
 
-      <Surface className="playerCard playerRosterCard">
-        <PanelHeader
-          title="Players"
-          help={<HelpTooltip label="player data">Locations are approximate. Ping is measured from the player's active TCP connection and is unavailable for offline or unmatched players.</HelpTooltip>}
-          actions={summary && (
-            <StatusBadge tone={summary.onlinePlayers ? "success" : "neutral"}>
-              {summary.onlinePlayers} online · {summary.knownPlayers} known
-            </StatusBadge>
-          )}
-        />
-        <PlayerRoster
-          players={insights?.players ?? []}
-          serverId={server.id}
-          playerHeadsEnabled={playerHeadsEnabled}
-          formatDate={formatDate}
-          formatNumber={formatNumber}
-        />
-      </Surface>
+      {!compactLayout && roster}
 
       <footer className="playerAttribution">
         <p>{insights?.attribution}</p>

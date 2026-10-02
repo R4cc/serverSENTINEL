@@ -3,7 +3,7 @@
 .tabPage.scheduleWorkspacePage {
   width: 100%;
   max-width: none;
-  height: max(560px, calc(100vh - 238px));
+  height: auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -44,14 +44,14 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 380px);
   gap: var(--space-4);
-  align-items: stretch;
+  align-items: start;
 }
 
 .scheduleWorkspaceGrid > .scheduleTableCard,
 .scheduleWorkspaceGrid > .scheduledRunsCard {
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -93,7 +93,8 @@
 }
 
 .scheduleTableBody {
-  flex: 1 1 auto;
+  max-height: 560px;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
 }
@@ -276,7 +277,8 @@
 /* Scheduled run history -------------------------------------------------- */
 
 .scheduledRunsFeed {
-  flex: 1 1 auto;
+  max-height: 420px;
+  flex: 0 1 auto;
   min-height: 0;
   display: grid;
   align-content: start;

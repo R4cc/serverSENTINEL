@@ -686,7 +686,7 @@ button:disabled,
   }
 
   .workspaceServerPage > .activeServerStrip .serverStripLeft {
-    width: 100%;
+    width: auto;
     flex: 0 0 auto;
     gap: 6px;
   }
@@ -702,7 +702,7 @@ button:disabled,
   }
 
   .workspaceServerPage > .activeServerStrip .serverStripTitleRow {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 6px;
   }
 
@@ -711,7 +711,7 @@ button:disabled,
   }
 
   .workspaceServerPage > .activeServerStrip .serverStripTitleRow strong {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     font-size: 14px;
   }
 
@@ -721,10 +721,19 @@ button:disabled,
   }
 
   .workspaceServerPage > .activeServerStrip .serverStripRight {
-    display: grid;
+    display: none;
     width: 100%;
     gap: 6px;
   }
+
+  .workspaceServerPage > .activeServerStrip.serverControlsExpanded .serverStripRight { display: grid; }
+  .workspaceServerPage > .activeServerStrip .serverStripPrimary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .workspaceServerPage > .activeServerStrip .serverStripRight { grid-column: 1 / -1; }
+  .workspaceServerPage > .activeServerStrip .serverControlsToggle { display: inline-flex; width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 0; }
+  .workspaceServerPage > .activeServerStrip .serverControlsToggle svg { width: 20px; height: 20px; }
+  .workspaceServerPage > .activeServerStrip .serverControlsToggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .workspaceServerPage > .activeServerStrip .serverStripPageTitle { display: block; margin: 0 0 2px; font-size: var(--type-meta-size); color: var(--text-muted); font-weight: var(--weight-meta); }
+  .workspaceServerPage > .activeServerStrip .serverStripMobileHealth { display: block; margin: 0; font-size: var(--type-helper-size); color: var(--text-muted); }
 
   .workspaceServerPage > .activeServerStrip .runtimeControls {
     display: grid;

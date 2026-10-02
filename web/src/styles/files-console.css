@@ -929,6 +929,8 @@
   min-height: 0;
 }
 
+.fileEditorRestrictionReason { margin: 0; padding: var(--space-2) var(--space-4); background: var(--surface-muted); color: var(--text-muted); font-size: var(--type-helper-size); overflow-wrap: anywhere; }
+
 .fileEditorMetaRow {
   min-height: 42px;
   display: flex;

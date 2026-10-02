@@ -435,6 +435,12 @@ export function SettingsPage(props: SettingsPageProps) {
   return (
     <section className="settingsHub layoutWide" aria-busy={props.loading}>
       <div className="settingsHubShell">
+        <label className="settingsMobileCategory">
+          <span>Settings category</span>
+          <select aria-label="Settings category" value={selectedCategory} onChange={(event) => setActiveCategory(event.target.value as SettingsCategory)}>
+            {categories.map(category => <option key={category} value={category}>{categoryDetails[category].label}</option>)}
+          </select>
+        </label>
         <nav className="settingsHubCategories" aria-label="Settings categories" role="tablist">
           {categories.map((category, index) => {
             const details = categoryDetails[category];

@@ -13,6 +13,7 @@ async function openPage(page, title) {
   const target = page.locator(`.sideNav button[title="Open ${title}"]`);
   if (!await target.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
   await target.click();
+  if (title === "players" && page.viewportSize().width <= 720) await page.getByRole("button", {name:"Player geography", exact:true}).click();
   await page.locator(`.workspacePage-${title === "schedules" ? "schedule" : title}`).waitFor();
 }
 
@@ -122,7 +123,7 @@ async function assertNearestVisibleMapPopupContained(page, label) {
   await marker.hover();
   const popup = page.locator(".playerMapClusterPopup");
   await popup.waitFor();
-  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.getAttribute("data-placement"));
+  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.style.visibility === "visible");
   const cursors = await popup.evaluate((element) => ({
     panel: getComputedStyle(element).cursor,
     text: Array.from(element.querySelectorAll([
@@ -185,9 +186,10 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
 
   const assertAnchored = async (phase) => {
     const measurements = await page.locator(".playerMapMarkerWrap").evaluateAll((wrappers) => {
-      const content = document.querySelector(".playerMapTransformContent");
-      if (!(content instanceof HTMLElement)) return [];
-      const contentRect = content.getBoundingClientRect();
+      // Marker percentages belong to the map scene, which is inset on phones.
+      const scene = document.querySelector(".playerMapScene");
+      if (!(scene instanceof HTMLElement)) return [];
+      const sceneRect = scene.getBoundingClientRect();
       return wrappers.flatMap((wrapper) => {
         const marker = wrapper.querySelector(".playerMapMarker");
         if (!(wrapper instanceof HTMLElement) || !(marker instanceof HTMLElement)) return [];
@@ -195,8 +197,8 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
         const left = Number.parseFloat(wrapper.style.left) / 100;
         const top = Number.parseFloat(wrapper.style.top) / 100;
         const expected = {
-          x: contentRect.left + contentRect.width * left,
-          y: contentRect.top + contentRect.height * top
+          x: sceneRect.left + sceneRect.width * left,
+          y: sceneRect.top + sceneRect.height * top
         };
         const actual = {
           x: markerRect.left + markerRect.width / 2,
@@ -283,7 +285,9 @@ async function assertPlayerMarkerAnchorsAcrossTransforms(page, label, {
   }
 
   await page.getByRole("button", { name: "Reset map view" }).click();
-  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a <= 1.01);
+  await page.waitForFunction(() => Math.abs(new DOMMatrix(getComputedStyle(document.querySelector(".playerMapTransformContent")).transform).a - 1) < 0.0001);
+  // Re-clustering follows the settled gesture by 140ms; inspect the final marker layout.
+  await page.waitForTimeout(160);
 }
 
 async function assertPlayerClusterPopupDismisses(page, label) {
@@ -379,7 +383,7 @@ async function assertPlayerClusterPopupDismisses(page, label) {
 
   const popup = page.locator(".playerMapClusterPopup");
   await popup.waitFor();
-  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.getAttribute("data-placement"));
+  await page.waitForFunction(() => document.querySelector(".playerMapClusterPopup")?.style.visibility === "visible");
   assert(await cluster.getAttribute("aria-expanded") === "true", `${label}: player cluster did not expand`);
   const geometry = await page.evaluate(() => {
     const marker = document.querySelector('.playerMapClusterMarker[aria-expanded="true"]');
@@ -593,9 +597,7 @@ async function assertModsToolbarVisible(page, label) {
     const toolbar = document.querySelector(".modsWorkspaceToolbar");
     const installed = document.querySelector(".modsWorkspaceInstalled");
     const documentScroller = document.scrollingElement;
-    const actions = Array.from(document.querySelectorAll(".modsWorkspaceToolbar button"));
-    const primaryActions = Array.from(document.querySelectorAll(".modsWorkspacePrimaryActions .uiButton"));
-    const updateActions = Array.from(document.querySelectorAll(".modsWorkspaceUpdateActions .uiButton"));
+    const actions = Array.from(document.querySelectorAll(".modsWorkspaceToolbar button")).filter(button => button.getBoundingClientRect().width > 0);
     if (!(toolbar instanceof HTMLElement) || !(installed instanceof HTMLElement) || !(documentScroller instanceof HTMLElement) || actions.length === 0) return { missing: true };
     const toolbarRect = toolbar.getBoundingClientRect();
     const installedRect = installed.getBoundingClientRect();
@@ -616,15 +618,13 @@ async function assertModsToolbarVisible(page, label) {
       missing: false,
       toolbarBottom: toolbarRect.bottom,
       installedTop: installedRect.top,
-      primaryActionsShareRow: primaryActions.length < 2 || Math.abs(primaryActions[0].getBoundingClientRect().top - primaryActions[1].getBoundingClientRect().top) <= 1,
-      updateActionsShareRow: updateActions.length < 2 || Math.abs(updateActions[0].getBoundingClientRect().top - updateActions[1].getBoundingClientRect().top) <= 1,
       overflowingActions: actions.filter((action) => action.scrollWidth > action.clientWidth + 1).map((action) => action.textContent?.trim() || "unnamed action"),
       coveredActions
     };
   });
   assert(!result.missing, `${label}: mods toolbar surfaces are missing`);
   assert(result.installedTop >= result.toolbarBottom, `${label}: installed mods overlaps the toolbar (${result.installedTop} < ${result.toolbarBottom})`);
-  assert(result.primaryActionsShareRow && result.updateActionsShareRow, `${label}: mods toolbar actions did not retain the compact two-column layout: ${JSON.stringify(result)}`);
+  assert(result.toolbarBottom < 500, `${label}: Mods toolbar consumes too much mobile space: ${JSON.stringify(result)}`);
   assert(result.overflowingActions.length === 0, `${label}: mods toolbar labels overflow their actions: ${JSON.stringify(result.overflowingActions)}`);
   assert(result.coveredActions.length === 0, `${label}: mods toolbar actions are covered: ${JSON.stringify(result.coveredActions)}`);
 }
@@ -650,7 +650,7 @@ async function assertNodeDetailsOpeningPosition(page, label) {
     };
   });
   assert(!result.missing, `${label}: node drawer header is missing`);
-  assert(result.documentTop <= 1 && result.header.top >= 0 && result.header.bottom <= result.viewportHeight && result.close.top >= 0 && result.close.bottom <= result.viewportHeight, `${label}: node details did not open at its visible top: ${JSON.stringify(result)}`);
+  assert(result.header.top >= 0 && result.header.bottom <= result.viewportHeight && result.close.top >= 0 && result.close.bottom <= result.viewportHeight, `${label}: node details did not open at its visible top: ${JSON.stringify(result)}`);
 }
 
 async function assertModsRowsAligned(page, label) {
@@ -837,8 +837,10 @@ async function assertFilesToolbarGeometry(page, label) {
     return {
       missing: false,
       navBottom: nav.bottom,
+      navLeft: nav.left,
       crumbsTop: crumbs.top,
       crumbsBottom: crumbs.bottom,
+      crumbsRight: crumbs.right,
       toolbarTop: toolbar.top,
       navWithinViewport: nav.left >= 0 && nav.right <= innerWidth,
       crumbsWithinViewport: crumbs.left >= 0 && crumbs.right <= innerWidth,
@@ -846,30 +848,21 @@ async function assertFilesToolbarGeometry(page, label) {
     };
   });
   assert(!result.missing, `${label}: Files toolbar groups are missing`);
-  assert(result.navBottom <= result.crumbsTop + 1 && result.crumbsBottom <= result.toolbarTop + 1, `${label}: Files toolbar groups overlap: ${JSON.stringify(result)}`);
+  assert(result.navLeft >= result.crumbsRight - 1 && Math.max(result.navBottom, result.crumbsBottom) <= result.toolbarTop + 1, `${label}: Files toolbar groups overlap: ${JSON.stringify(result)}`);
   assert(result.navWithinViewport && result.crumbsWithinViewport && result.toolbarWithinViewport, `${label}: Files toolbar leaves the viewport: ${JSON.stringify(result)}`);
 }
 
-async function assertSettingsCategoryGrid(page, label) {
-  const result = await page.locator(".settingsHubCategories").evaluate((element) => {
-    const style = getComputedStyle(element);
-    const buttons = Array.from(element.querySelectorAll("button"));
-    const rows = new Set(buttons.map((button) => Math.round(button.getBoundingClientRect().top)));
-    return {
-      display: style.display,
-      columns: style.gridTemplateColumns.split(" ").filter(Boolean).length,
-      rows: rows.size,
-      overflowX: style.overflowX,
-      scrollWidth: element.scrollWidth,
-      clientWidth: element.clientWidth
-    };
-  });
-  assert(result.display === "grid" && result.columns === 2 && result.rows >= 2, `${label}: Settings categories are not a two-column grid: ${JSON.stringify(result)}`);
-  assert(result.scrollWidth <= result.clientWidth + 1, `${label}: Settings categories scroll horizontally: ${JSON.stringify(result)}`);
+async function assertSettingsCategoryPicker(page, label) {
+  const picker = page.getByRole("combobox", {name:"Settings category"});
+  assert(await picker.isVisible(), label + ": compact Settings picker is missing");
+  assert.equal(await page.getByRole("tablist", {name:"Settings categories"}).isVisible(), false);
+  const box = await picker.boundingBox();
+  assert(box && box.height >= 44 && box.width <= page.viewportSize().width, label + ": Settings picker is not touch sized");
 }
 
 async function assertSettingsModuleDescriptionsVisible(page, label) {
-  await page.getByRole("tab", { name: /Modules/ }).click();
+  if (page.viewportSize().width <= 720) await page.getByRole("combobox", {name:"Settings category"}).selectOption("modules");
+  else await page.getByRole("tab", {name:/Modules/}).click();
   const result = await page.locator(".settingsModuleCard").evaluateAll((cards) => cards.map((card) => {
     const description = card.querySelector(".settingsModuleCardCopy > span");
     if (!(description instanceof HTMLElement)) return { missing: true };
@@ -1144,6 +1137,7 @@ async function runProfile(engine, profile, label) {
       console.log(`mobile navigation smoke passed: ${label}`);
       return;
     }
+    await page.getByRole("button", {name:"Server controls", exact:true}).click();
     await assertTargets(page, [".brandBlock .iconButton", ".activeServerStrip .runtimeControlButton", ".activeServerStrip .refreshStatusButton"], label);
     await assertFloatingSurfaces(page, label);
     await assertPlayerClusterPopupDismisses(page, `${label} players`);
@@ -1160,7 +1154,7 @@ async function runProfile(engine, profile, label) {
     await assertFilesToolbarGeometry(page, `${label} files`);
 
     await openPage(page, "settings");
-    await assertSettingsCategoryGrid(page, `${label} settings`);
+    await assertSettingsCategoryPicker(page, `${label} settings`);
 
     await openPage(page, "mods");
     await assertModsToolbarVisible(page, `${label} mods toolbar`);

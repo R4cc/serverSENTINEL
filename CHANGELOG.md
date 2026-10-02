@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.10.3 - 2026-10-02
+
+- Made phone workspaces more compact with expandable server controls, a Settings category picker, and a player roster before expandable geography.
+- Unified mobile workflow dialogs, showed file editing restrictions directly, simplified file and mod actions, and reduced empty inspector and schedule space.
+- Aligned summary metric typography and improved touch targets.
+
+## 26.10.2 - 2026-10-02
+
+- Softened the light-theme background and panel outlines, added subtle ambient color to dark glass, and enlarged Overview metric values for easier scanning.
+
 ## 26.10.1 - 2026-10-02
 
 - Fixed interrupted database upgrades and stale crash recovery overriding an intentional server stop.

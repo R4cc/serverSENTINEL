@@ -68,6 +68,13 @@
   background: var(--swiss-white);
 }
 
+.serverControlsToggle,
+.serverStripPageTitle,
+.serverStripMobileHealth { display: none; }
+.serverStripOperation,
+.serverStripControlsReason { margin: 0; font-size: var(--type-helper-size); color: var(--text-muted); }
+.serverStripOperation { display: flex; align-items: center; gap: var(--space-2); }
+
 /* Deliberately not `.activeServerStrip span`: the strip's spans are badges,
    status dots and button labels, each of which owns its own type. A blanket
    rule here only forced every one of them to be undone again further down. */
