@@ -14,6 +14,7 @@ type CachedServer = Partial<Record<ServerObservationSection, CachedSection>> & {
 
 type ObservationCoordinatorOptions = {
   readServers: () => Promise<ManagedServer[]>;
+  isServerActive?: (serverId: string) => boolean;
   lookupNode: (nodeId: string) => Promise<ManagedNode | undefined>;
   connections: PanelNodeConnections;
   pollMs?: number;
@@ -39,19 +40,22 @@ export class RemoteObservationCoordinator {
   private interval: NodeJS.Timeout | undefined;
   private tick = 0;
   private sequence = 0;
+  private closed = false;
+  private readonly generations = new Map<string, Partial<Record<ServerObservationSection, number>>>();
 
   constructor(private readonly options: ObservationCoordinatorOptions) {
     this.pollMs = options.pollMs ?? 5_000;
   }
 
   start() {
-    if (this.interval) return;
-    void this.collectAll();
-    this.interval = setInterval(() => void this.collectAll(), this.pollMs);
+    if (this.interval || this.closed) return;
+    void this.collectAll().catch(() => undefined);
+    this.interval = setInterval(() => void this.collectAll().catch(() => undefined), this.pollMs);
     this.interval.unref?.();
   }
 
   stop() {
+    this.closed = true;
     if (this.interval) clearInterval(this.interval);
     this.interval = undefined;
     this.cache.clear();
@@ -61,6 +65,9 @@ export class RemoteObservationCoordinator {
   }
 
   invalidate(serverId: string, sections?: ServerObservationSection[]) {
+    const generations = this.generations.get(serverId) ?? {};
+    for (const section of sections ?? observationSections) generations[section] = (generations[section] ?? 0) + 1;
+    this.generations.set(serverId, generations);
     if (!sections) {
       this.cache.delete(serverId);
       return;
@@ -78,12 +85,17 @@ export class RemoteObservationCoordinator {
   }
 
   async refreshNode(nodeId: string) {
+    if (this.closed) return;
+    const existing = this.inFlightNodes.get(nodeId);
+    if (existing) return existing;
     const servers = (await this.options.readServers()).filter((server) => server.nodeId === nodeId);
+    if (this.closed) return;
     for (const server of servers) this.invalidate(server.id);
     if (servers.length) await this.observeNodeOnce(nodeId, () => this.observeNode(servers, () => ["status", "stats", "players", "logs", "overviewFiles"]));
   }
 
   async read(server: ManagedServer, section: ServerObservationSection, maxAgeMs: number) {
+    this.assertActive(server.id);
     this.noteOverviewInterest(server.id, [section]);
     const cached = this.cache.get(server.id)?.[section];
     if (cached && Date.now() - cached.observedAt <= maxAgeMs) return cached.value;
@@ -94,6 +106,7 @@ export class RemoteObservationCoordinator {
   }
 
   async readMany(server: ManagedServer, sections: ServerObservationSection[], maxAgeMs: number) {
+    this.assertActive(server.id);
     this.noteOverviewInterest(server.id, sections);
     const missing = sections.filter((section) => {
       const cached = this.cache.get(server.id)?.[section];
@@ -116,7 +129,9 @@ export class RemoteObservationCoordinator {
   }
 
   private async collectAll() {
+    if (this.closed) return;
     const servers = await this.options.readServers().catch(() => []);
+    if (this.closed) return;
     const active = new Set(servers.map((server) => server.id));
     for (const serverId of this.cache.keys()) if (!active.has(serverId)) this.cache.delete(serverId);
     const now = Date.now();
@@ -134,6 +149,7 @@ export class RemoteObservationCoordinator {
     const byNode = new Map<string, ManagedServer[]>();
     for (const server of servers) {
       if (!nodes.has(server.nodeId)) nodes.set(server.nodeId, await this.options.lookupNode(server.nodeId));
+      if (this.closed) return;
       const node = nodes.get(server.nodeId);
       if (!node || !this.options.connections.isConnected(node.id) || !nodeAdvertisesCapability(node, "server.observe")) continue;
       const grouped = byNode.get(node.id) ?? [];
@@ -147,6 +163,7 @@ export class RemoteObservationCoordinator {
 
   private async observeNow(server: ManagedServer, sections: ServerObservationSection[], maxAgeMs: number) {
     const node = await this.options.lookupNode(server.nodeId);
+    this.assertActive(server.id);
     if (!node || !this.options.connections.isConnected(node.id) || !nodeAdvertisesCapability(node, "server.observe")) {
       throw new Error(`Node ${server.nodeId} does not support optimized observations`);
     }
@@ -159,7 +176,7 @@ export class RemoteObservationCoordinator {
     // A visible server must not queue behind a fleet-wide background batch. The node protocol
     // permits concurrent requests, and sequence-aware storage below prevents an older background
     // response from replacing the newer foreground result when it eventually arrives.
-    const key = `${server.id}:${[...stillMissing].sort().join(",")}`;
+    const key = `${server.id}:${[...stillMissing].sort().map((section) => `${section}:${this.generations.get(server.id)?.[section] ?? 0}`).join(",")}`;
     await this.observeForegroundOnce(key, () => this.observeNode([server], () => stillMissing, node));
   }
 
@@ -185,14 +202,18 @@ export class RemoteObservationCoordinator {
 
   private async observeNode(servers: ManagedServer[], sectionsFor: (server: ManagedServer) => ServerObservationSection[], resolvedNode?: ManagedNode) {
     const node = resolvedNode ?? await this.options.lookupNode(servers[0]?.nodeId);
+    if (this.closed) return;
     if (!node) throw new Error("Remote node was not found");
     for (let offset = 0; offset < servers.length; offset += nodeProtocolObservationBatchSize) {
       const chunk = servers.slice(offset, offset + nodeProtocolObservationBatchSize);
       this.sequence += 1;
       const sequence = this.sequence;
+      if (this.closed) return;
       const logBases = new Map<string, string>();
+      const requestGenerations = new Map<string, Partial<Record<ServerObservationSection, number>>>();
       const requested = chunk.map((server) => {
         const sections = sectionsFor(server);
+        requestGenerations.set(server.id, Object.fromEntries(sections.map((section) => [section, this.generations.get(server.id)?.[section] ?? 0])));
         if (sections.includes("logs")) logBases.set(server.id, this.cache.get(server.id)?.logText ?? "");
         return {
           server: compactNodeServerSpec(server),
@@ -203,26 +224,31 @@ export class RemoteObservationCoordinator {
       const response = normalizeServerObservationResponse(await this.options.connections.request(node, "server.observe", {
         items: requested
       }, 15_000));
+      if (this.closed) return;
       try {
         this.validateResponse(requested.map((item) => ({ serverId: item.server.id, sections: item.sections })), response.items);
       } catch (error) {
-        for (const item of requested) this.invalidate(item.server.id, item.sections);
+        for (const item of requested) this.invalidate(item.server.id, item.sections.filter((section) =>
+          (this.generations.get(item.server.id)?.[section] ?? 0) === requestGenerations.get(item.server.id)?.[section]
+          && Math.max(this.cache.get(item.server.id)?.[section]?.sequence ?? 0,
+            this.cache.get(item.server.id)?.failures?.[section]?.sequence ?? 0) <= sequence));
         throw error;
       }
       // `response.observedAt` comes off the node's wall clock while every reader ages the cache
       // against the panel's. A node running even a second behind made every observation look stale
       // on arrival, so each read forced its own round trip alongside the background tick.
       const observedAt = Date.now();
-      for (const item of response.items) this.store(item, observedAt, sequence, logBases.get(item.serverId));
+      for (const item of response.items) this.store(item, observedAt, sequence, requestGenerations.get(item.serverId) ?? {}, logBases.get(item.serverId));
     }
   }
 
-  private store(item: ServerObservationResultItem, observedAt: number, sequence: number, logBase = "") {
+  private store(item: ServerObservationResultItem, observedAt: number, sequence: number, generations: Partial<Record<ServerObservationSection, number>>, logBase = "") {
+    if (this.closed || this.options.isServerActive?.(item.serverId) === false) return;
     const cached = this.cache.get(item.serverId) ?? {};
     // A background tick and an on-demand read can be in flight together, and the older request can
     // answer last. Counter-backed sections such as `stats` read as a reset when that happens, so
     // the later-issued observation wins regardless of arrival order.
-    const superseded = (section: ServerObservationSection) => Math.max(cached[section]?.sequence ?? 0, cached.failures?.[section]?.sequence ?? 0) > sequence;
+    const superseded = (section: ServerObservationSection) => (this.generations.get(item.serverId)?.[section] ?? 0) !== generations[section] || Math.max(cached[section]?.sequence ?? 0, cached.failures?.[section]?.sequence ?? 0) > sequence;
     const entry = (value: unknown) => ({ value, observedAt, sequence });
     const success = (section: ServerObservationSection, value: unknown) => {
       if (value === undefined || superseded(section)) return;
@@ -253,6 +279,12 @@ export class RemoteObservationCoordinator {
       cached.failures[section] = { error, observedAt, sequence };
     }
     this.cache.set(item.serverId, cached);
+  }
+
+  private assertActive(serverId: string) {
+    if (this.closed || this.options.isServerActive?.(serverId) === false) {
+      throw structuredNodeProtocolError("observation_unavailable", "Observation collection stopped or server was deleted");
+    }
   }
 
   private validateResponse(

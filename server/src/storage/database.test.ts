@@ -3,13 +3,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { currentSchemaName, currentSchemaVersion, oldestSupportedSchemaVersion, openStorageDatabase, type StorageDatabase } from "./database.js";
 
 const temporaryDirectories: string[] = [];
 const openDatabases: StorageDatabase[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const database of openDatabases.splice(0)) database.close();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
@@ -140,6 +141,58 @@ describe("SQLite storage", () => {
     openDatabases.push(migrated);
     expect(migrated.connection.prepare("SELECT id FROM servers").all()).toEqual([{ id: "server-1" }]);
     expect(migrated.connection.prepare("SELECT * FROM mod_history").all()).toEqual([]);
+  });
+
+  it.each([22, 23])("rolls back a schema %i upgrade when a later migration fails, then retries safely", async (version) => {
+    const path = await temporaryDatabasePath();
+    openStorageDatabase(path).close();
+    seedServer(path);
+    if (version === 22) revertToSchema22(path);
+    else revertToSchema23(path);
+    const previous = new Database(path);
+    previous.prepare(`
+      INSERT INTO player_geo_locations (server_id, player_key, player_name, location_json, first_seen_at, last_seen_at, observations)
+      VALUES ('server-1', 'alice', 'Alice', '{}', 1000, 2000, 2)
+    `).run();
+    const columnsBefore = columnNames(previous, "player_geo_locations");
+    previous.close();
+
+    const originalExec = Database.prototype.exec;
+    const failure = vi.spyOn(Database.prototype, "exec").mockImplementation(function (this: Database.Database, sql: string) {
+      if (sql.startsWith("CREATE TABLE mod_history")) throw new Error("Injected migration failure");
+      return originalExec.call(this, sql);
+    });
+    expect(() => openStorageDatabase(path)).toThrow("Injected migration failure");
+    failure.mockRestore();
+
+    const unchanged = new Database(path);
+    expect(unchanged.prepare("SELECT version FROM schema_migrations").get()).toEqual({ version });
+    expect(columnNames(unchanged, "player_geo_locations")).toEqual(columnsBefore);
+    expect(unchanged.prepare("SELECT player_name, observations FROM player_geo_locations").all())
+      .toEqual([{ player_name: "Alice", observations: 2 }]);
+    unchanged.close();
+
+    const migrated = openStorageDatabase(path);
+    openDatabases.push(migrated);
+    expect(migrated.connection.prepare("SELECT version FROM schema_migrations").get()).toEqual({ version: currentSchemaVersion });
+    expect(migrated.connection.prepare("SELECT player_name, observations FROM player_geo_locations").all())
+      .toEqual([{ player_name: "Alice", observations: 2 }]);
+  });
+
+  it("rolls back upgrades whose final schema validation fails", async () => {
+    const path = await temporaryDatabasePath();
+    openStorageDatabase(path).close();
+    revertToSchema23(path);
+    const malformed = new Database(path);
+    malformed.exec("DROP INDEX operations_status_idx");
+    malformed.close();
+
+    expect(() => openStorageDatabase(path)).toThrow("application indexes do not match");
+    const unchanged = new Database(path);
+    expect(unchanged.prepare("SELECT version FROM schema_migrations").get()).toEqual({ version: 23 });
+    expect(columnNames(unchanged, "player_geo_locations")).not.toContain("last_ping_at");
+    expect(unchanged.prepare("SELECT name FROM sqlite_master WHERE name = 'mod_history'").get()).toBeUndefined();
+    unchanged.close();
   });
 
   it("migrates schema 23 for last-session player ping averages", async () => {

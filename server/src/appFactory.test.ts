@@ -63,6 +63,7 @@ describe("Fastify application factory", () => {
     };
     vi.resetModules();
     const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
     const app = await buildApp();
 
     try {
@@ -70,6 +71,23 @@ describe("Fastify application factory", () => {
       expect(app.addresses()).toEqual([]);
       expect(existsSync(join(dataDir, "serversentinel.sqlite"))).toBe(true);
       await expect(buildApp()).rejects.toThrow("Only one serverSENTINEL application instance can be active in a process");
+      let finish!: () => void;
+      const operation = services.operationService.enqueue({
+        type: "export.run", task: "Closing test", failureTask: "Failed", failureFallback: "Failed"
+      }, () => new Promise<void>((resolve) => { finish = resolve; }));
+      const drain = vi.spyOn(services.operationService, "drain");
+      const closing = app.close();
+      await vi.waitFor(() => expect(drain).toHaveBeenCalled());
+      expect(services.storageDatabase.connection.open).toBe(true);
+      finish();
+      await closing;
+      expect(services.storageDatabase.connection.open).toBe(false);
+      const stored = new Database(join(dataDir, "serversentinel.sqlite"), { readonly: true });
+      try {
+        expect(stored.prepare("SELECT status FROM operations WHERE id = ?").get(operation.id)).toEqual({ status: "succeeded" });
+      } finally {
+        stored.close();
+      }
     } finally {
       await app.close();
     }

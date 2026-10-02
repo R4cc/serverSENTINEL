@@ -15,6 +15,25 @@ export class ModPreferencesRepository {
     } as ModPreference]));
   }
 
+  snapshot(serverId: string) {
+    return this.storage.transaction(() => ({ preferences: this.list(serverId), revision: this.revision(serverId) }));
+  }
+
+  private revision(serverId: string) {
+    return Number(this.storage.metadata(`mod-preferences-revision:${serverId}`) ?? 0);
+  }
+
+  /** Enrichment may span a long upstream scan; never replace an intervening mutation's data. */
+  replaceAllIfUnchanged(serverId: string, preferences: Record<string, ModPreference>, revision: number) {
+    if (!this.storage.connection.open) return false;
+    return this.storage.transaction(() => {
+      if (!this.storage.connection.prepare("SELECT 1 FROM servers WHERE id = ?").get(serverId)) return false;
+      if (this.revision(serverId) !== revision) return false;
+      this.replaceAll(serverId, preferences);
+      return true;
+    });
+  }
+
   replaceAll(serverId: string, preferences: Record<string, ModPreference>) {
     this.storage.transaction((database) => {
       const filenames = new Set(Object.keys(preferences));
@@ -30,6 +49,7 @@ export class ModPreferencesRepository {
       for (const [filename, preference] of Object.entries(preferences)) {
         upsert.run(serverId, filename, preference.channel, preference.modrinth ? JSON.stringify(preference.modrinth) : null);
       }
+      this.storage.setMetadata(`mod-preferences-revision:${serverId}`, String(this.revision(serverId) + 1));
     });
   }
 }

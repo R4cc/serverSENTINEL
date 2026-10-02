@@ -170,10 +170,15 @@ async function assertOutputIsAppendedInOrder(page) {
   // that names the problem instead of as an anonymous timeout.
   await page.waitForFunction(
     () => [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
-      .map((row) => row.textContent.replace(/[\s ]+$/, ""))
+      // Preserve spaces at soft-wrap boundaries (for example, "players " / "online").
+      .map((row) => row.textContent)
       .join("")
+      .replace(/\s+/g, " ")
       .includes("players online")
-  );
+  ).catch(async (error) => {
+    console.error(`Rendered console rows: ${JSON.stringify(await terminalRows(page))}`);
+    throw error;
+  });
 
   const after = await terminalRows(page);
   assert.equal(await input.inputValue(), "", "Submitting a command left it in the command line");
@@ -228,8 +233,9 @@ async function assertJumpToBottomForUnseenOutput(page) {
   await jump.waitFor({ state: "detached" });
   await page.waitForFunction(() => {
     return [...document.querySelectorAll(".minecraftTerminal .xterm-rows > div")]
-      .map((row) => row.textContent.replace(/[\sÂ ]+$/, ""))
+      .map((row) => row.textContent)
       .join("")
+      .replace(/\s+/g, " ")
       .includes("players online");
   });
 }

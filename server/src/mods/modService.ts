@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { archiveModSnapshot, modHistoryChanges, modHistoryRepository, pruneModHistoryArchives, readModHistorySnapshot, type ModHistoryActor } from "./modHistory.js";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises";
@@ -19,7 +19,8 @@ import { diffModSnapshots, snapshotMods } from "../modRestartState.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 
 import { assessRequiredModDependencies } from "../modrinth/dependencyHealth.js";
-import { createModUpdatePlan, type ModUpdatePlan } from "../modrinth/updatePlan.js";
+import { createModUpdatePlan } from "../modrinth/updatePlan.js";
+import type { ModUpdateScan } from "../modrinth/updatePlanCoordinator.js";
 import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertModrinthJarHashes, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
@@ -52,10 +53,13 @@ const localModHashCache = new ModHashCache();
 type ModListOptions = {
   forceRefresh?: boolean;
   onProgress?: (progress: { checked: number; total: number }) => void;
+  signal?: AbortSignal;
+  cachedMetadataOnly?: boolean;
 };
 
 type ModListRequest = {
   promise: Promise<unknown>;
+  signal?: AbortSignal;
   progress?: { checked: number; total: number };
   listeners: Set<NonNullable<ModListOptions["onProgress"]>>;
 };
@@ -252,21 +256,6 @@ async function lookupModrinthUpdateFromMetadata(server: ManagedServer, metadata:
   }, preferredChannel, options);
 }
 
-async function lookupModrinthUpdate(server: ManagedServer, modPath: string, preferredChannel: ReleaseChannel, metadata?: InstalledModMetadata, options: { forceRefresh?: boolean } = {}) {
-  if (metadata?.projectId) {
-    return lookupModrinthUpdateFromMetadata(server, metadata, preferredChannel, options);
-  }
-  const hash = createHash("sha1").update(await readFile(modPath)).digest("hex");
-  const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
-  const current = await currentRes.json() as InstalledModUpdateCurrent;
-  return lookupModrinthUpdateForCurrent(server, {
-    project_id: current.project_id,
-    version_id: current.version_id ?? current.id,
-    version_number: current.version_number,
-    version_type: current.version_type
-  }, preferredChannel, options);
-}
-
 export function remoteModMetadata(value: unknown): InstalledModMetadata | null {
   if (!value || typeof value !== "object") return null;
   const metadata = value as Partial<InstalledModMetadata>;
@@ -361,10 +350,26 @@ export async function withTrackedModMutation<T>(server: ManagedServer, action: (
       }
     }
 
+    await refreshCachedModInventory(server);
     if (actionError) throw actionError;
     if (reconciliationError) throw reconciliationError;
     return result;
   });
+}
+
+async function refreshCachedModInventory(server: ManagedServer) {
+  const coordinator = services.modUpdatePlanCoordinator;
+  if (coordinator) {
+    // A mutation owns the inventory now; an older background scan must not publish over it.
+    coordinator.invalidate(server.id);
+    try { await coordinator.refresh(server, false); } catch (error) {
+      logWarn({ serverId: server.id, ...errorLogFields(error) }, "Could not refresh cached mod inventory after the change");
+    }
+  } else if (services.storageDatabase?.connection.open) {
+    // File-manager changes still happen with managed content disabled. Re-enable must warm them.
+    services.storageDatabase.connection.prepare("DELETE FROM storage_metadata WHERE key = ?")
+      .run(`mod-installed-snapshot:${server.id}`);
+  }
 }
 
 export function requireNoActiveModMutation(serverId: string) {
@@ -395,9 +400,19 @@ async function loadBatchVersionsFromSha1(hashes: string[]) {
 }
 
 async function reconcileRemoteInstalledMods(server: ManagedServer, result: unknown, options: ModListOptions = {}) {
+  options.signal?.throwIfAborted();
   if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return result;
   const base = result as { mods: Array<Record<string, unknown>> };
-  const prefs = await readModPreferences(server);
+  const snapshot = services.modPreferencesRepository.snapshot(server.id);
+  const prefs = normalizeModPreferences(snapshot.preferences);
+  if (options.cachedMetadataOnly) {
+    return { ...base, mods: base.mods.map((mod) => {
+      const preference = prefs[String(mod.filename)];
+      const metadata = preference?.modrinth ?? remoteModMetadata(mod.modrinth);
+      return { ...mod, preferredChannel: normalizeReleaseChannel(preference?.channel),
+        modrinth: metadata, compatibility: installedModCompatibility(server, metadata ?? undefined) };
+    }) };
+  }
   const hashes = Array.from(new Set(base.mods.map((mod) => typeof mod.sha1 === "string" ? mod.sha1 : undefined).filter((hash): hash is string => Boolean(hash))));
   let versions = new Map<string, ModrinthVersion>();
   let projects = new Map<string, ModrinthProject>();
@@ -486,7 +501,7 @@ async function reconcileRemoteInstalledMods(server: ManagedServer, result: unkno
     checked += 1;
     options.onProgress?.({ checked, total: base.mods.length });
   })));
-  if (prefsModified) await writeModPreferences(server, prefs);
+  if (prefsModified && !options.signal?.aborted) services.modPreferencesRepository.replaceAllIfUnchanged(server.id, normalizeModPreferences(prefs), snapshot.revision);
   return { ...base, mods };
 }
 
@@ -543,9 +558,11 @@ export async function enrichInstalledModDependencies(result: unknown, options: {
 }
 
 export async function listModsWithPanelMetadata(server: ManagedServer, options: ModListOptions = {}) {
-  const requestKey = `${server.id}|${options.forceRefresh === true}`;
+  options = { ...options, cachedMetadataOnly: options.cachedMetadataOnly ?? options.forceRefresh !== true };
+  options.signal?.throwIfAborted();
+  const requestKey = `${server.id}|${options.forceRefresh === true}|${options.cachedMetadataOnly === true}`;
   const pending = modListRequests.get(requestKey);
-  if (pending) {
+  if (pending && !pending.signal?.aborted) {
     if (options.onProgress) {
       pending.listeners.add(options.onProgress);
       if (pending.progress) options.onProgress(pending.progress);
@@ -555,7 +572,7 @@ export async function listModsWithPanelMetadata(server: ManagedServer, options: 
   const runtime = runtimeForServer(server);
   const listeners = new Set<NonNullable<ModListOptions["onProgress"]>>();
   if (options.onProgress) listeners.add(options.onProgress);
-  const requestState: ModListRequest = { promise: Promise.resolve(undefined), listeners };
+  const requestState: ModListRequest = { promise: Promise.resolve(undefined), listeners, signal: options.signal };
   const reportProgress = (progress: { checked: number; total: number }) => {
     requestState.progress = progress;
     for (const listener of listeners) listener(progress);
@@ -564,7 +581,7 @@ export async function listModsWithPanelMetadata(server: ManagedServer, options: 
   // Local listing already resolves updates. Only remote results need panel enrichment.
   const request = runtime.listMods(server, requestOptions)
     .then((result) => runtime instanceof RemoteNodeRuntime ? reconcileRemoteInstalledMods(server, result, requestOptions) : result)
-    .finally(() => modListRequests.delete(requestKey));
+    .finally(() => { if (modListRequests.get(requestKey) === requestState) modListRequests.delete(requestKey); });
   requestState.promise = request;
   modListRequests.set(requestKey, requestState);
   return request;
@@ -575,7 +592,9 @@ export async function localListMods(server: ManagedServer, options: ModListOptio
   await mkdir(ensureInsideServer(server, directory), { recursive: true });
   const modsDir = await validateExistingInsideServer(server, directory);
   const entries = await readdir(modsDir, { withFileTypes: true });
-  const prefs = await readModPreferences(server);
+  options.signal?.throwIfAborted();
+  const snapshot = services.modPreferencesRepository.snapshot(server.id);
+  const prefs = normalizeModPreferences(snapshot.preferences);
   let prefsModified = false;
 
   const modEntries = entries
@@ -583,53 +602,57 @@ export async function localListMods(server: ManagedServer, options: ModListOptio
     .sort((a, b) => a.name.localeCompare(b.name));
   let checked = 0;
   options.onProgress?.({ checked, total: modEntries.length });
+  const prepared = await Promise.all(modEntries.map(async (entry) => {
+    const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
+    const modStat = await stat(modPath);
+    const sha1 = await localModHashCache.sha1(`${server.id}:${entry.name}`, modStat.size, modStat.mtimeMs, () => readFile(modPath));
+    return { entry, modPath, modStat, sha1 };
+  }));
+  let identified = new Map<string, ModrinthVersion>();
+  let projects = new Map<string, ModrinthProject>();
+  if (options.forceRefresh) {
+    const missingHashes = [...new Set(prepared.filter(({ entry }) => !prefs[entry.name]?.modrinth).map(({ sha1 }) => sha1))];
+    try {
+      identified = await batchVersionsFromSha1(missingHashes);
+      projects = await fetchProjects([...identified.values()].map((version) => version.project_id ?? ""));
+    } catch (error) {
+      logWarn({ ...serverLogFields(server), hashCount: missingHashes.length, action: "local_mod_metadata_reconcile", ...errorLogFields(error) }, "Local mod metadata refresh failed; retaining last-known metadata");
+    }
+  }
   const mods = await Promise.all(
-    modEntries
-      .map((entry) => withProgress((async () => {
-        const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
-        const modStat = await stat(modPath);
-        const sha1 = await localModHashCache.sha1(`${server.id}:${entry.name}`, modStat.size, modStat.mtimeMs, () => readFile(modPath));
+    prepared
+      .map(({ entry, modPath, modStat, sha1 }) => withProgress((async () => {
         const preferredChannel = normalizeReleaseChannel(prefs[entry.name]?.channel);
         let metadata = prefs[entry.name]?.modrinth;
 
         if (!metadata && options.forceRefresh) {
-          try {
-            const currentRes = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${sha1}?algorithm=sha1`);
-            if (currentRes.ok) {
-              const current = await currentRes.json() as any;
-              if (current && current.project_id) {
-                const project = await fetchProject(current.project_id);
-                metadata = {
-                  projectId: current.project_id,
-                  versionId: current.id,
-                  filename: entry.name,
-                  versionNumber: current.version_number,
-                  versionType: normalizeReleaseChannel(current.version_type),
-                  gameVersions: current.game_versions,
-                  loaders: current.loaders,
-                  hashes: current.files?.find((f: any) => f.hashes?.sha1 === sha1 || f.primary)?.hashes || { sha1 },
-                  installedAt: new Date().toISOString(),
-                  installedWithForceIncompatible: false,
-                  clientSide: project.client_side,
-                  serverSide: project.server_side
-                };
-                prefs[entry.name] = {
-                  ...(prefs[entry.name] || {}),
-                  channel: preferredChannel,
-                  modrinth: metadata
-                };
-                prefsModified = true;
-              }
-            }
-          } catch {
-            // Ignore backfill failures
+          const current = identified.get(sha1);
+          if (current?.project_id) {
+            const project = projects.get(current.project_id);
+            metadata = {
+              projectId: current.project_id,
+              versionId: current.id,
+              filename: entry.name,
+              versionNumber: current.version_number,
+              versionType: normalizeReleaseChannel(current.version_type),
+              gameVersions: current.game_versions,
+              loaders: current.loaders,
+              hashes: current.files?.find((file) => file.hashes?.sha1 === sha1 || file.primary)?.hashes || { sha1 },
+              installedAt: new Date().toISOString(),
+              installedWithForceIncompatible: false,
+              clientSide: project?.client_side,
+              serverSide: project?.server_side
+            };
+            prefs[entry.name] = { ...(prefs[entry.name] || {}), channel: preferredChannel, modrinth: metadata };
+            prefsModified = true;
           }
         }
 
-        const iconUrl = await ensureModrinthIconForFile(server, entry.name, modPath, metadata);
+        const iconUrl = options.cachedMetadataOnly ? metadata?.iconUrl
+          : await ensureModrinthIconForFile(server, entry.name, modPath, metadata, { skipIdentification: options.forceRefresh });
         let versionInfo: any = null;
         if (options.forceRefresh) {
-          try { versionInfo = await lookupModrinthUpdate(server, modPath, preferredChannel, metadata, options); } catch { versionInfo = null; }
+          try { versionInfo = metadata ? await lookupModrinthUpdateFromMetadata(server, metadata, preferredChannel, options) : null; } catch { versionInfo = null; }
         }
         return {
           filename: entry.name,
@@ -650,8 +673,8 @@ export async function localListMods(server: ManagedServer, options: ModListOptio
       }))
   );
 
-  if (prefsModified) {
-    await writeModPreferences(server, prefs);
+  if (prefsModified && !options.signal?.aborted) {
+    services.modPreferencesRepository.replaceAllIfUnchanged(server.id, normalizeModPreferences(prefs), snapshot.revision);
   }
 
   return { mods };
@@ -861,9 +884,27 @@ export function modsFromListResult(result: unknown) {
   return (result as { mods: Array<Record<string, unknown>> }).mods;
 }
 
-export async function buildModUpdatePlan(server: ManagedServer, options: ModListOptions & { channel?: ReleaseChannel } = {}): Promise<ModUpdatePlan> {
-  const listed = await listModsWithPanelMetadata(server, { forceRefresh: options.forceRefresh, onProgress: options.onProgress });
+export async function buildModUpdatePlan(server: ManagedServer, options: ModListOptions & { channel?: ReleaseChannel; includeInstalled?: boolean } = {}): Promise<ModUpdateScan> {
+  const cachedMetadataOnly = options.includeInstalled === true && options.forceRefresh !== true;
+  const listed = await listModsWithPanelMetadata(server, { ...options, cachedMetadataOnly });
   let mods = modsFromListResult(listed);
+  if (cachedMetadataOnly) {
+    const previous = services.modUpdatePlanCoordinator?.getInstalled(server.id)?.mods ?? [];
+    const previousPlan = services.modUpdatePlanCoordinator?.get(server.id);
+    const byFileHash = new Map(previous.filter((mod) => mod.sha1).map((mod) => [
+      `${String(mod.filename).replace(/\.disabled$/, "")}:${mod.sha1}`, mod
+    ]));
+    mods = mods.map((mod) => {
+      const prior = byFileHash.get(`${String(mod.filename).replace(/\.disabled$/, "")}:${mod.sha1}`);
+      if (prior) return { ...prior, ...mod, iconUrl: mod.iconUrl ?? prior.iconUrl, versionInfo: prior.versionInfo };
+      const metadata = remoteModMetadata(mod.modrinth);
+      const entry = !previous.length ? previousPlan?.updates.find((entry) => entry.filename === mod.filename
+        && entry.projectId === metadata?.projectId && entry.currentVersion === metadata?.versionNumber)
+        : undefined;
+      return entry ? { ...mod, versionInfo: { currentVersion: entry.currentVersion, latestVersion: entry.targetVersion,
+        latestFilename: entry.targetFilename, upToDate: entry.status === "up_to_date" } } : mod;
+    });
+  }
   if (options.channel) {
     mods = await Promise.all(mods.map(async (mod) => {
       const metadata = remoteModMetadata(mod.modrinth);
@@ -876,7 +917,11 @@ export async function buildModUpdatePlan(server: ManagedServer, options: ModList
       }
     }));
   }
-  return createModUpdatePlan(server.id, mods);
+  const plan = createModUpdatePlan(server.id, mods);
+  if (!options.includeInstalled) return plan;
+  const enriched = options.forceRefresh ? await enrichInstalledModDependencies({ mods }, { fetchMetadata: true }) : { mods };
+  options.signal?.throwIfAborted();
+  return { ...plan, installedMods: { mods: modsFromListResult(enriched), scannedAt: plan.generatedAt } };
 }
 
 export async function updateModrinthMod(server: ManagedServer, input: unknown) {
@@ -1122,6 +1167,7 @@ export async function acknowledgeInstalledModReview(server: ManagedServer, input
   };
   await writeModPreferences(server, prefs);
   logInfo({ ...serverLogFields(server), filename, projectId: metadata.projectId, versionId: metadata.versionId, action: "acknowledge_mod_review", status: "succeeded" }, "Mod review acknowledged");
+  await refreshCachedModInventory(server);
   return { ok: true, filename, reviewAcknowledgedVersionId: metadata.versionId, reviewAcknowledgedAt: acknowledgedAt };
 }
 

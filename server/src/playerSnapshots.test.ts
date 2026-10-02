@@ -43,6 +43,36 @@ function coordinator(read: () => Promise<PlayerObservation>, now: () => number) 
 }
 
 describe("player snapshot coordinator", () => {
+  it("starts a fresh collection after invalidation without letting the old completion clear it", async () => {
+    const releases: Array<(value: PlayerObservation) => void> = [];
+    const read = vi.fn(() => new Promise<PlayerObservation>((resolve) => { releases.push(resolve); }));
+    const snapshots = coordinator(read, () => Date.now());
+    const older = snapshots.collect(server);
+    snapshots.invalidate(server.id);
+    const newer = snapshots.collect(server);
+    expect(read).toHaveBeenCalledTimes(2);
+    releases[0](live(new Date().toISOString(), "old-instance"));
+    await expect(older).resolves.toMatchObject({ state: "unavailable" });
+    expect(snapshots.collect(server)).toBe(newer);
+    releases[1](live(new Date().toISOString(), "new-instance"));
+    await expect(newer).resolves.toMatchObject({ state: "live" });
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+  it.each(["stop", "delete"])("discards pending player snapshots after %s", async (action) => {
+    let release!: (value: PlayerObservation) => void;
+    const pending = new Promise<PlayerObservation>((resolve) => { release = resolve; });
+    let active = true;
+    const snapshots = new PlayerSnapshotCoordinator({
+      pollMs: 10_000, staleMs: 60_000, readServers: async () => [server], isServerActive: () => active,
+      runtimeForServer: () => ({ readPlayerObservation: () => pending }) as unknown as NodeRuntime
+    });
+    const collection = snapshots.collect(server);
+    if (action === "stop") snapshots.stop();
+    else active = false;
+    release(live(new Date().toISOString()));
+    await expect(collection).resolves.toMatchObject({ state: "unavailable" });
+    expect(snapshots.latest(server.id)).toBeUndefined();
+  });
   it("preserves one complete snapshot through a bounded transient failure", async () => {
     let timestamp = Date.parse("2026-07-16T12:00:00.000Z");
     const observations: PlayerObservation[] = [

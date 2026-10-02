@@ -43,6 +43,7 @@ function authContext(demoEnabled: boolean, permissionGranted = false) {
     },
     users: {
       list: () => users,
+      findById: (id: string) => users.find((user) => user.id === id),
       createFirst(user: StoredUser) { users.push(user); },
       create(user: StoredUser) { users.push(user); },
       updateById(id: string, updater: (user: StoredUser) => StoredUser) {
@@ -75,8 +76,8 @@ function authContext(demoEnabled: boolean, permissionGranted = false) {
     validatePassword: (password?: string) => password || "password",
     normalizeRolePreset: (rolePreset?: unknown) => rolePreset as RolePreset | undefined,
     buildUserPermissions: () => ({ rolePreset: "admin" as RolePreset, permissions: [] as Permission[] }),
-    hashPassword: () => ({ salt: "salt", passwordHash: "hash" }),
-    verifyPassword: (password: string, user: StoredUser) => demoEnabled && user.username === "demo" && password === "demo",
+    hashPassword: async () => ({ salt: "salt", passwordHash: "hash" }),
+    verifyPassword: async (password: string, user: StoredUser) => demoEnabled && user.username === "demo" && password === "demo",
     publicUser: (user: StoredUser): PublicUser => ({
       id: user.id,
       username: user.username,
@@ -185,6 +186,66 @@ describe("auth demo login", () => {
     });
     expect(context.calls.sessions).toHaveLength(1);
     expect(response.headers["set-cookie"]).toContain("ss=");
+  });
+
+  it("serves session checks while password verification waits and rejects credentials reset during that wait", async () => {
+    const app = Fastify();
+    const context = authContext(true);
+    const started = Promise.withResolvers<void>();
+    const verification = Promise.withResolvers<boolean>();
+    context.verifyPassword = async () => {
+      started.resolve();
+      return verification.promise;
+    };
+    registerAuthRoutes(app, context);
+    try {
+      const login = app.inject({ method: "POST", url: "/api/auth/login", payload: { username: "demo", password: "demo" } }).then((response) => response);
+      await started.promise;
+      const session = await app.inject({ method: "GET", url: "/api/auth/session" });
+      expect(session.statusCode).toBe(200);
+      expect(context.calls.sessions).toHaveLength(0);
+      context.users.updateById("demo-user", (user) => ({ ...user, passwordHash: "reset-hash" }));
+      verification.resolve(true);
+      expect((await login).statusCode).toBe(401);
+      expect(context.calls.sessions).toHaveLength(0);
+    } finally {
+      verification.resolve(false);
+      await app.close();
+    }
+  });
+
+  it("does not recreate a session for an account deleted during password verification", async () => {
+    const app = Fastify();
+    const context = authContext(true);
+    context.verifyPassword = async () => {
+      context.users.delete("demo-user");
+      return true;
+    };
+    registerAuthRoutes(app, context);
+    try {
+      const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: "demo", password: "demo" } });
+      expect(login.statusCode).toBe(401);
+      expect(context.calls.sessions).toHaveLength(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns updated permissions when they change during password verification", async () => {
+    const app = Fastify();
+    const context = authContext(true);
+    context.verifyPassword = async () => {
+      context.users.updateById("demo-user", (user) => ({ ...user, permissions: ["servers.view"] }));
+      return true;
+    };
+    registerAuthRoutes(app, context);
+    try {
+      const login = await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: "demo", password: "demo" } });
+      expect(login.statusCode).toBe(200);
+      expect(login.json().user.permissions).toEqual(["servers.view"]);
+    } finally {
+      await app.close();
+    }
   });
 
   it("prunes expired sessions when checking the current auth session", async () => {

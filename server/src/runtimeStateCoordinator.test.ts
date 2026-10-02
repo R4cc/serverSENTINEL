@@ -33,6 +33,49 @@ afterEach(() => {
 });
 
 describe("RuntimeStateCoordinator", () => {
+  it.each(["stop", "shutdown", "delete"])("discards a due recovery when %s supersedes its pending status", async (action) => {
+    const managed = { ...server("running"), crashNextRetryAt: new Date(0).toISOString() };
+    let release!: (value: ReturnType<typeof status>) => void;
+    const pending = new Promise<ReturnType<typeof status>>((resolve) => { release = resolve; });
+    const restoreServer = vi.fn(async () => status(true));
+    const setLifecycle = vi.fn();
+    let active = true;
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [{ ...managed }], isServerActive: () => active,
+      serverStatus: () => pending, connectionEpoch: async () => "local",
+      restoreServer, setLifecycle, setRuntimeIntent: vi.fn()
+    });
+    const poll = coordinator.poll();
+    await Promise.resolve();
+    if (action === "stop") coordinator.noteStopped(managed.id);
+    else if (action === "shutdown") coordinator.stop();
+    else active = false;
+    release(status(false));
+    await poll;
+    expect(restoreServer).not.toHaveBeenCalled();
+    expect(setLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("does not persist recovery failure after shutdown", async () => {
+    const managed = { ...server("running"), crashNextRetryAt: new Date(0).toISOString() };
+    let reject!: (error: Error) => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const recovery = new Promise<never>((_resolve, rejectPromise) => { reject = rejectPromise; });
+    const setLifecycle = vi.fn();
+    const coordinator = new RuntimeStateCoordinator({
+      readServers: async () => [managed], serverStatus: async () => status(false),
+      connectionEpoch: async () => "local", restoreServer: () => { entered(); return recovery; },
+      setLifecycle, setRuntimeIntent: vi.fn()
+    });
+    const poll = coordinator.poll();
+    await started;
+    setLifecycle.mockClear();
+    coordinator.stop();
+    reject(new Error("start failed"));
+    await poll;
+    expect(setLifecycle).not.toHaveBeenCalled();
+  });
   it("treats a missing but recreatable container as authoritatively stopped", () => {
     expect(__runtimeStateCoordinatorTestHooks.authoritativeStatus({
       docker: {

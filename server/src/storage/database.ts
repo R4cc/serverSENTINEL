@@ -381,7 +381,6 @@ function migrateSchema20(database: Database.Database) {
       ALTER TABLE managed_ports_next RENAME TO managed_ports;
       CREATE INDEX managed_ports_server_id_idx ON managed_ports(server_id);
     `);
-    recordCurrentSchema(database);
   }).immediate();
 }
 
@@ -403,7 +402,6 @@ function migrateSchema21(database: Database.Database) {
       );
       CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
     `);
-    recordCurrentSchema(database);
   }).immediate();
 }
 
@@ -437,7 +435,6 @@ function migrateSchema22(database: Database.Database) {
       ALTER TABLE player_geo_locations_next RENAME TO player_geo_locations;
       CREATE INDEX player_geo_locations_last_seen_idx ON player_geo_locations(server_id, last_seen_at);
     `);
-    recordCurrentSchema(database);
   }).immediate();
 }
 
@@ -449,7 +446,6 @@ function migrateSchema23(database: Database.Database) {
       ALTER TABLE player_geo_locations ADD COLUMN last_ping_samples INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE player_geo_locations ADD COLUMN last_ping_at INTEGER;
     `);
-    recordCurrentSchema(database);
   }).immediate();
 }
 
@@ -496,15 +492,17 @@ function initializeSchema(database: Database.Database) {
   // still passes through every migration between it and the current baseline.
   const baseline = history.length === 1 && history[0].name === currentSchemaName ? history[0].version : undefined;
   if (baseline !== undefined && baseline >= oldestSupportedSchemaVersion && baseline < currentSchemaVersion) {
-    if (baseline <= 20) migrateSchema20(database);
-    if (baseline <= 21) migrateSchema21(database);
-    if (baseline <= 22) migrateSchema22(database);
-    if (baseline <= 23) migrateSchema23(database);
-    if (baseline <= 24) database.transaction(() => {
-      createModHistoryTable(database);
+    // Keep skipped-release upgrades atomic. The nested migration transactions use savepoints;
+    // their schema changes cannot commit before the entire layout passes and the final marker is set.
+    database.transaction(() => {
+      if (baseline <= 20) migrateSchema20(database);
+      if (baseline <= 21) migrateSchema21(database);
+      if (baseline <= 22) migrateSchema22(database);
+      if (baseline <= 23) migrateSchema23(database);
+      if (baseline <= 24) createModHistoryTable(database);
+      assertCurrentSchemaLayout(database);
       recordCurrentSchema(database);
     }).immediate();
-    assertCurrentSchemaLayout(database);
     return;
   }
 

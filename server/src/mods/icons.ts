@@ -274,14 +274,14 @@ export async function fetchModrinthIcon(iconUrl: unknown) {
 const unknownModrinthJarHashes = new Set<string>();
 const unknownModrinthJarHashLimit = 2_000;
 
-export async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string, metadata?: InstalledModMetadata) {
+export async function ensureModrinthIconForFile(server: ManagedServer, filename: string, filePath: string, metadata?: InstalledModMetadata, options: { skipIdentification?: boolean } = {}) {
   const cached = await modIconUrl(server, filename);
   if (cached) return cached;
   try {
     if (metadata?.projectId) {
       const project = await fetchProject(metadata.projectId);
       await saveModIcon(server, filename, project.icon_url);
-    } else {
+    } else if (!options.skipIdentification) {
       const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
       const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
       if (unknownModrinthJarHashes.has(hash)) return undefined;

@@ -127,6 +127,11 @@ export class FileEditLeasesRepository {
     return this.storage.connection.prepare("DELETE FROM file_edit_leases WHERE expires_at <= ?").run(now).changes;
   }
 
+  findForServer(leaseId: string, serverId: string) {
+    const lease = this.findById(leaseId);
+    return lease?.serverId === serverId ? lease : undefined;
+  }
+
   private findById(leaseId: string) {
     const row = this.storage.connection.prepare<[string], LeaseRow>("SELECT * FROM file_edit_leases WHERE lease_id = ?").get(leaseId);
     return row ? leaseFromRow(row) : undefined;

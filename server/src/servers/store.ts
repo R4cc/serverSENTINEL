@@ -249,6 +249,10 @@ export function listManagedServers() {
   return readServers();
 }
 
+export async function listRuntimeServers() {
+  return services.serversRepository.listForRuntime();
+}
+
 export async function getServer(serverId?: string) {
   if (serverId !== undefined) {
     validateServerId(serverId);

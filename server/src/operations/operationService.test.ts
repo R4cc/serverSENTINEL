@@ -17,6 +17,33 @@ function repository() {
 }
 
 describe("OperationService", () => {
+  it("drains delayed foreground and queued result writes before storage can close", async () => {
+    const { value } = repository();
+    const service = new OperationService(value as never, { markRestartRequired: vi.fn(), clearRestartRequired: vi.fn(), errorDetails: String });
+    let finishForeground!: () => void;
+    let finishQueued!: () => void;
+    let finishCleanup!: () => void;
+    const foreground = service.run({ type: "server.start", task: "Starting" },
+      () => new Promise<void>((resolve) => { finishForeground = resolve; }));
+    const cleanup = new Promise<void>((resolve) => { finishCleanup = resolve; });
+    service.enqueue({ type: "export.run", task: "Exporting", failureTask: "Failed", failureFallback: "Failed",
+      onSettled: () => cleanup }, () => new Promise<void>((resolve) => { finishQueued = resolve; }));
+    const drained = vi.fn();
+    const drain = service.drain().then(drained);
+    await Promise.resolve();
+    expect(drained).not.toHaveBeenCalled();
+    finishForeground();
+    await foreground;
+    expect(value.succeed).toHaveBeenCalledTimes(1);
+    expect(drained).not.toHaveBeenCalled();
+    finishQueued();
+    await vi.waitFor(() => expect(value.succeed).toHaveBeenCalledTimes(2));
+    expect(drained).not.toHaveBeenCalled();
+    finishCleanup();
+    await drain;
+    expect(drained).toHaveBeenCalledOnce();
+  });
+
   it("runs foreground operations through one lifecycle", async () => {
     const { value } = repository();
     const mark = vi.fn();

@@ -31,6 +31,25 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("managed content request counts", () => {
+  it("starts a new scan after cancellation and preserves its coalescing slot when the old scan finishes", async () => {
+    let finishOld!: (result: { mods: typeof mods }) => void;
+    let finishNew!: (result: { mods: typeof mods }) => void;
+    listMods.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { finishNew = resolve; }));
+    const controller = new AbortController();
+    const old = listModsWithPanelMetadata(server, { forceRefresh: true, signal: controller.signal });
+    controller.abort();
+    const current = listModsWithPanelMetadata(server, { forceRefresh: true, signal: new AbortController().signal });
+    expect(listMods).toHaveBeenCalledTimes(2);
+    finishOld({ mods: [] });
+    await old;
+    const joined = listModsWithPanelMetadata(server, { forceRefresh: true });
+    expect(listMods).toHaveBeenCalledTimes(2);
+    finishNew({ mods });
+    expect(await current).toEqual({ mods });
+    expect(await joined).toEqual({ mods });
+  });
+
   it("shares concurrent local scans without repeating their metadata enrichment", async () => {
     const results = await Promise.all([
       listModsWithPanelMetadata(server, { forceRefresh: true }),

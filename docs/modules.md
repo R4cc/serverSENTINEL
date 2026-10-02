@@ -22,6 +22,19 @@ startup and on the same tick. For five servers without saved plans, the next sca
 while a new scan runs, and reused after a panel restart until it is due. Idle browser polling reads
 that saved plan and does not start another upstream scan.
 
+The installed list is persisted with the plan in the same transaction. Opening the site or the
+Mods/Plugins page reads these snapshots; it does not list or hash jars or query Modrinth. The browser
+preloads cached rows for the selected server and keeps them across navigation. **Check updates**
+starts one explicit scan and then reads its saved inventory. When no inventory exists yet, the
+background worker warms it from the runtime and saved metadata without an upstream lookup, so
+inventory loading does not wait for every server's staggered Modrinth turn. Panel mutations refresh
+the cached inventory and reuse known update metadata without resetting the scheduled check's age.
+Changes made outside the panel appear after the next background or manual check.
+
+Failed scans keep the last successful plan and take their turn in the same rotation as healthy
+servers. Retry eligibility backs off through five, ten, twenty, and thirty minutes, without bypassing
+the fleet's normal scan spacing. An offline server cannot hold up another server's due check.
+
 Modrinth API calls, including retries and manual actions, share a process-wide queue with starts
 spaced at least 300 ms apart (about 200 requests per minute). Rate-limit responses pause the queue.
 CDN downloads do not consume this API allowance. Other panel processes and applications sharing
@@ -32,6 +45,10 @@ for one minute even during explicit refreshes. Updating or switching a mod check
 first checking every other installed mod. Explicit browser refreshes allow five minutes for large
 queued scans; the previous plan stays visible until that refresh succeeds, and ordinary cached reads
 retain their normal timeout. Manual checks report completed and total mod/plugin counts while running.
+
+Local and remote metadata identification batch up to 100 file hashes per request. Enrichment only
+persists when the saved preferences have not changed during the scan, so installs, removals, and
+version/channel changes made while a check is pending remain authoritative.
 
 ## The two gates
 

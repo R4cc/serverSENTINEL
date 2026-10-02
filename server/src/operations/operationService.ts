@@ -42,12 +42,29 @@ function operationErrorMessage(error: unknown, fallback: string) {
 }
 
 export class OperationService {
+  private readonly inFlight = new Set<Promise<unknown>>();
+
   constructor(
     private readonly operations: OperationsRepository,
     private readonly context: OperationServiceContext
   ) {}
 
-  async run<T>(input: ForegroundOperationInput<T>, action: (operation: OperationRecord) => Promise<T>) {
+  run<T>(input: ForegroundOperationInput<T>, action: (operation: OperationRecord) => Promise<T>) {
+    return this.track(this.runOnce(input, action));
+  }
+
+  /** Complete durable result writes before the application closes its storage handle. */
+  async drain() {
+    while (this.inFlight.size) await Promise.allSettled([...this.inFlight]);
+  }
+
+  private track<T>(request: Promise<T>) {
+    this.inFlight.add(request);
+    void request.then(() => this.inFlight.delete(request), () => this.inFlight.delete(request));
+    return request;
+  }
+
+  private async runOnce<T>(input: ForegroundOperationInput<T>, action: (operation: OperationRecord) => Promise<T>) {
     const operation = this.start(input, 5);
     try {
       const value = await action(operation);
@@ -69,7 +86,7 @@ export class OperationService {
   ) {
     const operation = this.start(input, input.runningProgress ?? input.initialProgress ?? 0, input.initialProgress ?? 0);
     input.onStarted?.(operation);
-    void action(operation, (progress, task) => this.operations.update(operation.id, { progress, task }))
+    this.track(action(operation, (progress, task) => this.operations.update(operation.id, { progress, task }))
       .then((value) => this.succeed(operation, input, value))
       .catch((error: unknown) => {
         if (input.isCancellationError?.(error)) {
@@ -79,7 +96,7 @@ export class OperationService {
         input.onError?.(error, operation);
         this.fail(operation, error, input.failureTask, input.failureFallback);
       })
-      .finally(async () => input.onSettled?.(this.operations.find(operation.id) ?? operation));
+      .finally(async () => input.onSettled?.(this.operations.find(operation.id) ?? operation)));
     return operation;
   }
 

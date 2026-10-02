@@ -18,16 +18,18 @@ export function createScheduleModuleRuntime(deps: {
   const intervalMs = deps.intervalMs ?? schedulePollIntervalMs;
   let timer: NodeJS.Timeout | undefined;
   let stopped = true;
+  let generation = 0;
 
-  function scheduleNextTick() {
+  function scheduleNextTick(epoch: number) {
     timer = setTimeout(async () => {
+      if (stopped || epoch !== generation) return;
       timer = undefined;
       try {
         await deps.tick();
       } catch (error: unknown) {
         deps.onError(error);
       } finally {
-        if (!stopped) scheduleNextTick();
+        if (!stopped && epoch === generation) scheduleNextTick(epoch);
       }
     }, intervalMs);
     timer.unref();
@@ -37,10 +39,11 @@ export function createScheduleModuleRuntime(deps: {
     start() {
       if (!stopped) return;
       stopped = false;
-      scheduleNextTick();
+      scheduleNextTick(++generation);
     },
     stop() {
       stopped = true;
+      generation += 1;
       if (timer) clearTimeout(timer);
       timer = undefined;
     }

@@ -1358,14 +1358,25 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   const result: ServerObservationResultItem = { serverId: server.id };
   const errors: ServerObservationResultItem["errors"] = {};
   const needsInspect = sections.has("status") || sections.has("stats") || sections.has("players");
-  const details = needsInspect ? await inspectOrMissing(server) : undefined;
+  let details: NodeContainerInspect | null | undefined;
+  let inspectionFailed = false;
+  if (needsInspect) {
+    try {
+      details = await inspectOrMissing(server);
+    } catch (error) {
+      inspectionFailed = true;
+      for (const section of ["status", "stats", "players"] as const) {
+        if (sections.has(section)) errors[section] = observationError(error);
+      }
+    }
+  }
   const tasks: Promise<void>[] = [];
   const run = (section: ServerObservationSection, operation: () => Promise<unknown>, assign: (value: any) => void) => {
     tasks.push(operation().then(assign).catch((error) => { errors[section] = observationError(error); }));
   };
-  if (sections.has("status")) run("status", () => runtimeStatus(server, details), (value) => { result.status = value; });
-  if (sections.has("stats")) run("stats", () => resourceStats(server, details), (value) => { result.stats = value; });
-  if (sections.has("players")) run("players", () => playerObservation(server, details), (value) => { result.players = value; });
+  if (!inspectionFailed && sections.has("status")) run("status", () => runtimeStatus(server, details), (value) => { result.status = value; });
+  if (!inspectionFailed && sections.has("stats")) run("stats", () => resourceStats(server, details), (value) => { result.stats = value; });
+  if (!inspectionFailed && sections.has("players")) run("players", () => playerObservation(server, details), (value) => { result.players = value; });
   if (sections.has("logs")) run("logs", () => readServerLogDelta(server, item.logCursor), (value) => { result.logs = value; });
   if (sections.has("overviewFiles")) run("overviewFiles", async () => ({
     properties: await readFile(await inside(server, "server.properties", false), "utf8").catch(() => ""),
@@ -1384,7 +1395,14 @@ async function observeServers(payload: unknown): Promise<ServerObservationRespon
     while (nextIndex < normalized.length) {
       const index = nextIndex;
       nextIndex += 1;
-      results[index] = await observeServer(normalized[index]);
+      try {
+        results[index] = await observeServer(normalized[index]);
+      } catch (error) {
+        results[index] = {
+          serverId: normalized[index].server.id,
+          errors: Object.fromEntries(normalized[index].sections.map((section) => [section, observationError(error)]))
+        };
+      }
     }
   }));
   return { observedAt: new Date().toISOString(), items: results };

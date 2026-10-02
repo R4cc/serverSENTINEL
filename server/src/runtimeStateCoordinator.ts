@@ -19,12 +19,14 @@ type RuntimeObservation = {
   pendingExitAt?: number;
   explicitObservation: boolean;
   inFlight: boolean;
+  generation: number;
 };
 
 type RuntimeStateCoordinatorOptions = {
   pollMs?: number;
   exitConfirmationMs?: number;
   readServers: () => Promise<ManagedServer[]>;
+  isServerActive?: (serverId: string) => boolean;
   serverStatus: (server: ManagedServer) => Promise<unknown>;
   connectionEpoch: (server: ManagedServer) => Promise<string>;
   canRestore?: (server: ManagedServer) => boolean;
@@ -68,6 +70,7 @@ export class RuntimeStateCoordinator {
   private readonly observations = new Map<string, RuntimeObservation>();
   private interval?: NodeJS.Timeout;
   private closed = false;
+  private revision = 0;
 
   constructor(private readonly options: RuntimeStateCoordinatorOptions) {
     this.pollMs = options.pollMs ?? 5_000;
@@ -88,7 +91,16 @@ export class RuntimeStateCoordinator {
     this.observations.clear();
   }
 
+  invalidate(serverId: string) {
+    if (this.closed) return;
+    // A user action owns the next intent even if an earlier poll still awaits its status.
+    this.revision += 1;
+    this.observation(serverId).generation += 1;
+  }
+
   noteRunning(serverId: string) {
+    if (this.closed) return;
+    this.invalidate(serverId);
     const observation = this.observation(serverId);
     observation.observedRunning = true;
     observation.restoreAttempted = true;
@@ -98,6 +110,8 @@ export class RuntimeStateCoordinator {
   }
 
   noteStopped(serverId: string) {
+    if (this.closed) return;
+    this.invalidate(serverId);
     const observation = this.observation(serverId);
     observation.observedRunning = false;
     observation.restoreAttempted = true;
@@ -107,6 +121,7 @@ export class RuntimeStateCoordinator {
 
   async poll() {
     if (this.closed) return;
+    const revision = this.revision;
     let servers: ManagedServer[];
     try {
       servers = await this.options.readServers();
@@ -114,6 +129,7 @@ export class RuntimeStateCoordinator {
       this.options.onError?.(error);
       return;
     }
+    if (this.closed || revision !== this.revision) return;
     const activeIds = new Set(servers.map((server) => server.id));
     for (const id of this.observations.keys()) {
       if (!activeIds.has(id)) this.observations.delete(id);
@@ -129,7 +145,8 @@ export class RuntimeStateCoordinator {
       observedRunning: false,
       restoreAttempted: false,
       explicitObservation: false,
-      inFlight: false
+      inFlight: false,
+      generation: 0
     };
     this.observations.set(serverId, created);
     return created;
@@ -139,9 +156,13 @@ export class RuntimeStateCoordinator {
     const observation = this.observation(server.id);
     if (observation.inFlight) return;
     observation.inFlight = true;
+    const generation = observation.generation;
+    const current = () => !this.closed && observation.generation === generation
+      && this.observations.get(server.id) === observation && this.options.isServerActive?.(server.id) !== false;
     try {
-      await this.reconcile(server, observation);
+      await this.reconcile(server, observation, current);
     } catch (error) {
+      if (!current()) return;
       observation.unavailable = true;
       observation.pendingExitAt = undefined;
       this.options.onError?.(error, server);
@@ -150,11 +171,12 @@ export class RuntimeStateCoordinator {
     }
   }
 
-  private async reconcile(server: ManagedServer, observation: RuntimeObservation) {
+  private async reconcile(server: ManagedServer, observation: RuntimeObservation, current: () => boolean) {
     const [status, epoch] = await Promise.all([
       this.options.serverStatus(server),
       this.options.connectionEpoch(server)
     ]);
+    if (!current()) return;
     const actual = authoritativeStatus(status);
     if (!actual.available || (!actual.running && !actual.stopped)) {
       observation.unavailable = true;
@@ -188,6 +210,7 @@ export class RuntimeStateCoordinator {
         if (server.restartPhase === "stopping" && !observation.restoreAttempted && this.options.restartServer && this.options.canRestore?.(server) !== false) {
           observation.restoreAttempted = true;
           const result = await this.options.restartServer(server);
+          if (!current()) return;
           if (!runningFromStatus(result)) throw new Error("Resumed restart did not remain running");
           this.persistLifecycle(server, { runtimeIntent: "running", restartPhase: undefined, crashStableSince: new Date().toISOString() });
         } else if (server.restartPhase === "starting") {
@@ -201,6 +224,7 @@ export class RuntimeStateCoordinator {
         if (!observation.restoreAttempted && this.options.stopServer && this.options.canRestore?.(server) !== false) {
           observation.restoreAttempted = true;
           await this.options.stopServer(server);
+          if (!current()) return;
         }
         observation.observedRunning = false;
         observation.pendingExitAt = undefined;
@@ -237,6 +261,7 @@ export class RuntimeStateCoordinator {
       if (observation.restoreAttempted || this.options.canRestore?.(server) === false || !this.options.restartServer) return;
       observation.restoreAttempted = true;
       const result = await this.options.restartServer(server);
+      if (!current()) return;
       if (!runningFromStatus(result)) throw new Error("Resumed restart did not remain running");
       this.persistLifecycle(server, { runtimeIntent: "running", restartPhase: undefined, crashStableSince: new Date().toISOString() });
       observation.observedRunning = true;
@@ -250,7 +275,7 @@ export class RuntimeStateCoordinator {
     }
 
     if (server.crashNextRetryAt || (server.crashAttemptTimestamps?.length ?? 0) > 0) {
-      await this.recoverCrash(server, observation);
+      await this.recoverCrash(server, observation, current);
       return;
     }
 
@@ -259,10 +284,12 @@ export class RuntimeStateCoordinator {
       observation.restoreAttempted = true;
       try {
         const result = await this.options.restoreServer(server);
+        if (!current()) return;
         if (!runningFromStatus(result)) throw new Error("Restored Minecraft runtime did not remain running");
         observation.observedRunning = true;
         observation.pendingExitAt = undefined;
       } catch (error) {
+        if (!current()) return;
         this.persistLifecycle(server, { runtimeIntent: "stopped" });
         observation.observedRunning = false;
         this.options.onError?.(error, server);
@@ -299,7 +326,7 @@ export class RuntimeStateCoordinator {
     });
   }
 
-  private async recoverCrash(server: ManagedServer, observation: RuntimeObservation) {
+  private async recoverCrash(server: ManagedServer, observation: RuntimeObservation, current: () => boolean) {
     const attempts = this.recentCrashAttempts(server);
     if (attempts.length >= crashRetryDelaysMs.length && !server.crashNextRetryAt) {
       this.persistLifecycle(server, { crashAttemptTimestamps: attempts, crashLoopSince: new Date().toISOString(), crashStableSince: undefined });
@@ -314,12 +341,14 @@ export class RuntimeStateCoordinator {
     this.persistLifecycle(server, { crashAttemptTimestamps: nextAttempts, crashNextRetryAt: undefined });
     try {
       const result = await this.options.restoreServer(server);
+      if (!current()) return;
       if (!runningFromStatus(result)) throw new Error("Crash recovery did not remain running");
       this.persistLifecycle(server, { crashStableSince: new Date().toISOString() });
       observation.observedRunning = true;
       observation.restoreAttempted = false;
       observation.pendingExitAt = undefined;
     } catch (error) {
+      if (!current()) return;
       if (nextAttempts.length >= crashRetryDelaysMs.length) {
         this.persistLifecycle(server, { crashLoopSince: new Date().toISOString(), crashNextRetryAt: undefined, crashStableSince: undefined });
       } else {

@@ -72,17 +72,17 @@ app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string } }>("/ap
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
-  const options = { forceRefresh: request.query.forceRefresh === "true" };
-  const listed = await listModsWithPanelMetadata(server, options);
-  return publicInstalledModsResult(await enrichInstalledModDependencies(listed, { fetchMetadata: options.forceRefresh }));
+  const coordinator = updatePlanCoordinator();
+  if (request.query.forceRefresh === "true") await coordinator.refresh(server);
+  return publicInstalledModsResult(coordinator.getInstalled(server.id) ?? { mods: [], scannedAt: null });
 });
 
 app.get<{ Params: { id: string }; Querystring: { forceRefresh?: string; channel?: ReleaseChannel } }>("/api/servers/:id/mods/update-plan", async (request) => {
   await requireRequestPermission(request, "mods.view");
   const server = await getServer(request.params.id);
   requireManagedModsRuntime(server);
-  const channel = optionalReleaseChannel(request.query.channel);
-  if (channel) return buildModUpdatePlan(server, { forceRefresh: request.query.forceRefresh === "true", channel });
+  const channel = request.query.channel === undefined ? undefined : optionalReleaseChannel(request.query.channel);
+  if (channel && request.query.forceRefresh === "true") return buildModUpdatePlan(server, { forceRefresh: true, channel });
   if (request.query.forceRefresh === "true") return updatePlanCoordinator().refresh(server);
   return updatePlanCoordinator().get(server.id);
 });
