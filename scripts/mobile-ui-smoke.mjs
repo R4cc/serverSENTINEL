@@ -350,7 +350,9 @@ async function assertPlayerClusterPopupDismisses(page, label) {
   assert(openHelp.left >= openHelp.viewportLeft && openHelp.right <= openHelp.viewportLeft + openHelp.viewportWidth && openHelp.top >= openHelp.viewportTop && openHelp.bottom <= openHelp.viewportTop + openHelp.viewportHeight, `${label}: player geography help leaves the visual viewport: ${JSON.stringify(openHelp)}`);
   assert(Math.abs(openHelp.cardHeight - beforeHelp.cardHeight) <= 1 && Math.abs(openHelp.mapOffset - beforeHelp.mapOffset) <= 1, `${label}: opening help shifts the geography card: ${JSON.stringify({ beforeHelp, openHelp })}`);
   assert(openHelp.documentWidth <= openHelp.viewportWidth && beforeHelp.documentWidth <= beforeHelp.viewportWidth, `${label}: player geography help causes horizontal overflow: ${JSON.stringify({ beforeHelp, openHelp })}`);
-  await page.locator(".playerMap").tap({ position: { x: 2, y: 2 } });
+  const map = page.locator(".playerMap");
+  // The open help overlaps the upper edge on small phones; dismiss from the exposed lower edge.
+  await map.tap({ position: { x: 2, y: (await map.boundingBox()).height - 2 } });
   await helpTooltip.waitFor({ state: "hidden" });
 
   const mapScope = page.getByRole("group", { name: "Players shown on map" });

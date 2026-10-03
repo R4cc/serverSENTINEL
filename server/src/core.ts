@@ -1,9 +1,8 @@
-import { constants as fsConstants } from "node:fs";
+import { type Stats, constants as fsConstants } from "node:fs";
 import { lstat, open, realpath, rename, rm, type FileHandle } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
-import type { Stats } from "node:fs";
 
 export type ServerPathScope = {
   serverDir: string;
@@ -189,21 +188,6 @@ export async function openContainedFile(target: string): Promise<FileHandle> {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ELOOP" || code === "EMLINK") symlinkRefusal();
     throw error;
-  }
-}
-
-/**
- * Stats a validated path through an open handle so the stat and any later read cannot disagree. Rejects
- * anything that is not a regular file, which also covers a swap to a directory or device node.
- */
-export async function statContainedFile(target: string): Promise<Stats> {
-  const handle = await openContainedFile(target);
-  try {
-    const stats = await handle.stat();
-    if (!stats.isFile()) notRegularFileRefusal();
-    return stats;
-  } finally {
-    await handle.close();
   }
 }
 

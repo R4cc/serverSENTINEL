@@ -1,10 +1,12 @@
+import { ensureDockerImage } from "../docker/dockerImages.js";
+import { minecraftContainerCreateSettings, reconcileContainerRestartPolicy } from "../runtime/containerPolicy.js";
 import { NodeServerUpdateRecovery } from "./serverUpdateRecovery.js";
 import { serverMutations } from "../servers/mutationCoordinator.js";
 import { existsSync } from "node:fs";
 import { lstat, mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { Readable, Transform } from "node:stream";
+import { Readable } from "node:stream";
 import http from "node:http";
 import WebSocket from "ws";
 import { defaultDockerImageForMinecraftVersion, EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
@@ -26,12 +28,11 @@ import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, vali
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import {
   assertDownloadableModrinthFile,
-  assertModrinthDownloadSize,
   assertVersionInstallable,
   compatibilityFromSelectedVersion,
   managedContentNaming
 } from "../modrinth/installPolicy.js";
-import { modrinthFetch } from "../modrinth/modrinthClient.js";
+import { downloadModrinthJarStream } from "../modrinth/jarDownload.js";
 import { ModHashCache } from "../modHashCache.js";
 import { managedContentFileSizeLimit } from "../managedContentLimits.js";
 import { registerShutdownHandlers } from "../shutdown.js";
@@ -59,7 +60,7 @@ import { detectedTotalMemory, minecraftContainerNetworkingConfig } from "../runt
 import { detailedError, detailedErrorMessage } from "../logging.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { runtimeSelection } from "../runtime/selection.js";
-import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
+import { minecraftTerminalConfigFingerprint } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
 import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
@@ -302,23 +303,6 @@ function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: f
   return createHash("sha256").update(JSON.stringify(runtimeConfigHashInput(server, options))).digest("hex");
 }
 
-async function reconcileRestartPolicy(server: ManagedServer, details: NodeContainerInspect) {
-  if (!isManagedContainerFor(details.Config?.Labels, server.id)) return;
-  const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
-  if (!restartPolicy || restartPolicy === "no") return;
-  await dockerJsonRequest(
-    "POST",
-    `/containers/${encodeURIComponent(containerName(server))}/update`,
-    { RestartPolicy: { Name: "no" } },
-    200
-  );
-  details.HostConfig = { ...details.HostConfig, RestartPolicy: { Name: "no" } };
-}
-
-function minecraftContainerEnvironment() {
-  return [...minecraftTerminalContainerConfig().Env, `TZ=${config.timeZone}`];
-}
-
 async function dockerServerRoot(server: ManagedServer) {
   const root = await serverRoot(server);
   const rel = relative(config.nodeDataDir, root);
@@ -366,32 +350,19 @@ async function writeVersionMetadata(server: ManagedServer) {
   }, null, 2)}\n`);
 }
 
-async function pullImage(image: string) {
-  validateDockerImageName(image);
-  const [fromImage, tag] = image.includes(":") ? image.split(/:(.*)/, 2) : [image, "latest"];
-  await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag || "latest")}`, [200, 201]);
-}
-
 async function createContainer(server: ManagedServer, networkingConfig?: NodeNetworkingConfig) {
   const targetRuntime = runtimeTarget(server);
   const image = validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion));
-  await pullImage(image);
+  await ensureDockerImage(image);
   const root = await dockerServerRoot(server);
   const binds = [`${root}:/data`];
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts ?? "25565:25565/tcp");
   const command = minecraftContainerCommand(server);
-  const terminalConfig = minecraftTerminalContainerConfig();
   await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(validateDockerContainerName(containerName(server)))}`, {
     Image: image,
     WorkingDir: "/data",
     Cmd: command,
-    OpenStdin: true,
-    AttachStdin: true,
-    // Applies to every stop this container ever receives, including the one the daemon issues to
-    // all containers when Docker itself is restarted or upgraded, which the node agent never sees.
-    StopTimeout: config.minecraftStopTimeoutSeconds,
-    ...terminalConfig,
-    Env: minecraftContainerEnvironment(),
+    ...minecraftContainerCreateSettings(config.timeZone),
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "no" } },
     NetworkingConfig: networkingConfig ?? minecraftContainerNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
@@ -438,7 +409,7 @@ async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?
   if (!isManagedContainerFor(details.Config?.Labels, server.id)) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
   }
-  await reconcileRestartPolicy(server, details);
+  await reconcileContainerRestartPolicy(server.id, containerName(server), details);
   const configHash = containerConfigHash(details.Config?.Labels);
   const compatibleConfigHash = configHash === runtimeConfigHash(server)
     || configHash === runtimeConfigHash(server, { includeTerminal: false, includeRestartPolicy: false })
@@ -672,7 +643,7 @@ async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeCont
   const details = prefetchedDetails === undefined ? await inspectOrMissing(server) : prefetchedDetails;
   const running = Boolean(details?.State?.Running);
   const managed = isManagedContainerFor(details?.Config?.Labels, server.id);
-  if (details && managed) await reconcileRestartPolicy(server, details);
+  if (details && managed) await reconcileContainerRestartPolicy(server.id, containerName(server), details);
   const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
   const configured = Boolean(server.dockerContainer);
   const available = dockerAvailable();
@@ -1543,43 +1514,13 @@ async function downloadManagedContent(server: ManagedServer, metadata: { url: st
   await mkdir(await inside(server, directory, false), { recursive: true });
   const target = await writableInside(server, posix.join(directory, name));
   if (existsSync(target)) throw new Error("A file or folder with that name already exists");
-  const response = await modrinthFetch(metadata.url, { signal });
+  const stream = await downloadModrinthJarStream(metadata, { singular, maximumBytes: uploadLimit, signal });
   try {
-    if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
-    assertModrinthDownloadSize(Number(response.headers.get("content-length")) || undefined, { singular, maximumBytes: uploadLimit });
-    if (!response.body) throw new Error(`${Singular} download has no body`);
-    const sha1 = createHash("sha1");
-    const sha512 = createHash("sha512");
-    let header = Buffer.alloc(0);
-    const inspect = new Transform({
-      transform(chunk: Buffer, _encoding, callback) {
-        sha1.update(chunk);
-        sha512.update(chunk);
-        if (header.length < 4) header = Buffer.concat([header, chunk.subarray(0, 4 - header.length)]);
-        callback(null, chunk);
-      }
-    });
-    const source = Readable.fromWeb(response.body as never);
-    source.on("error", (error) => inspect.destroy(error));
-    inspect.on("close", () => source.destroy());
-    const size = await writeRuntimeUpload(target, { stream: source.pipe(inspect) }, {
-      maximumBytes: uploadLimit, allowEmpty: false, label: `${Singular} download`,
-      validateTemporary: async () => {
-        signal?.throwIfAborted();
-        assertJarBuffer(header, singular);
-        const hashes = { sha1: sha1.digest("hex"), sha512: sha512.digest("hex") };
-        for (const algorithm of ["sha1", "sha512"] as const) {
-          if (metadata.hashes?.[algorithm] && metadata.hashes[algorithm] !== hashes[algorithm]) {
-            throw new Error("Downloaded JAR hash did not match Modrinth metadata");
-          }
-        }
-      }
+    const size = await writeRuntimeUpload(target, { stream }, {
+      maximumBytes: uploadLimit, allowEmpty: false, label: `${Singular} download`
     });
     return { ok: true, path: publicPath(await serverRoot(server), target), size };
-  } catch (error) {
-    if (!response.bodyUsed) await response.body?.cancel().catch(() => undefined);
-    throw error;
-  }
+  } finally { stream.destroy(); }
 }
 
 type PreparedBinaryUpload = {
@@ -1923,7 +1864,7 @@ export const __nodeAgentTestHooks = {
   createdServerRecord,
   handleCommand,
   minecraftContainerNetworkingConfig,
-  minecraftContainerEnvironment,
+  minecraftContainerEnvironment: () => minecraftContainerCreateSettings(config.timeZone).Env,
   minecraftContainerCommand,
   runtimeConfigHash,
   nodeReconnectDelayMs,

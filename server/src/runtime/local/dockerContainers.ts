@@ -1,3 +1,5 @@
+import { ensureDockerImage } from "../../docker/dockerImages.js";
+import { minecraftContainerCreateSettings, reconcileContainerRestartPolicy } from "../containerPolicy.js";
 import { createHash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { totalmem } from "node:os";
@@ -17,12 +19,9 @@ import { dockerStopQuery, dockerStopRequestTimeoutMs } from "../../docker/docker
 import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
 import { shellQuote } from "../../docker/shell.js";
 import { durationSince, errorLogFields, logError, logInfo, logWarn, type LogFields } from "../../logging.js";
-import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../terminal.js";
+import { minecraftTerminalConfigFingerprint } from "../terminal.js";
 import { parseServerProperties, serializeServerProperties } from "./../serverProperties.js";
 import type { DockerState, ManagedServer } from "../../types.js";
-
-/** A cold pull of a Minecraft runtime image routinely takes minutes on a slow registry link. */
-const imagePullTimeoutMs = 10 * 60 * 1000;
 
 export type DockerContainerInspect = {
   Id?: string;
@@ -162,61 +161,6 @@ export async function removeManagedDockerContainer(server: ManagedServer) {
   return true;
 }
 
-function splitImage(image: string) {
-  // A digest-pinned reference keeps its whole digest as the tag. Splitting on the last colon would
-  // cut `sha256` off the hash and produce a reference the registry cannot resolve.
-  const digestIndex = image.lastIndexOf("@");
-  if (digestIndex > 0) {
-    return { fromImage: image.slice(0, digestIndex), tag: image.slice(digestIndex + 1) };
-  }
-  const slashIndex = image.lastIndexOf("/");
-  const colonIndex = image.lastIndexOf(":");
-  if (colonIndex > slashIndex) {
-    return { fromImage: image.slice(0, colonIndex), tag: image.slice(colonIndex + 1) };
-  }
-  return { fromImage: image, tag: "latest" };
-}
-
-/**
- * `POST /images/create` answers 200 and then streams progress, so a pull that fails on
- * authentication, a rate limit, or an unknown tag reports its reason inside a successful response.
- * Left unread, provisioning continued and failed later with "No such image", naming the wrong cause.
- */
-function assertDockerPullSucceeded(image: string, body: Buffer) {
-  for (const line of body.toString("utf8").split("\n")) {
-    if (!line.trim()) continue;
-    let parsed: { error?: string; errorDetail?: { message?: string } };
-    try {
-      parsed = JSON.parse(line) as typeof parsed;
-    } catch {
-      continue;
-    }
-    const message = parsed.errorDetail?.message ?? parsed.error;
-    if (message) throw new Error(`Could not pull Docker image ${image}: ${message}`);
-  }
-}
-
-async function ensureDockerImage(image: string) {
-  try {
-    await dockerRequest("GET", `/images/${encodeURIComponent(image)}/json`, 200);
-    return;
-  } catch (error) {
-    // Only a genuinely absent image is worth a pull. A daemon that is unreachable or unconfigured
-    // must surface that, not be retried as if the image were merely missing.
-    if (!dockerAvailable()) throw error;
-  }
-  logInfo({ image }, "Pulling Minecraft runtime image");
-  const { fromImage, tag } = splitImage(image);
-  const body = await dockerBufferRequest(
-    "POST",
-    `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
-    200,
-    // A first pull of a Minecraft runtime image routinely outruns the default socket idle timeout.
-    imagePullTimeoutMs
-  );
-  assertDockerPullSucceeded(image, body);
-}
-
 export async function inspectDockerContainer(server: ManagedServer) {
   try {
     return await dockerRequest<DockerContainerInspect>(
@@ -255,17 +199,8 @@ export function dockerRuntimeConfigHash(server: ManagedServer, options: { includ
 }
 
 export async function reconcileDockerRestartPolicy(server: ManagedServer, details: DockerContainerInspect) {
-  if (!isManagedContainerFor(details.Config?.Labels, server.id)) return;
-  const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
-  if (!restartPolicy || restartPolicy === "no") return;
-  await dockerJsonRequest(
-    "POST",
-    `/containers/${encodeURIComponent(dockerContainerName(server))}/update`,
-    { RestartPolicy: { Name: "no" } },
-    200
-  );
-  details.HostConfig = { ...details.HostConfig, RestartPolicy: { Name: "no" } };
-  logInfo({ ...serverLogFields(server), previousRestartPolicy: restartPolicy }, "Updated Minecraft runtime restart policy");
+  const previousRestartPolicy = await reconcileContainerRestartPolicy(server.id, dockerContainerName(server), details);
+  if (previousRestartPolicy) logInfo({ ...serverLogFields(server), previousRestartPolicy }, "Updated Minecraft runtime restart policy");
 }
 
 export async function detectedTotalMemory() {
@@ -365,15 +300,10 @@ export async function ensureDockerContainer(server: ManagedServer, preferredNetw
         Image: image,
         WorkingDir: workingDir,
         Cmd: ["sh", "-lc", command],
-        OpenStdin: true,
         StdinOnce: false,
-        AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
-        // Applies to every stop this container ever receives, including the one the daemon issues to
-        // all containers when Docker itself is restarted or upgraded, which serverSENTINEL never sees.
-        StopTimeout: config.minecraftStopTimeoutSeconds,
-        ...minecraftTerminalContainerConfig(),
+        ...minecraftContainerCreateSettings(),
         ExposedPorts: exposedPorts,
         HostConfig: {
           Privileged: false,

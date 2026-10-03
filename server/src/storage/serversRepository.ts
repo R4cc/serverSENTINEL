@@ -132,14 +132,13 @@ export class ServersRepository {
   /** Configuration includes schedule definitions, but no retained run history. */
   list(): ManagedServer[] { return this.listRecords("configuration"); }
   listWithScheduleSummaries(): ManagedServer[] { return this.listRecords("summary"); }
-  listWithScheduleHistory(): ManagedServer[] { return this.listRecords("detail"); }
   listForRuntime(): ManagedServer[] { return this.listRecords("runtime"); }
 
   exists(id: string): boolean {
     return Boolean(this.storage.connection.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(id));
   }
 
-  private listRecords(projection: "runtime" | "configuration" | "summary" | "detail"): ManagedServer[] {
+  private listRecords(projection: "runtime" | "configuration" | "summary"): ManagedServer[] {
     const database = this.storage.connection;
     const portsByServer = new Map<string, ManagedServerPort[]>();
     for (const row of database.prepare<[], PortRow>("SELECT * FROM managed_ports ORDER BY rowid").all()) {
@@ -151,7 +150,7 @@ export class ServersRepository {
     if (projection !== "runtime") {
       for (const row of database.prepare<[], ScheduleRow>("SELECT * FROM schedules ORDER BY rowid").all()) {
         const schedules = schedulesByServer.get(row.server_id) ?? [];
-        schedules.push(scheduleFromRow(row, projection === "configuration" ? [] : this.scheduleRuns(row.server_id, row.id, projection)));
+        schedules.push(scheduleFromRow(row, projection === "configuration" ? [] : this.scheduleRuns(row.server_id, row.id)));
         schedulesByServer.set(row.server_id, schedules);
       }
     }
@@ -161,23 +160,22 @@ export class ServersRepository {
 
   find(id: string): ManagedServer | undefined { return this.findRecord(id, "configuration"); }
   findWithScheduleSummaries(id: string): ManagedServer | undefined { return this.findRecord(id, "summary"); }
-  findWithScheduleHistory(id: string): ManagedServer | undefined { return this.findRecord(id, "detail"); }
   findForRuntime(id: string): ManagedServer | undefined { return this.findRecord(id, "runtime"); }
 
-  private findRecord(id: string, projection: "runtime" | "configuration" | "summary" | "detail"): ManagedServer | undefined {
+  private findRecord(id: string, projection: "runtime" | "configuration" | "summary"): ManagedServer | undefined {
     const database = this.storage.connection;
     const row = database.prepare<[string], ServerRow>(`${serverSelection} WHERE id = ?`).get(id);
     if (!row) return undefined;
     const ports = database.prepare<[string], PortRow>("SELECT * FROM managed_ports WHERE server_id = ? ORDER BY rowid").all(id).map(portFromRow);
     const schedules = projection === "runtime" ? [] : database.prepare<[string], ScheduleRow>("SELECT * FROM schedules WHERE server_id = ? ORDER BY rowid").all(id)
-      .map((schedule) => scheduleFromRow(schedule, projection === "configuration" ? [] : this.scheduleRuns(id, schedule.id, projection)));
+      .map((schedule) => scheduleFromRow(schedule, projection === "configuration" ? [] : this.scheduleRuns(id, schedule.id)));
     return this.serverFromRow(row, ports, schedules);
   }
 
-  private scheduleRuns(serverId: string, scheduleId: string, projection: "summary" | "detail") {
+  private scheduleRuns(serverId: string, scheduleId: string) {
     // Apply LIMIT through the schedule index before materializing or parsing captured logs.
     // SQLite removes logs for summaries, so they never cross into the application heap.
-    const details = projection === "detail" ? "details_json" : `CASE
+    const details = `CASE
       WHEN json_type(details_json, '$.steps') = 'array' THEN json_set(details_json, '$.steps', json((
         SELECT json_group_array(json_remove(value, '$.logs')) FROM json_each(details_json, '$.steps')
       ))) ELSE details_json END`;

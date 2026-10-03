@@ -1,8 +1,8 @@
+import { useJavaMemory, useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { defaultDockerImageForMinecraftVersion, serverRuntimeDefinition } from "@serversentinel/contracts";
-import { api } from "../api";
 import { dockerContainerNameInputPattern, runtimeJarFilenameInputPattern } from "../utils/inputPatterns";
-import type { ManagedServer, RuntimeVersion } from "../types";
+import type { ManagedServer } from "../types";
 import {
   formatAdaptiveBytes,
   isValidServerPort,
@@ -22,15 +22,12 @@ import { InlineState } from "../components/InlineState";
 import type { ServerExportArtifact, ServerExportState } from "../features/exports/useExportWorkspace";
 import {
   clampNumber,
-  fallbackFabricRuntimeVersions,
-  fallbackMinecraftVersions,
   formatManagedPortBindings,
   memoryBoundsForNode,
   parseAdditionalPortBindings,
   portBindingId,
   queryPortForServer,
   serverPortForServer,
-  syncJavaMemoryArgs,
   wizardJavaArgs,
   type PortBindingRow
 } from "./serverSettingsHelpers";
@@ -221,12 +218,8 @@ export function ServerEditForm({
   const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
   const [minecraftVersion, setMinecraftVersion] = useState(server.runtimeProfile.minecraftVersion);
   const [runtimeVersion, setRuntimeVersion] = useState(server.runtimeProfile.runtimeVersion);
-  const [availableMinecraftVersions, setAvailableMinecraftVersions] = useState(() => runtime.type === "fabric"
-    ? fallbackMinecraftVersions
-    : [{ version: server.runtimeProfile.minecraftVersion, stable: true, type: "release" as const }]);
-  const [availableRuntimeVersions, setAvailableRuntimeVersions] = useState<RuntimeVersion[]>(() => runtime.type === "fabric"
-    ? fallbackFabricRuntimeVersions
-    : []);
+  const { versions: availableMinecraftVersions } = useMinecraftVersions(runtime.type, server.runtimeProfile.minecraftVersion, server.id);
+  const { versions: availableRuntimeVersions } = useRuntimeVersions(runtime.type, minecraftVersion, true);
   const [dockerImage, setDockerImage] = useState(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
   /**
    * True once the image no longer matches what serverSENTINEL would pick for the selected version,
@@ -239,13 +232,11 @@ export function ServerEditForm({
   );
   const [serverJar, setServerJar] = useState(server.runtimeProfile.jarArtifact.filename);
   const [dockerContainer, setDockerContainer] = useState(server.dockerContainer || "");
-  const [minimumHeapGb, setMinimumHeapGb] = useState(() => clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max));
-  const [maximumHeapGb, setMaximumHeapGb] = useState(() => clampNumber(initialMaximumHeapGb, memoryBounds.min, memoryBounds.max));
-  const [javaArgs, setJavaArgs] = useState(() => wizardJavaArgs(
-    clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max),
-    clampNumber(initialMaximumHeapGb, memoryBounds.min, memoryBounds.max),
-    initialJavaArgs
-  ));
+  const { minimumHeapGb, maximumHeapGb, javaArgs, updateMinimumHeap, updateMaximumHeap, updateJavaArgs, resetMemory } = useJavaMemory(memoryBounds, {
+    min: clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max),
+    max: clampNumber(initialMaximumHeapGb, memoryBounds.min, memoryBounds.max),
+    args: wizardJavaArgs(clampNumber(initialMinimumHeapGb, memoryBounds.min, memoryBounds.max), clampNumber(initialMaximumHeapGb, memoryBounds.min, memoryBounds.max), initialJavaArgs)
+  });
   const [serverPort, setServerPort] = useState(() => serverPortForServer(server));
   const [queryPort, setQueryPort] = useState(() => queryPortForServer(server));
   const [startOnNodeStart, setStartOnNodeStart] = useState(server.startOnNodeStart ?? false);
@@ -265,55 +256,9 @@ export function ServerEditForm({
   }, [server.id, server.updatedAt]);
 
   useEffect(() => {
-    let cancelled = false;
-    api<{ versions: Array<{ id: string; type?: "release" | "snapshot" | "unknown"; supported?: boolean; recommended?: boolean }> }>(`/api/runtime/${runtime.type}/minecraft-versions`)
-      .then((result) => {
-        if (!cancelled) setAvailableMinecraftVersions(result.versions.map((version) => ({
-          version: version.id,
-          stable: version.type === "release" && version.supported !== false,
-          recommended: version.recommended,
-          type: version.type ?? "unknown"
-        })));
-      })
-      .catch(() => {
-        if (!cancelled) setAvailableMinecraftVersions(runtime.type === "fabric"
-          ? fallbackMinecraftVersions
-          : [{ version: server.runtimeProfile.minecraftVersion, stable: true, type: "release" }]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [runtime.type, server.id, server.runtimeProfile.minecraftVersion]);
-
-  useEffect(() => {
-    if (!minecraftVersion) {
-      setAvailableRuntimeVersions([]);
-      return;
-    }
-    let cancelled = false;
-    api<{ runtimeVersions: RuntimeVersion[] }>(`/api/runtime/${runtime.type}/versions?minecraftVersion=${encodeURIComponent(minecraftVersion)}`)
-      .then((result) => {
-        if (!cancelled) setAvailableRuntimeVersions(result.runtimeVersions);
-      })
-      .catch(() => {
-        if (!cancelled) setAvailableRuntimeVersions(runtime.type === "fabric"
-          ? fallbackFabricRuntimeVersions
-          : []);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [minecraftVersion, runtime.type]);
-
-  useEffect(() => {
     setServerPort(serverPortForServer(server));
     setQueryPort(queryPortForServer(server));
   }, [server.id, server.dockerPorts, server.managedPorts]);
-
-  useEffect(() => {
-    setMinimumHeapGb((current) => Math.min(clampNumber(current, memoryBounds.min, memoryBounds.max), maximumHeapGb));
-    setMaximumHeapGb((current) => Math.max(clampNumber(current, memoryBounds.min, memoryBounds.max), minimumHeapGb));
-  }, [maximumHeapGb, memoryBounds.max, memoryBounds.min, minimumHeapGb]);
 
   function resetFormState() {
     const nextJavaArgs = server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs));
@@ -329,9 +274,7 @@ export function ServerEditForm({
     );
     setServerJar(server.runtimeProfile.jarArtifact.filename);
     setDockerContainer(server.dockerContainer || "");
-    setMinimumHeapGb(nextMinimum);
-    setMaximumHeapGb(nextMaximum);
-    setJavaArgs(wizardJavaArgs(nextMinimum, nextMaximum, nextJavaArgs));
+    resetMemory(nextMinimum, nextMaximum, nextJavaArgs);
     setServerPort(serverPortForServer(server));
     setQueryPort(queryPortForServer(server));
     setStartOnNodeStart(server.startOnNodeStart ?? false);
@@ -342,23 +285,6 @@ export function ServerEditForm({
   async function submitForm(event: FormEvent<HTMLFormElement>) {
     const saved = await onSubmit(event);
     if (saved === true) setDirty(false);
-  }
-
-  function updateMinimumHeap(value: number) {
-    const next = clampNumber(Math.round(value), memoryBounds.min, Math.min(memoryBounds.max, maximumHeapGb));
-    setMinimumHeapGb(next);
-    setJavaArgs((current) => wizardJavaArgs(next, maximumHeapGb, current));
-  }
-
-  function updateMaximumHeap(value: number) {
-    const next = clampNumber(Math.round(value), Math.max(memoryBounds.min, minimumHeapGb), memoryBounds.max);
-    setMaximumHeapGb(next);
-    setJavaArgs((current) => wizardJavaArgs(minimumHeapGb, next, current));
-  }
-
-  function updateJavaArgs(value: string) {
-    setJavaArgs(value);
-    syncJavaMemoryArgs(value, memoryBounds, minimumHeapGb, maximumHeapGb, setMinimumHeapGb, setMaximumHeapGb);
   }
 
   return (

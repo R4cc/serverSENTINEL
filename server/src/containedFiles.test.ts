@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { openContainedFile, openContainedReadStream, readContainedFile, statContainedFile } from "./core.js";
+import { openContainedFile, openContainedReadStream, readContainedFile } from "./core.js";
 import { readConsoleLogTail } from "./consoleLogs.js";
 import { readFileRange } from "./runtime/local/dockerContainers.js";
 import { copyServerFile } from "./runtime/local/fileService.js";
@@ -45,13 +45,6 @@ describe("contained file reads", () => {
     expect((await readContainedFile(join(root, "server.properties"))).toString("utf8")).toBe("level-name=world\n");
   });
 
-  it("reports the size of the inode it opened", async () => {
-    const root = await temporaryRoot();
-    await writeFile(join(root, "log.txt"), "0123456789", "utf8");
-
-    expect((await statContainedFile(join(root, "log.txt"))).size).toBe(10);
-  });
-
   it("streams a regular file and closes its handle", async () => {
     const root = await temporaryRoot();
     await writeFile(join(root, "world.dat"), "payload", "utf8");
@@ -75,7 +68,7 @@ describe("contained file reads", () => {
     const root = await temporaryRoot();
     await mkdir(join(root, "config"));
 
-    await expect(statContainedFile(join(root, "config"))).rejects.toMatchObject({ code: "EINVAL" });
+    await expect(readContainedFile(join(root, "config"))).rejects.toMatchObject({ code: "EINVAL" });
   });
 });
 

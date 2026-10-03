@@ -135,11 +135,6 @@ export function publicSchedule(serverId: string, schedule: ScheduledExecution): 
   };
 }
 
-export function findScheduledRun(server: ManagedServer, scheduleId: string, runId: string) {
-  const schedule = server.schedules?.find((candidate) => candidate.id === scheduleId);
-  return schedule?.recentRuns?.find((run) => run.id === runId);
-}
-
 function safeNextCronRun(cron: string) {
   try {
     return nextCronRun(cron);

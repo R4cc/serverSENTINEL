@@ -48,12 +48,6 @@ export function hashPassword(password: string, salt = randomBytes(16).toString("
   return { salt, passwordHash: hash };
 }
 
-export function verifyPassword(password: string, user: Pick<StoredUser, "passwordHash" | "salt">) {
-  const attempted = Buffer.from(hashPassword(password, user.salt).passwordHash, "hex");
-  const stored = Buffer.from(user.passwordHash, "hex");
-  return attempted.length === stored.length && timingSafeEqual(attempted, stored);
-}
-
 /**
  * A stand-in for a username that does not exist. Skipping the hash entirely when no user matches
  * answered in microseconds where a real account costs a full scrypt, which tells an unauthenticated

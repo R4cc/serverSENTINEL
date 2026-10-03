@@ -111,37 +111,7 @@ export function useFilesWorkspace({
   const fileSelectAllRef = useRef<HTMLInputElement>(null);
   const trackedZipOperationsRef = useRef(new Set<string>());
 
-  const {
-    state: {
-      selectedPath,
-      editorText,
-      savedEditorText,
-      dirty,
-      fileOpening,
-      fileOpenFailed,
-      fileReadError,
-      fileSaving,
-      fileEditMode,
-      fileLeaseBusy,
-      fileLeaseMessage,
-      discardEditorRequest,
-      canEditSelectedPath,
-      editDisabledReason
-    },
-    actions: {
-      openFile,
-      saveFile,
-      enterFileEditMode,
-      cancelFileEdit,
-      requestCloseEditor,
-      discardEditorChanges,
-      resetEditorState,
-      setSelectedPath,
-      setEditorText,
-      setFileReadError,
-      setDiscardEditorRequest
-    }
-  } = useFileEditorSession({
+  const editor = useFileEditorSession({
     activeServer,
     activeServerIsDemo,
     listing,
@@ -166,6 +136,8 @@ export function useFilesWorkspace({
     setSelectionAnchorPath,
     refreshFiles: (serverId, path) => loadFiles(serverId, path)
   });
+  const { selectedPath, dirty } = editor.state;
+  const { openFile, resetEditorState, setSelectedPath, setFileReadError } = editor.actions;
 
   const canViewCurrentFiles = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "view");
   const canUploadToCurrentPath = activeServerIsDemo || hasFileManagerPermission(permissionUser, listing.path, "upload");
@@ -1085,6 +1057,7 @@ export function useFilesWorkspace({
       zipDestinationListing
     },
     state: {
+      ...editor.state,
       filesLoading,
       filesLoaded,
       filesError,
@@ -1093,22 +1066,8 @@ export function useFilesWorkspace({
       fileOperationBusy,
       focusedFilePath,
       fileActionDialog,
-      selectedPath,
-      editorText,
-      savedEditorText,
-      dirty,
-      fileOpening,
-      fileOpenFailed,
-      fileReadError,
-      fileSaving,
-      fileEditMode,
-      fileLeaseBusy,
-      fileLeaseMessage,
-      discardEditorRequest,
       canViewCurrentFiles,
       canUploadToCurrentPath,
-      canEditSelectedPath,
-      editDisabledReason,
       canOpenSelectedFile,
       canExtractSelectedZip,
       canDownloadSelectedItems,
@@ -1130,6 +1089,7 @@ export function useFilesWorkspace({
       fileSelectAllRef
     },
     actions: {
+      ...editor.actions,
       loadFiles,
       refreshCurrentFiles,
       navigateFiles,
@@ -1146,7 +1106,6 @@ export function useFilesWorkspace({
       canDragFileEntry,
       canMoveFileEntry,
       moveFileEntry,
-      openFile,
       openCreateFolderDialog,
       uploadFile,
       downloadSelectedItems,
@@ -1162,13 +1121,7 @@ export function useFilesWorkspace({
       closeFileActionDialog,
       setFileActionDialogValue,
       submitFileActionDialog,
-      saveFile,
-      enterFileEditMode,
-      cancelFileEdit,
-      requestCloseEditor,
-      discardEditorChanges,
       clearWorkspace,
-      resetEditorState,
       initializeDemoRoot,
       setUnavailable,
       resetPageState,
@@ -1178,8 +1131,6 @@ export function useFilesWorkspace({
       setFilePreview,
       setSelectedFilePaths,
       setFocusedFilePath,
-      setEditorText,
-      setDiscardEditorRequest,
       setZipDestinationListing
     }
   };

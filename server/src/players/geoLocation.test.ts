@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeLocation, isLocatableAddress, locateAddress, playerLocationFromCityResponse, type GeoCityResponse } from "./geoLocation.js";
+import { isLocatableAddress, locateAddress, playerLocationFromCityResponse, type GeoCityResponse } from "./geoLocation.js";
 
 function cityResponse(overrides: Partial<GeoCityResponse> = {}): GeoCityResponse {
   return {
@@ -33,7 +33,6 @@ describe("GeoLite2 city answers", () => {
     expect(location?.label).toBe("Capital Region");
     // The city is still recorded — it is the name GeoLite2 gave — but it is not what is presented.
     expect(location?.city).toBe("Copenhagen");
-    expect(describeLocation(location)).toBe("Capital Region, Denmark");
   });
 
   it("draws the city line at fifty kilometres", () => {
