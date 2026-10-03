@@ -261,7 +261,7 @@
   padding-inline: var(--space-2);
 }
 
-.scheduleActionMenu .actionMenuPopover {
+.scheduleActionMenuPopover {
   min-width: 170px;
 }
 
@@ -1610,27 +1610,6 @@
 
   .scheduledRunDetailsButton.uiButton {
     min-height: 44px;
-  }
-
-  /* Upward and leftward, because the frame and the panel both clip their overflow: the menu has to
-     stay inside the card it belongs to, and the card layout puts its trigger in the bottom-right. */
-  .scheduleActionMenu .actionMenuPopover {
-    top: auto;
-    right: 0;
-    bottom: calc(100% + var(--space-2));
-    left: auto;
-  }
-
-  .scheduleTableRow:has(.scheduleActionMenu .actionMenuPopover) {
-    position: relative;
-    z-index: 2;
-  }
-
-  /* The open menu now leaves its own card, so the card has to outrank the Scheduled Runs panel,
-     which is a later sibling and would otherwise paint over it. */
-  .panel.scheduleTableCard:has(.scheduleActionMenu .actionMenuPopover) {
-    position: relative;
-    z-index: 3;
   }
 }
 

@@ -533,10 +533,10 @@ async function assertConfiguredPlayerAddressEditor() {
 }
 
 async function assertScheduleActionMenuVisible(page, label) {
-  const trigger = page.locator(".scheduleActionMenuTrigger").first();
+  const trigger = page.locator(".scheduleActionMenuTrigger").last();
   assert(await trigger.count(), `${label}: demo schedule action trigger is missing`);
   await trigger.click();
-  const menu = page.locator(".scheduleActionMenu .actionMenuPopover").first();
+  const menu = page.getByRole("menu", { name: await trigger.getAttribute("aria-label"), exact: true });
   await menu.waitFor();
   const geometry = await menu.evaluate((element) => {
     const rect = element.getBoundingClientRect();

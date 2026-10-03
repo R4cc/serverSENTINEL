@@ -43,6 +43,7 @@ import {
   listServerDirectory,
   moveServerEntry,
   previewServerFile,
+  publishRuntimeUpload,
   publicZipExtractionPlan,
   readServerTextFile,
   renameServerEntry,
@@ -2132,7 +2133,7 @@ export async function startNodeAgent() {
               await headerHandle.close();
             }
           }
-          await rename(transfer.prepared.temporaryPath, transfer.prepared.targetPath);
+          await publishRuntimeUpload(transfer.prepared.temporaryPath, transfer.prepared.targetPath);
           activeTransfers.delete(message.id);
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: true, result: { ok: true, path: transfer.prepared.publicTargetPath, size: transfer.received } } satisfies NodeTransferResultMessage));
         } catch (error) {

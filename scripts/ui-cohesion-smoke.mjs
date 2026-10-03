@@ -109,8 +109,15 @@ try {
         await page.getByRole("table", { name: "Server files", exact: true }).waitFor();
         assert.equal(await page.locator(".fileDetailsPanel").count(), 0, "Empty inspector still consumes space");
         const file = page.getByRole("rowheader", { name: "server.properties", exact: true });
+        const fileFilter = page.getByRole("searchbox", { name: "File filter" });
+        await fileFilter.fill("server.properties");
+        assert.equal(await page.locator(".fileTableRow").count(), 1, "Folder filter includes unrelated entries");
+        await page.getByRole("button", { name: "Clear file filter", exact: true }).click();
         await file.click();
-        if (width >= 981) assert(await page.locator(".fileDetailsPanel").isVisible(), "Selected file has no inspector");
+        if (width >= 981) {
+          assert(await page.locator(".fileDetailsPanel").isVisible(), "Selected file has no inspector");
+          await page.locator(".filePreviewPanel pre").waitFor();
+        }
         if (phone) {
           assert(await page.getByRole("button", { name: "Upload file" }).locator(".fileToolbarLabel").isVisible(), "Upload has no visible label");
           assert(await page.getByRole("button", { name: "New folder", exact: true }).locator(".fileToolbarLabel").isVisible(), "New folder has no visible label");
@@ -162,6 +169,33 @@ try {
         const panelHeight = await page.locator(".scheduleTableCard").evaluate(element => element.getBoundingClientRect().height);
         assert(panelHeight < 500, `Short schedule list reserves empty space: ${panelHeight}`);
         await snapshot(page, `${label}-schedules`);
+        const scheduleActions = page.locator(".scheduleActionMenuTrigger").last();
+        await scheduleActions.click();
+        const scheduleMenu = page.getByRole("menu", { name: await scheduleActions.getAttribute("aria-label"), exact: true });
+        await scheduleMenu.waitFor();
+        assert(await scheduleMenu.evaluate(element => {
+          const bounds = element.getBoundingClientRect();
+          return element.parentElement === document.body && bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight
+            && [...element.querySelectorAll('[role="menuitem"]')].every(item => {
+              const box = item.getBoundingClientRect();
+              return item.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+            });
+        }), "Bottom schedule menu is clipped or obscured");
+        assert(await scheduleMenu.evaluate(element => element.contains(document.activeElement)), "Schedule menu did not acquire focus");
+        await page.keyboard.press("End");
+        assert(await scheduleMenu.getByRole("menuitem", { name: "Delete", exact: true }).evaluate(element => element === document.activeElement), "Menu keyboard navigation does not reach Delete");
+        await snapshot(page, `${label}-schedule-menu`);
+        await page.keyboard.press("Escape");
+        await scheduleMenu.waitFor({ state: "detached" });
+        assert(await scheduleActions.evaluate(element => element === document.activeElement), "Schedule menu did not restore trigger focus");
+        await scheduleActions.click();
+        await scheduleMenu.getByRole("menuitem", { name: "Edit", exact: true }).click();
+        await checkDialog(page, page.locator(".scheduleModalPanel"), phone);
+        await page.keyboard.press("Escape");
+        await page.locator(".scheduleModalPanel").waitFor({ state: "detached" });
+        await scheduleActions.click();
+        await page.getByRole("heading", { name: "Configured schedules", exact: true }).click();
+        await scheduleMenu.waitFor({ state: "detached" });
         await page.getByRole("button", { name: "Add schedule", exact: true }).click();
         await checkDialog(page, page.locator(".scheduleModalPanel"), phone);
         await snapshot(page, `${label}-schedule-dialog`);

@@ -1,9 +1,10 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openContainedFile } from "../../core.js";
 import {
   copyServerFile,
   createServerFolder,
@@ -20,6 +21,15 @@ import {
   writeServerTextFile
 } from "./fileService.js";
 
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, lstat: vi.fn(actual.lstat) };
+});
+vi.mock("../../core.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../core.js")>();
+  return { ...actual, openContainedFile: vi.fn(actual.openContainedFile) };
+});
+
 describe("fileService", () => {
   let serverDir: string;
   let scope: { serverDir: string };
@@ -30,6 +40,8 @@ describe("fileService", () => {
   });
 
   afterEach(async () => {
+    vi.mocked(lstat).mockReset();
+    vi.mocked(openContainedFile).mockReset();
     await rm(serverDir, { recursive: true, force: true });
   });
 
@@ -73,6 +85,49 @@ describe("fileService", () => {
     await writeFile(join(serverDir, "image.png"), Buffer.from([1, 2, 3]));
     const listing = await listServerDirectory(scope, serverDir);
     expect(listing.entries[0].status).toBe("binary");
+  });
+
+  it("omits entries removed during listing but propagates access errors", async () => {
+    await writeFile(join(serverDir, "vanished.txt"), "gone");
+    await writeFile(join(serverDir, "kept.txt"), "keep");
+    const original = vi.mocked(lstat).getMockImplementation()!;
+    vi.mocked(lstat).mockImplementation((...args) => String(args[0]).endsWith("vanished.txt")
+      ? Promise.reject(Object.assign(new Error("removed"), { code: "ENOENT" })) : original(...args));
+    expect((await listServerDirectory(scope, serverDir)).entries.map((entry) => entry.name)).toEqual(["kept.txt"]);
+    vi.mocked(lstat).mockRejectedValueOnce(Object.assign(new Error("denied"), { code: "EACCES" }));
+    await expect(listServerDirectory(scope, serverDir)).rejects.toThrow("denied");
+  });
+
+  it("limits listing concurrency in large folders", async () => {
+    await Promise.all(Array.from({ length: 80 }, (_, i) => writeFile(join(serverDir, `${i}.txt`), "x")));
+    const original = vi.mocked(lstat).getMockImplementation()!;
+    let active = 0;
+    let peak = 0;
+    vi.mocked(lstat).mockImplementation(async (...args) => {
+      peak = Math.max(peak, ++active);
+      try { return await original(...args); } finally { active--; }
+    });
+    expect((await listServerDirectory(scope, serverDir)).entries).toHaveLength(80);
+    expect(peak).toBeLessThanOrEqual(32);
+  });
+
+  it("enforces read limits even if the file grows after stat", async () => {
+    const target = join(serverDir, "growing.log");
+    const original = vi.mocked(openContainedFile).getMockImplementation()!;
+    vi.mocked(openContainedFile).mockImplementation(async (path) => {
+      const handle = await original(path);
+      const originalStat = handle.stat.bind(handle);
+      vi.spyOn(handle, "stat").mockImplementation(async () => {
+        const result = await originalStat();
+        await writeFile(target, "x".repeat(2 * 1024 * 1024 + 20));
+        return result;
+      });
+      return handle;
+    });
+    await writeFile(target, "small");
+    expect(await previewServerFile(scope, target, { sizeLimit: 96 * 1024, requireTextLike: true })).toMatchObject({ preview: "too_large" });
+    await writeFile(target, "small");
+    await expect(readServerTextFile(scope, target)).rejects.toThrow("2 MiB editor limit");
   });
 
   describe("previewServerFile", () => {
@@ -126,6 +181,14 @@ describe("fileService", () => {
     await expect(writeServerTextFile(scope, target, 42)).rejects.toThrow("Content is required");
     await expect(writeServerTextFile(scope, target, "a\0b")).rejects.toThrow("Binary files cannot be edited in the browser editor");
     expect(await readFile(target, "utf8")).toBe("old");
+  });
+
+  it.skipIf(process.platform === "win32")("preserves file permissions across an editor save", async () => {
+    const target = join(serverDir, "restricted.conf");
+    await writeFile(target, "old");
+    await chmod(target, 0o640);
+    await writeServerTextFile(scope, target, "new");
+    expect((await stat(target)).mode & 0o777).toBe(0o640);
   });
 
   it("creates folders and refuses to clobber an existing entry", async () => {
@@ -225,6 +288,26 @@ describe("fileService", () => {
   });
 
   describe("writeRuntimeUpload", () => {
+    it("does not overwrite a file created while the upload is in progress", async () => {
+      const target = await resolveUploadTarget(scope, serverDir, "concurrent.txt");
+      await expect(writeRuntimeUpload(target, { stream: Readable.from(["upload"]) }, {
+        maximumBytes: 1024, allowEmpty: true, label: "Uploaded file content",
+        validateTemporary: async () => { await writeFile(target, "runtime content"); }
+      })).rejects.toThrow("already exists");
+      expect(await readFile(target, "utf8")).toBe("runtime content");
+      expect((await listServerDirectory(scope, serverDir)).entries.map((entry) => entry.name)).toEqual(["concurrent.txt"]);
+    });
+
+    it("publishes only one of two concurrent uploads to the same path", async () => {
+      const target = join(serverDir, "shared.txt");
+      const results = await Promise.allSettled(["first", "second"].map((content) => writeRuntimeUpload(target, {
+        stream: Readable.from([content])
+      }, { maximumBytes: 1024, allowEmpty: true, label: "Uploaded file content" })));
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(["first", "second"]).toContain(await readFile(target, "utf8"));
+      expect((await listServerDirectory(scope, serverDir)).entries.map((entry) => entry.name)).toEqual(["shared.txt"]);
+    });
+
     it("writes a streamed upload and returns its size", async () => {
       const target = join(serverDir, "streamed.txt");
       const size = await writeRuntimeUpload(target, { stream: Readable.from([Buffer.from("hello")]), size: 5 }, {

@@ -603,6 +603,8 @@ export function SchedulePage({
                         label={`Actions for ${schedule.name}`}
                         className="scheduleActionMenu"
                         triggerClassName="scheduleActionMenuTrigger"
+                        portal
+                        menuClassName="scheduleActionMenuPopover"
                         disabled={disabled}
                         items={[
                           {

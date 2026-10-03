@@ -45,6 +45,20 @@
   flex-wrap: nowrap;
 }
 
+.fileFilterBar {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.fileFilterBar .uiSearchField { width: 100%; }
+.filesPage .fileNameText { display: grid; min-width: 0; text-align: left; }
+.fileNameText > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fileCompactMetadata { display: none; color: var(--text-muted); font-size: 11px; font-weight: normal; }
+
+@media (max-width: 720px) {
+  .fileCompactMetadata { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
 .filesPage .fileBreadcrumbs {
   min-width: 0;
   padding: 2px;

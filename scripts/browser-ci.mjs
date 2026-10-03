@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const suites = [
+  ["files-workspace", "scripts/files-workspace-smoke.mjs"],
   ["console-loading", "scripts/console-loading-smoke.mjs"],
   ["mobile-navigation", "scripts/mobile-ui-smoke.mjs", "--navigation-only"],
   ["console", "scripts/console-smoke.mjs"],

@@ -7,6 +7,7 @@ import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
 import { TableSortButton } from "../../components/TableControls";
+import { SearchField } from "../../components/SearchField";
 import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
 import { formatBytes } from "../../utils/format";
 import { hasFileManagerPermission } from "../../utils/permissions";
@@ -94,6 +95,7 @@ export function FilesPage({
     zipOperationId,
     selectedFilePathSet,
     fileSort,
+    fileSearch,
     allFilesSelected
   } = state;
   const breadcrumbRef = useRef<HTMLDivElement>(null);
@@ -395,10 +397,15 @@ export function FilesPage({
             </div>
           </div>
 
+          <div className="fileFilterBar" onKeyDown={(event) => { if (event.key === "Escape") actions.changeFileSearch(""); }}>
+            <SearchField label="File filter" placeholder="Filter this folder…" value={fileSearch} onChange={actions.changeFileSearch} />
+          </div>
+
           <section className="fileListSurface" aria-label="File list">
           <div className="selectionActionBar" aria-label="File selection actions">
             <span className="selectionSummary" role="status" aria-live="polite">{operationLabel || selectionSummary}</span>
             <div className="selectionActions">
+              {selectedEntries.length > 0 && <Button variant="ghost" compact iconOnly aria-label="Clear file selection" title="Clear selection" onClick={actions.clearFileSelection}><AppIcon name="x" /></Button>}
               {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
                 <AppIcon name="edit" />
                 <span className="selectionActionLabel">Open</span>
@@ -483,7 +490,9 @@ export function FilesPage({
             {emptyFolderVisible && (
               <div className="fileTableState" role="row">
                 <div role="cell">
-                  <InlineState tone="empty" title="This folder is empty" message="There are no files or folders here yet. Upload a file or create a folder to add content." />
+                  <InlineState tone="empty" title={listing.entries.length > 0 ? "No matching files" : "This folder is empty"}
+                    message={listing.entries.length > 0 ? "Try a different name or clear the filter to see everything in this folder." : "There are no files or folders here yet. Upload a file or create a folder to add content."}
+                    actionLabel={fileSearch ? "Clear filter" : undefined} onAction={fileSearch ? () => actions.changeFileSearch("") : undefined} />
                 </div>
               </div>
             )}
@@ -523,6 +532,8 @@ export function FilesPage({
                   <button
                     type="button"
                     role="rowheader"
+                    aria-label={entry.name}
+                    aria-description={`${fileDisplayType(entry)}${entry.type === "file" ? `, ${formatBytes(entry.size)}` : ""}`}
                     className="fileNameCell"
                     ref={(node) => { if (node) rowButtonRefs.current.set(entry.path, node); else rowButtonRefs.current.delete(entry.path); }}
                     tabIndex={focusedFilePath === entry.path || (!focusedFilePath && sortedFileEntries[0]?.path === entry.path) ? 0 : -1}
@@ -535,7 +546,7 @@ export function FilesPage({
                     title={`${entry.path} — Double-click or press Enter to open`}
                   >
                     <FileTypeIcon entry={entry} />
-                    <span>{entry.name}</span>
+                    <span className="fileNameText"><span>{entry.name}</span><small className="fileCompactMetadata">{fileDisplayType(entry)}{entry.type === "file" ? ` · ${formatBytes(entry.size)}` : ""}</small></span>
                   </button>
                   <span className="fileModifiedCell" role="cell">{dateTimeFormatter.format(new Date(entry.modifiedAt))}</span>
                   <span className="fileTypeCell" role="cell">{fileDisplayType(entry)}</span>
@@ -545,7 +556,7 @@ export function FilesPage({
             })}
           </div>
           <div className="fileTableFooter">
-            <span>{initialFilesLoading ? <SkeletonBlock className="fileFooterCountSkeleton" /> : `${sortedFileEntries.length} items`}</span>
+            <span role="status">{initialFilesLoading ? <SkeletonBlock className="fileFooterCountSkeleton" /> : fileSearch.trim() ? `${sortedFileEntries.length} of ${listing.entries.length} items` : `${sortedFileEntries.length} items`}</span>
             <span title={listing.path}>{initialFilesLoading ? <SkeletonBlock className="fileFooterPathSkeleton" /> : selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : listing.path}</span>
           </div>
           </section>
@@ -583,16 +594,16 @@ export function FilesPage({
             </dl>
             <section className="filePreviewPanel">
               <h3>Preview</h3>
-              {filePreview.loading && <FilePreviewSkeleton />}
-              {filePreview.error && <InlineState tone="error" title="Preview is unavailable" message={`${filePreview.error} You can still download or edit supported text files from the toolbar.`} />}
-              {!filePreview.loading && !filePreview.error && filePreview.data?.preview === "text" && (
+              {(filePreview.loading || filePreview.path !== selectedEntry.path) && <FilePreviewSkeleton />}
+              {filePreview.path === selectedEntry.path && filePreview.error && <InlineState tone="error" title="Preview is unavailable" message={`${filePreview.error} You can still download or edit supported text files from the toolbar.`} />}
+              {filePreview.path === selectedEntry.path && !filePreview.loading && !filePreview.error && filePreview.data?.preview === "text" && (
                 <pre>
                   {(filePreview.data.content ?? "").split(/\r?\n/).slice(0, 80).map((line, index) => (
                     <span key={`${index}-${line.slice(0, 8)}`}><b>{index + 1}</b>{line || " "}</span>
                   ))}
                 </pre>
               )}
-              {!filePreview.loading && !filePreview.error && filePreview.data?.preview !== "text" && (
+              {filePreview.path === selectedEntry.path && !filePreview.loading && !filePreview.error && filePreview.data?.preview !== "text" && (
                 <div className="previewUnavailable">
                   <strong>Preview unavailable</strong>
                   <span>{filePreview.data?.message ?? "This item cannot be previewed here. You can still use the available file actions above."}</span>

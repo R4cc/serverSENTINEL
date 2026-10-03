@@ -92,6 +92,7 @@ export function useFilesWorkspace({
   const [fileBackStack, setFileBackStack] = useState<string[]>([]);
   const [fileForwardStack, setFileForwardStack] = useState<string[]>([]);
   const [fileSort, setFileSort] = useState(defaultFileSort);
+  const [fileSearch, setFileSearch] = useState("");
   const [filePreview, setFilePreview] = useState<FilePreviewState>({ path: "", loading: false, data: null, error: "" });
   const [fileOperationBusy, setFileOperationBusy] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
@@ -179,7 +180,10 @@ export function useFilesWorkspace({
   const selectedTotalSize = selectedEntries.reduce((total, entry) => total + (entry.type === "file" ? entry.size : 0), 0);
   const selectedTouchesServerSettings = selectedEntries.some((entry) => isServerPropertiesPath(entry.path));
   const selectedEntryTouchesServerSettings = Boolean(selectedEntry && isServerPropertiesPath(selectedEntry.path));
-  const sortedFileEntries = useMemo(() => sortFileEntries(listing.entries, fileSort), [listing.entries, fileSort]);
+  const sortedFileEntries = useMemo(() => {
+    const query = fileSearch.trim().toLocaleLowerCase();
+    return sortFileEntries(query ? listing.entries.filter((entry) => entry.name.toLocaleLowerCase().includes(query)) : listing.entries, fileSort);
+  }, [listing.entries, fileSort, fileSearch]);
   const sortedFilePaths = sortedFileEntries.map((entry) => entry.path);
   const allFilesSelected = sortedFilePaths.length > 0 && sortedFilePaths.every((path) => selectedFilePathSet.has(path));
   const someFilesSelected = !allFilesSelected && sortedFilePaths.some((path) => selectedFilePathSet.has(path));
@@ -195,6 +199,11 @@ export function useFilesWorkspace({
     setSelectedFilePaths([]);
     setSelectionAnchorPath("");
     setFocusedFilePath("");
+  }
+
+  function changeFileSearch(value: string) {
+    setFileSearch(value);
+    clearFileSelection();
   }
 
   function toggleSelectAllFiles() {
@@ -274,6 +283,7 @@ export function useFilesWorkspace({
   }, [someFilesSelected]);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (!selectedEntry) {
       setFilePreview({ path: "", loading: false, data: null, error: "" });
       return;
@@ -287,8 +297,9 @@ export function useFilesWorkspace({
       });
       return;
     }
-    void loadFilePreview(selectedEntry);
-  }, [selectedEntry?.path, selectedEntry?.modifiedAt, selectedEntry?.size, activeServer?.id, demoFiles]);
+    void loadFilePreview(selectedEntry, controller.signal);
+    return () => controller.abort();
+  }, [selectedEntry, fileScope, demoFiles]);
 
   /**
    * Carries the selection across a reload, dropping whatever no longer exists. Surviving paths are
@@ -334,10 +345,10 @@ export function useFilesWorkspace({
       if (activeServerIdRef.current === serverId) {
         const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
         setListing(nextListing);
+        if (nextListing.path !== previousPath) setFileSearch("");
         setFilesLoaded(true);
         writeStoredFileLocation(serverId, nextListing.path);
         applyPostLoadSelection(nextListing.entries, preserveSelection);
-        setFilePreview({ path: "", loading: false, data: null, error: "" });
         if (historyMode === "push" && nextListing.path !== previousPath) {
           setFileBackStack((current) => [...current, previousPath].slice(-50));
           setFileForwardStack([]);
@@ -352,10 +363,10 @@ export function useFilesWorkspace({
       if (controller.signal.aborted) return;
       if (activeServerIdRef.current === serverId) {
         setListing(nextListing);
+        if (nextListing.path !== previousPath) setFileSearch("");
         setFilesLoaded(true);
         writeStoredFileLocation(serverId, nextListing.path);
         applyPostLoadSelection(nextListing.entries, preserveSelection);
-        setFilePreview({ path: "", loading: false, data: null, error: "" });
         setFilesError("");
         if (historyMode === "push" && nextListing.path !== previousPath) {
           setFileBackStack((current) => [...current, previousPath].slice(-50));
@@ -436,7 +447,7 @@ export function useFilesWorkspace({
     void openFile(entry.path);
   }
 
-  async function loadFilePreview(entry: FileEntry) {
+  async function loadFilePreview(entry: FileEntry, signal: AbortSignal) {
     if (!activeServer) return;
     setFilePreview({ path: entry.path, loading: true, data: null, error: "" });
     if (!activeServerIsDemo && !hasFileManagerPermission(permissionUser, entry.path, "view")) {
@@ -463,11 +474,13 @@ export function useFilesWorkspace({
       return;
     }
     try {
-      const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/file/preview?path=${encodeURIComponent(entry.path)}`);
+      const preview = await api<FilePreview>(`/api/servers/${activeServer.id}/file/preview?path=${encodeURIComponent(entry.path)}`, { signal });
+      if (signal.aborted) return;
       setFilePreview((current) => current.path === entry.path
         ? { path: entry.path, loading: false, data: preview, error: "" }
         : current);
     } catch (error) {
+      if (signal.aborted) return;
       setFilePreview((current) => current.path === entry.path
         ? { path: entry.path, loading: false, data: null, error: errorMessage(error, "Could not load a preview for this file.") }
         : current);
@@ -611,6 +624,7 @@ export function useFilesWorkspace({
         await loadFiles(activeServer.id, listing.path);
       }
       const folderPath = joinPublicPath(listing.path, name.trim());
+      setFileSearch("");
       setSelectedFilePaths([folderPath]);
       setFocusedFilePath(folderPath);
       setSelectionAnchorPath(folderPath);
@@ -633,6 +647,10 @@ export function useFilesWorkspace({
     const nameError = fileNameValidation(file.name);
     if (nameError) {
       notify("error", nameError);
+      return;
+    }
+    if (listing.entries.some((entry) => entry.name === file.name)) {
+      notify("error", "A file or folder with that name already exists. Rename the file before uploading it.");
       return;
     }
     if (file.size > 256 * 1024 * 1024) {
@@ -658,6 +676,7 @@ export function useFilesWorkspace({
         });
         await loadFiles(activeServer.id, listing.path);
       }
+      setFileSearch("");
       setSelectedFilePaths([targetPath]);
       setFocusedFilePath(targetPath);
       setSelectionAnchorPath(targetPath);
@@ -888,6 +907,7 @@ export function useFilesWorkspace({
         });
         await loadFiles(activeServer.id, listing.path);
       }
+      setFileSearch("");
       setSelectedFilePaths([targetPath]);
       setFocusedFilePath(targetPath);
       setSelectionAnchorPath(targetPath);
@@ -976,6 +996,7 @@ export function useFilesWorkspace({
         });
         await loadFiles(activeServer.id, listing.path);
       }
+      setFileSearch("");
       setSelectedFilePaths([targetPath]);
       setFocusedFilePath(targetPath);
       setSelectionAnchorPath(targetPath);
@@ -991,6 +1012,7 @@ export function useFilesWorkspace({
   }
 
   function clearWorkspace() {
+    setFileSearch("");
     listingRequestRef.current?.abort();
     listingRequestRef.current = null;
     setListing({ path: "/", entries: [] });
@@ -1008,6 +1030,7 @@ export function useFilesWorkspace({
   }
 
   function initializeDemoRoot(path = "/") {
+    setFileSearch("");
     listingRequestRef.current?.abort();
     listingRequestRef.current = null;
     const nextListing = demoFixtures().demoListing(path, demoFiles, demoInstalledMods);
@@ -1017,6 +1040,7 @@ export function useFilesWorkspace({
   }
 
   function setUnavailable(message: string) {
+    setFileSearch("");
     listingRequestRef.current?.abort();
     listingRequestRef.current = null;
     setFilesError(message);
@@ -1033,6 +1057,7 @@ export function useFilesWorkspace({
   }
 
   function resetPageState() {
+    setFileSearch("");
     setSelectedFilePaths([]);
     setFocusedFilePath("");
     setSelectionAnchorPath("");
@@ -1097,6 +1122,7 @@ export function useFilesWorkspace({
       selectedFilePaths,
       selectedFilePathSet,
       fileSort,
+      fileSearch,
       allFilesSelected
     },
     refs: {
@@ -1113,6 +1139,7 @@ export function useFilesWorkspace({
       activateFileEntry,
       selectFileEntry,
       clearFileSelection,
+      changeFileSearch,
       toggleSelectAllFiles,
       toggleFileSort: (id: Parameters<typeof nextFileSort>[1]) => setFileSort((current) => nextFileSort(current, id)),
       moveFileFocus,

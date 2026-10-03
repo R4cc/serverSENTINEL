@@ -1,5 +1,5 @@
-import { createWriteStream, existsSync } from "node:fs";
-import { copyFile, lstat, mkdir, readdir, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { constants, createWriteStream, existsSync } from "node:fs";
+import { chmod, copyFile, link, lstat, mkdir, readdir, rename, rm, rmdir, stat, writeFile, type FileHandle } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Transform } from "node:stream";
@@ -77,25 +77,44 @@ export async function listServerDirectory(
     throw new Error("Path is not a directory");
   }
   const entries = await readdir(target, { withFileTypes: true });
+  const listed = [];
+  // Bound filesystem work in large world/region folders. A rotating log or removed
+  // file should disappear from the listing rather than fail the entire folder.
+  for (let offset = 0; offset < entries.length; offset += 32) {
+    const batch = await Promise.all(entries.slice(offset, offset + 32).map(async (entry) => {
+      const absolutePath = join(target, entry.name);
+      try {
+        const entryStat = await lstat(absolutePath);
+        return {
+          name: entry.name,
+          path: toPublicServerPath(scope, absolutePath),
+          type: entryStat.isDirectory() ? "directory" : "file",
+          size: entryStat.size,
+          modifiedAt: entryStat.mtime.toISOString(),
+          status: options.status ? options.status(entryStat, entry.name) : fileManagerStatus(entryStat, entry.name)
+        };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw error;
+      }
+    }));
+    listed.push(...batch.filter((entry) => entry !== null));
+  }
   return {
     path: toPublicServerPath(scope, target),
-    entries: await Promise.all(
-      entries
-        .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
-        .map(async (entry) => {
-          const absolutePath = join(target, entry.name);
-          const entryStat = await lstat(absolutePath);
-          return {
-            name: entry.name,
-            path: toPublicServerPath(scope, absolutePath),
-            type: entry.isDirectory() ? "directory" : "file",
-            size: entryStat.size,
-            modifiedAt: entryStat.mtime.toISOString(),
-            status: options.status ? options.status(entryStat, entry.name) : fileManagerStatus(entryStat, entry.name)
-          };
-        })
-    )
+    entries: listed.sort((a, b) => Number(b.type === "directory") - Number(a.type === "directory") || a.name.localeCompare(b.name))
   };
+}
+
+async function readBoundedFile(handle: FileHandle, maximumBytes: number) {
+  const buffer = Buffer.alloc(maximumBytes + 1);
+  let size = 0;
+  while (size < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, size, buffer.length - size, null);
+    if (bytesRead === 0) break;
+    size += bytesRead;
+  }
+  return buffer.subarray(0, size);
 }
 
 /**
@@ -120,7 +139,10 @@ export async function previewServerFile(
     if (targetStat.size > options.sizeLimit) {
       return { path, preview: "too_large", message: "File too large to preview" };
     }
-    const buffer = await handle.readFile();
+    const buffer = await readBoundedFile(handle, options.sizeLimit);
+    if (buffer.length > options.sizeLimit) {
+      return { path, preview: "too_large", message: "File too large to preview" };
+    }
     if (buffer.includes(0)) {
       return { path, preview: "binary", message: "Preview unavailable" };
     }
@@ -151,7 +173,11 @@ export async function readServerTextFile(
       options.onRejected?.("editor_size_limit", path, targetStat.size);
       throw new Error("File is larger than the 2 MiB editor limit");
     }
-    const buffer = await handle.readFile();
+    const buffer = await readBoundedFile(handle, editorFileSizeLimit);
+    if (buffer.length > editorFileSizeLimit) {
+      options.onRejected?.("editor_size_limit", path, buffer.length);
+      throw new Error("File is larger than the 2 MiB editor limit");
+    }
     if (buffer.includes(0)) {
       options.onRejected?.("binary_file", path, targetStat.size);
       throw new Error("Binary files cannot be edited in the browser editor");
@@ -180,7 +206,10 @@ export async function writeServerTextFile(scope: ServerPathScope, target: string
   if (!targetStat.isFile()) {
     throw new Error("Path is not a file");
   }
-  await replaceFileAtomically(target, (temporary) => writeFile(temporary, content, "utf8"));
+  await replaceFileAtomically(target, async (temporary) => {
+    await writeFile(temporary, content, { encoding: "utf8", mode: targetStat.mode, flag: "wx" });
+    await chmod(temporary, targetStat.mode);
+  });
   return { ok: true, path: toPublicServerPath(scope, target) };
 }
 
@@ -255,7 +284,7 @@ export async function copyServerFile(scope: ServerPathScope, source: string, par
   if (existsSync(target)) {
     throw new Error("A file or folder with that name already exists");
   }
-  await copyFile(source, target);
+  await copyFile(source, target, constants.COPYFILE_EXCL);
   return { ok: true, path: toPublicServerPath(scope, target) };
 }
 
@@ -308,7 +337,7 @@ function isUploadSource(value: unknown): value is UploadSource {
 }
 
 /**
- * Writes an upload to a sibling temporary file and renames it into place, so a
+ * Writes an upload to a sibling temporary file and publishes it exclusively, so a
  * failed or oversized transfer never leaves a partial file at the target path.
  */
 export async function writeRuntimeUpload(
@@ -340,14 +369,26 @@ export async function writeRuntimeUpload(
     if (!allowEmpty && size === 0) throw new Error(`${label} cannot be empty`);
     await options.validateTemporary?.(temporary);
     return size;
-  });
+  }, true);
 }
 
-async function replaceFileAtomically<T>(target: string, write: (temporary: string) => Promise<T>) {
+/** Atomically publishes complete bytes without clobbering a concurrent upload or runtime-created file. */
+export async function publishRuntimeUpload(temporary: string, target: string) {
+  try {
+    await link(temporary, target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error("A file or folder with that name already exists");
+    throw error;
+  }
+  await rm(temporary, { force: true });
+}
+
+async function replaceFileAtomically<T>(target: string, write: (temporary: string) => Promise<T>, exclusive = false) {
   const temporary = `${target}.serversentinel-${randomUUID()}.tmp`;
   try {
     const result = await write(temporary);
-    await rename(temporary, target);
+    if (exclusive) await publishRuntimeUpload(temporary, target);
+    else await rename(temporary, target);
     return result;
   } catch (error) {
     await rm(temporary, { force: true }).catch(() => undefined);

@@ -95,7 +95,8 @@ async function assertRequestRecovery(browser) {
     await page.goto(harness.baseUrl);
     await page.locator(".appShell").waitFor();
     await openPage(page, "overview");
-    await page.getByText("Updates not checked", { exact: true }).waitFor();
+    const overviewUpdates = page.locator(".modUpdatesCard");
+    await overviewUpdates.getByText("No updates found", { exact: true }).waitFor();
     await openPage(page, "mods");
     await page.locator(".modsWorkspaceIdentity strong").waitFor();
     assert.deepEqual(snapshotRequests, [{ kind: "installed", forced: false }, { kind: "plan", forced: false }], "Overview did not preload both saved snapshots, or opening Mods restarted a scan");
@@ -112,13 +113,17 @@ async function assertRequestRecovery(browser) {
     await page.evaluate(() => window.pollSavedModSnapshots());
     await openPage(page, "overview");
     const manualList = page.waitForResponse(response => response.url().endsWith("/mods") && response.request().method() === "GET");
+    const checkedPlan = page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/mods/update-plan") && new URL(response.url()).searchParams.get("forceRefresh") === "true");
     await page.getByRole("button", { name: "Recheck mods for updates", exact: true }).click();
-    await page.getByText("Some versions could not be checked", { exact: true }).first().waitFor();
+    await checkedPlan;
+    await overviewUpdates.getByText("No updates found", { exact: true }).waitFor();
     await manualList;
     installedDelay = 0;
     assert.equal(snapshotRequests.filter(request => request.forced && request.kind === "plan").length, 1, "A manual update check did not request exactly one upstream scan");
     assert.equal(snapshotRequests.filter(request => request.forced && request.kind === "installed").length, 0, "The installed-list reload triggered a second upstream scan");
     assert.equal(await page.getByText("Everything is up to date", { exact: true }).count(), 0);
+    assert.equal(await page.getByText("Some versions could not be checked", { exact: true }).count(), 0, "Overview still shows unchecked-version details");
+    assert.equal(await overviewUpdates.getByText("Open Mods to review unchecked versions.", { exact: true }).count(), 0);
     await openPage(page, "mods");
     const identity = page.locator(".modsWorkspaceIdentity strong");
     await page.waitForFunction(() => document.querySelector(".modsWorkspaceIdentity strong")?.textContent === "Polished Library");
