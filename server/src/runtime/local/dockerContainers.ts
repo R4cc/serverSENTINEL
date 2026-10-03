@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { totalmem } from "node:os";
 import { config } from "../../config.js";
-import { dockerHostPortBindings, ensureInsideServer, parseDockerPorts, validateExistingInsideServer } from "../../core.js";
+import { dockerHostPortBindings, openContainedFile, parseDockerPorts, validateExistingInsideServer } from "../../core.js";
+import { readServerConfiguration, writeServerConfiguration } from "./configurationFiles.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../../consoleLogs.js";
 import { validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../../http/validation.js";
 import { defaultServerContainerName } from "../../storage/serverIdentity.js";
@@ -130,12 +130,18 @@ function dockerContainerMountValid(server: ManagedServer, details: DockerContain
  * container name drive that sibling's runtime, so every local Docker path checks ownership instead.
  * Returns the refusal message, or undefined when the container really belongs to this server.
  */
-function containerOwnershipRefusal(server: ManagedServer, labels: ContainerLabels, verb: "control" | "delete") {
+function containerOwnershipRefusal(server: ManagedServer, labels: ContainerLabels, verb: "control" | "delete" | "access") {
   if (isManagedContainerFor(labels, server.id)) return undefined;
   const cause = isManagedContainer(labels)
     ? "belongs to a different managed server"
     : "exists but is not managed by serverSENTINEL";
   return `Container ${dockerContainerName(server)} ${cause}; refusing to ${verb} it`;
+}
+
+export function assertDockerContainerOwnership(server: ManagedServer, details: DockerContainerInspect) {
+  const refusal = containerOwnershipRefusal(server, details.Config?.Labels, "access");
+  if (refusal) throw new Error(refusal);
+  return details;
 }
 
 async function removeDockerContainer(server: ManagedServer) {
@@ -588,9 +594,12 @@ export async function dockerRecentLogs(server: ManagedServer, lineLimit = 200) {
     throw new Error("Console logs are not configured for this managed server instance");
   }
   const tail = consoleLogLineLimit(lineLimit, 200);
+  const details = await inspectDockerContainer(server);
+  if (!details?.Id) throw new Error("Runtime container was not found");
+  assertDockerContainerOwnership(server, details);
   const response = await dockerBufferRequest(
     "GET",
-    `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=${tail}`,
+    `/containers/${encodeURIComponent(details.Id)}/logs?stdout=1&stderr=1&tail=${tail}`,
     200,
     15000,
     undefined,
@@ -652,16 +661,19 @@ export async function dockerResourceStats(server: ManagedServer) {
   };
 }
 
-export function readFileRange(filePath: string, start: number, end: number) {
-  return new Promise<Buffer>((resolveRead, rejectRead) => {
+export async function readFileRange(filePath: string, start: number, end: number) {
+  const handle = await openContainedFile(filePath);
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error("Console log is not a file");
     const chunks: Buffer[] = [];
-    const stream = createReadStream(filePath, { start, end });
-    stream.on("data", (chunk) => {
+    const stream = handle.createReadStream({ start, end, autoClose: false });
+    for await (const chunk of stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    stream.on("error", rejectRead);
-    stream.on("end", () => resolveRead(Buffer.concat(chunks)));
-  });
+    }
+    return Buffer.concat(chunks);
+  } finally {
+    await handle.close();
+  }
 }
 
 export async function readLatestServerLog(server: ManagedServer, lineLimit?: number) {
@@ -680,14 +692,13 @@ export async function readLatestServerLog(server: ManagedServer, lineLimit?: num
 }
 
 export async function updateServerProperties(server: ManagedServer, updates: Record<string, string>) {
-  const path = ensureInsideServer(server, "server.properties");
   let values: Record<string, string> = {};
   try {
-    values = parseServerProperties(await readFile(path, "utf8"));
+    values = parseServerProperties(await readServerConfiguration(server, "server.properties"));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  await writeFile(path, serializeServerProperties({ ...values, ...updates }), "utf8");
+  await writeServerConfiguration(server, "server.properties", serializeServerProperties({ ...values, ...updates }));
 }
 
 export function normalizeJavaRuntime(server: ManagedServer) {

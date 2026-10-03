@@ -13,7 +13,7 @@ import { runtimeProfileForServer, type ServerJarProvider } from "../runtime/prof
 import { runtimeSelection } from "../runtime/selection.js";
 import { ensureDockerContainer, removeManagedDockerContainer, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
 
-import { ensureInsideServer } from "../core.js";
+import { ensureInsideServer, writeContainedFile } from "../core.js";
 import { newServerId, serverDirectory, serverStorageName, defaultServerContainerName } from "../storage/serverIdentity.js";
 import { requiredString } from "../storage/valueValidation.js";
 import { activeProvisionPortReservations, assertNodePortsAvailable, normalizeCreateServerPorts, type CreateServerInput } from "./ports.js";
@@ -83,7 +83,7 @@ export async function downloadServerJar(server: ManagedServer) {
   }
   const content = await readRuntimeArtifact(response);
   verifyRuntimeArtifact(profile, content);
-  await writeFile(target, content);
+  await writeContainedFile(server, filename, content);
   const downloaded = await stat(target);
   if (!downloaded.isFile() || downloaded.size === 0) {
     throw new Error(`${runtime.displayName} server download did not produce a runnable jar`);
@@ -112,7 +112,7 @@ async function createServerFiles(
     "enable-query": "true",
     "query.port": String(queryPort)
   });
-  await writeFile(ensureInsideServer(server, "eula.txt"), `# Managed by serverSENTINEL\n# Only set true if you accept the Minecraft EULA.\neula=${acceptEula ? "true" : "false"}\n`, "utf8");
+  await writeContainedFile(server, "eula.txt", `# Managed by serverSENTINEL\n# Only set true if you accept the Minecraft EULA.\neula=${acceptEula ? "true" : "false"}\n`);
   await writeVersionMetadataFile(server);
   await writeFile(ensureInsideServer(server, "logs/latest.log"), "", { flag: "a" });
 }

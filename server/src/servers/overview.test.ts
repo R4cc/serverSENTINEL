@@ -24,6 +24,7 @@ import {
 } from "./overview.js";
 import type { ConsoleUpstream } from "./consoleChannel.js";
 import type { ManagedServer } from "../types.js";
+import { managedContainerLabels } from "../runtime/containerLabels.js";
 
 type PendingDockerRequest = {
   options: RequestOptions;
@@ -77,7 +78,7 @@ const dockerServer = {
 beforeEach(() => {
   vi.useFakeTimers();
   mockHttpRequest.mockReset();
-  mockInspect.mockReset().mockResolvedValue({ Id: "container-a" });
+  mockInspect.mockReset().mockResolvedValue({ Id: "container-a", Config: { Labels: managedContainerLabels(dockerServer.id, "hash") } });
 });
 
 afterEach(() => {
@@ -93,6 +94,16 @@ describe("overview history retention", () => {
 });
 
 describe("Docker console following", () => {
+  it.each([{}, managedContainerLabels("another-server", "hash")])("refuses live logs from an unmanaged or differently owned container", async (labels) => {
+    mockInspect.mockResolvedValue({ Id: "panel-or-node-container", Config: { Labels: labels } });
+    const requests = recordDockerRequests();
+    const upstream = consoleUpstream();
+    const stop = streamDockerLogs(dockerServer, upstream);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(requests).toHaveLength(0);
+    expect(upstream.unavailable).toHaveBeenCalledWith(expect.stringContaining("refusing to access"));
+    stop?.();
+  });
   it("recovers a burst written during disconnection exactly once, including identical timestamped records", async () => {
     const requests = recordDockerRequests();
     const upstream = consoleUpstream();
@@ -132,7 +143,7 @@ describe("Docker console following", () => {
     const line = "2026-09-05T12:00:00.123456789Z startup\n";
     initial.emit("data", dockerFrame(line));
     initial.emit("end");
-    mockInspect.mockResolvedValue({ Id: "container-b" });
+    mockInspect.mockResolvedValue({ Id: "container-b", Config: { Labels: managedContainerLabels(dockerServer.id, "hash") } });
     await vi.advanceTimersByTimeAsync(dockerFollowRetryMs);
     expect(requests[1].options.path).toContain("/containers/container-b/logs?");
     expect(requests[1].options.path).toContain("tail=all");

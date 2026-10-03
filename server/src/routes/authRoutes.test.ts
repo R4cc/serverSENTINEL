@@ -94,6 +94,34 @@ function authContext(demoEnabled: boolean, permissionGranted = false) {
 }
 
 describe("auth demo login", () => {
+  it.each(["create", "reset password"])("rechecks revoked user-management access after hashing for %s", async (action) => {
+    const app = Fastify();
+    const context = authContext(false, true);
+    const originalHash = context.hashPassword;
+    let revoked = false;
+    context.requireRequestPermission = async () => {
+      if (revoked) throw Object.assign(new Error("Permission denied"), { statusCode: 403 });
+      return context.users.list()[0];
+    };
+    context.users.create({ id: "admin", username: "admin", passwordHash: "old-hash", salt: "salt", permissions: ["users.manage"], rolePreset: "admin", createdAt: "now", updatedAt: "now" });
+    context.hashPassword = async () => {
+      revoked = true;
+      return originalHash();
+    };
+    registerAuthRoutes(app, context);
+    try {
+      const response = await app.inject({
+        method: action === "create" ? "POST" : "PUT",
+        url: action === "create" ? "/api/users" : "/api/users/admin",
+        payload: { username: "attacker", password: "password123", rolePreset: "admin" }
+      });
+      expect(response.statusCode).toBe(403);
+      expect(context.users.list()).toHaveLength(1);
+      expect(context.users.findById("admin")?.passwordHash).toBe("old-hash");
+      expect(context.calls.deletedForUsers).toHaveLength(0);
+    } finally { await app.close(); }
+  });
+
   it("requires the one-time setup token before creating the first administrator", async () => {
     const app = Fastify();
     const context = authContext(false);

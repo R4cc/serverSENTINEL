@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
@@ -15,7 +15,8 @@ import { storageSpaceForPath } from "../servers/storageSpace.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
-import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, openContainedReadStream, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
+import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, openContainedFile, openContainedReadStream, readContainedFile, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer, writeContainedFile } from "../core.js";
+import { readServerConfiguration, writeServerConfiguration } from "../runtime/local/configurationFiles.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerReachable, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { dockerLiveRestoreEnabled, dockerLiveRestoreGuidance, dockerStopQuery, dockerStopRequestTimeoutMs } from "../docker/dockerDaemon.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
@@ -244,6 +245,7 @@ async function serverRoot(server: ManagedServer) {
   const root = resolve(serversRoot, id);
   if (root !== serversRoot && !root.startsWith(serversRoot + sep)) throw new Error("Invalid server root");
   await mkdir(root, { recursive: true });
+  if ((await lstat(root)).isSymbolicLink()) throw new Error("Managed server root cannot be a symbolic link");
   return root;
 }
 
@@ -344,21 +346,21 @@ function ensureQueryDockerPort(dockerPorts: string, queryPort: number) {
 async function writeVersionMetadata(server: ManagedServer) {
   const now = new Date().toISOString();
   const targetRuntime = runtimeTarget(server);
-  const target = await writableInside(server, ".serversentinel-version.json");
+  const scope = { serverDir: await serverRoot(server) };
   let createdAt = now;
   try {
-    const existing = JSON.parse(await readFile(target, "utf8")) as { createdAt?: string };
+    const existing = JSON.parse(await readServerConfiguration(scope, ".serversentinel-version.json")) as { createdAt?: string };
     createdAt = existing.createdAt ?? now;
   } catch {
     createdAt = now;
   }
-  await writeFile(target, `${JSON.stringify({
+  await writeServerConfiguration(scope, ".serversentinel-version.json", `${JSON.stringify({
     minecraftVersion: targetRuntime.minecraftVersion,
     runtimeType: targetRuntime.runtimeType,
     runtimeVersion: targetRuntime.runtimeVersion,
     createdAt,
     updatedAt: now
-  }, null, 2)}\n`, "utf8");
+  }, null, 2)}\n`);
 }
 
 async function pullImage(image: string) {
@@ -493,8 +495,7 @@ async function downloadServerJar(server: ManagedServer, signal?: AbortSignal) {
   }
   const content = await readRuntimeArtifact(res);
   verifyRuntimeArtifact(profile, content);
-  const target = await writableInside(server, artifact.filename);
-  await writeFile(target, content);
+  await writeContainedFile({ serverDir: await serverRoot(server) }, artifact.filename, content);
 }
 
 function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeProfile, now = new Date().toISOString()) {
@@ -606,19 +607,19 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
   }
   await writeVersionMetadata(updated);
   if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
-    const propertiesPath = await writableInside(updated, "server.properties");
+    const scope = { serverDir: await serverRoot(updated) };
     let props: Record<string, string> = {};
     try {
-      props = parseServerProperties(await readFile(propertiesPath, "utf8"));
+      props = parseServerProperties(await readServerConfiguration(scope, "server.properties"));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
-    await writeFile(propertiesPath, serializeServerProperties({
+    await writeServerConfiguration(scope, "server.properties", serializeServerProperties({
       ...props,
       ...(serverPort ? { "server-port": serverPort } : {}),
       "enable-query": "true",
       "query.port": String(queryPort)
-    }), "utf8");
+    }));
   }
   if (containerConfigChanged && dockerAvailable() && !running) {
     const networkingConfig = minecraftContainerNetworkingConfig(await inspectOrMissing(server));
@@ -718,8 +719,7 @@ async function resourceStats(server: ManagedServer, details?: NodeContainerInspe
 }
 
 async function playerObservation(server: ManagedServer, details?: NodeContainerInspect | null) {
-  const propsPath = await inside(server, "server.properties", false);
-  const props = parseServerProperties(await readFile(propsPath, "utf8").catch(() => ""));
+  const props = parseServerProperties(await readServerConfiguration({ serverDir: await serverRoot(server) }, "server.properties").catch(() => ""));
   const minecraftInspect = assertContainerOwnership(server, details === undefined ? await inspectOrMissing(server) : details);
   const running = minecraftInspect?.State?.Running === true;
   const callerInspect = running ? await inspectCurrentContainer().catch(() => null) : null;
@@ -768,77 +768,88 @@ function startConsoleStream(server: ManagedServer, streamId: string, socket: Web
     return () => undefined;
   }
 
-  const name = encodeURIComponent(containerName(server));
-  const request = http.request(
-    {
-      socketPath: config.dockerSocket,
-      path: `/containers/${name}/logs?stdout=1&stderr=1&tail=200&follow=1`,
-      method: "GET"
-    },
-    (response) => {
-      if (response.statusCode !== 200) {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const message = dockerErrorMessage(Buffer.concat(chunks).toString("utf8"), response.statusCode);
-          sendStreamData(socket, streamId, { type: "unavailable", message });
-          finish();
-        });
-        return;
-      }
+  let request: http.ClientRequest | undefined;
+  const follow = async () => {
+    const details = assertContainerOwnership(server, await inspectOrMissing(server));
+    if (closed) return;
+    if (!details?.Id) throw new Error("Runtime container was not found");
+    const name = encodeURIComponent(details.Id);
+    request = http.request(
+      {
+        socketPath: config.dockerSocket,
+        path: `/containers/${name}/logs?stdout=1&stderr=1&tail=200&follow=1`,
+        method: "GET"
+      },
+      (response) => {
+        if (response.statusCode !== 200) {
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk: Buffer) => chunks.push(chunk));
+          response.on("end", () => {
+            const message = dockerErrorMessage(Buffer.concat(chunks).toString("utf8"), response.statusCode);
+            sendStreamData(socket, streamId, { type: "unavailable", message });
+            finish();
+          });
+          return;
+        }
 
-      const decoder = new DockerLogDecoder();
-      let drainTimer: NodeJS.Timeout | undefined;
-      // A container can write faster than the panel's socket drains — a crash loop, a mod logging
-      // per tick. Every other high-volume path here awaits its send; this one cannot, so it pauses
-      // the docker response instead. Without it the frames queue in the agent's heap without limit
-      // and take the whole node down, not just the console.
-      const applyBackpressure = () => {
-        if (closed || drainTimer || socket.bufferedAmount <= consoleStreamHighWaterMark) return;
-        response.pause();
-        drainTimer = setInterval(() => {
-          if (closed || socket.readyState !== WebSocket.OPEN) {
+        const decoder = new DockerLogDecoder();
+        let drainTimer: NodeJS.Timeout | undefined;
+        // A container can write faster than the panel's socket drains — a crash loop, a mod logging
+        // per tick. Every other high-volume path here awaits its send; this one cannot, so it pauses
+        // the docker response instead. Without it the frames queue in the agent's heap without limit
+        // and take the whole node down, not just the console.
+        const applyBackpressure = () => {
+          if (closed || drainTimer || socket.bufferedAmount <= consoleStreamHighWaterMark) return;
+          response.pause();
+          drainTimer = setInterval(() => {
+            if (closed || socket.readyState !== WebSocket.OPEN) {
+              clearInterval(drainTimer);
+              drainTimer = undefined;
+              return;
+            }
+            if (socket.bufferedAmount > consoleStreamHighWaterMark) return;
             clearInterval(drainTimer);
             drainTimer = undefined;
-            return;
+            response.resume();
+          }, consoleStreamDrainPollMs);
+          drainTimer.unref?.();
+        };
+        response.on("data", (chunk: Buffer) => {
+          const text = decoder.write(chunk).toString("utf8");
+          if (text) {
+            sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
+            applyBackpressure();
           }
-          if (socket.bufferedAmount > consoleStreamHighWaterMark) return;
-          clearInterval(drainTimer);
+        });
+        response.on("close", () => {
+          if (drainTimer) clearInterval(drainTimer);
           drainTimer = undefined;
-          response.resume();
-        }, consoleStreamDrainPollMs);
-        drainTimer.unref?.();
-      };
-      response.on("data", (chunk: Buffer) => {
-        const text = decoder.write(chunk).toString("utf8");
-        if (text) {
-          sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
-          applyBackpressure();
-        }
-      });
-      response.on("close", () => {
-        if (drainTimer) clearInterval(drainTimer);
-        drainTimer = undefined;
-      });
-      response.on("end", () => finish());
-      response.on("error", (error) => {
-        sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
-        finish();
-      });
-    }
-  );
+        });
+        response.on("end", () => finish());
+        response.on("error", (error) => {
+          sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+          finish();
+        });
+      }
+    );
 
-  request.on("error", (error) => {
+    request.on("error", (error) => {
+      if (closed) return;
+      sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+      finish();
+    });
+    request.end();
+  };
+  void follow().catch((error) => {
     if (closed) return;
-    sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+    sendStreamData(socket, streamId, { type: "unavailable", message: (error as Error).message });
     finish();
   });
-  request.end();
 
   return () => {
     if (closed) return;
     closed = true;
-    request.destroy();
+    request?.destroy();
     onDone();
   };
 }
@@ -1296,7 +1307,7 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
     if (lineLimit !== undefined) {
       return { text: await readConsoleLogTail(target, lineLimit), source: "logs/latest.log" as const };
     }
-    const handle = await open(target, "r");
+    const handle = await openContainedFile(target);
     try {
       const fileStat = await handle.stat();
       if (!fileStat.isFile()) throw new Error("logs/latest.log is not a file");
@@ -1309,7 +1320,9 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
       await handle.close();
     }
   } catch {
-    const name = encodeURIComponent(containerName(server));
+    const details = assertContainerOwnership(server, await inspectOrMissing(server));
+    if (!details?.Id) throw new Error("Runtime container was not found");
+    const name = encodeURIComponent(details.Id);
     const tail = lineLimit === undefined ? 300 : consoleLogLineLimit(lineLimit);
     const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=${tail}`, 200, 15000, undefined, dockerLogTailMaxBytes)).toString("utf8");
     return { text, source: "docker" as const };
@@ -1319,7 +1332,7 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
 async function readServerLogDelta(server: ManagedServer, cursor?: ServerLogCursor) {
   try {
     const target = await inside(server, "logs/latest.log");
-    const handle = await open(target, "r");
+    const handle = await openContainedFile(target);
     try {
       const fileStat = await handle.stat();
       if (!fileStat.isFile()) throw new Error("logs/latest.log is not a file");
@@ -1380,8 +1393,8 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   if (!inspectionFailed && sections.has("players")) run("players", () => playerObservation(server, details), (value) => { result.players = value; });
   if (sections.has("logs")) run("logs", () => readServerLogDelta(server, item.logCursor), (value) => { result.logs = value; });
   if (sections.has("overviewFiles")) run("overviewFiles", async () => ({
-    properties: await readFile(await inside(server, "server.properties", false), "utf8").catch(() => ""),
-    eula: await readFile(await inside(server, "eula.txt", false), "utf8").catch(() => "")
+    properties: await readServerConfiguration({ serverDir: await serverRoot(server) }, "server.properties").catch(() => ""),
+    eula: await readServerConfiguration({ serverDir: await serverRoot(server) }, "eula.txt").catch(() => "")
   }), (value) => { result.overviewFiles = value; });
   await Promise.all(tasks);
   if (Object.keys(errors).length) result.errors = errors;
@@ -1466,7 +1479,7 @@ async function writeRelativeFile(server: ManagedServer, path: unknown, content: 
   if (existsSync(target)) {
     throw new Error("A file or folder with that name already exists");
   }
-  await writeFile(target, content);
+  await writeFile(target, content, { flag: "wx" });
   return { ok: true, path: publicPath(root, target), size: Buffer.byteLength(content) };
 }
 
@@ -1495,7 +1508,7 @@ async function modsList(server: ManagedServer) {
         };
         try {
           const target = await inside(server, posix.join(runtime.contentDirectory, filename));
-          const sha1 = await modHashCache.sha1(`${server.id}:${filename}`, entry.size, entry.modifiedAt, () => readFile(target));
+          const sha1 = await modHashCache.sha1(`${server.id}:${filename}`, entry.size, entry.modifiedAt, () => readContainedFile(target, uploadLimit));
           return { ...base, sha1 };
         } catch {
           return base;
@@ -1572,11 +1585,12 @@ async function prepareBinaryDownload(message: NodeTransferStartMessage) {
   if (!server) throw new Error("server payload is required");
   if (message.command === "files.download") {
     const target = await inside(server, payload.path);
-    const targetStat = await stat(target);
-    if (!targetStat.isFile()) throw new Error("Download path is not a file");
-    if (targetStat.size > (message.maxBytes ?? uploadLimit)) throw new Error("File exceeds the configured download limit");
-    const handle = await open(target, "r");
-    return { filename: basename(target), size: targetStat.size, stream: handle.createReadStream() };
+    const download = await openContainedReadStream(target);
+    if (download.size > (message.maxBytes ?? uploadLimit)) {
+      download.stream.destroy();
+      throw new Error("File exceeds the configured download limit");
+    }
+    return { filename: basename(target), size: download.size, stream: download.stream };
   }
   if (message.command === "exports.download") {
     const manifest = payload.manifest;
@@ -1851,6 +1865,7 @@ export const __nodeAgentTestHooks = {
   nodeReconnectDelayMs,
   prepareBinaryUpload,
   prepareBinaryDownload,
+  startConsoleStream,
   nodeReplacementContainerConfig,
   selfUpdateContainer
 };

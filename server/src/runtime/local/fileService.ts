@@ -1,5 +1,5 @@
-import { constants, createWriteStream, existsSync } from "node:fs";
-import { chmod, copyFile, link, lstat, mkdir, readdir, rename, rm, rmdir, stat, writeFile, type FileHandle } from "node:fs/promises";
+import { createWriteStream, existsSync } from "node:fs";
+import { chmod, link, lstat, mkdir, readdir, rename, rm, rmdir, stat, writeFile, type FileHandle } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Transform } from "node:stream";
@@ -272,10 +272,6 @@ export async function moveServerEntry(
 }
 
 export async function copyServerFile(scope: ServerPathScope, source: string, parent: string, name: unknown) {
-  const sourceStat = await stat(source);
-  if (!sourceStat.isFile()) {
-    throw new Error("Only files can be duplicated from the browser file manager");
-  }
   const parentStat = await stat(parent);
   if (!parentStat.isDirectory()) {
     throw new Error("Parent path is not a directory");
@@ -284,7 +280,18 @@ export async function copyServerFile(scope: ServerPathScope, source: string, par
   if (existsSync(target)) {
     throw new Error("A file or folder with that name already exists");
   }
-  await copyFile(source, target, constants.COPYFILE_EXCL);
+  const handle = await openContainedFile(source);
+  try {
+    const sourceStat = await handle.stat();
+    if (!sourceStat.isFile()) throw new Error("Only files can be duplicated from the browser file manager");
+    await replaceFileAtomically(target, async (temporary) => {
+      await pipeline(handle.createReadStream({ autoClose: false }), createWriteStream(temporary, { flags: "wx", mode: sourceStat.mode }));
+      await chmod(temporary, sourceStat.mode);
+      await ensureWritableResolvedInsideServer(scope, target);
+    }, true);
+  } finally {
+    await handle.close();
+  }
   return { ok: true, path: toPublicServerPath(scope, target) };
 }
 

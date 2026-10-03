@@ -56,6 +56,19 @@ describe("path safety", () => {
     }
   });
 
+  it("rejects a server root replaced with a link to host data", async () => {
+    const root = await mkdtemp(join(tmpdir(), "serversentinel-root-link-"));
+    try {
+      const serverDir = join(root, "server");
+      const outsideDir = join(root, "outside");
+      await mkdir(outsideDir);
+      await writeFile(join(outsideDir, "credentials"), "host secret");
+      await symlink(outsideDir, serverDir, process.platform === "win32" ? "junction" : "dir");
+      await expect(validateExistingInsideServer({ serverDir }, "credentials")).rejects.toThrow("root cannot be a symbolic link");
+      await expect(ensureWritableInsideServer({ serverDir }, "credentials")).rejects.toThrow("root cannot be a symbolic link");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("rejects writes through a symlinked parent directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "serversentinel-write-"));
     try {

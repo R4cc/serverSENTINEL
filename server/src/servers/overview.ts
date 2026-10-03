@@ -1,12 +1,13 @@
 import http from "node:http";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
+import { readServerConfiguration } from "../runtime/local/configurationFiles.js";
 
 import { config } from "../config.js";
 import { logWarn, errorLogFields } from "../logging.js";
 import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
 import { DockerLogDecoder } from "../docker/dockerLogs.js";
 import { DockerLogResume } from "../docker/dockerLogResume.js";
-import { configuredServerPort, currentContainerInspect, dockerContainerName, dockerControlConfigured, dockerRecentLogs, inspectDockerContainer, normalizeJavaRuntime, readFileRange, readLatestServerLog, serverLogFields, validDockerTimestamp, type DockerContainerInspect } from "../runtime/local/dockerContainers.js";
+import { assertDockerContainerOwnership, configuredServerPort, currentContainerInspect, dockerContainerName, dockerControlConfigured, dockerRecentLogs, inspectDockerContainer, normalizeJavaRuntime, readFileRange, readLatestServerLog, serverLogFields, validDockerTimestamp, type DockerContainerInspect } from "../runtime/local/dockerContainers.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { compactRecentEvents, parseLogEvent } from "./logEvents.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
@@ -44,8 +45,8 @@ export async function serverOverviewData(server: ManagedServer) {
   const [fileLog, dockerLog, properties, eula, dockerInspect] = await Promise.allSettled([
     readLatestServerLog(server),
     dockerConfigured ? dockerRecentLogs(server) : Promise.resolve(""),
-    validateExistingInsideServer(server, "server.properties").then((path) => readFile(path, "utf8")),
-    validateExistingInsideServer(server, "eula.txt").then((path) => readFile(path, "utf8")),
+    readServerConfiguration(server, "server.properties"),
+    readServerConfiguration(server, "eula.txt"),
     dockerConfigured ? dockerRequest<DockerContainerInspect>("GET", `/containers/${encodeURIComponent(dockerContainerName(server))}/json`, 200) : Promise.resolve(null)
   ]);
   const logSources: Array<{ source: ServerEvent["source"]; text: string }> = [];
@@ -78,8 +79,7 @@ export async function serverOverviewData(server: ManagedServer) {
 }
 
 export async function readLocalPlayerObservation(server: ManagedServer) {
-  const path = await validateExistingInsideServer(server, "server.properties").catch(() => "");
-  const props = path ? parseServerProperties(await readFile(path, "utf8")) : {};
+  const props = parseServerProperties(await readServerConfiguration(server, "server.properties").catch(() => ""));
   const minecraftInspect = dockerControlConfigured(server) ? await inspectDockerContainer(server).catch(() => null) : null;
   const running = minecraftInspect?.State?.Running === true;
   const callerInspect = running && dockerAvailable() ? await currentContainerInspect().catch(() => null) : null;
@@ -194,6 +194,12 @@ export function streamDockerLogs(server: ManagedServer, upstream: ConsoleUpstrea
     }
     if (closed) return;
     if (!details?.Id) { reattach(); return; }
+    try {
+      assertDockerContainerOwnership(server, details);
+    } catch (error) {
+      upstream.unavailable((error as Error).message);
+      return;
+    }
     if (containerId !== details.Id) {
       containerId = details.Id;
       resume = new DockerLogResume();

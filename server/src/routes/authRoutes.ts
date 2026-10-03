@@ -56,6 +56,12 @@ function pruneExpiredSessions(context: AuthRoutesContext, now = Date.now()) {
   context.sessions.deleteExpired(new Date(now - context.sessionMaxAgeSeconds * 1000).toISOString());
 }
 
+async function recheckUserManagement(context: AuthRoutesContext, request: AuthenticatedRequest) {
+  // Password hashing yields. Re-read the session and permissions before committing an account
+  // mutation so a revoked administrator cannot use an in-flight request to regain access.
+  return context.requireRequestPermission({ headers: request.headers }, "users.manage");
+}
+
 export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesContext) {
   app.get("/api/auth/session", async (request) => {
     pruneExpiredSessions(context);
@@ -220,6 +226,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       permissions: permissionData.permissions, createdAt: now, updatedAt: now,
       ...passwordData
     };
+    await recheckUserManagement(context, request);
     context.users.create(createdUser);
     context.logInfo({
       userId: createdUser.id,
@@ -242,6 +249,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const body = request.body ?? {};
     const passwordChanged = typeof body.password === "string" && Boolean(body.password.trim());
     const passwordData = passwordChanged ? await context.hashPassword(context.validatePassword(body.password)) : undefined;
+    await recheckUserManagement(context, request);
     const updatedUser = context.users.updateById(request.params.id, (current) => {
       if (context.demoEnabled && context.isDemoUser(current)) {
         throwHttp(403, "The demo user is managed by demo-mode startup and cannot be changed", { code: "VALIDATION_ERROR" });

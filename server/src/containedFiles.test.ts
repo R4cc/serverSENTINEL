@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { openContainedFile, openContainedReadStream, readContainedFile, statContainedFile } from "./core.js";
+import { readConsoleLogTail } from "./consoleLogs.js";
+import { readFileRange } from "./runtime/local/dockerContainers.js";
+import { copyServerFile } from "./runtime/local/fileService.js";
 
 /**
  * A managed workload can write inside its own server root, so it can replace a validated path with a
@@ -77,6 +80,17 @@ describe("contained file reads", () => {
 });
 
 describeSymlinks("contained file reads against a swapped path", () => {
+  it("refuses log-tail and range reads and file duplication through a swapped symlink", async () => {
+    const root = await temporaryRoot();
+    await mkdir(join(root, "server"));
+    await writeFile(join(root, "secret"), "host credentials");
+    const swapped = join(root, "server", "latest.log");
+    await symlink(join(root, "secret"), swapped);
+    await expect(readConsoleLogTail(swapped, 100)).rejects.toMatchObject({ code: "ELOOP" });
+    await expect(readFileRange(swapped, 0, 15)).rejects.toMatchObject({ code: "ELOOP" });
+    await expect(copyServerFile({ serverDir: join(root, "server") }, swapped, join(root, "server"), "copy.log")).rejects.toMatchObject({ code: "ELOOP" });
+  });
+
   it("refuses to open a symlink pointing outside the server root", async () => {
     const root = await temporaryRoot();
     const outside = join(root, "outside-secret");

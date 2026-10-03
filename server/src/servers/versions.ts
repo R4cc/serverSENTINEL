@@ -1,8 +1,8 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readContainedFile, validateExistingInsideServer } from "../core.js";
+import { writeServerConfiguration } from "../runtime/local/configurationFiles.js";
 import { inflateRawSync } from "node:zlib";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 
-import { ensureWritableInsideServer, validateExistingInsideServer } from "../core.js";
 import { dockerControlConfigured, dockerRecentLogs, readLatestServerLog } from "../runtime/local/dockerContainers.js";
 import { parseServerProperties } from "../runtime/serverProperties.js";
 import { runtimeTarget } from "../runtime/profile.js";
@@ -32,8 +32,7 @@ export async function writeVersionMetadataFile(server: ManagedServer) {
     createdAt: now,
     updatedAt: now
   };
-  const target = await ensureWritableInsideServer(server, versionMetadataFilename);
-  await writeFile(target, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  await writeServerConfiguration(server, versionMetadataFilename, `${JSON.stringify(metadata, null, 2)}\n`);
 }
 
 /**
@@ -76,9 +75,7 @@ async function detectVersionsFromLauncherJar(server: ManagedServer): Promise<Ver
   if (targetRuntime.runtimeType !== "fabric") return {};
   try {
     const jarPath = await validateExistingInsideServer(server, runtimeTarget(server).serverJar);
-    const jarStat = await stat(jarPath);
-    if (!jarStat.isFile() || jarStat.size > 16 * 1024 * 1024) return {};
-    const installProperties = readZipEntry(await readFile(jarPath), "install.properties");
+    const installProperties = readZipEntry(await readContainedFile(jarPath, 16 * 1024 * 1024), "install.properties");
     if (!installProperties) return {};
     const values = parseServerProperties(installProperties.toString("utf8"));
     return {

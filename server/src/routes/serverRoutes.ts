@@ -12,7 +12,8 @@ import { requireNoActiveModMutation } from "../mods/modService.js";
 import { removeModHistoryArchives } from "../mods/modHistory.js";
 import { allocateQueryPort, assertNodePortsAvailable, assertUniqueDockerHostPorts, dockerPortsWithManagedEntries, isValidServerPort, normalizeCreateServerPorts, normalizeManagedPorts, queryPortEntry } from "../servers/ports.js";
 import { runtimeProfileForServer } from "../runtime/profile.js";
-import { requireRequestPermission } from "../auth/sessionService.js";
+import { currentSessionUser, requireRequestPermission } from "../auth/sessionService.js";
+import { watchSocketAuthorization } from "../auth/socketAuthorization.js";
 import { getServer, listManagedServers } from "../servers/store.js";
 import { publicServerStatus } from "../servers/publicViews.js";
 import { serverJarProvider, startProvisionOperation } from "../servers/provisioning.js";
@@ -270,30 +271,50 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
   const url = new URL(request.url, "http://localhost");
   const serverId = url.searchParams.get("serverId") ?? undefined;
   let stopHeartbeat: (() => void) | undefined;
+  let stopAuthorization: (() => void) | undefined;
+  let detachSession: (() => void) | undefined;
+  let closed = false;
+  socket.on("close", () => { closed = true; });
   try {
     await requireRequestPermission(request, "console.view");
     const server = await getServer(serverId);
+    if (closed || socket.readyState !== 1) return;
+    const authorization = watchSocketAuthorization(() => {
+      const user = currentSessionUser(request.headers.cookie);
+      return Boolean(user && hasPermission(user, "console.view"));
+    }, () => {
+      stopHeartbeat?.();
+      detachSession?.();
+      socket.close(1008, "Console access revoked");
+    });
+    stopAuthorization = authorization.stop;
+    socket.on("close", authorization.stop);
+    if (!authorization.allow()) return;
     stopHeartbeat = startConsoleHeartbeat(client);
     socket.on("close", stopHeartbeat);
     // `attach` below subscribes synchronously and then awaits its upstream, which for a remote node
     // is a round trip. A viewer that gives up inside that window would otherwise register its close
     // handler on an already-closed socket, stranding the subscriber and holding the upstream follow
     // open for the life of the process.
-    let closedDuringAttach = false;
-    socket.on("close", () => { closedDuringAttach = true; });
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
 
     // Per viewer, not per buffer: a viewer that cannot keep up drops its own frames and resumes
     // from its cursor, rather than slowing the output everyone else is reading.
     const sender = createConsoleSender(client);
     const session = await consoleHub.attach(server, {
-      lines: (lines, epoch) => { sender.send({ type: "log", epoch, lines }); },
-      unavailable: (message, options) => { sender.send({ type: "unavailable", message, ...options }); },
-      empty: (message) => { sender.send({ type: "empty", message }); }
+      lines: (lines, epoch) => { if (authorization.allow()) sender.send({ type: "log", epoch, lines }); },
+      unavailable: (message, options) => { if (authorization.allow()) sender.send({ type: "unavailable", message, ...options }); },
+      empty: (message) => { if (authorization.allow()) sender.send({ type: "empty", message }); }
     }, consoleCursor(url.searchParams));
-    socket.on("close", session.detach);
-    if (closedDuringAttach) {
+    let detached = false;
+    detachSession = () => {
+      if (detached) return;
+      detached = true;
       session.detach();
+    };
+    socket.on("close", detachSession);
+    if (closed || !authorization.allow()) {
+      detachSession();
       return;
     }
 
@@ -303,14 +324,18 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
     sender.send({ type: "status" });
   } catch (error) {
     stopHeartbeat?.();
+    stopAuthorization?.();
+    detachSession?.();
     logWarn({ serverId, source: "console_websocket", ...errorLogFields(error) }, "Console stream unavailable");
-    const streamError = error as Error & { code?: string };
+    const streamError = error as Error & { code?: string; statusCode?: number };
+    if (socket.readyState !== 1) return;
     client.send(JSON.stringify({
       type: "unavailable",
       message: streamError.message,
       code: streamError.code?.toUpperCase(),
       retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
     }));
+    if (streamError.statusCode === 401 || streamError.statusCode === 403) socket.close(1008, "Console access unavailable");
   }
 });
 
