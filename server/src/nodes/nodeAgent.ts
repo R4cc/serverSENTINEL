@@ -1,3 +1,5 @@
+import { NodeServerUpdateRecovery } from "./serverUpdateRecovery.js";
+import { serverMutations } from "../servers/mutationCoordinator.js";
 import { existsSync } from "node:fs";
 import { lstat, mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix, relative, resolve, sep } from "node:path";
@@ -602,25 +604,36 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
     updatedAt: new Date().toISOString()
   };
 
-  if (jarChanged) {
-    await downloadServerJar(updated, signal);
-  }
-  await writeVersionMetadata(updated);
-  if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
-    const scope = { serverDir: await serverRoot(updated) };
-    let props: Record<string, string> = {};
-    try {
-      props = parseServerProperties(await readServerConfiguration(scope, "server.properties"));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  const recovery = new NodeServerUpdateRecovery(nodeStorage());
+  const root = await serverRoot(server);
+  await recovery.prepare(server, updated, root, [".serversentinel-version.json", "server.properties", ...(jarChanged ? [updated.runtimeProfile.jarArtifact.filename] : [])]);
+  try {
+    if (jarChanged) {
+      await downloadServerJar(updated, signal);
     }
-    await writeServerConfiguration(scope, "server.properties", serializeServerProperties({
-      ...props,
-      ...(serverPort ? { "server-port": serverPort } : {}),
-      "enable-query": "true",
-      "query.port": String(queryPort)
-    }));
+    await writeVersionMetadata(updated);
+    if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
+      const scope = { serverDir: await serverRoot(updated) };
+      let props: Record<string, string> = {};
+      try {
+        props = parseServerProperties(await readServerConfiguration(scope, "server.properties"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      await writeServerConfiguration(scope, "server.properties", serializeServerProperties({
+        ...props,
+        ...(serverPort ? { "server-port": serverPort } : {}),
+        "enable-query": "true",
+        "query.port": String(queryPort)
+      }));
+    }
+    signal?.throwIfAborted();
+    recovery.applied(server.id);
+  } catch (error) {
+    await recovery.recover(server.id, root);
+    throw error;
   }
+  await recovery.recover(server.id, root);
   if (containerConfigChanged && dockerAvailable() && !running) {
     const networkingConfig = minecraftContainerNetworkingConfig(await inspectOrMissing(server));
     await removeManagedContainer(server);
@@ -1366,8 +1379,18 @@ function observationError(error: unknown) {
   return { code: "observation_failed", message: error instanceof Error ? error.message : "Observation failed", details: detailedErrorMessage(error), retryable: true };
 }
 
+async function recoverServerUpdate(recovery: NodeServerUpdateRecovery, server: ManagedServer) {
+  if (recovery.needsRecovery(server.id)) {
+    await serverMutations.run(server.id, async () => recovery.recover(server.id, await serverRoot(server)));
+  }
+}
+
 async function observeServer(item: ServerObservationItem): Promise<ServerObservationResultItem> {
-  const server = item.server as unknown as ManagedServer;
+  const requested = item.server as unknown as ManagedServer;
+  const recovery = new NodeServerUpdateRecovery(nodeStorage());
+  if (!serverMutations.isActive(requested.id)) await recoverServerUpdate(recovery, requested);
+  const pending = recovery.pending(requested);
+  const server = pending ? { ...requested, ...pending.server } : requested;
   const sections = new Set<ServerObservationSection>(item.sections);
   const result: ServerObservationResultItem = { serverId: server.id };
   const errors: ServerObservationResultItem["errors"] = {};
@@ -1388,7 +1411,7 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   const run = (section: ServerObservationSection, operation: () => Promise<unknown>, assign: (value: any) => void) => {
     tasks.push(operation().then(assign).catch((error) => { errors[section] = observationError(error); }));
   };
-  if (!inspectionFailed && sections.has("status")) run("status", () => runtimeStatus(server, details), (value) => { result.status = value; });
+  if (!inspectionFailed && sections.has("status")) run("status", () => runtimeStatus(server, details), (value) => { result.status = pending ? { ...value, configurationUpdate: pending } : value; });
   if (!inspectionFailed && sections.has("stats")) run("stats", () => resourceStats(server, details), (value) => { result.stats = value; });
   if (!inspectionFailed && sections.has("players")) run("players", () => playerObservation(server, details), (value) => { result.players = value; });
   if (sections.has("logs")) run("logs", () => readServerLogDelta(server, item.logCursor), (value) => { result.logs = value; });
@@ -1440,7 +1463,11 @@ async function archivePlan(server: ManagedServer, path: unknown, destinationPath
 function startArchiveExtractionStream(server: ManagedServer, payload: Record<string, unknown>, streamId: string, socket: WebSocket, onDone: () => void) {
   let closed = false;
   const controller = new AbortController();
-  void (async () => {
+  void serverMutations.run(server.id, async () => {
+    const recovery = new NodeServerUpdateRecovery(nodeStorage());
+    await recoverServerUpdate(recovery, server);
+    const pending = recovery.pending(server);
+    if (pending) server = { ...server, ...pending.server };
     const root = await serverRoot(server);
     const archive = await inside(server, payload.path);
     const destination = await writableInside(server, payload.destinationPath);
@@ -1464,7 +1491,7 @@ function startArchiveExtractionStream(server: ManagedServer, payload: Record<str
       sendStreamData(socket, streamId, { type: "result", result: { ...result, destinationPath: publicPath(root, result.destinationPath) } });
       sendStreamEnd(socket, streamId);
     }
-  })().catch((error) => {
+  }).catch((error) => {
     if (!closed) sendStreamEnd(socket, streamId, { code: "archive_extraction_failed", message: (error as Error).message, details: detailedErrorMessage(error) });
   }).finally(onDone);
   return () => {
@@ -1712,7 +1739,25 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   };
 }
 
-async function handleCommand(command: string, payload: any, signal?: AbortSignal) {
+const nodeMutationCommands = new Set(["server.update", "server.delete", "server.start", "server.stop", "server.restart", "server.console.send", "files.write", "files.delete", "files.rename", "files.move", "files.copy", "files.mkdir", "files.archive.extract", "mods.install", "mods.enableDisable", "mods.remove", "content.install", "content.enableDisable", "content.remove"]);
+
+async function handleCommand(command: string, payload: any, signal?: AbortSignal): Promise<unknown> {
+  const server = payload?.server as ManagedServer | undefined;
+  if (!server) return handleCommandImpl(command, payload, signal);
+  const action = async () => {
+    const recovery = new NodeServerUpdateRecovery(nodeStorage());
+    if (nodeMutationCommands.has(command) || !serverMutations.isActive(server.id)) await recoverServerUpdate(recovery, server);
+    const pending = recovery.pending(server);
+    if (command === "server.configuration.read") return pending ?? null;
+    const effective = pending ? { ...server, ...pending.server } : server;
+    const result = await handleCommandImpl(command, { ...payload, server: effective }, signal);
+    if (pending && ["server.inspect", "server.start", "server.stop", "server.restart"].includes(command)) return { ...(result as object), configurationUpdate: pending };
+    return result;
+  };
+  return nodeMutationCommands.has(command) ? serverMutations.run(server.id, action, command === "files.write" && !isMutableConfigurationPath(payload?.path)) : action();
+}
+
+async function handleCommandImpl(command: string, payload: any, signal?: AbortSignal) {
   if (!isNodeCapability(command)) {
     throw new Error(`Unsupported node command ${command}`);
   }
@@ -1855,6 +1900,7 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
 }
 
 export const __nodeAgentTestHooks = {
+  closeStorage: () => { nodeStorageDatabase?.close(); nodeStorageDatabase = undefined; },
   cleanupPreviousNodeContainers,
   createdServerRecord,
   handleCommand,
@@ -1909,9 +1955,10 @@ export async function startNodeAgent() {
     const activeStreams = new Map<string, () => void>();
     const activeRequests = new Map<string, AbortController>();
     type ActiveTransfer =
-      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void>; cancelled: boolean; writeError?: Error }
+      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void>; cancelled: boolean; writeError?: Error; release: () => void }
       | { direction: "download"; stream?: NodeJS.ReadableStream; cancelled: boolean };
     const activeTransfers = new Map<string, ActiveTransfer>();
+    const preparingUploads = new Map<string, { cancelled: boolean }>();
     let accepted = false;
     let lastPanelPingAt = Date.now();
     let heartbeatWatchdog: NodeJS.Timeout | undefined;
@@ -1921,12 +1968,14 @@ export async function startNodeAgent() {
       activeStreams.clear();
       for (const controller of activeRequests.values()) controller.abort();
       activeRequests.clear();
+      for (const upload of preparingUploads.values()) upload.cancelled = true;
       for (const transfer of activeTransfers.values()) {
         if (transfer.direction === "upload") {
           transfer.cancelled = true;
           void transfer.writes.catch(() => undefined)
             .then(() => transfer.file.close().catch(() => undefined))
-            .then(() => rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined));
+            .then(() => rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined))
+            .finally(transfer.release);
         } else {
           transfer.cancelled = true;
           if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();
@@ -2078,23 +2127,41 @@ export async function startNodeAgent() {
         return;
       }
       if (message.type === "transferStart") {
-        if (activeTransfers.has(message.id)) {
+        if (activeTransfers.has(message.id) || preparingUploads.has(message.id)) {
           socket.close(1002, "Duplicate transfer id");
           return;
         }
-        if (activeTransfers.size >= nodeProtocolMaxActiveTransfers) {
+        if (activeTransfers.size + preparingUploads.size >= nodeProtocolMaxActiveTransfers) {
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "node_overloaded", message: "Node transfer limit reached", retryable: true } } satisfies NodeTransferResultMessage));
           return;
         }
         if (message.direction === "upload") {
+          const preparation = { cancelled: false };
+          preparingUploads.set(message.id, preparation);
+          let release: (() => void) | undefined;
           try {
-            const prepared = await prepareBinaryUpload(message);
+            const server = (message.payload as { server?: ManagedServer })?.server;
+            if (!server) throw new Error("server payload is required");
+            const lease = serverMutations.acquire(server.id);
+            release = lease.release;
+            const prepared = await lease.run(async () => {
+              const recovery = new NodeServerUpdateRecovery(nodeStorage());
+              await recoverServerUpdate(recovery, server);
+              const pending = recovery.pending(server);
+              return prepareBinaryUpload(pending ? { ...message, payload: { ...message.payload as object, server: { ...server, ...pending.server } } } : message);
+            });
             const file = await open(prepared.temporaryPath, "wx");
-            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve(), cancelled: false });
+            if (preparation.cancelled || socket.readyState !== WebSocket.OPEN) {
+              await file.close();
+              await rm(prepared.temporaryPath, { force: true });
+              throw new Error("Node disconnected while preparing upload");
+            }
+            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve(), cancelled: false, release: lease.release });
             socket.send(JSON.stringify({ type: "transferReady", id: message.id }));
           } catch (error) {
-            socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_rejected", message: (error as Error).message } } satisfies NodeTransferResultMessage));
-          }
+            release?.();
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_rejected", message: (error as Error).message } } satisfies NodeTransferResultMessage));
+          } finally { preparingUploads.delete(message.id); }
           return;
         }
         const transfer: ActiveTransfer = { direction: "download", cancelled: false };
@@ -2133,6 +2200,7 @@ export async function startNodeAgent() {
         if (!transfer || transfer.direction !== "upload") return;
         try {
           await transfer.writes;
+          if (transfer.cancelled) throw new Error("Transfer was cancelled");
           if (transfer.writeError) throw transfer.writeError;
           if (transfer.received !== transfer.expectedSize || transfer.received !== message.size || transfer.hash.digest("hex") !== message.sha256) {
             throw new Error("Transfer size or SHA-256 did not match");
@@ -2148,13 +2216,16 @@ export async function startNodeAgent() {
               await headerHandle.close();
             }
           }
+          if (transfer.cancelled) throw new Error("Transfer was cancelled");
           await publishRuntimeUpload(transfer.prepared.temporaryPath, transfer.prepared.targetPath);
           activeTransfers.delete(message.id);
+          transfer.release();
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: true, result: { ok: true, path: transfer.prepared.publicTargetPath, size: transfer.received } } satisfies NodeTransferResultMessage));
         } catch (error) {
           await transfer.file.close().catch(() => undefined);
           await rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
           activeTransfers.delete(message.id);
+          transfer.release();
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_failed", message: (error as Error).message } } satisfies NodeTransferResultMessage));
         }
         return;
@@ -2168,6 +2239,8 @@ export async function startNodeAgent() {
         return;
       }
       if (message.type === "transferCancel") {
+        const preparation = preparingUploads.get(message.id);
+        if (preparation) preparation.cancelled = true;
         const transfer = activeTransfers.get(message.id);
         activeTransfers.delete(message.id);
         if (transfer?.direction === "upload") {
@@ -2175,6 +2248,7 @@ export async function startNodeAgent() {
           await transfer.writes.catch(() => undefined);
           await transfer.file.close().catch(() => undefined);
           await rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
+          transfer.release();
         } else if (transfer) {
           transfer.cancelled = true;
           if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();

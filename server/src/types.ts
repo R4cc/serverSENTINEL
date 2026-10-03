@@ -149,6 +149,8 @@ export type ManagedNode = ManagedNodeCore & {
  */
 export type ManagedServer = ManagedServerCore & {
   serverDir: string;
+  /** Internal configuration generation; panel bookkeeping does not advance it. */
+  configurationRevision?: string;
   dockerMountSource?: string;
   dockerWorkingDir?: string;
   /** Import quarantine marker; current conflicts are resolved dynamically from the node inventory. */

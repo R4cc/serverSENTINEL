@@ -17,6 +17,7 @@ vi.mock("../appServices.js", () => ({
 vi.mock("../runtime/local/dockerContainers.js", () => ({ serverLogFields: () => ({}) }));
 
 import { startServerWithIntent } from "./lifecycle.js";
+import { withModMutationLock } from "../mods/managedContent.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,4 +43,17 @@ it("lets an explicit start clear retry history and invalidate pending reconcilia
   expect(managed.crashAttemptTimestamps).toEqual([]);
   expect(fixtures.invalidate).toHaveBeenCalledWith("a");
   expect(fixtures.noteRunning).toHaveBeenCalledWith("a");
+});
+
+it("blocks a scheduled or recovery start during a mod mutation and permits a retry afterward", async () => {
+  const managed = { id: "a", runtimeIntent: "stopped" } as ManagedServer;
+  const gate = Promise.withResolvers<void>();
+  const mutation = withModMutationLock(managed.id, () => gate.promise);
+  await expect(startServerWithIntent(managed)).rejects.toMatchObject({ statusCode: 409 });
+  await expect(startServerWithIntent(managed, { recovery: true })).rejects.toMatchObject({ statusCode: 409 });
+  expect(fixtures.lifecycle).not.toHaveBeenCalled();
+  gate.resolve();
+  await mutation;
+  await startServerWithIntent(managed);
+  expect(fixtures.lifecycle).toHaveBeenCalledOnce();
 });

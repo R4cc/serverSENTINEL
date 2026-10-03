@@ -18,6 +18,7 @@ const publishedSha512 = createHash("sha512").update(jar).digest("hex");
 
 let tempRoot: string;
 let servedBytes: Buffer;
+let loadedHooks: typeof import("./nodeAgent.js").__nodeAgentTestHooks | undefined;
 
 function modrinthFile() {
   return {
@@ -65,7 +66,8 @@ async function loadHooks() {
       fetchProjectVersions: async () => []
     };
   });
-  return (await import("./nodeAgent.js")).__nodeAgentTestHooks;
+  loadedHooks = (await import("./nodeAgent.js")).__nodeAgentTestHooks;
+  return loadedHooks;
 }
 
 function fabricServer(): ManagedServer {
@@ -97,6 +99,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  loadedHooks?.closeStorage();
+  loadedHooks = undefined;
   vi.resetModules();
   await rm(tempRoot, { recursive: true, force: true });
 });

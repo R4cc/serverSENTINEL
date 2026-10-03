@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { ManagedServer, ManagedServerPort, RestartRequiredChange, RestartRequiredModSnapshot, ScheduleStep, ScheduledExecution, ScheduledRun } from "../types.js";
 import type { StorageDatabase } from "./database.js";
@@ -28,7 +29,10 @@ type ServerRow = {
   restart_required_mod_baseline_json: string | null;
   created_at: string;
   updated_at: string;
+  configuration_revision?: string | null;
 };
+
+const serverSelection = "SELECT servers.*, (SELECT value FROM storage_metadata WHERE key = 'server-configuration-revision:' || servers.id) AS configuration_revision FROM servers";
 
 type PortRow = {
   server_id: string;
@@ -148,7 +152,7 @@ export class ServersRepository {
     }
 
     if (!includeSchedules) {
-      return database.prepare<[], ServerRow>("SELECT * FROM servers ORDER BY created_at, id").all()
+      return database.prepare<[], ServerRow>(`${serverSelection} ORDER BY created_at, id`).all()
         .map((row) => this.serverFromRow(row, portsByServer.get(row.id) ?? [], []));
     }
 
@@ -170,7 +174,7 @@ export class ServersRepository {
       schedulesByServer.set(row.server_id, schedules);
     }
 
-    return database.prepare<[], ServerRow>("SELECT * FROM servers ORDER BY created_at, id").all()
+    return database.prepare<[], ServerRow>(`${serverSelection} ORDER BY created_at, id`).all()
       .map((row) => this.serverFromRow(row, portsByServer.get(row.id) ?? [], schedulesByServer.get(row.id) ?? []));
   }
 
@@ -184,7 +188,7 @@ export class ServersRepository {
 
   private findRecord(id: string, includeSchedules: boolean): ManagedServer | undefined {
     const database = this.storage.connection;
-    const row = database.prepare<[string], ServerRow>("SELECT * FROM servers WHERE id = ?").get(id);
+    const row = database.prepare<[string], ServerRow>(`${serverSelection} WHERE id = ?`).get(id);
     if (!row) return undefined;
 
     const ports = database.prepare<[string], PortRow>("SELECT * FROM managed_ports WHERE server_id = ? ORDER BY rowid").all(id).map(portFromRow);
@@ -207,7 +211,7 @@ export class ServersRepository {
   }
 
   private serverFromRow(row: ServerRow, managedPorts: ManagedServerPort[], schedules: ScheduledExecution[]): ManagedServer {
-    return this.normalize({
+    const server = this.normalize({
       id: row.id,
       nodeId: row.node_id,
       displayName: row.display_name,
@@ -236,6 +240,8 @@ export class ServersRepository {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     });
+    if (row.configuration_revision) server.configurationRevision = row.configuration_revision;
+    return server;
   }
 
   create(value: ManagedServer) {
@@ -264,6 +270,7 @@ export class ServersRepository {
       }
       this.upsertServer(database, server, true);
       this.syncPorts(database, server);
+      this.storage.setMetadata(`server-configuration-revision:${server.id}`, randomUUID());
     });
   }
 
@@ -271,8 +278,8 @@ export class ServersRepository {
     return this.storage.transaction((database) => {
       const deleted = database.prepare("DELETE FROM servers WHERE id = ?").run(id).changes > 0;
       if (deleted) {
-        database.prepare("DELETE FROM storage_metadata WHERE key IN (?, ?, ?)")
-          .run(`mod-update-plan:${id}`, `mod-preferences-revision:${id}`, `mod-installed-snapshot:${id}`);
+        database.prepare("DELETE FROM storage_metadata WHERE key IN (?, ?, ?, ?)")
+          .run(`mod-update-plan:${id}`, `mod-preferences-revision:${id}`, `mod-installed-snapshot:${id}`, `server-configuration-revision:${id}`);
       }
       return deleted;
     });

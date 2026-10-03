@@ -7,6 +7,8 @@ import { serverLogFields } from "../runtime/local/dockerContainers.js";
 import { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason } from "./mutableConfigurationGate.js";
 import { unresolvedServerPortIssues } from "./ports.js";
 import { conflict as requestConflict } from "../http/errors.js";
+import { serverMutations } from "./mutationCoordinator.js";
+import { activeModMutations } from "../mods/managedContent.js";
 
 import type { ForegroundOperationInput } from "../operations/operationService.js";
 import type { ManagedServer, OperationRecord } from "../types.js";
@@ -60,7 +62,8 @@ export function setRuntimeLifecycle(server: ManagedServer, patch: Partial<Pick<M
 }
 
 async function withLifecycleLock<T>(server: ManagedServer, operation: () => Promise<T>, recovery = false) {
-  return services.exportCoordinator.withMutation(server.id, async () => {
+  return serverMutations.run(server.id, () => services.exportCoordinator.withMutation(server.id, async () => {
+    if (activeModMutations.has(server.id)) requestConflict("A mod change is already running for this server", { code: "MOD_OPERATION_IN_PROGRESS" });
     if (activeLifecycleActions.has(server.id)) throw new Error("Another lifecycle action is already running for this server");
     activeLifecycleActions.add(server.id);
     if (!recovery) services.runtimeStateCoordinator?.invalidate(server.id);
@@ -69,7 +72,7 @@ async function withLifecycleLock<T>(server: ManagedServer, operation: () => Prom
     } finally {
       activeLifecycleActions.delete(server.id);
     }
-  });
+  }));
 }
 
 async function waitForRuntimeState(server: ManagedServer, running: boolean, timeoutMs: number) {
@@ -199,7 +202,7 @@ export function isMinecraftStopCommand(command: unknown) {
 }
 
 export async function sendConsoleCommandWithIntent(server: ManagedServer, command: unknown) {
-  return services.exportCoordinator.withMutation(server.id, async () => {
+  return serverMutations.run(server.id, () => services.exportCoordinator.withMutation(server.id, async () => {
     if (!isMinecraftStopCommand(command)) return runtimeForServer(server).sendConsoleCommand(server, command);
     if (activeLifecycleActions.has(server.id)) throw new Error("A lifecycle action is already running for this server");
     const previous = server.runtimeIntent ?? "running";
@@ -214,5 +217,5 @@ export async function sendConsoleCommandWithIntent(server: ManagedServer, comman
       if (fallback !== "stopped") services.runtimeStateCoordinator?.noteRunning(server.id);
       throw error;
     }
-  });
+  }));
 }

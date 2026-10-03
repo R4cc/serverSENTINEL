@@ -14,6 +14,14 @@ Requests include relative deadlines when cancellation is negotiated. The panel s
 
 Every panel-to-node payload that carries a server sends the compact specification, never the panel's stored record. The compact form is the complete set of fields a node reads; the stored record additionally carries schedules with their runs, the restart-required mod baseline, and crash history, all of which are panel bookkeeping. Node responses do not echo the specification back — the panel projects status from the record it already holds.
 
+## Remote configuration recovery
+
+Updated nodes advertise the additive `server.configuration.read` capability under protocol 3.1. The compact server specification includes an optional `configurationRevision` advanced only when panel configuration metadata is replaced. Lifecycle, schedule, and restart bookkeeping do not advance it. Older agents remain compatible; recovery requires an updated node agent.
+
+Before changing runtime files, a node snapshots affected files and persists a preparation journal in its SQLite metadata. A failed or interrupted preparation restores the preceding files before subsequent mutations. Once all files are committed, the journal records the applied configuration before Docker container replacement. A Docker failure or lost RPC reply therefore leaves a recoverable applied configuration.
+
+`server.configuration.read`, `server.inspect`, and the status section of `server.observe` can return a recovery record containing `previousFingerprint` and `server`. Status responses use the private `configurationUpdate` field. The panel applies that configuration only if its current record still matches the preceding fingerprint, preserves panel-owned metadata, and removes the recovery field from public status responses. A newer panel edit is never overwritten by a delayed recovery response.
+
 ## Batched observations
 
 `server.observe` accepts up to 32 compact server specifications and any combination of `status`, `stats`, `players`, `logs`, and `overviewFiles`, chosen per item rather than per batch. A node observes at most four servers concurrently, reuses one container inspection for a server's requested sections, and returns section-specific errors without failing the rest of the batch.

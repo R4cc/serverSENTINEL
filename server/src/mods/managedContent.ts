@@ -7,11 +7,12 @@ import { badRequest } from "../http/validation.js";
 import type { NodeRuntime, RuntimeUploadSource } from "../nodes/types.js";
 import type { ManagedServer } from "../types.js";
 import { services } from "../appServices.js";
+import { serverMutations } from "../servers/mutationCoordinator.js";
 export const activeModMutations = new Set<string>();
 export const modFileSizeLimit = managedContentFileSizeLimit;
 
 export async function withModMutationLock<T>(serverId: string, operation: () => Promise<T>) {
-  return services.exportCoordinator.withMutation(serverId, async () => {
+  return serverMutations.run(serverId, () => services.exportCoordinator.withMutation(serverId, async () => {
     if (activeModMutations.has(serverId)) operationInProgress("Another mod change is already running for this server", "MOD_OPERATION_IN_PROGRESS");
     activeModMutations.add(serverId);
     try {
@@ -19,7 +20,7 @@ export async function withModMutationLock<T>(serverId: string, operation: () => 
     } finally {
       activeModMutations.delete(serverId);
     }
-  });
+  }));
 }
 
 export function uploadManagedContentBuffer(

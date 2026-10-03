@@ -6,6 +6,7 @@ import type { ManagedServer, Permission, StoredUser } from "../types.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { FileEditLeasesRepository, fileEditLeaseTimeoutMs } from "../storage/fileEditLeasesRepository.js";
 import { fileContentRevision } from "../files/fileService.js";
+import { serverMutations } from "../servers/mutationCoordinator.js";
 import { registerFileRoutes } from "./fileRoutes.js";
 
 const context = vi.hoisted(() => ({
@@ -103,6 +104,28 @@ function save(leaseId: string, content: string, path = "config.txt", revision = 
 }
 
 describe("file edit concurrency", () => {
+  it("refuses saves during lifecycle or settings mutations before reading the file", async () => {
+    const leaseId = await acquire();
+    readFile.mockClear();
+    const reservation = serverMutations.acquire("server");
+    try {
+      const response = await save(leaseId, "updated");
+      expect(response.statusCode, response.body).toBe(409);
+      expect(readFile).not.toHaveBeenCalled();
+      expect(writeFile).not.toHaveBeenCalled();
+    } finally { reservation.release(); }
+    expect((await save(leaseId, "updated")).statusCode).toBe(200);
+  });
+
+  it("rechecks stopped state after a settings save reads the current revision", async () => {
+    context.user!.permissions.push("servers.editSettings");
+    contents.set("server.properties", "original");
+    const leaseId = await acquire("server.properties");
+    readFile.mockImplementationOnce(async () => { context.running = true; return { content: "original" }; });
+    const response = await save(leaseId, "updated", "server.properties");
+    expect(response.statusCode, response.body).toBe(409);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
   it("allows one save for a lease and rejects a concurrent stale save", async () => {
     const leaseId = await acquire();
     const entered = Promise.withResolvers<void>();

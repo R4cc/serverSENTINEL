@@ -21,7 +21,7 @@ function operation(overrides: Partial<OperationRecord> = {}): OperationRecord {
 
 const requestingUser = { id: "user-1", username: "manager" } as StoredUser;
 
-function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord; mayCancel?: boolean; cancelOperation?: OperationsRoutesContext["cancelOperation"] } = {}) {
+function testApp(options: { user?: StoredUser; found?: OperationRecord; cancelled?: OperationRecord; mayCancel?: boolean; cancelOperation?: OperationsRoutesContext["cancelOperation"] } = {}) {
   const app = Fastify();
   const permissions: Permission[] = [];
   let destructiveRateLimitCalls = 0;
@@ -41,7 +41,7 @@ function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord
     },
     requireRequestPermission: async (_request, permission) => {
       permissions.push(permission);
-      return requestingUser;
+      return options.user ?? requestingUser;
     },
     assertServerExists,
     mayCancelOperation: () => options.mayCancel ?? true,
@@ -59,6 +59,39 @@ function testApp(options: { found?: OperationRecord; cancelled?: OperationRecord
 }
 
 describe("operations routes", () => {
+  it.each(["list", "detail", "cancel"])("projects restricted schedule results and internal diagnostics on %s responses", async (endpoint) => {
+    const record = operation({ type: "schedule.run", logSummary: "private stack", result: { run: { details: { steps: [{ command: "private command", logs: ["private console"] }] } } } });
+    const user = { ...requestingUser, permissions: ["servers.view", "servers.editSettings"] } as StoredUser;
+    const harness = testApp({ found: record, cancelled: record, user });
+    harness.operations.list.mockReturnValue([record]);
+    const url = endpoint === "list" ? "/api/operations" : `/api/operations/${operationId}${endpoint === "cancel" ? "/cancel" : ""}`;
+    const response = await harness.app.inject({ method: endpoint === "cancel" ? "POST" : "GET", url });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toMatch(/private stack|private command|private console/);
+    expect(record.logSummary).toBe("private stack");
+  });
+
+  it("retains schedule details for schedule viewers and requires console permission for captured logs", async () => {
+    const record = operation({ type: "schedule.run", logSummary: "private stack", result: { run: { details: { steps: [{ command: "say test", logs: ["captured output"] }] } } } });
+    const user = { ...requestingUser, permissions: ["servers.view", "schedules.view"] } as StoredUser;
+    const harness = testApp({ found: record, user });
+    const first = await harness.app.inject({ url: `/api/operations/${operationId}` });
+    expect(first.body).toContain("say test");
+    expect(first.body).not.toContain("captured output");
+    user.permissions.push("console.view");
+    const second = await harness.app.inject({ url: `/api/operations/${operationId}` });
+    expect(second.body).toContain("captured output");
+    expect(second.body).not.toContain("private stack");
+  });
+
+  it.each([true, false])("keeps host artifact paths private and preserves only the owner's download link (owner: %s)", async (owner) => {
+    const record = operation({ type: "export.run", createdBy: owner ? "user-1" : "other", result: { artifactPath: "/private/export.zip", artifact: { filename: "export.zip", downloadUrl: "/api/exports/export/download" } } });
+    const user = { ...requestingUser, permissions: ["servers.view", "servers.export"] } as StoredUser;
+    const harness = testApp({ found: record, user });
+    const response = await harness.app.inject({ url: `/api/operations/${operationId}` });
+    expect(response.body).not.toContain("/private/export.zip");
+    expect(response.body.includes("/api/exports/export/download")).toBe(owner);
+  });
   it("lists filtered operations after checking server visibility", async () => {
     const harness = testApp();
 

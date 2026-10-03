@@ -48,6 +48,40 @@ describe("node reconnect backoff", () => {
 });
 
 describe("node lifecycle action exclusion", () => {
+  it("excludes lifecycle actions while a node file mutation is awaiting I/O", async () => {
+    const server = testServer();
+    await mkdir(server.serverDir, { recursive: true });
+    await writeFile(join(server.serverDir, "config.txt"), "old");
+    const writing = hooks.handleCommand("files.write", { server, path: "config.txt", content: "updated" });
+    await expect(hooks.handleCommand("server.start", { server })).rejects.toMatchObject({ statusCode: 409, code: "SERVER_MUTATION_IN_PROGRESS" });
+    await writing;
+    expect(await readFile(join(server.serverDir, "config.txt"), "utf8")).toBe("updated");
+    await expect(hooks.handleCommand("files.write", { server, path: "config.txt", content: "retry" })).resolves.toMatchObject({ ok: true });
+  });
+
+  it("keeps applied settings recoverable when Docker creation fails after the file commit", async () => {
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    await mkdir(server.serverDir, { recursive: true });
+    await writeFile(join(server.serverDir, "server.properties"), "server-port=25565\nquery.port=25566\n");
+    mockDockerAvailable = true;
+    const inspected = { Id: "minecraft-container-id", State: { Running: false, Status: "exited" }, Config: { Labels: managedContainerLabels(server.id, "stale"), OpenStdin: true, AttachStdin: true } };
+    let removed = false;
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path.startsWith("/containers/")) {
+        if (removed) throw new Error("No such container");
+        return inspected;
+      }
+      if (method === "DELETE") { removed = true; return {}; }
+      if (path.startsWith("/images/")) return {};
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+    mockDockerJsonRequest.mockRejectedValue(new Error("container creation failed"));
+    await expect(hooks.handleCommand("server.update", { server, input: { dockerPorts: "25567:25565/tcp,25566:25566/udp", displayName: "Updated" } })).rejects.toThrow("container creation failed");
+    const recovery = await hooks.handleCommand("server.configuration.read", { server }) as { server: ManagedServer };
+    expect(recovery.server).toMatchObject({ id: server.id, displayName: "Updated", dockerPorts: "25567:25565/tcp,25566:25566/udp" });
+    const observation = await hooks.handleCommand("server.observe", { items: [{ server, sections: ["status"] }] }) as { items: Array<{ status: { configurationUpdate: unknown } }> };
+    expect(observation.items[0].status.configurationUpdate).toMatchObject({ server: { displayName: "Updated" } });
+  });
   it("does not disclose files outside a node server through overview configuration", async () => {
     const server = testServer();
     const outside = join(tempRoot, "outside");
@@ -222,6 +256,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  hooks.closeStorage();
   vi.restoreAllMocks();
   delete process.env.SERVERSENTINEL_DATA_DIR;
   delete process.env.HOSTNAME;

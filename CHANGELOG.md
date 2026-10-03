@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.10.5 - 2026-10-03
+
+- Hid internal operation diagnostics and restricted operation results and captured console output to the corresponding permissions.
+- Coordinated lifecycle, scheduled commands, content, settings, and file changes per server to prevent conflicting mutations.
+- Added recoverable remote configuration updates: interrupted file changes roll back, and applied changes reconcile with the panel after Docker failures or lost replies.
+
 ## 26.10.4 - 2026-10-03
 
 - Hardened panel and node runtime file reads and writes against credential exposure and unsafe filesystem links.

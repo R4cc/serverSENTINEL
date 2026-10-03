@@ -20,10 +20,15 @@ import { detailedErrorMessage } from "../logging.js";
 import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer, Permission } from "../types.js";
 import { FileEditCoordinator } from "../files/fileEditCoordinator.js";
+import { serverMutations } from "../servers/mutationCoordinator.js";
 
 export function registerFileRoutes(app: FastifyInstance) {
 const fileEdits = new FileEditCoordinator();
-const withFileMutation = <T>(server: ManagedServer, action: () => Promise<T>) => services.exportCoordinator.withMutation(server.id, action);
+const withFileMutation = <T>(server: ManagedServer, action: () => Promise<T>, sharedFiles = false) => serverMutations.run(server.id, () => services.exportCoordinator.withMutation(server.id, action), sharedFiles);
+const checkedFileMutation = <T>(server: ManagedServer, requiresStopped: boolean, action: () => Promise<T>) => async () => {
+  if (requiresStopped) await requireServerStoppedForMutableConfiguration(server);
+  return action();
+};
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/files", async (request) => {
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
@@ -78,7 +83,7 @@ async function requireArchiveExtractionPermissions(
     touchesServerSettings ||= permission === "servers.editSettings";
   }
   if (touchesServerSettings) await requireServerStoppedForMutableConfiguration(server);
-  return touchesMods;
+  return { touchesMods, touchesServerSettings };
 }
 
 app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: string; conflictPolicy?: string } }>("/api/servers/:id/files/archive/extract", destructiveRateLimit, async (request, reply) => {
@@ -93,41 +98,50 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const alreadyRunning = services.operationsRepository.listActive(server.id).some((operation) => operation.type === "file.extract");
   if (alreadyRunning) throw new Error("Another ZIP extraction is already running for this server");
   const user = await requireRequestPermission(request);
-  // The claim is taken before the archive is read. Planning reads it, the permission decision below
-  // is made from that plan, and extraction opens it a third time — so with the claim taken after
-  // planning the archive could be deleted and re-uploaded in between, and files authorized from one
-  // archive were written from another. Every mutating file route honours this claim.
-  const operation = services.operationsRepository.create({
-    type: "file.extract",
-    serverId: server.id,
-    nodeId: server.nodeId,
-    createdBy: user.id,
-    progress: 0,
-    task: `Extracting ${basename(archive)}`
-  });
-  services.operationsRepository.update(operation.id, {
-    result: { archivePath: runtime.publicPath(server, archive), destinationPath: runtime.publicPath(server, destination) }
-  });
-  services.operationsRepository.start(operation.id, { progress: 5, task: `Validating ${basename(archive)}` });
-  let touchesMods: boolean;
+  const lease = serverMutations.acquire(server.id);
   try {
-    const plan = await runtime.planArchiveExtraction(server, archive, destination);
-    if (plan.blocked.length) throw new Error(`Extraction is blocked by ${plan.blocked[0].path}`);
-    touchesMods = await requireArchiveExtractionPermissions(request, server, runtime, destination, plan);
+    return await lease.run(async () => {
+      // The claim is taken before the archive is read. Planning reads it, the permission decision below
+      // is made from that plan, and extraction opens it a third time — so with the claim taken after
+      // planning the archive could be deleted and re-uploaded in between, and files authorized from one
+      // archive were written from another. Every mutating file route honours this claim.
+      const operation = services.operationsRepository.create({
+        type: "file.extract",
+        serverId: server.id,
+        nodeId: server.nodeId,
+        createdBy: user.id,
+        progress: 0,
+        task: `Extracting ${basename(archive)}`
+      });
+      services.operationsRepository.update(operation.id, {
+        result: { archivePath: runtime.publicPath(server, archive), destinationPath: runtime.publicPath(server, destination) }
+      });
+      services.operationsRepository.start(operation.id, { progress: 5, task: `Validating ${basename(archive)}` });
+      let touchesMods: boolean;
+      let touchesServerSettings: boolean;
+      try {
+        const plan = await runtime.planArchiveExtraction(server, archive, destination);
+        if (plan.blocked.length) throw new Error(`Extraction is blocked by ${plan.blocked[0].path}`);
+        ({ touchesMods, touchesServerSettings } = await requireArchiveExtractionPermissions(request, server, runtime, destination, plan));
+      } catch (error) {
+        // The claim must not outlive a refusal, or the server is left unable to accept file mutations.
+        services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed" });
+        throw error;
+      }
+      const extract = checkedFileMutation(server, touchesServerSettings, () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
+        services.operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
+      }));
+      void (touchesMods ? withTrackedModMutation(server, extract, await requireRequestPermission(request)) : withFileMutation(server, extract)).then(async (result) => {
+        services.operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
+      }).catch((error) => {
+        services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
+      }).finally(() => lease.release());
+      return reply.code(202).send(services.operationsRepository.find(operation.id)!);
+    });
   } catch (error) {
-    // The claim must not outlive a refusal, or the server is left unable to accept file mutations.
-    services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed" });
+    lease.release();
     throw error;
   }
-  const extract = () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
-    services.operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
-  });
-  void (touchesMods ? withTrackedModMutation(server, extract, await requireRequestPermission(request)) : withFileMutation(server, extract)).then(async (result) => {
-    services.operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
-  }).catch((error) => {
-    services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
-  });
-  return reply.code(202).send(services.operationsRepository.find(operation.id)!);
 });
 
 app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/servers/:id/file/preview", async (request) => {
@@ -279,16 +293,16 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   const path = await fileEditLockPath(runtime, server, target);
   const owner = fileLeaseOwner(request, user);
   const leaseId = request.body.leaseId;
-  return fileEdits.run(server.id, path, async () => {
+  return fileEdits.run(server.id, path, () => withFileMutation(server, async () => {
     const lease = services.fileEditLeasesRepository.requireOwned(leaseId, server.id, path, owner);
     const current = await readFileWithRevision(runtime, server, target);
     assertFileRevision(request.body.revision, lease.fileRevision, current.revision);
     // A slow remote read may have outlived the lease or its session.
     services.fileEditLeasesRepository.requireOwned(leaseId, server.id, path, owner);
-    const result = await withFileMutation(server, () => runtime.writeFile(server, target, request.body.content)) as Record<string, unknown>;
+    const result = await checkedFileMutation(server, runtime.isServerSettingsFile(server, target), () => runtime.writeFile(server, target, request.body.content))() as Record<string, unknown>;
     services.fileEditLeasesRepository.release(lease.leaseId, owner);
     return { ...result, revision: fileContentRevision(request.body.content ?? "") };
-  });
+  }, !runtime.isServerSettingsFile(server, target)));
 });
 
 app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/api/servers/:id/folder", destructiveRateLimit, async (request) => {
@@ -324,7 +338,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/files/upload", destructiv
   await requireFilePathPermission(request, server, parent, uploadPermission);
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const touchesMods = runtime.isModsPath(server, target);
-  const upload = () => runtime.uploadFile(server, parent, filename, uploadRequest.content);
+  const upload = checkedFileMutation(server, runtime.isServerSettingsFile(server, target), () => runtime.uploadFile(server, parent, filename, uploadRequest.content));
   return touchesMods ? withTrackedModMutation(server, upload, await requireRequestPermission(request)) : withFileMutation(server, upload);
 });
 
@@ -342,7 +356,7 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
-  const renameEntry = () => runtime.renameFile(server, source, targetName);
+  const renameEntry = checkedFileMutation(server, touchesSettings, () => runtime.renameFile(server, source, targetName));
   return touchesMods ? withTrackedModMutation(server, renameEntry, await requireRequestPermission(request)) : withFileMutation(server, renameEntry);
 });
 
@@ -360,7 +374,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
-  const moveEntry = () => runtime.moveFile(server, source, destination);
+  const moveEntry = checkedFileMutation(server, touchesSettings, () => runtime.moveFile(server, source, destination));
   return touchesMods ? withTrackedModMutation(server, moveEntry, await requireRequestPermission(request)) : withFileMutation(server, moveEntry);
 });
 
@@ -377,7 +391,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.upload");
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
-  const duplicate = () => runtime.duplicateFile(server, source, targetName);
+  const duplicate = checkedFileMutation(server, touchesSettings, () => runtime.duplicateFile(server, source, targetName));
   return touchesMods ? withTrackedModMutation(server, duplicate, await requireRequestPermission(request)) : withFileMutation(server, duplicate);
 });
 
@@ -389,7 +403,7 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   await requireFilePathPermission(request, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
   const touchesMods = runtime.isModsPath(server, target);
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
-  const deleteEntry = () => runtime.deleteFile(server, target, request.query.recursive);
+  const deleteEntry = checkedFileMutation(server, runtime.isServerSettingsFile(server, target), () => runtime.deleteFile(server, target, request.query.recursive));
   return touchesMods ? withTrackedModMutation(server, deleteEntry, await requireRequestPermission(request)) : withFileMutation(server, deleteEntry);
 });
 

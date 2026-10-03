@@ -1,3 +1,4 @@
+import { serverMutations } from "./servers/mutationCoordinator.js";
 import Fastify, { LogController } from "fastify";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -623,7 +624,8 @@ services.runtimeRegistry = new NodeRuntimeRegistry(
     async (serverId) => {
       services.serversRepository.delete(serverId);
     },
-    services.remoteObservationCoordinator
+    services.remoteObservationCoordinator,
+    (serverId) => services.serversRepository.findForRuntime(serverId)
   )
 );
 services.remoteObservationCoordinator.start();
@@ -647,7 +649,7 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
     if (!node || !panelNodeConnections.isConnected(node.id)) throw new Error(`Node ${server.nodeId} is offline`);
     return `${node.id}:${node.connectedAt || "connected"}`;
   },
-  canRestore: (server) => blockingRuntimeOperations(server.id).length === 0 && !activeModMutations.has(server.id) && !activeLifecycleActions.has(server.id),
+  canRestore: (server) => !serverMutations.isActive(server.id) && blockingRuntimeOperations(server.id).length === 0 && !activeModMutations.has(server.id) && !activeLifecycleActions.has(server.id),
   restoreServer: (server) => recordOperation({
     type: "server.start",
     serverId: server.id,

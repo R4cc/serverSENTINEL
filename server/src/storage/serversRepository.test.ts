@@ -119,6 +119,22 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
 }
 
 describe("ServersRepository", () => {
+  it("advances configuration generations only for metadata changes, including a revert", async () => {
+    const { servers } = await createRepositories();
+    const original = managedServer();
+    servers.create(original);
+    servers.replaceMetadata({ ...original, displayName: "Renamed" });
+    const revision = servers.findForRuntime(original.id)!.configurationRevision;
+    expect(revision).toEqual(expect.any(String));
+    servers.setRuntimeIntent(original.id, "running");
+    servers.markRestartRequired(original.id);
+    servers.updateSchedule(original.id, original.schedules![0], "new schedule time");
+    expect(servers.findForRuntime(original.id)!.configurationRevision).toBe(revision);
+    servers.replaceMetadata(original);
+    expect(servers.findForRuntime(original.id)!.configurationRevision).not.toBe(revision);
+    servers.delete(original.id);
+    expect(servers.findForRuntime(original.id)).toBeUndefined();
+  });
   it("reads current runtime configuration without schedule history and preserves detailed reads", async () => {
     const { servers, storage } = await createRepositories();
     const server = managedServer();
@@ -210,7 +226,7 @@ describe("ServersRepository", () => {
     servers.replaceMetadata(updated);
     servers.recordScheduledRun(updated.id, updated.schedules![0].id, updated.schedules![0].recentRuns![0]);
 
-    expect(servers.list()).toEqual([updated]);
+    expect(servers.list()).toEqual([{ ...updated, configurationRevision: expect.any(String) }]);
     expect(storage.connection.prepare("SELECT only_when_no_players AS policy FROM schedules WHERE id = ?").get("schedule-id")).toEqual({ policy: 2 });
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 2 });
   });
@@ -431,7 +447,7 @@ describe("ServersRepository", () => {
     };
     servers.replaceMetadata(renamed);
 
-    expect(servers.list()).toEqual([renamed]);
+    expect(servers.list()).toEqual([{ ...renamed, configurationRevision: expect.any(String) }]);
     expect(servers.list()[0]).toMatchObject({
       id: original.id,
       serverDir: original.serverDir,
