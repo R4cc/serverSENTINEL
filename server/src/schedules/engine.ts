@@ -13,6 +13,15 @@ import { sanitizeScheduleSteps, ScheduleCancellationError, throwIfScheduleCancel
 import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer, OperationRecord, ScheduleProcedure, ScheduledExecution, ScheduledRun, ScheduledRunDetails, ScheduledRunStepDetails } from "../types.js";
 
+const scheduleShutdownReason = new Error("Panel shutdown");
+
+/** Stop waits promptly; an in-progress lifecycle action is awaited before its run settles. */
+export function stopScheduleExecutions() {
+  for (const active of activeScheduleExecutions.values()) {
+    if (!active.controller.signal.aborted) active.controller.abort(scheduleShutdownReason);
+  }
+}
+
 const scheduleWaitRecoveryKind = "schedule.wait-for-empty";
 
 type ScheduleWaitRecovery = {
@@ -156,6 +165,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
     throwIfScheduleCancelled(active.controller.signal);
     active.message = "Checking server status";
     const status = await runtime.serverStatus(server) as { docker?: { running?: boolean } };
+    throwIfScheduleCancelled(active.controller.signal);
     if (!status.docker?.running && scheduleRequiresRunningServer(schedule)) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, reason: "server_offline" }, "Schedule skipped");
       return { status: "skipped", message: "Skipped because Minecraft server is stopped", details: details() };
@@ -165,6 +175,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       throwIfScheduleCancelled(active.controller.signal);
       active.message = "Checking online players";
       const count = await services.playerSnapshotCoordinator!.freshOnlineCount(server);
+      throwIfScheduleCancelled(active.controller.signal);
       if (count === null) {
         logWarn({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, reason: "player_count_unknown" }, "Schedule skipped");
         return { status: "skipped", message: "Skipped because online player count could not be determined", details: details() };
@@ -217,6 +228,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
       if (step.type === "command") {
         const logsBefore = await scheduledRunLogSnapshot(runtime, server);
         try {
+          throwIfScheduleCancelled(active.controller.signal);
           await sendConsoleCommandWithIntent(server, step.command);
           active.message = `Sent command ${index + 1} of ${schedule.steps.length}`;
         } catch (error) {
@@ -236,6 +248,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
           if (hasFollowingStep && step.procedure !== "stop" && startupLogsBefore === undefined) {
             throw new Error("Server logs are unavailable, so startup cannot be validated before the next schedule step");
           }
+          throwIfScheduleCancelled(active.controller.signal);
           await runScheduleProcedure(server, step.procedure);
           if (hasFollowingStep && step.procedure !== "stop") {
             active.message = "Waiting for server startup";
@@ -257,7 +270,7 @@ async function runScheduledExecution(server: ManagedServer, schedule: ScheduledE
   } catch (error) {
     if (error instanceof ScheduleCancellationError || active.controller.signal.aborted) {
       logInfo({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "cancelled" }, "Schedule execution cancelled");
-      return { status: "cancelled", message: "Cancelled by user", details: details() };
+      return { status: "cancelled", message: active.controller.signal.reason === scheduleShutdownReason ? "Interrupted by panel shutdown" : "Cancelled by user", details: details() };
     }
     logError({ ...serverLogFields(server), scheduleId: schedule.id, stepCount: schedule.steps.length, durationMs: durationSince(startedAt), status: "failed", ...errorLogFields(error) }, "Schedule execution failed");
     return { status: "failed", message: error instanceof Error ? error.message : "Scheduled execution failed", details: details() };
@@ -487,6 +500,10 @@ export async function executeMatchedSchedule(
     // that has already finished.
     activeScheduleExecutions.delete(runId);
   }
+  // Only a checkpoint before any steps is safe to resume. Leave that durable operation running,
+  // but remove the in-memory execution and await all of its work before storage closes.
+  if (active.controller.signal.reason === scheduleShutdownReason
+    && parseScheduleWaitRecovery(services.operationsRepository.find(operation.id) ?? operation)) return;
   // Run history represents the invocation instant, not the completion instant.
   // Keeping this aligned with the matched cron minute also makes the durable
   // duplicate guard correct for long-running actions and DST overlaps.
@@ -544,11 +561,11 @@ export function startScheduleExecution(
   if (requireAvailability) services.exportCoordinator.assertMutationAllowed(server.id);
 
   runningSchedules.add(key);
-  void executeMatchedSchedule(server, schedule)
+  void services.operationService.track(executeMatchedSchedule(server, schedule)
     .catch((error) => {
       logError({ ...serverLogFields(server), scheduleId: schedule.id, ...errorLogFields(error) }, "Schedule run could not be recorded");
     })
-    .finally(() => runningSchedules.delete(key));
+    .finally(() => runningSchedules.delete(key)));
 
   return activeScheduledRunsFor(server.id, schedule.id)[0];
 }
@@ -586,7 +603,7 @@ export function resumeWaitingScheduleExecutions(operations: readonly OperationRe
       runId: recovery.runId,
       operationId: operation.id
     }, "Resuming schedule that was waiting for players to leave");
-    void executeMatchedSchedule(server, recovery.schedule, {
+    void services.operationService.track(executeMatchedSchedule(server, recovery.schedule, {
       operationId: operation.id,
       runId: recovery.runId,
       startedAt: recovery.startedAt
@@ -597,7 +614,7 @@ export function resumeWaitingScheduleExecutions(operations: readonly OperationRe
           task: "Schedule recovery failed"
         });
       })
-      .finally(() => runningSchedules.delete(key));
+      .finally(() => runningSchedules.delete(key)));
   }
   return resumed;
 }

@@ -10,6 +10,22 @@ afterEach(() => {
 });
 
 describe("schedules module runtime", () => {
+  it("waits for a pending admission tick before shutdown continues", async () => {
+    let finish!: () => void;
+    const runtime = createScheduleModuleRuntime({
+      tick: () => new Promise<void>((resolve) => { finish = resolve; }), onError: vi.fn(), intervalMs: 1000
+    });
+    runtime.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    const stopped = vi.fn();
+    const stopping = Promise.resolve(runtime.stop()).then(stopped);
+    await Promise.resolve();
+    expect(stopped).not.toHaveBeenCalled();
+    finish();
+    await stopping;
+    expect(stopped).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it.each([false, true])("orphans an old pending tick after disable/re-enable (failure: %s)", async (fail) => {
     let finish!: () => void;
     const tick = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve, reject) => {

@@ -131,11 +131,11 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
       const extract = checkedFileMutation(server, touchesServerSettings, () => runtime.extractArchive(server, archive, destination, conflictPolicy, (progress, task) => {
         services.operationsRepository.update(operation.id, { progress: 10 + Math.round(progress * 0.85), task });
       }));
-      void (touchesMods ? withTrackedModMutation(server, extract, await requireRequestPermission(request)) : withFileMutation(server, extract)).then(async (result) => {
+      void services.operationService.track((touchesMods ? withTrackedModMutation(server, extract, await requireRequestPermission(request)) : withFileMutation(server, extract)).then(async (result) => {
         services.operationsRepository.succeed(operation.id, { progress: 100, task: "Extraction complete", result: { ...result, archivePath: runtime.publicPath(server, archive) } });
       }).catch((error) => {
         services.operationsRepository.fail(operation.id, operationErrorMessage(error, "ZIP extraction failed"), { task: "Extraction failed", logSummary: detailedErrorMessage(error) });
-      }).finally(() => lease.release());
+      }).finally(() => lease.release()));
       return reply.code(202).send(services.operationsRepository.find(operation.id)!);
     });
   } catch (error) {

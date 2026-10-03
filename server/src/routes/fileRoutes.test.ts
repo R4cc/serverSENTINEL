@@ -1,3 +1,5 @@
+import { OperationService } from "../operations/operationService.js";
+import { OperationsRepository } from "../storage/operationsRepository.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import { setImmediate } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -104,6 +106,32 @@ function save(leaseId: string, content: string, path = "config.txt", revision = 
 }
 
 describe("file edit concurrency", () => {
+  it.each([false, true])("drains ZIP extraction and its durable settlement (failure: %s)", async (fail) => {
+    const operations = new OperationsRepository(storage);
+    context.services.operationsRepository = operations;
+    const service = new OperationService(operations, { markRestartRequired: vi.fn(), clearRestartRequired: vi.fn(), errorDetails: String });
+    context.services.operationService = service;
+    context.services.exportCoordinator.assertMutationAllowed = () => {};
+    context.runtime!.planArchiveExtraction = async () => ({ blocked: [], outputPaths: [] }) as never;
+    let finish!: () => void;
+    context.runtime!.extractArchive = () => new Promise((resolve, reject) => {
+      finish = () => fail ? reject(new Error("extraction failed")) : resolve({ ok: true } as never);
+    });
+    const response = await app.inject({ method: "POST", url: "/api/servers/server/files/archive/extract",
+      payload: { path: "archive.zip", destinationPath: "extracted", conflictPolicy: "skip" } });
+    expect(response.statusCode, response.body).toBe(202);
+    const operationId = response.json().id as string;
+    const drained = vi.fn();
+    const draining = service.drain().then(drained);
+    await setImmediate();
+    expect(drained).not.toHaveBeenCalled();
+    expect(serverMutations.isActive("server")).toBe(true);
+    finish();
+    await draining;
+    expect(operations.find(operationId)!.status).toBe(fail ? "failed" : "succeeded");
+    expect(serverMutations.isActive("server")).toBe(false);
+  });
+
   it("refuses saves during lifecycle or settings mutations before reading the file", async () => {
     const leaseId = await acquire();
     readFile.mockClear();

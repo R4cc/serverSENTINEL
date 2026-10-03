@@ -97,6 +97,116 @@ describe("Fastify application factory", () => {
     await rebuiltApp.close();
   });
 
+  it("settles lifecycle and ZIP jobs and preserves safe waits before closing storage", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-shutdown-jobs-"));
+    temporaryDirectories.push(dataDir);
+    process.env = { ...originalEnv, SS_MODE: "all-in-one", SERVERSENTINEL_DATA_DIR: dataDir,
+      SERVERSENTINEL_ENABLE_DEMO: "false", SERVERSENTINEL_SETUP_TOKEN: "0123456789abcdef", SERVERSENTINEL_TRUST_PROXY: "false", LOG_LEVEL: "silent", TZ: "UTC" };
+    vi.resetModules();
+    const { buildApp } = await import("./app.js");
+    const { services } = await import("./appServices.js");
+    const { startScheduleExecution } = await import("./schedules/engine.js");
+    const { activeScheduleExecutions } = await import("./schedules/activeRuns.js");
+    const app = await buildApp();
+    const now = new Date().toISOString();
+    const server: ManagedServer = {
+      id: "11111111-1111-4111-8111-111111111111", nodeId: "local", displayName: "Shutdown test",
+      serverDir: join(dataDir, "servers", "shutdown"), storageName: "shutdown",
+      runtimeProfile: { minecraftVersion: "1.21.4", runtimeType: "fabric", runtimeVersion: "0.16.10",
+        javaMajorVersion: 21, jarProvider: "mcjars", jarArtifact: { filename: "server.jar" },
+        compatibilityStatus: "compatible", resolvedAt: now },
+      runtimeIntent: "stopped", startOnNodeStart: false, createdAt: now, updatedAt: now,
+      schedules: [
+        { id: "22222222-2222-4222-8222-222222222222", name: "Safe wait", cron: "0 * * * *",
+          steps: [{ type: "command", command: "save-all", delaySeconds: 0 }], onlyWhenNoPlayers: true,
+          waitForPlayersToLeave: true, enabled: true, createdAt: now, updatedAt: now },
+        { id: "33333333-3333-4333-8333-333333333333", name: "Delayed command", cron: "0 * * * *",
+          steps: [{ type: "command", command: "say delayed", delaySeconds: 3600 }], onlyWhenNoPlayers: false,
+          waitForPlayersToLeave: false, enabled: true, createdAt: now, updatedAt: now },
+        { id: "44444444-4444-4444-8444-444444444444", name: "Stop", cron: "0 * * * *",
+          steps: [{ type: "action", procedure: "stop", delaySeconds: 0 }], onlyWhenNoPlayers: false,
+          waitForPlayersToLeave: false, enabled: true, createdAt: now, updatedAt: now }
+      ]
+    };
+    services.serversRepository.create(server);
+    const archiveServer = { ...server, id: "55555555-5555-4555-8555-555555555555",
+      displayName: "Archive", serverDir: join(dataDir, "servers", "archive"), schedules: [] };
+    services.serversRepository.create(archiveServer);
+    let finishLifecycle!: () => void;
+    let finishExtraction!: () => void;
+    const lifecycle = vi.fn(() => new Promise((resolve) => { finishLifecycle = () => resolve({ ok: true }); }));
+    const extractArchive = vi.fn(() => new Promise((resolve) => { finishExtraction = () => resolve({ ok: true }); }));
+    const runtime = {
+      serverStatus: async () => ({ docker: { running: true } }), serverLogs: async () => ({ text: "" }),
+      lifecycle, sendConsoleCommand: vi.fn(), publicPath: (_server: unknown, path: string) => `/${path}`,
+      resolveExistingPath: async (_server: unknown, path: string) => path,
+      planArchiveExtraction: async () => ({ blocked: [], outputPaths: [] }), extractArchive
+    };
+    vi.spyOn(services.runtimeRegistry!, "forServer").mockReturnValue(runtime as never);
+    vi.spyOn(services.playerSnapshotCoordinator!, "freshOnlineCount").mockResolvedValue(2);
+    await mkdir(server.serverDir, { recursive: true });
+    await writeFile(join(server.serverDir, "archive.zip"), "mock archive");
+    // Local archive validation only checks that this path exists; the mocked runtime owns the plan.
+    runtime.resolveExistingPath = async (record, path) => path === "archive.zip" ? join((record as ManagedServer).serverDir, path) : path;
+    await mkdir(archiveServer.serverDir, { recursive: true });
+    await writeFile(join(archiveServer.serverDir, "archive.zip"), "mock archive");
+    const csrf = { "x-requested-with": "XMLHttpRequest" };
+    try {
+      const login = await app.inject({ method: "POST", url: "/api/auth/register-first", headers: csrf, payload: { username: "admin", password: "password123", setupToken: "0123456789abcdef" } });
+      expect(login.statusCode, login.body).toBe(200);
+      const cookie = sessionCookieFrom(login);
+      const previousRunId = "66666666-6666-4666-8666-666666666666";
+      services.serversRepository.recordScheduledRun(server.id, server.schedules![0].id, {
+        id: previousRunId, scheduleId: server.schedules![0].id, scheduleName: "Safe wait", status: "success", ranAt: now,
+        details: { stepCount: 1, completedStepCount: 1, steps: [{ stepIndex: 0, type: "command", command: "save-all",
+          delaySeconds: 0, status: "success", startedAt: now, logs: ["Saved the game"], logCaptureStatus: "captured" }] }
+      });
+      const schedules = await app.inject({ method: "GET", url: `/api/servers/${server.id}/schedules`, headers: { ...csrf, cookie } });
+      expect(schedules.statusCode, schedules.body).toBe(200);
+      expect(schedules.json().schedules[0].recentRuns[0].details.steps[0].logs).toBeUndefined();
+      const details = await app.inject({ method: "GET", url: `/api/servers/${server.id}/schedules/${server.schedules![0].id}/runs/${previousRunId}`, headers: { ...csrf, cookie } });
+      expect(details.statusCode, details.body).toBe(200);
+      expect(details.json().run.details.steps[0].logs).toEqual(["Saved the game"]);
+      const waiting = startScheduleExecution(server, server.schedules![0])!;
+      const delayed = startScheduleExecution(server, server.schedules![1])!;
+      const stopping = startScheduleExecution(server, server.schedules![2])!;
+      await vi.waitFor(() => expect(lifecycle).toHaveBeenCalledOnce());
+      const extracted = await app.inject({ method: "POST", url: `/api/servers/${archiveServer.id}/files/archive/extract`,
+        headers: { ...csrf, cookie }, payload: { path: "archive.zip", destinationPath: ".", conflictPolicy: "skip" } });
+      expect(extracted.statusCode, extracted.body).toBe(202);
+      const drain = vi.spyOn(services.operationService, "drain");
+      const closed = vi.fn();
+      const closing = app.close().then(closed);
+      await vi.waitFor(() => expect(drain).toHaveBeenCalled());
+      expect(services.storageDatabase.connection.open).toBe(true);
+      finishLifecycle();
+      await vi.waitFor(() => expect(activeScheduleExecutions.size).toBe(0));
+      expect(closed).not.toHaveBeenCalled();
+      expect(services.storageDatabase.connection.open).toBe(true);
+      finishExtraction();
+      await closing;
+      expect(services.storageDatabase.connection.open).toBe(false);
+      const database = new Database(join(dataDir, "serversentinel.sqlite"), { readonly: true });
+      try {
+        const runs = database.prepare("SELECT result_json, status FROM operations WHERE type = 'schedule.run'").all() as Array<{ result_json: string; status: string }>;
+        const byRun = (id: string) => runs.find((entry) => {
+          const result = JSON.parse(entry.result_json);
+          return result.runId === id || result.run?.id === id;
+        });
+        expect(byRun(waiting.id)?.status).toBe("running");
+        expect(JSON.parse(byRun(waiting.id)!.result_json).phase).toBe("waiting");
+        expect(byRun(delayed.id)?.status).toBe("cancelled");
+        expect(byRun(stopping.id)?.status).toBe("succeeded");
+        expect(database.prepare("SELECT status FROM operations WHERE id = ?").get(extracted.json().id)).toEqual({ status: "succeeded" });
+        expect(runtime.sendConsoleCommand).not.toHaveBeenCalled();
+      } finally { database.close(); }
+    } finally {
+      finishLifecycle?.();
+      finishExtraction?.();
+      await app.close();
+    }
+  });
+
   it("persists node update notification settings through the node API", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "serversentinel-node-notifications-"));
     temporaryDirectories.push(dataDir);

@@ -119,6 +119,32 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
 }
 
 describe("ServersRepository", () => {
+  it("separates configuration, bounded summaries and individual captured run details", async () => {
+    const { servers, storage } = await createRepositories();
+    const server = managedServer();
+    server.schedules![0].recentRuns = [];
+    servers.create(server);
+    const details = { stepCount: 1, completedStepCount: 1, steps: [{ stepIndex: 0, type: "command", command: "save-all", delaySeconds: 0, status: "success", startedAt: server.createdAt, logs: ["captured output"], logCaptureStatus: "captured" }] };
+    const insert = storage.connection.prepare("INSERT INTO scheduled_runs (id, server_id, schedule_id, schedule_name, status, ran_at, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    for (let index = 0; index < 100; index++) {
+      insert.run(`run-${index}`, server.id, "schedule-id", "Backup notice", "success", new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(), index < 75 ? "malformed old payload" : JSON.stringify(details));
+    }
+    expect(servers.find(server.id)!.schedules![0].recentRuns).toEqual([]);
+    expect(servers.list()[0].schedules![0].steps).toEqual(server.schedules![0].steps);
+    expect(servers.list()[0].schedules![0].recentRuns).toEqual([]);
+    const summary = servers.findWithScheduleSummaries(server.id)!;
+    expect(summary.schedules![0].recentRuns).toHaveLength(25);
+    expect(summary.schedules![0].recentRuns![0].id).toBe("run-99");
+    expect(summary.schedules![0].recentRuns![0].details!.steps![0]).toMatchObject({ logCaptureStatus: "captured" });
+    expect(summary.schedules![0].recentRuns![0].details!.steps![0].logs).toBeUndefined();
+    expect(servers.listWithScheduleSummaries()[0]).toEqual(summary);
+    expect(servers.findScheduledRun(server.id, "schedule-id", "run-99")!.details!.steps![0].logs).toEqual(["captured output"]);
+    expect(servers.findScheduledRun(server.id, "schedule-id", "run-74")).toBeUndefined();
+    expect(servers.findScheduledRun(server.id, "other", "run-99")).toBeUndefined();
+    expect(servers.findScheduledRun("other", "schedule-id", "run-99")).toBeUndefined();
+    expect(servers.findWithScheduleHistory(server.id)!.schedules![0].recentRuns).toHaveLength(25);
+  });
+
   it("advances configuration generations only for metadata changes, including a revert", async () => {
     const { servers } = await createRepositories();
     const original = managedServer();
@@ -147,7 +173,7 @@ describe("ServersRepository", () => {
     servers.create(server);
     servers.setRuntimeIntent(server.id, "running");
 
-    const full = servers.find(server.id)!;
+    const full = servers.findWithScheduleHistory(server.id)!;
     const expected = { ...full, schedules: [] };
     expect(servers.listForRuntime()).toEqual([expected]);
     expect(servers.findForRuntime(server.id)).toEqual(expected);
@@ -160,7 +186,7 @@ describe("ServersRepository", () => {
     expect(servers.listForRuntime()).toEqual([expected]);
     expect(servers.findForRuntime(server.id)).toEqual(expected);
     storage.connection.prepare("UPDATE scheduled_runs SET details_json = ?").run(JSON.stringify(server.schedules![0].recentRuns![0].details));
-    expect(servers.list()[0].schedules).toEqual(full.schedules);
+    expect(servers.listWithScheduleHistory()[0].schedules).toEqual(full.schedules);
     storage.setMetadata(`mod-update-plan:${server.id}`, "cached plan");
     storage.setMetadata(`mod-preferences-revision:${server.id}`, "2");
     storage.setMetadata(`mod-installed-snapshot:${server.id}`, "{}");
@@ -177,9 +203,9 @@ describe("ServersRepository", () => {
     servers.create(server);
 
     expect(servers.markStartOnNodeStart(server.nodeId)).toBe(0);
-    expect(servers.list()[0].runtimeIntent).toBe("stopped");
+    expect(servers.listWithScheduleHistory()[0].runtimeIntent).toBe("stopped");
 
-    const optedIn = { ...servers.list()[0], startOnNodeStart: true };
+    const optedIn = { ...servers.listWithScheduleHistory()[0], startOnNodeStart: true };
     servers.replaceMetadata(optedIn);
     servers.setRuntimeLifecycle(server.id, {
       runtimeIntent: "stopped",
@@ -188,12 +214,12 @@ describe("ServersRepository", () => {
     });
 
     expect(servers.markStartOnNodeStart(server.nodeId, "2026-01-02T00:00:00.000Z")).toBe(1);
-    expect(servers.list()[0]).toMatchObject({
+    expect(servers.listWithScheduleHistory()[0]).toMatchObject({
       startOnNodeStart: true,
       runtimeIntent: "running",
       crashAttemptTimestamps: []
     });
-    expect(servers.list()[0].crashLoopSince).toBeUndefined();
+    expect(servers.listWithScheduleHistory()[0].crashLoopSince).toBeUndefined();
   });
 
   it("stores server, port, schedule, and run state in normalized tables", async () => {
@@ -201,10 +227,10 @@ describe("ServersRepository", () => {
     const server = managedServer();
     server.schedules![0].onlyWhenNoPlayers = true;
     server.schedules![0].waitForPlayersToLeave = true;
-    expect(servers.list()).toEqual([]);
+    expect(servers.listWithScheduleHistory()).toEqual([]);
 
     servers.create(server);
-    expect(servers.list()).toEqual([server]);
+    expect(servers.listWithScheduleHistory()).toEqual([server]);
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM managed_ports").get()).toEqual({ count: 2 });
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM schedules").get()).toEqual({ count: 1 });
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 1 });
@@ -226,7 +252,7 @@ describe("ServersRepository", () => {
     servers.replaceMetadata(updated);
     servers.recordScheduledRun(updated.id, updated.schedules![0].id, updated.schedules![0].recentRuns![0]);
 
-    expect(servers.list()).toEqual([{ ...updated, configurationRevision: expect.any(String) }]);
+    expect(servers.listWithScheduleHistory()).toEqual([{ ...updated, configurationRevision: expect.any(String) }]);
     expect(storage.connection.prepare("SELECT only_when_no_players AS policy FROM schedules WHERE id = ?").get("schedule-id")).toEqual({ policy: 2 });
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM scheduled_runs").get()).toEqual({ count: 2 });
   });
@@ -267,7 +293,7 @@ describe("ServersRepository", () => {
 
     servers.create(server);
 
-    expect(servers.list()[0].schedules![0]).toMatchObject({
+    expect(servers.listWithScheduleHistory()[0].schedules![0]).toMatchObject({
       steps: schedule.steps,
       recentRuns: [{ details: schedule.recentRuns![0].details }]
     });
@@ -280,9 +306,9 @@ describe("ServersRepository", () => {
 
     const imported = { ...managedServer("second-id"), portConflictUnresolved: true };
     expect(() => servers.create(imported)).not.toThrow();
-    expect(servers.list()).toHaveLength(2);
-    expect(servers.list().find((server) => server.id === first.id)).toEqual(first);
-    expect(servers.list().find((server) => server.id === imported.id)).toMatchObject({
+    expect(servers.listWithScheduleHistory()).toHaveLength(2);
+    expect(servers.listWithScheduleHistory().find((server) => server.id === first.id)).toEqual(first);
+    expect(servers.listWithScheduleHistory().find((server) => server.id === imported.id)).toMatchObject({
       id: imported.id,
       managedPorts: imported.managedPorts,
       portConflictUnresolved: true
@@ -310,7 +336,7 @@ describe("ServersRepository", () => {
       ranAt: "2026-01-04T00:01:00.000Z"
     });
 
-    const schedule = servers.list()[0].schedules![0];
+    const schedule = servers.listWithScheduleHistory()[0].schedules![0];
     expect(schedule.name).toBe("Renamed schedule");
     expect(schedule.cron).toBe("30 * * * *");
     expect(schedule.lastRunAt).toBe("2026-01-04T00:01:00.000Z");
@@ -325,12 +351,12 @@ describe("ServersRepository", () => {
     expect(servers.markRestartRequired(server.id, "2026-01-02T00:00:00.000Z")).toBe(true);
     expect(servers.markRestartRequired(server.id, "2026-01-03T00:00:00.000Z")).toBe(false);
 
-    const marked = servers.list()[0];
+    const marked = servers.listWithScheduleHistory()[0];
     expect(marked.restartRequiredSince).toBe("2026-01-02T00:00:00.000Z");
     expect(marked.updatedAt).toBe("2026-01-02T00:00:00.000Z");
 
     servers.replaceMetadata({ ...marked, displayName: "Renamed", updatedAt: "2026-01-04T00:00:00.000Z" });
-    expect(servers.list()[0]).toMatchObject({
+    expect(servers.listWithScheduleHistory()[0]).toMatchObject({
       displayName: "Renamed",
       restartRequiredSince: "2026-01-02T00:00:00.000Z",
       updatedAt: "2026-01-04T00:00:00.000Z"
@@ -338,7 +364,7 @@ describe("ServersRepository", () => {
 
     expect(servers.clearRestartRequired(server.id, "2026-01-05T00:00:00.000Z")).toBe(true);
     expect(servers.clearRestartRequired(server.id, "2026-01-06T00:00:00.000Z")).toBe(false);
-    expect(servers.list()[0].restartRequiredSince).toBeUndefined();
+    expect(servers.listWithScheduleHistory()[0].restartRequiredSince).toBeUndefined();
     expect(storage.connection.prepare("SELECT updated_at FROM servers WHERE id = ?").get(server.id)).toEqual({ updated_at: "2026-01-05T00:00:00.000Z" });
   });
 
@@ -349,15 +375,15 @@ describe("ServersRepository", () => {
     const baseline = [{ identity: "file:example.jar", displayName: "example.jar", filename: "example.jar", enabled: true, sha1: "before" }];
     expect(servers.beginModRestartTracking(server.id, baseline, "2026-01-02T00:00:00.000Z")).toBe(true);
     servers.updateModRestartChanges(server.id, [{ type: "mod", identity: "file:example.jar", displayName: "example.jar", filename: "example.jar.disabled", action: "disabled" }], "2026-01-03T00:00:00.000Z");
-    expect(servers.list()[0]).toMatchObject({
+    expect(servers.listWithScheduleHistory()[0]).toMatchObject({
       restartRequiredSince: "2026-01-02T00:00:00.000Z",
       restartRequiredModBaseline: baseline,
       restartRequiredChanges: [{ action: "disabled", displayName: "example.jar" }]
     });
     servers.updateModRestartChanges(server.id, [], "2026-01-04T00:00:00.000Z");
-    expect(servers.list()[0].restartRequiredSince).toBeUndefined();
-    expect(servers.list()[0].restartRequiredChanges).toBeUndefined();
-    expect(servers.list()[0].restartRequiredModBaseline).toBeUndefined();
+    expect(servers.listWithScheduleHistory()[0].restartRequiredSince).toBeUndefined();
+    expect(servers.listWithScheduleHistory()[0].restartRequiredChanges).toBeUndefined();
+    expect(servers.listWithScheduleHistory()[0].restartRequiredModBaseline).toBeUndefined();
   });
 
   it("defaults, updates, and preserves runtime intent", async () => {
@@ -365,13 +391,13 @@ describe("ServersRepository", () => {
     const server = { ...managedServer(), runtimeIntent: undefined };
     servers.create(server);
 
-    expect(servers.list()[0].runtimeIntent).toBe("stopped");
+    expect(servers.listWithScheduleHistory()[0].runtimeIntent).toBe("stopped");
     expect(servers.setRuntimeIntent(server.id, "running", "2026-01-02T00:00:00.000Z")).toBe(true);
     expect(servers.setRuntimeIntent(server.id, "running", "2026-01-03T00:00:00.000Z")).toBe(false);
 
-    const running = servers.list()[0];
+    const running = servers.listWithScheduleHistory()[0];
     servers.replaceMetadata({ ...running, displayName: "Renamed", runtimeIntent: "stopped" });
-    expect(servers.list()[0]).toMatchObject({ displayName: "Renamed", runtimeIntent: "running" });
+    expect(servers.listWithScheduleHistory()[0]).toMatchObject({ displayName: "Renamed", runtimeIntent: "running" });
   });
 
   it("persists restart phases and crash-loop recovery metadata", async () => {
@@ -388,7 +414,7 @@ describe("ServersRepository", () => {
       crashStableSince: undefined
     });
 
-    expect(servers.list()[0]).toMatchObject({
+    expect(servers.listWithScheduleHistory()[0]).toMatchObject({
       runtimeIntent: "restarting",
       restartPhase: "starting",
       crashAttemptTimestamps: ["2026-01-02T00:00:00.000Z"],
@@ -447,14 +473,14 @@ describe("ServersRepository", () => {
     };
     servers.replaceMetadata(renamed);
 
-    expect(servers.list()).toEqual([{ ...renamed, configurationRevision: expect.any(String) }]);
-    expect(servers.list()[0]).toMatchObject({
+    expect(servers.listWithScheduleHistory()).toEqual([{ ...renamed, configurationRevision: expect.any(String) }]);
+    expect(servers.listWithScheduleHistory()[0]).toMatchObject({
       id: original.id,
       serverDir: original.serverDir,
       storageName: original.storageName,
       dockerContainer: original.dockerContainer
     });
-    expect(servers.list()[0].schedules?.[0].id).toBe(original.schedules![0].id);
+    expect(servers.listWithScheduleHistory()[0].schedules?.[0].id).toBe(original.schedules![0].id);
     expect(storage.connection.prepare("SELECT COUNT(*) AS count FROM resource_stats WHERE server_id = ?").get(original.id)).toEqual({ count: 1 });
     expect(modPreferences.list(original.id)).toEqual({ "fabric-api.jar": { channel: "release" } });
   });
@@ -476,7 +502,7 @@ describe("ServersRepository", () => {
     expect(modPreferences.list("server-id")).toEqual({ "fabric-api.jar": { channel: "release" } });
     servers.delete("server-id");
 
-    expect(servers.list()).toEqual([]);
+    expect(servers.listWithScheduleHistory()).toEqual([]);
     for (const table of ["managed_ports", "schedules", "scheduled_runs"]) {
       expect(storage.connection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
     }
@@ -490,10 +516,10 @@ describe("ServersRepository", () => {
 
     expect(() => nodes.deleteWithServers("node-id", false)).toThrow("Cannot delete a node while servers are assigned to it");
     expect(nodes.list()).toHaveLength(1);
-    expect(servers.list()).toHaveLength(1);
+    expect(servers.listWithScheduleHistory()).toHaveLength(1);
 
     expect(nodes.deleteWithServers("node-id", true).deletedServers).toBe(1);
     expect(nodes.list()).toEqual([]);
-    expect(servers.list()).toEqual([]);
+    expect(servers.listWithScheduleHistory()).toEqual([]);
   });
 });

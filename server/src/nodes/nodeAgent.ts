@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { lstat, mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import http from "node:http";
 import WebSocket from "ws";
 import { defaultDockerImageForMinecraftVersion, EXPORT_ARTIFACT_TYPE, EXPORT_MANIFEST_ENTRY, EXPORT_SCHEMA_VERSION, serverRuntimeDefinition, type NodeUpdateFailure, type NodeUpdateFailureStage } from "@serversentinel/contracts";
@@ -26,7 +26,7 @@ import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, vali
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import {
   assertDownloadableModrinthFile,
-  assertModrinthJarHashes,
+  assertModrinthDownloadSize,
   assertVersionInstallable,
   compatibilityFromSelectedVersion,
   managedContentNaming
@@ -52,7 +52,8 @@ import {
   renameServerEntry,
   safeFileManagerName,
   toPublicServerPath,
-  writeServerTextFile
+  writeServerTextFile,
+  writeRuntimeUpload
 } from "../runtime/local/fileService.js";
 import { detectedTotalMemory, minecraftContainerNetworkingConfig } from "../runtime/local/dockerContainers.js";
 import { detailedError, detailedErrorMessage } from "../logging.js";
@@ -1500,16 +1501,6 @@ function startArchiveExtractionStream(server: ManagedServer, payload: Record<str
   };
 }
 
-async function writeRelativeFile(server: ManagedServer, path: unknown, content: Buffer | string) {
-  const root = await serverRoot(server);
-  const target = await writableInside(server, path);
-  if (existsSync(target)) {
-    throw new Error("A file or folder with that name already exists");
-  }
-  await writeFile(target, content, { flag: "wx" });
-  return { ok: true, path: publicPath(root, target), size: Buffer.byteLength(content) };
-}
-
 async function writeEditableFile(server: ManagedServer, path: unknown, content: unknown) {
   const scope = { serverDir: await serverRoot(server) };
   return writeServerTextFile(scope, await inside(server, path), content);
@@ -1545,15 +1536,50 @@ async function modsList(server: ManagedServer) {
   return { mods };
 }
 
-async function writeManagedContentBuffer(server: ManagedServer, filename: unknown, content: Buffer) {
+async function downloadManagedContent(server: ManagedServer, metadata: { url: string; filename: string; hashes?: Record<string, string> }, signal?: AbortSignal) {
   const { directory, singular, Singular } = managedContentNaming(runtimeTarget(server).runtimeType);
-  const name = safeModFilename(safeInstalledModFilename(filename as string | undefined));
-  if (!name.endsWith(".jar")) throw new Error(`${Singular} uploads must be .jar files`);
-  if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
-  assertJarBuffer(content, singular);
+  const name = safeModFilename(safeInstalledModFilename(metadata.filename));
+  if (!name.endsWith(".jar")) throw new Error(`${Singular} downloads must be .jar files`);
   await mkdir(await inside(server, directory, false), { recursive: true });
-  await inside(server, directory);
-  return writeRelativeFile(server, posix.join(directory, name), content);
+  const target = await writableInside(server, posix.join(directory, name));
+  if (existsSync(target)) throw new Error("A file or folder with that name already exists");
+  const response = await modrinthFetch(metadata.url, { signal });
+  try {
+    if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
+    assertModrinthDownloadSize(Number(response.headers.get("content-length")) || undefined, { singular, maximumBytes: uploadLimit });
+    if (!response.body) throw new Error(`${Singular} download has no body`);
+    const sha1 = createHash("sha1");
+    const sha512 = createHash("sha512");
+    let header = Buffer.alloc(0);
+    const inspect = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        sha1.update(chunk);
+        sha512.update(chunk);
+        if (header.length < 4) header = Buffer.concat([header, chunk.subarray(0, 4 - header.length)]);
+        callback(null, chunk);
+      }
+    });
+    const source = Readable.fromWeb(response.body as never);
+    source.on("error", (error) => inspect.destroy(error));
+    inspect.on("close", () => source.destroy());
+    const size = await writeRuntimeUpload(target, { stream: source.pipe(inspect) }, {
+      maximumBytes: uploadLimit, allowEmpty: false, label: `${Singular} download`,
+      validateTemporary: async () => {
+        signal?.throwIfAborted();
+        assertJarBuffer(header, singular);
+        const hashes = { sha1: sha1.digest("hex"), sha512: sha512.digest("hex") };
+        for (const algorithm of ["sha1", "sha512"] as const) {
+          if (metadata.hashes?.[algorithm] && metadata.hashes[algorithm] !== hashes[algorithm]) {
+            throw new Error("Downloaded JAR hash did not match Modrinth metadata");
+          }
+        }
+      }
+    });
+    return { ok: true, path: publicPath(await serverRoot(server), target), size };
+  } catch (error) {
+    if (!response.bodyUsed) await response.body?.cancel().catch(() => undefined);
+    throw error;
+  }
 }
 
 type PreparedBinaryUpload = {
@@ -1675,7 +1701,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const channel: ReleaseChannel = payload.channel === "alpha" || payload.channel === "beta" ? payload.channel : "release";
   const targetRuntime = runtimeTarget(server);
   const naming = managedContentNaming(targetRuntime.runtimeType);
-  const { singular, Singular } = naming;
+  const { singular } = naming;
   if (!targetRuntime.minecraftVersion) throw new Error(`A resolved ${naming.displayName} runtime profile is required before installing compatible ${naming.plural}`);
 
   if (!versionId) {
@@ -1684,11 +1710,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     const file = compatibility.file;
     if (!file?.url || !file.filename) throw new Error("No installable .jar file was found for that version");
     assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
-    const response = await modrinthFetch(file.url, { signal });
-    if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
-    const content = Buffer.from(await response.arrayBuffer());
-    assertModrinthJarHashes(content, file);
-    const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
+    const written = await downloadManagedContent(server, file, signal);
     return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
   }
 
@@ -1718,11 +1740,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const { file, matchesMinecraft } = candidate;
   if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
   assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
-  const response = await modrinthFetch(file.url, { signal });
-  if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
-  const content = Buffer.from(await response.arrayBuffer());
-  assertModrinthJarHashes(content, file);
-  const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
+  const written = await downloadManagedContent(server, file, signal);
   return {
     ...written,
     filename: file.filename,

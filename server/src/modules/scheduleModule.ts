@@ -19,16 +19,21 @@ export function createScheduleModuleRuntime(deps: {
   let timer: NodeJS.Timeout | undefined;
   let stopped = true;
   let generation = 0;
+  const pendingTicks = new Set<Promise<void>>();
 
   function scheduleNextTick(epoch: number) {
     timer = setTimeout(async () => {
       if (stopped || epoch !== generation) return;
       timer = undefined;
+      let pending: Promise<void> | undefined;
       try {
-        await deps.tick();
+        pending = deps.tick();
+        pendingTicks.add(pending);
+        await pending;
       } catch (error: unknown) {
         deps.onError(error);
       } finally {
+        if (pending) pendingTicks.delete(pending);
         if (!stopped && epoch === generation) scheduleNextTick(epoch);
       }
     }, intervalMs);
@@ -41,11 +46,12 @@ export function createScheduleModuleRuntime(deps: {
       stopped = false;
       scheduleNextTick(++generation);
     },
-    stop() {
+    async stop() {
       stopped = true;
       generation += 1;
       if (timer) clearTimeout(timer);
       timer = undefined;
+      await Promise.allSettled([...pendingTicks]);
     }
   };
 }

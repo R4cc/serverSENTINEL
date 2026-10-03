@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +18,7 @@ const publishedSha512 = createHash("sha512").update(jar).digest("hex");
 
 let tempRoot: string;
 let servedBytes: Buffer;
+let servedResponse: (() => Response) | undefined;
 let loadedHooks: typeof import("./nodeAgent.js").__nodeAgentTestHooks | undefined;
 
 function modrinthFile() {
@@ -45,11 +46,7 @@ async function loadHooks() {
     sendDockerContainerStdinLine: vi.fn()
   }));
   vi.doMock("../modrinth/modrinthClient.js", () => ({
-    modrinthFetch: async () => ({
-      ok: true,
-      statusText: "OK",
-      arrayBuffer: async () => servedBytes.buffer.slice(servedBytes.byteOffset, servedBytes.byteOffset + servedBytes.byteLength)
-    })
+    modrinthFetch: async () => servedResponse ? servedResponse() : new Response(new Uint8Array(servedBytes))
   }));
   vi.doMock("../modrinth/compatibility.js", async (importOriginal) => {
     const actual = await importOriginal<typeof import("../modrinth/compatibility.js")>();
@@ -96,6 +93,7 @@ beforeEach(async () => {
   tempRoot = await mkdtemp(join(tmpdir(), "serversentinel-node-install-"));
   await mkdir(join(tempRoot, "servers", "survival"), { recursive: true });
   servedBytes = jar;
+  servedResponse = undefined;
 });
 
 afterEach(async () => {
@@ -112,6 +110,48 @@ describe("node agent direct Modrinth install integrity", () => {
 
     await hooks.handleCommand("mods.install", { server, projectId: "fabric-api" });
 
+    expect(await readFile(join(server.serverDir, "mods", "fabric-api.jar"))).toEqual(jar);
+  });
+
+  it("cancels an oversized chunked body and removes the temporary download", async () => {
+    const { managedContentFileSizeLimit } = await import("../managedContentLimits.js");
+    const cancel = vi.fn();
+    let chunks = 0;
+    servedResponse = () => new Response(new ReadableStream<Uint8Array>({
+      pull(stream) { chunks += 1; stream.enqueue(new Uint8Array(1024 * 1024)); }, cancel
+    }));
+    const hooks = await loadHooks();
+    const server = fabricServer();
+    await expect(hooks.handleCommand("mods.install", { server, projectId: "fabric-api" })).rejects.toThrow("larger than");
+    expect(chunks).toBeLessThanOrEqual(managedContentFileSizeLimit / (1024 * 1024) + 4);
+    expect(cancel).toHaveBeenCalled();
+    expect(await readdir(join(server.serverDir, "mods"))).toEqual([]);
+  });
+
+  it("cleans up an interrupted streamed download without publishing it", async () => {
+    let chunks = 0;
+    servedResponse = () => new Response(new ReadableStream<Uint8Array>({
+      pull(stream) {
+        if (chunks++ === 0) stream.enqueue(new Uint8Array(jar));
+        else stream.error(new Error("body stalled and timed out"));
+      }
+    }));
+    const hooks = await loadHooks();
+    const server = fabricServer();
+    await expect(hooks.handleCommand("mods.install", { server, projectId: "fabric-api" })).rejects.toThrow("timed out");
+    expect(await readdir(join(server.serverDir, "mods"))).toEqual([]);
+  });
+
+  it("verifies hashes incrementally across split JAR headers", async () => {
+    servedResponse = () => new Response(new ReadableStream<Uint8Array>({
+      start(stream) {
+        for (const byte of jar) stream.enqueue(Uint8Array.of(byte));
+        stream.close();
+      }
+    }));
+    const hooks = await loadHooks();
+    const server = fabricServer();
+    await hooks.handleCommand("mods.install", { server, projectId: "fabric-api" });
     expect(await readFile(join(server.serverDir, "mods", "fabric-api.jar"))).toEqual(jar);
   });
 

@@ -9,7 +9,7 @@ import { throwHttp } from "../http/errors.js";
 import { isDemoModeRequest, publicUser, requireRequestPermission } from "../auth/sessionService.js";
 
 import { publicNodes, readNodes } from "../nodes/nodeService.js";
-import { listManagedServers } from "../servers/store.js";
+import { listScheduleServers } from "../servers/store.js";
 
 import { playerHeadProvider } from "../playerHeadService.js";
 import { modrinthApiKey } from "../mods/modService.js";
@@ -64,7 +64,7 @@ app.get("/api/app", async (request) => {
       totalMemory: 0
     };
   }
-  const servers = await listManagedServers();
+  const servers = await listScheduleServers();
   const nodes = await readNodes();
   const dockerSocketMounted = await dockerReachable();
   const totalMemory = await detectedTotalMemory();
@@ -88,7 +88,7 @@ app.get("/api/app", async (request) => {
 
 app.get("/api/context", async (request) => {
   await requireRequestPermission(request, "servers.view");
-  const servers = await listManagedServers();
+  const servers = await listScheduleServers();
   const nodes = await readNodes();
   const publicServers = await Promise.all(servers.map((server) => runtimeForServer(server).publicServer(server, nodes, servers)));
   const publicNodeList = await publicNodes(nodes);
