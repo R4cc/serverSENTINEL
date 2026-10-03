@@ -189,16 +189,13 @@ const unknownNetworkRates: NetworkRates = { rx: null, tx: null };
  * not cover the interval between collections. Dividing by the collection interval reported a rate
  * of zero for the repeated read and roughly double the true rate for the one that followed it.
  */
-function readingIntervalMs(sample: ResourceStatsSample, baseline: ResourceStatsSample) {
-  const current = Date.parse(sample.readAt);
-  const previous = Date.parse(baseline.readAt);
+function readingIntervalMs(sample: ResourceStatsSample, baseline: ResourceStatsSample, current: number, previous: number) {
   if (!Number.isFinite(current) || !Number.isFinite(previous)) return sample.sampledAt - baseline.sampledAt;
   return current - previous;
 }
 
-function networkRates(sample: ResourceStatsSample, baseline: ResourceStatsSample | undefined, held: NetworkRates): NetworkRates {
+function networkRates(sample: ResourceStatsSample, baseline: ResourceStatsSample | undefined, held: NetworkRates, elapsedMs: number): NetworkRates {
   if (!baseline || sample.sampledAt - baseline.sampledAt > gapThresholdMs) return unknownNetworkRates;
-  const elapsedMs = readingIntervalMs(sample, baseline);
   // The counters were never re-read, so they cannot have advanced. Holding the last measured rate
   // keeps the series continuous instead of claiming the server went quiet.
   if (elapsedMs === 0) return held;
@@ -240,35 +237,50 @@ function point(
   };
 }
 
-function average(values: Array<number | null>) {
-  const valid = values.filter((value): value is number => value !== null && Number.isFinite(value));
-  return valid.length ? valid.reduce((total, value) => total + value, 0) / valid.length : null;
-}
-
-function completeAverage(values: Array<number | null>) {
-  return values.some((value) => value === null) ? null : average(values);
-}
+const averagedFields = ["sampledAt", "cpuPercent", "cpuUtilizationPercent", "memoryUsageBytes", "memoryLimitBytes", "memoryUtilizationPercent", "networkRxBytesPerSecond", "networkTxBytesPerSecond"] as const;
 
 function aggregate(points: ServerTimelineResourcePoint[], maxPoints: number) {
   if (points.length <= maxPoints) return points;
   const bucketSize = Math.ceil(points.length / maxPoints);
   const output: ServerTimelineResourcePoint[] = [];
   for (let index = 0; index < points.length; index += bucketSize) {
-    const bucket = points.slice(index, index + bucketSize);
-    const containsGap = bucket.some((item) => !item.available || !item.running);
-    const lastPlayersOnline = bucket.findLast((item) => item.playersOnline !== null)?.playersOnline ?? null;
+    const sums = Array<number>(averagedFields.length).fill(0);
+    const counts = Array<number>(averagedFields.length).fill(0);
+    const incomplete = Array<boolean>(averagedFields.length).fill(false);
+    let containsGap = false;
+    let lastPlayersOnline: number | null = null;
+    // Visit a bucket once instead of allocating a slice, mapped arrays and filtered arrays
+    // for every series. A missing reading still leaves that entire series bucket blank.
+    const end = Math.min(points.length, index + bucketSize);
+    for (let cursor = index; cursor < end; cursor += 1) {
+      const item = points[cursor];
+      containsGap ||= !item.available || !item.running;
+      if (item.playersOnline !== null) lastPlayersOnline = item.playersOnline;
+      for (let field = 0; field < averagedFields.length; field += 1) {
+        const value = item[averagedFields[field]];
+        if (value === null) incomplete[field] = true;
+        else if (Number.isFinite(value)) {
+          sums[field] += value;
+          counts[field] += 1;
+        }
+      }
+    }
+    const average = (key: typeof averagedFields[number]) => {
+      const field = averagedFields.indexOf(key);
+      return counts[field] && !incomplete[field] ? sums[field] / counts[field] : null;
+    };
     output.push({
-      sampledAt: Math.round(average(bucket.map((item) => item.sampledAt)) ?? bucket[0].sampledAt),
+      sampledAt: Math.round(average("sampledAt") ?? points[index].sampledAt),
       available: !containsGap,
       running: !containsGap,
-      cpuPercent: containsGap ? null : completeAverage(bucket.map((item) => item.cpuPercent)),
-      cpuUtilizationPercent: containsGap ? null : completeAverage(bucket.map((item) => item.cpuUtilizationPercent)),
-      memoryUsageBytes: containsGap ? null : completeAverage(bucket.map((item) => item.memoryUsageBytes)),
-      memoryLimitBytes: containsGap ? null : completeAverage(bucket.map((item) => item.memoryLimitBytes)),
-      memoryUtilizationPercent: containsGap ? null : completeAverage(bucket.map((item) => item.memoryUtilizationPercent)),
+      cpuPercent: containsGap ? null : average("cpuPercent"),
+      cpuUtilizationPercent: containsGap ? null : average("cpuUtilizationPercent"),
+      memoryUsageBytes: containsGap ? null : average("memoryUsageBytes"),
+      memoryLimitBytes: containsGap ? null : average("memoryLimitBytes"),
+      memoryUtilizationPercent: containsGap ? null : average("memoryUtilizationPercent"),
       playersOnline: containsGap ? null : lastPlayersOnline,
-      networkRxBytesPerSecond: containsGap ? null : completeAverage(bucket.map((item) => item.networkRxBytesPerSecond)),
-      networkTxBytesPerSecond: containsGap ? null : completeAverage(bucket.map((item) => item.networkTxBytesPerSecond))
+      networkRxBytesPerSecond: containsGap ? null : average("networkRxBytesPerSecond"),
+      networkTxBytesPerSecond: containsGap ? null : average("networkTxBytesPerSecond")
     });
   }
   return output;
@@ -282,6 +294,7 @@ export function timelineResourcePoints(samples: ResourceStatsSample[], from: num
   // Rates are measured against that reading rather than the previous sample so a repeated remote
   // observation neither reports a false zero nor doubles the rate of the collection after it.
   let networkBaseline: ResourceStatsSample | undefined;
+  let baselineReadAt = NaN;
   let heldNetworkRates = unknownNetworkRates;
   for (let index = 0; index < samples.length; index += 1) {
     const sample = samples[index];
@@ -294,9 +307,14 @@ export function timelineResourcePoints(samples: ResourceStatsSample[], from: num
       networkBaseline = undefined;
       heldNetworkRates = unknownNetworkRates;
     }
-    const rates = networkRates(sample, networkBaseline, heldNetworkRates);
+    const readAt = Date.parse(sample.readAt);
+    const elapsedMs = networkBaseline ? readingIntervalMs(sample, networkBaseline, readAt, baselineReadAt) : 0;
+    const rates = networkRates(sample, networkBaseline, heldNetworkRates, elapsedMs);
     if (running) {
-      if (!networkBaseline || readingIntervalMs(sample, networkBaseline) !== 0) networkBaseline = sample;
+      if (!networkBaseline || elapsedMs !== 0) {
+        networkBaseline = sample;
+        baselineReadAt = readAt;
+      }
       heldNetworkRates = rates;
     }
     const current = point(sample, previous, rates, cpuCapacityCores, cachedPlayersOnline);

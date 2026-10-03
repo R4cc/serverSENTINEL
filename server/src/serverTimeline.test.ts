@@ -132,6 +132,36 @@ describe("server timeline resource points", () => {
     expect(points.at(-1)?.cpuUtilizationPercent).toBe(5);
   });
 
+  it("falls back to collection time for invalid reading clocks and recovers after a clock rollback", () => {
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { readAt: "invalid" }),
+      sample(5_000, 500, 1_000),
+      sample(10_000, 1_000, 2_000, { readAt: new Date(4_000).toISOString() }),
+      sample(15_000, 1_600, 3_200, { readAt: new Date(10_000).toISOString() }),
+      sample(20_000, 2_100, 4_200, { readAt: "invalid" }),
+      sample(25_000, 2_600, 5_200)
+    ], 0, 25_000, 100);
+    expect(points.map((point) => point.networkRxBytesPerSecond)).toEqual([null, 100, null, 100, 100, 100]);
+    expect(points.map((point) => point.networkTxBytesPerSecond)).toEqual([null, 200, null, 200, 200, 200]);
+  });
+
+  it("averages resources while retaining missing series, downtime and the last player count", () => {
+    const points = timelineResourcePoints([
+      sample(0, 0, 0, { cpuPercent: 10, memoryUsageBytes: 1_000, playersOnline: 1 }),
+      sample(5_000, 500, 1_000, { cpuPercent: 30, memoryUsageBytes: 3_000, playersOnline: 3 }),
+      sample(10_000, 1_000, 2_000, { cpuPercent: NaN, playersOnline: 4 }),
+      sample(15_000, 1_500, 3_000, { cpuPercent: 40, playersOnline: 5 }),
+      sample(20_000, 2_000, 4_000),
+      sample(25_000, 2_500, 5_000, { running: false }),
+      sample(30_000, 3_000, 6_000, { playersOnline: 6 })
+    ], 0, 30_000, 4);
+    expect(points).toHaveLength(4);
+    expect(points[0]).toMatchObject({ sampledAt: 2_500, cpuPercent: 20, cpuUtilizationPercent: 5, memoryUsageBytes: 2_000, playersOnline: 3, networkRxBytesPerSecond: null });
+    expect(points[1]).toMatchObject({ sampledAt: 12_500, cpuPercent: null, playersOnline: 5, networkRxBytesPerSecond: 100, networkTxBytesPerSecond: 200 });
+    expect(points[2]).toMatchObject({ sampledAt: 22_500, available: false, running: false, memoryUsageBytes: null, playersOnline: null });
+    expect(points[3]).toMatchObject({ sampledAt: 30_000, available: true, running: true, playersOnline: 6 });
+  });
+
   it("preserves network reset gaps while aggregating", () => {
     const points = timelineResourcePoints([
       sample(0, 100, 100),
