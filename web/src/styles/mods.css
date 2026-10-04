@@ -676,7 +676,70 @@
 
 /* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
 
-.modsWorkspaceInstalled { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.modsWorkspaceInstalled.uiGlassSurface {
+  border-color: var(--glass-edge);
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+}
+
+.modsWorkspaceListHeader h2 { display: flex; align-items: center; gap: var(--space-3); }
+.modsWorkspaceListHeader { padding: var(--space-4); }
+.modsSectionIcon {
+  display: inline-grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-soft);
+  box-shadow: var(--glass-highlight);
+  color: var(--sentinel-accent-strong);
+}
+.modsSectionIcon svg { width: 17px; height: 17px; }
+.modsWorkspaceListHeader .uiPanelHeaderCopy > p { margin-left: calc(32px + var(--space-3)); }
+.modsWorkspaceInstalled .modsWorkspaceTable { padding: 0 var(--space-2) var(--space-2); }
+.modsWorkspaceInstalled .modsWorkspaceTableHead { margin-inline: calc(0px - var(--space-2)); background: var(--glass-tint-strong); -webkit-backdrop-filter: var(--glass-filter-chrome); backdrop-filter: var(--glass-filter-chrome); }
+.modsWorkspaceInstalled .modsWorkspaceRow { margin-block: var(--space-1); padding-inline: var(--space-2); border: 1px solid transparent; border-bottom-color: var(--border-row); border-radius: var(--radius-sm); background: transparent; }
+.modsWorkspaceInstalled .modsWorkspaceRow:hover,
+.modsWorkspaceInstalled .modsWorkspaceRow:focus-within { border-color: var(--glass-edge); background: var(--glass-tint-soft); }
+.modsWorkspaceInstalled .modsWorkspaceFallback { background: var(--glass-tint-soft); border-color: var(--glass-edge); box-shadow: var(--glass-highlight); }
+
+.modsDetailsDrawer .modsVersionComparison > div {
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-row);
+  border-radius: 0;
+  background: transparent;
+}
+.modsDetailsDrawer .modsVersionComparison > div:nth-child(2) { border-color: var(--accent); }
+.modsDetailsDrawer .modsVersionComparison > div:nth-child(2) dd { color: var(--sentinel-accent-strong); }
+.modsDetailsDrawer .modsCompatibilityCard {
+  padding: var(--space-4);
+  border-inline: 0;
+  border-radius: 0;
+  background: var(--glass-tint-soft);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.modsDetailsDrawer .modsCompatibilityCard.ready { background: color-mix(in srgb, var(--sentinel-success) 7%, var(--glass-tint-soft)); }
+.modsDetailsDrawer .modsCompatibilityCard.update { background: color-mix(in srgb, var(--sentinel-warning) 7%, var(--glass-tint-soft)); }
+.modsDetailsDrawer .modsCompatibilityCard.not-recommended { background: color-mix(in srgb, var(--sentinel-danger) 7%, var(--glass-tint-soft)); }
+.modsDetailsDrawer .modsTechnicalDetails {
+  padding: var(--space-4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-row);
+  border-radius: 0;
+  background: transparent;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .modsWorkspaceInstalled.uiGlassSurface,
+  .modsWorkspaceInstalled .modsWorkspaceTableHead { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 
 @media (max-width: 720px) {
 

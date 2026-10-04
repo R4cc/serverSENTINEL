@@ -26,6 +26,33 @@ async function snapshot(page, name) {
   if (screenshots) await page.screenshot({ path: `${screenshots}/${name}.png`, fullPage: !/dialog|editor/.test(name) });
 }
 
+async function checkGlassPanel(panel) {
+  assert(await panel.evaluate(element => {
+    const style = getComputedStyle(element);
+    const backdrop = style.backdropFilter || style.webkitBackdropFilter;
+    const opaqueFullscreen = innerWidth <= 720 && element.classList.contains("uiDialog--mobileFullscreen");
+    return element.classList.contains("uiGlassSurface") && (opaqueFullscreen || backdrop && backdrop !== "none");
+  }), "Workspace lost its shared glass material");
+}
+
+async function checkStableHover(row) {
+  await row.scrollIntoViewIfNeeded();
+  const geometry = element => ({
+    x: element.offsetLeft,
+    y: element.offsetTop,
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+    padding: getComputedStyle(element).padding
+  });
+  const before = await row.evaluate(geometry);
+  await row.hover();
+  const after = await row.evaluate(geometry);
+  for (const dimension of ["x", "y", "width", "height"]) {
+    assert(Math.abs(after[dimension] - before[dimension]) <= 1, `Hover shifts row ${dimension}`);
+  }
+  assert.equal(after.padding, before.padding, "Hover changes row padding");
+}
+
 async function checkDialog(page, dialog, phone) {
   await dialog.waitFor();
   assert(await dialog.evaluate(element => element.contains(document.activeElement)), "Dialog did not acquire focus");
@@ -74,6 +101,8 @@ try {
 
         await navigate(page, "mods");
         await page.locator(".modsWorkspaceRow").first().waitFor();
+        await checkGlassPanel(page.locator(".modsWorkspaceInstalled"));
+        await checkStableHover(page.locator(".modsWorkspaceRow").first());
         if (phone) {
           const toggle = page.getByRole("button", { name: "Server controls", exact: true });
           assert.equal(await toggle.getAttribute("aria-expanded"), "false");
@@ -97,6 +126,14 @@ try {
           assert(await add.evaluate(element => element.classList.contains("uiButton--secondary")));
         }
         await snapshot(page, `${label}-mods`);
+        const identity = page.locator(".modsWorkspaceIdentity").first();
+        await identity.click();
+        const modDetails = page.locator(".modsDetailsDrawer");
+        await checkDialog(page, modDetails, phone);
+        await checkGlassPanel(modDetails);
+        await snapshot(page, `${label}-mods-details-dialog`);
+        await page.keyboard.press("Escape");
+        await modDetails.waitFor({ state: "detached" });
         await add.click();
         await checkDialog(page, page.getByRole("dialog", { name: "Add mods", exact: true }), phone);
         await snapshot(page, `${label}-mods-dialog`);
@@ -105,8 +142,22 @@ try {
         await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Add mods");
         assert(await add.evaluate(element => element === document.activeElement), "Add mods did not regain focus");
 
+        await navigate(page, "console");
+        await page.locator(".minecraftTerminal:not(.initializing) .xterm-screen").waitFor();
+        await checkGlassPanel(page.locator(".consolePanel"));
+        assert.equal(await page.locator(".consolePanelHeader").isVisible(), !phone, "Console chrome does not respect the available viewport");
+        assert(await page.locator(".consolePanel > .terminal").evaluate(element => {
+          const box = element.getBoundingClientRect();
+          const header = element.previousElementSibling.getBoundingClientRect();
+          const prompt = element.querySelector(".consolePrompt").getBoundingClientRect();
+          return box.top >= header.bottom - 1 && box.height >= 180 && prompt.bottom <= innerHeight + 1;
+        }), "Console chrome overlaps output or clips the command prompt");
+        await snapshot(page, `${label}-console`);
+
         await navigate(page, "files");
         await page.getByRole("table", { name: "Server files", exact: true }).waitFor();
+        await checkGlassPanel(page.locator(".filesPanel"));
+        await checkStableHover(page.locator(".fileTableRow").first());
         assert.equal(await page.locator(".fileDetailsPanel").count(), 0, "Empty inspector still consumes space");
         const file = page.getByRole("rowheader", { name: "server.properties", exact: true });
         const fileFilter = page.getByRole("searchbox", { name: "File filter" });
@@ -116,6 +167,7 @@ try {
         await file.click();
         if (width >= 981) {
           assert(await page.locator(".fileDetailsPanel").isVisible(), "Selected file has no inspector");
+          await checkGlassPanel(page.locator(".fileDetailsPanel"));
           await page.locator(".filePreviewPanel pre").waitFor();
         }
         if (phone) {
@@ -129,6 +181,7 @@ try {
         await file.dblclick();
         const editor = page.getByRole("dialog", { name: "server.properties", exact: true });
         await editor.locator(".cm-editor").waitFor();
+        await checkGlassPanel(editor);
         await checkDialog(page, editor, phone);
         assert(await editor.locator(".fileEditorRestrictionReason").isVisible(), "Editing restriction is not visible");
         assert.match(await editor.locator(".fileEditorRestrictionReason").innerText(), /Stop the server/);

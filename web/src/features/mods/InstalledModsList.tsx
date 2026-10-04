@@ -1,7 +1,8 @@
 import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
-import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock } from "../../components/UiPrimitives";
+import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, Surface } from "../../components/UiPrimitives";
+import { Puzzle } from "lucide-react";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { applyUpdatePlanEntry, updatePlanEntryLookup } from "./modUpdatePlan";
@@ -75,11 +76,11 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
   }
 
   return (
-    <section className="modsWorkspaceInstalled" aria-labelledby="installed-mods-title">
+    <Surface className="modsWorkspaceInstalled" material="glass" density="flush" aria-labelledby="installed-mods-title">
       <PanelHeader
         className="modsWorkspaceListHeader"
         headingId="installed-mods-title"
-        title={`Installed ${terminology.plural}`}
+        title={<><span className="modsSectionIcon" aria-hidden="true"><Puzzle /></span>Installed {terminology.plural}</>}
         description={<span role="status">{initialLoading ? <SkeletonBlock className="modsTotalSkeleton" /> : deferredQuery.trim() ? `${visible.length} of ${mods.length}` : `${mods.length} total`}</span>}
         actions={<div className="modsWorkspaceSearch">
           <SearchField label={`Search installed ${terminology.plural}`} value={query} onChange={onQueryChange} disabled={initialLoading} />
@@ -161,7 +162,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
           );
         })}
       </div>
-    </section>
+    </Surface>
   );
 }
 

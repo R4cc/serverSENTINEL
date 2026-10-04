@@ -911,7 +911,7 @@ async function assertConsoleViewportOwnership(page, label) {
       terminalLeft: terminalRect.left,
       terminalRight: terminalRect.right,
       terminalHeight: terminal.getBoundingClientRect().height,
-      panelHeaderPresent: terminalFrame.parentElement?.querySelector(":scope > .uiPanelHeader") !== null
+      panelHeaderVisible: Boolean(terminalFrame.parentElement?.querySelector(":scope > .uiPanelHeader")?.getClientRects().length)
     };
   });
   assert(!result.missing, `${label}: console viewport surfaces are missing`);
@@ -921,7 +921,7 @@ async function assertConsoleViewportOwnership(page, label) {
   assert(result.documentWidth <= result.documentViewportWidth + 1, `${label}: full-width console causes horizontal overflow: ${JSON.stringify(result)}`);
   assert(result.terminalLeft <= 1 && result.terminalRight >= result.documentViewportWidth - 1, `${label}: console does not reach both viewport edges: ${JSON.stringify(result)}`);
   assert(result.terminalHeight > 0, `${label}: console terminal lost its viewport height`);
-  assert(!result.panelHeaderPresent, `${label}: removed console header bar is still present`);
+  assert(!result.panelHeaderVisible, `${label}: console header consumes space in the compact viewport`);
 }
 
 /**

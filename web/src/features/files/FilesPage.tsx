@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent, type Keybo
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
-import { Banner, Button, LoadingLabel, SkeletonBlock } from "../../components/UiPrimitives";
+import { Banner, Button, LoadingLabel, SkeletonBlock, Surface } from "../../components/UiPrimitives";
 import { ActionMenu, type ActionMenuItem } from "../../components/ActionMenu";
 import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
@@ -343,7 +343,7 @@ export function FilesPage({
   return (
     <section className={`tabPage filesPage layoutWide${selectedEntries.length ? " filesPage--withInspector" : ""}`}>
       <section className="filesExplorer">
-        <section className="panel filesPanel">
+        <Surface className="filesPanel" material="glass">
           <div className="fileNavBar">
             <div className="fileNavButtons uiToolbarPrimary">
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
@@ -560,10 +560,10 @@ export function FilesPage({
             <span title={listing.path}>{initialFilesLoading ? <SkeletonBlock className="fileFooterPathSkeleton" /> : selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : listing.path}</span>
           </div>
           </section>
-        </section>
+        </Surface>
       </section>
 
-      {selectedEntries.length > 0 && <aside className="panel fileDetailsPanel">
+      {selectedEntries.length > 0 && <Surface as="aside" className="fileDetailsPanel" material="glass">
         {selectedEntries.length > 1 && (
           <div className="fileDetailsContent">
             <h2>{selectedEntries.length} items selected</h2>
@@ -612,7 +612,7 @@ export function FilesPage({
             </section>
           </div>
         )}
-      </aside>}
+      </Surface>}
 
       {fileContextMenu && (
         <ContextMenu
