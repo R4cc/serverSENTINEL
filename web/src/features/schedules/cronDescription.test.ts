@@ -7,6 +7,9 @@ describe("describeCronExpression", () => {
     expect(describeCronExpression("5 4 * * 1")).toBe("Every Monday at 04:05");
     expect(describeCronExpression("30 8 * * 1-5")).toBe("Every weekday at 08:30");
     expect(describeCronExpression("*/15 * * * *")).toBe("Every 15 minutes");
+    expect(describeCronExpression("* * * * *")).toBe("Every minute");
+    expect(describeCronExpression("0 * * * *")).toBe("Every hour");
+    expect(describeCronExpression("5 * * * *")).toBe("Hourly at minute 05");
   });
 
   it("returns null for invalid cron expressions", () => {

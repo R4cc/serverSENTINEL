@@ -1,5 +1,24 @@
 # Changelog
 
+## 26.10.9 - 2026-10-04
+
+- Fixed Recent runs hover and focus styling with rounded corners, balanced padding, and stable row geometry on desktop and mobile.
+
+## 26.10.8 - 2026-10-04
+
+- Refined Nodes with liquid glass host cards, icon-led fleet summaries, and a lighter health and runtime drawer.
+- Streamlined node setup and install instructions with responsive fullscreen dialogs and always-visible setup actions.
+
+## 26.10.7 - 2026-10-04
+
+- Redesigned Schedules with a full-width liquid glass list, search and state filters, and a lighter recent-run activity view.
+- Streamlined the schedule editor and run history with consistent controls, responsive layouts, and concise hourly timing descriptions.
+
+## 26.10.6 - 2026-10-04
+
+- Redesigned Properties with a continuous liquid glass configuration surface, aligned runtime fields, and responsive memory and network sections.
+- Made server deletion an expandable action and streamlined exports and the unsaved-changes controls.
+
 ## 26.10.5 - 2026-10-03
 
 - Hid internal operation diagnostics and restricted operation results and captured console output to the corresponding permissions.

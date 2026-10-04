@@ -1,6 +1,6 @@
 {
   "name": "@serversentinel/contracts",
-  "version": "26.10.5",
+  "version": "26.10.9",
   "private": true,
   "type": "module",
   "types": "dist/index.d.ts",

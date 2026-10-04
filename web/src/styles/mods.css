@@ -394,8 +394,7 @@
 .modsAdvancedOptions,
 .modsReviewLine,
 .modsDependencySummary,
-.modsCompatibilityCard,
-.nodeInstallBox {
+.modsCompatibilityCard {
   border-color: var(--border-panel);
   border-radius: var(--radius-md);
   background: var(--surface-raised);

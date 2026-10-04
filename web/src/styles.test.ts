@@ -75,6 +75,11 @@ describe("global stylesheet entry point", () => {
 });
 
 describe("stylesheet ownership", () => {
+  it("keeps node install styling out of the Mods owner", () => {
+    expect(modsStyles).not.toContain(".nodeInstallBox");
+    expect(featureStyles["settings-nodes.css"]).toContain(".nodeInstallBox");
+  });
+
   it("keeps feature selectors out of the shared responsive layer", () => {
     const featureOwners: Record<string, RegExp> = {
       "overview.css": /(?:\.workspacePage-overview|\.overview|\.serverTimeline)/,

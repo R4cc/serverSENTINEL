@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { ArrowRight, Box, Check, Network, Plus, Server, Users } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { InlineState } from "../components/InlineState";
 import { AppIcon } from "../components/FileTypeIcon";
@@ -41,25 +42,6 @@ function sharedStatusTone(value?: string): "success" | "danger" | "neutral" {
 
 function shortBuildId(value?: string) {
   return value ? value.slice(0, 12) : undefined;
-}
-
-function ServerRowIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" />
-      <path d="m4 7 8 4 8-4" />
-      <path d="M12 11v10" />
-    </svg>
-  );
-}
-
-function PlayerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="8" r="3" />
-      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
-    </svg>
-  );
 }
 
 function playerCountLabel(snapshot?: PlayerSnapshot) {
@@ -208,7 +190,7 @@ function AddNodeStepper({ activeStep, completeAll }: { activeStep: number; compl
           >
             {index > 0 && <span className={`addNodeConnector ${index <= completedUntil ? "complete" : ""}`} aria-hidden="true" />}
             <span className="addNodeStepContent">
-              <span className="addNodeStepCircle" aria-hidden="true">{isComplete ? "✓" : stepNumber}</span>
+              <span className="addNodeStepCircle" aria-hidden="true">{isComplete ? <Check /> : stepNumber}</span>
               <span className="addNodeStepLabel">{label}</span>
               {isComplete && <span className="srOnly">completed</span>}
             </span>
@@ -223,7 +205,7 @@ function AddNodeStatusCard({ nodeName, flowState }: { nodeName: string; flowStat
   if (flowState === "success") {
     return (
       <div className="addNodeStatusCard success" role="status" aria-live="polite">
-        <span className="addNodeStatusIcon" aria-hidden="true">✓</span>
+        <span className="addNodeStatusIcon" aria-hidden="true"><Check /></span>
         <div>
           <h3>Node added successfully</h3>
         </div>
@@ -315,9 +297,10 @@ export function AddNodeModal({
   const canClose = !busy;
 
   return (
-    <DialogSurface backdrop="nodeModalBackdrop" backdropDismiss={canClose} className="modalPanel nodeModalPanel" labelledBy="add-node-title" onClose={onClose}>
+    <DialogSurface backdrop="nodeModalBackdrop" dismissible={canClose} mobileFullscreen className="modalPanel nodeModalPanel" labelledBy="add-node-title" onClose={onClose}>
       <header className="nodeModalHeader">
-        <div>
+        <div className="nodeModalTitle">
+          <span className="nodeModalGlyph" aria-hidden="true"><Network /></span>
           <h2 id="add-node-title">Add node</h2>
         </div>
         <Button
@@ -334,8 +317,8 @@ export function AddNodeModal({
       </header>
 
       {!created ? (
-        <form className="appForm nodeModalBody" onSubmit={submit}>
-          <fieldset disabled={busy}>
+        <form className="appForm nodeCreateForm" onSubmit={submit}>
+          <fieldset className="nodeModalBody" disabled={busy}>
             {formError && <InlineState tone="error" title="Check node details" message={formError} />}
             <FormField label="Node name" htmlFor="add-node-name" required>
               <input id="add-node-name" name="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="MC-NODE-01" maxLength={80} required />
@@ -344,7 +327,7 @@ export function AddNodeModal({
               <div className="nodeConnectionIntro">
                 <div className="nodeConnectionDirection" aria-label="The node computer connects to this panel">
                   <span>Node computer</span>
-                  <b aria-hidden="true">→</b>
+                  <ArrowRight aria-hidden="true" />
                   <span>This panel</span>
                 </div>
                 <div className="nodeConnectionTitle"><h3 id="node-connection-title">How the node connects</h3><HelpTooltip label="node connection">The node opens an outbound connection to this panel. Enter a panel address that is reachable from the node computer.</HelpTooltip></div>
@@ -382,24 +365,26 @@ export function AddNodeModal({
                 />
               )}
             </section>
-            <FormField label="Data folder on node" help={<HelpTooltip label="node data folder" id="node-data-folder-tip">Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts it into the node container.</HelpTooltip>}>
-              <input name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
+            <FormField label="Data folder on node" htmlFor="add-node-data" help={<HelpTooltip label="node data folder" id="node-data-folder-tip">Folder on the node host where Minecraft server files, worlds, mods, logs, and configs are stored. The installer mounts it into the node container.</HelpTooltip>}>
+              <input id="add-node-data" name="dataMount" value={dataMount} onChange={(event) => setDataMount(event.target.value)} placeholder={defaultNodeDataPath} required />
             </FormField>
-            <div className="nodeModalFooter inline">
-              <Button type="submit" reserveLabel="Create install command">{busy ? "Creating..." : "Create install command"}</Button>
-              <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
-            </div>
           </fieldset>
+          <footer className="nodeModalFooter inline">
+            <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
+            <Button type="submit" disabled={busy} reserveLabel="Create install command">{busy ? "Creating..." : "Create install command"}</Button>
+          </footer>
         </form>
       ) : (
-        <div className="nodeModalBody">
-          <AddNodeStepper activeStep={activeStep} completeAll={isSuccess} />
-          <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
-          {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />}
-          <div className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
-            <Button onClick={isSuccess ? onDone : onClose} disabled={!canClose} title={canClose ? (isSuccess ? "Finish node setup" : "Close and finish later") : "Node creation is still in progress"}>{isSuccess ? "Done" : "Finish later"}</Button>
+        <>
+          <div className="nodeModalBody">
+            <AddNodeStepper activeStep={activeStep} completeAll={isSuccess} />
+            <AddNodeStatusCard nodeName={created.node.name} flowState={flowState} node={liveNode} />
+            {showInstall && <InstallInstructions result={created} method={installMethod} onMethodChange={onInstallMethodChange} onCopy={onCopy} formatDate={formatDate} />}
           </div>
-        </div>
+          <footer className={`nodeModalFooter inline addNodeModalActions ${isSuccess ? "success" : ""}`}>
+            <Button onClick={isSuccess ? onDone : onClose} disabled={!canClose} title={canClose ? (isSuccess ? "Finish node setup" : "Close and finish later") : "Node creation is still in progress"}>{isSuccess ? "Done" : "Finish later"}</Button>
+          </footer>
+        </>
       )}
     </DialogSurface>
   );
@@ -545,7 +530,7 @@ export function NodesPage({
       disabled={busy || !canManageNodes}
       title={!canManageNodes ? "Manage nodes permission is required" : busy ? "A node action is already in progress" : "Add a remote node"}
     >
-      Add node
+      <Plus aria-hidden="true" /> Add node
     </Button>
   );
 
@@ -556,6 +541,9 @@ export function NodesPage({
           <section className="nodesFleetSummary" aria-label="Node fleet summary">
             <MetricTile
               variant="summary"
+              className="nodeFleetMetric"
+              icon={<Network />}
+              iconPlacement="leading"
               tone={fleet.nodesOnline === fleet.nodes ? "success" : "danger"}
               label="Nodes"
               value={fleet.nodes}
@@ -563,6 +551,9 @@ export function NodesPage({
             />
             <MetricTile
               variant="summary"
+              className="nodeFleetMetric"
+              icon={<Server />}
+              iconPlacement="leading"
               tone="info"
               label="Servers"
               value={fleet.servers}
@@ -570,6 +561,9 @@ export function NodesPage({
             />
             <MetricTile
               variant="summary"
+              className="nodeFleetMetric"
+              icon={<Users />}
+              iconPlacement="leading"
               tone="accent"
               label="Players"
               value={fleet.players}
@@ -632,10 +626,10 @@ export function NodesPage({
               node.isInternal ? "" : node.agentVersion ? `Agent ${node.agentVersion}` : "Agent version unknown"
             ].filter(Boolean);
             return (
-              <Surface as="article" density="flush" key={node.id} className="nodeListItem" role="listitem">
+              <Surface as="article" material="glass" density="flush" key={node.id} className="nodeListItem" role="listitem">
                 <header className="nodeListRow">
                   <div className="nodeListIdentity">
-                    <span className={`nodeListMark ${statusTone(node.status)}`} aria-hidden="true"><AppIcon name="server" /></span>
+                    <span className={`nodeListMark ${statusTone(node.status)}`} aria-hidden="true">{node.isInternal ? <Server /> : <Network />}</span>
                     <div className="nodeListCopy">
                       <h3 className="nodeListName" title={node.name}>{node.name}</h3>
                       <p className="nodeListMeta">{nodeMeta.join(" · ")}</p>
@@ -665,7 +659,7 @@ export function NodesPage({
                   <header className="nodeServersHeader">
                     <div>
                       <strong>{node.servers.length} {node.servers.length === 1 ? "server" : "servers"}</strong>
-                      <span>{nodePlayers} players</span>
+                      <span><Users aria-hidden="true" />{nodePlayers} players</span>
                     </div>
                   </header>
                   {visibleServers.length > 0 ? (
@@ -676,14 +670,14 @@ export function NodesPage({
                         const playerLabel = playerCountLabel(snapshot);
                         return (
                           <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
-                            <span className="nodeServerRowIcon" aria-hidden="true"><ServerRowIcon /></span>
+                            <span className="nodeServerRowIcon" aria-hidden="true"><Box /></span>
                             <span className="nodeServerRowName" title={server.displayName}>{server.displayName}</span>
                             <span className={`nodeServerRowState ${state.toLowerCase()}`}>
                               <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
                               {state}
                             </span>
                             <span className={`nodeServerRowPlayers${snapshot?.state === "stale" ? " unknown" : ""}`} title={playerLabel === "-" ? "Player count unavailable" : `${playerLabel} players online${snapshot?.state === "stale" ? " (last verified snapshot)" : ""}`}>
-                              {playerLabel !== "-" && <span className="nodePlayerIcon"><PlayerIcon /></span>}
+                              {playerLabel !== "-" && <span className="nodePlayerIcon" aria-hidden="true"><Users /></span>}
                               {playerLabel === "-" ? "—" : playerLabel}
                             </span>
                             <span className="nodeServerRowArrow" aria-hidden="true"><AppIcon name="chevronRight" /></span>
@@ -726,7 +720,7 @@ export function NodesPage({
                         {operation?.phase === "waiting" ? operation.kind === "update" ? "Updating…" : "Restarting…" : nodeBuildUpdateAvailable(node) ? "Update" : "Upgrade"}
                       </Button>
                     )}
-                    <Button variant="secondary" compact onClick={() => openNodeDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details</Button>
+                    <Button variant="ghost" compact onClick={() => openNodeDetails(node)} disabled={busyNodeId === node.id} title={busyNodeId === node.id ? "This node is being updated" : "View node details"}>Details<ArrowRight aria-hidden="true" /></Button>
                   </div>
                 </footer>
               </Surface>
@@ -772,9 +766,10 @@ export function NodesPage({
       )}
 
       {installResult && (
-        <DialogSurface backdrop="nodeModalBackdrop" className="modalPanel nodeModalPanel" labelledBy="install-node-title" onClose={onClearInstall}>
+        <DialogSurface backdrop="nodeModalBackdrop" mobileFullscreen className="modalPanel nodeModalPanel" labelledBy="install-node-title" onClose={onClearInstall}>
           <header className="nodeModalHeader">
-            <div>
+            <div className="nodeModalTitle">
+              <span className="nodeModalGlyph" aria-hidden="true"><Network /></span>
               <h2 id="install-node-title">Node Install</h2>
             </div>
             <Button variant="secondary" iconOnly className="iconButton modalCloseButton" onClick={onClearInstall} aria-label="Close install instructions" title="Close install instructions"><AppIcon name="x" /></Button>
