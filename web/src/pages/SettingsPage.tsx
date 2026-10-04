@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
-import { Blocks, CalendarDays, Check, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
+import { Blocks, CalendarDays, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
 import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";
 import type { DisplayTimeZonePreference, ModuleAccessState, ModuleId, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
 import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/settingsPreferences";
@@ -9,7 +9,7 @@ import { themeOptions } from "../features/settings/themePreferences";
 import { IntegrationControlField, MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
-import { Button, HelpTooltip, PanelHeader, StatusBadge } from "../components/UiPrimitives";
+import { Button, HelpTooltip, PanelHeader, Spinner, StatusBadge, Surface } from "../components/UiPrimitives";
 import { resolveRegionalFormatLocale } from "../utils/format";
 
 type SettingsCategory = "appearance" | "console" | "integrations" | "modules" | "users" | "system";
@@ -352,7 +352,7 @@ export function SettingsPage(props: SettingsPageProps) {
                 onClick={() => props.onModuleEnabledChange(descriptor.id, !enabled)}
               >
                 <span className="settingsModuleCardIcon"><ModuleGlyph id={descriptor.id} /></span>
-                {enabled && <span className="settingsModuleCardCheck" aria-hidden="true"><Check /></span>}
+                <span className="settingsModuleCardSwitch" aria-hidden="true"><span /></span>
                 <span className="settingsModuleCardCopy">
                   <strong>{descriptor.label}</strong>
                   <span>{descriptor.summary}</span>
@@ -392,7 +392,7 @@ export function SettingsPage(props: SettingsPageProps) {
     ),
     system: (
       <>
-        <CategoryHeader category="system" actions={<div className="settingsHubSystemActions"><Button variant="secondary" onClick={props.onRefreshSystemInfo} disabled={props.refreshingSystemInfo} reserveLabel="Refreshing"><SettingsGlyph name="refresh" />{props.refreshingSystemInfo ? "Refreshing" : "Refresh"}</Button><Button onClick={() => props.onCopyDiagnostics(buildSystemDiagnostics(props.systemInfo))}><SettingsGlyph name="copy" />Copy diagnostics</Button><HelpTooltip label="copied diagnostics">Diagnostics include aggregate runtime information only. Usernames, credentials, commands, server and node names, and filesystem paths are excluded.</HelpTooltip></div>} />
+        <CategoryHeader category="system" actions={<div className="settingsHubSystemActions"><Button variant="secondary" iconOnly aria-label="Refresh system information" title="Refresh system information" aria-busy={props.refreshingSystemInfo} onClick={props.onRefreshSystemInfo} disabled={props.refreshingSystemInfo}>{props.refreshingSystemInfo ? <Spinner size="sm" /> : <SettingsGlyph name="refresh" />}</Button><Button variant="secondary" onClick={() => props.onCopyDiagnostics(buildSystemDiagnostics(props.systemInfo))}><SettingsGlyph name="copy" />Copy diagnostics</Button><HelpTooltip label="copied diagnostics">Diagnostics include aggregate runtime information only. Usernames, credentials, commands, server and node names, and filesystem paths are excluded.</HelpTooltip></div>} />
         <div className="settingsHubSystemOverview">
           <div className={`settingsHubHealth ${props.systemInfo.panelOnlyMode || props.systemInfo.dockerSocketMounted || props.systemInfo.demoMode ? "ready" : "limited"}`}>
             <span className="settingsHubHealthDot" aria-hidden="true" />
@@ -441,16 +441,16 @@ export function SettingsPage(props: SettingsPageProps) {
             {categories.map(category => <option key={category} value={category}>{categoryDetails[category].label}</option>)}
           </select>
         </label>
-        <nav className="settingsHubCategories" aria-label="Settings categories" role="tablist">
+        <nav className="settingsHubCategories" aria-label="Settings categories" role="tablist" aria-orientation="horizontal">
           {categories.map((category, index) => {
             const details = categoryDetails[category];
             const selected = selectedCategory === category;
             return <button key={category} id={`settings-tab-${category}`} type="button" role="tab" aria-selected={selected} aria-controls={`settings-panel-${category}`} tabIndex={selected ? 0 : -1} className={selected ? "active" : ""} onClick={() => setActiveCategory(category)} onKeyDown={(event) => handleCategoryKeyDown(event, index)}><span className="settingsHubCategoryIcon"><SettingsGlyph name={category} /></span><strong>{details.label}</strong></button>;
           })}
         </nav>
-        <section className="settingsHubContent" id={`settings-panel-${selectedCategory}`} role="tabpanel" aria-labelledby={`settings-tab-${selectedCategory}`} tabIndex={0}>
+        <Surface material="glass" density="flush" className="settingsHubContent" id={`settings-panel-${selectedCategory}`} role="tabpanel" aria-labelledby={`settings-tab-${selectedCategory}`} tabIndex={0}>
           {categoryContent[selectedCategory]}
-        </section>
+        </Surface>
       </div>
     </section>
   );

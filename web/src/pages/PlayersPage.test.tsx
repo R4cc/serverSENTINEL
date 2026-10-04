@@ -53,6 +53,14 @@ function mapMarkup(html: string) {
 }
 
 describe("the Players workspace before it knows anything", () => {
+  it("keeps the desktop roster ahead of geography and analytics using shared glass surfaces", () => {
+    const html = render();
+    expect(html).toMatch(/class="[^"]*uiGlassSurface[^"]*playerRosterCard/);
+    expect(html).toMatch(/class="[^"]*uiGlassSurface[^"]*playerGeographyCard/);
+    expect(html.indexOf("playerRosterCard")).toBeLessThan(html.indexOf("playerGeographyCard"));
+    expect(html.indexOf("playerRosterCard")).toBeLessThan(html.indexOf("playerAnalysisRow"));
+  });
+
   it("says geography is not configured, and how to configure it", () => {
     const html = render();
     expect(html).toContain("Player geography is not configured");

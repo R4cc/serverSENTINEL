@@ -23,6 +23,7 @@ async function checkOverflow(page) {
 
 async function snapshot(page, name) {
   await checkOverflow(page);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   if (screenshots) await page.screenshot({ path: `${screenshots}/${name}.png`, fullPage: !/dialog|editor/.test(name) });
 }
 
@@ -191,6 +192,8 @@ try {
 
         await navigate(page, "settings");
         await page.locator('.settingsHub[aria-busy="false"]').waitFor();
+        await checkGlassPanel(page.locator(".settingsHubContent"));
+        await checkStableHover(page.locator(".settingsHubRow").first());
         if (phone) {
           const picker = page.getByRole("combobox", { name: "Settings category" });
           assert(await picker.isVisible());
@@ -198,11 +201,52 @@ try {
           await picker.selectOption("console");
           assert(await page.getByRole("combobox", { name: "Terminal font size" }).isVisible());
           await picker.selectOption("appearance");
+        } else {
+          const tabs = page.getByRole("tablist", { name: "Settings categories" });
+          assert.equal(await tabs.getAttribute("aria-orientation"), "horizontal");
+          assert(await tabs.evaluate(element => {
+            const buttons = [...element.querySelectorAll("button")].map(button => button.getBoundingClientRect());
+            const panel = document.querySelector(".settingsHubContent").getBoundingClientRect();
+            return buttons.every(box => Math.abs(box.top - buttons[0].top) < 1) && panel.top >= buttons[0].bottom;
+          }), "Settings navigation is not a horizontal strip above the content");
+          await page.getByRole("tab", { name: "Appearance", exact: true }).focus();
+          await page.keyboard.press("End");
+          await page.waitForFunction(() => document.activeElement?.id === "settings-tab-system");
+          assert.equal(await page.getByRole("tab", { name: "System", exact: true }).getAttribute("aria-selected"), "true");
+          assert(await page.getByRole("tab", { name: "System", exact: true }).evaluate(element => element === document.activeElement));
+          await page.keyboard.press("Home");
+          await page.waitForFunction(() => document.activeElement?.id === "settings-tab-appearance");
+          await page.keyboard.press("ArrowRight");
+          await page.waitForFunction(() => document.activeElement?.id === "settings-tab-console");
+          await page.getByRole("combobox", { name: "Terminal font size" }).waitFor();
+          await page.keyboard.press("ArrowLeft");
+          await page.waitForFunction(() => document.activeElement?.id === "settings-tab-appearance");
+          assert.equal(await page.getByRole("tab", { name: "Appearance", exact: true }).getAttribute("aria-selected"), "true");
         }
         await snapshot(page, `${label}-settings`);
+        for (const category of ["integrations", "modules", "system"]) {
+          if (phone) await page.getByRole("combobox", { name: "Settings category" }).selectOption(category);
+          else await page.locator(`#settings-tab-${category}`).click();
+          await page.locator(`#settings-panel-${category}`).waitFor();
+          await checkGlassPanel(page.locator(".settingsHubContent"));
+          if (category === "modules") {
+            assert.equal(await page.locator(".settingsModuleCardSwitch").count(), 3);
+            await checkStableHover(page.locator(".settingsModuleCard").first());
+          }
+          if (category === "system") {
+            assert(await page.getByRole("button", { name: "Refresh system information", exact: true }).isVisible());
+            assert(await page.locator(".settingsHubFacts").evaluate((element, phone) => {
+              const boxes = [...element.children].map(child => child.getBoundingClientRect());
+              return !phone || boxes[1].left > boxes[0].left && Math.abs(boxes[1].top - boxes[0].top) < 1;
+            }, phone), "Phone system facts do not use the compact two-column layout");
+          }
+          await snapshot(page, `${label}-settings-${category}`);
+        }
 
         await navigate(page, "players");
         await page.locator(".playerRosterCard").waitFor();
+        await checkGlassPanel(page.locator(".playerRosterCard"));
+        await checkStableHover(page.locator(".playerRosterTable tbody tr").first());
         if (phone) {
           assert.equal(await page.locator(".playerMap").count(), 0, "Collapsed geography still mounts a map");
           const rosterTop = await page.locator(".playerRosterCard").evaluate(element => element.getBoundingClientRect().top);
@@ -212,10 +256,20 @@ try {
           const geography = page.getByRole("button", { name: "Player geography", exact: true });
           await geography.click();
           await page.locator(".playerMapCanvas").waitFor();
+          await checkGlassPanel(page.locator(".playerGeographyCard"));
           await page.getByRole("button", { name: "Zoom in", exact: true }).click();
           await geography.click();
           assert.equal(await page.locator(".playerMap").count(), 0);
-        } else await snapshot(page, `${label}-players`);
+        } else {
+          await checkGlassPanel(page.locator(".playerGeographyCard"));
+          assert(await page.locator(".playerRosterCard").evaluate(element => {
+            const roster = element.getBoundingClientRect();
+            const summary = document.querySelector(".playerSummaryGrid").getBoundingClientRect();
+            const map = document.querySelector(".playerGeographyCard").getBoundingClientRect();
+            return summary.bottom <= roster.top && roster.bottom <= map.top;
+          }), "Desktop roster is not between the summary and geography");
+          await snapshot(page, `${label}-players`);
+        }
 
         await navigate(page, "schedule");
         await page.getByRole("table", { name: "Schedules", exact: true }).waitFor();

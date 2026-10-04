@@ -86,6 +86,8 @@ describe("SettingsPage", () => {
   it("renders a category-based page with Appearance selected by default", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props()} />);
     expect(html).toContain('role="tablist"');
+    expect(html).toContain('aria-orientation="horizontal"');
+    expect(html).toMatch(/class="[^"]*uiGlassSurface[^"]*settingsHubContent/);
     expect(html).toContain('id="settings-tab-appearance"');
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain("Relative timestamps");
@@ -214,6 +216,7 @@ describe("SettingsPage", () => {
       ]
     })} />);
     expect(html).toContain("Nothing is scheduled while this is off");
+    expect(html.match(/class="settingsModuleCardSwitch"/g)).toHaveLength(3);
     expect(html).toContain("Disabled");
     expect(html).not.toContain("Manage integrations permission is required");
   });
@@ -250,6 +253,7 @@ describe("SettingsPage", () => {
       systemInfo: { ...props().systemInfo, runtimeMode: "panel", panelOnlyMode: true, dockerSocketMounted: false }
     })} />);
     expect(html).toContain("Remote-node mode");
+    expect(html).toContain('aria-label="Refresh system information"');
     expect(html).toContain("Not required (remote-node mode)");
     expect(html).toContain('aria-label="About copied diagnostics"');
     expect(html).toContain("Usernames, credentials, commands, server and node names, and filesystem paths are excluded.");

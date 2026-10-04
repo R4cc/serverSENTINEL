@@ -24,6 +24,12 @@
   font-size: var(--type-metric-value-size);
 }
 
+.playerSummaryGrid .uiMetricTile {
+  background: var(--glass-tint-soft);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-highlight);
+}
+
 .playerSummarySkeleton {
   height: 96px;
   border-radius: var(--radius-md);
@@ -56,6 +62,55 @@
 
 .playerGeographyCard.playerCard { gap: var(--space-4); }
 
+.playerCard .uiPanelHeader h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.playerSectionIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-soft);
+  box-shadow: var(--glass-highlight);
+  color: var(--sentinel-accent-strong);
+}
+
+.playerSectionIcon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.playerRosterCard.uiGlassSurface,
+.playerGeographyCard.uiGlassSurface {
+  background: var(--glass-tint);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+}
+
+.playerRegionCard,
+.playerLatencyCard,
+.playerActivityCard {
+  border-top: 1px solid var(--border-row);
+  padding: var(--space-4) var(--space-1) 0;
+}
+
+.playerRosterCard .uiPanelHeader {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-row);
+}
+
+.playerRosterTable tbody tr:hover {
+  background: var(--glass-tint-soft);
+}
+
 .playerCardNote {
   margin: 0;
   color: var(--text-muted);
@@ -84,7 +139,7 @@
   border: 1px solid var(--border-muted);
   border-radius: var(--radius-md);
   aspect-ratio: 2 / 1;
-  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 9%, var(--surface)), var(--surface));
+  background: var(--surface);
 }
 
 .playerMapViewport {
@@ -1058,15 +1113,13 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid var(--border-muted);
-  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--border-row);
   margin: 0;
-  background: color-mix(in srgb, var(--surface-muted) 34%, transparent);
 }
 
 .playerConnectionSnapshot > div {
   min-width: 0;
-  padding: 9px var(--space-3);
+  padding: var(--space-3);
 }
 
 .playerConnectionSnapshot > div + div {
@@ -1511,5 +1564,15 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   .playerActivityHourLabel,
   .playerLocationDisclosureToggle > svg {
     transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .playerSummaryGrid .uiMetricTile { background: var(--surface-raised); }
+  .playerRosterCard.uiGlassSurface,
+  .playerGeographyCard.uiGlassSurface {
+    background: var(--surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
