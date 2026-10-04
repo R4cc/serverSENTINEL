@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.10.9 - 2026-10-04
+
+- Fixed Recent runs hover and focus styling with rounded corners, balanced padding, and stable row geometry on desktop and mobile.
+
 ## 26.10.8 - 2026-10-04
 
 - Refined Nodes with liquid glass host cards, icon-led fleet summaries, and a lighter health and runtime drawer.

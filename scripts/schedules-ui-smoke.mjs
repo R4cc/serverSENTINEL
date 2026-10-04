@@ -63,6 +63,30 @@ try {
         await page.locator(".scheduleTableRow").waitFor();
         await page.evaluate(() => document.fonts.ready);
         await capture(page, `${width}-${theme}-initial`);
+        const recentRun = page.locator(".scheduledRunItem").first();
+        await recentRun.scrollIntoViewIfNeeded();
+        await page.mouse.move(0, 0);
+        const restingBounds = await recentRun.boundingBox();
+        await recentRun.hover();
+        assert.deepEqual(await recentRun.boundingBox(), restingBounds, "Hover changes recent-run geometry");
+        assert(await recentRun.evaluate(element => {
+          const style = getComputedStyle(element);
+          const row = element.getBoundingClientRect();
+          const marker = element.querySelector('.scheduledRunMarker').getBoundingClientRect();
+          const action = element.querySelector('.scheduledRunActions').getBoundingClientRect();
+          return parseFloat(style.borderTopLeftRadius) >= 6
+            && marker.left - row.left >= 10 && row.right - action.right >= 10;
+        }), "Recent-run hover must be rounded and inset on both sides");
+        if (screenshots) await recentRun.screenshot({ path: `${screenshots}/${width}-${theme}-recent-hover.png`, animations: "disabled" });
+        const recentDetails = recentRun.getByRole("button", { name: /^View details/ });
+        await recentDetails.focus();
+        await page.mouse.move(0, 0);
+        assert(await recentRun.evaluate(element => element.matches(':focus-within')), "Recent-run keyboard focus is missing");
+        assert.deepEqual(await recentRun.boundingBox(), restingBounds, "Keyboard focus changes recent-run geometry");
+        await recentDetails.click();
+        await page.locator(".scheduleRunModalPanel").waitFor();
+        await page.keyboard.press("Escape");
+        await page.locator(".scheduleRunModalPanel").waitFor({ state: "detached" });
         for (const [template, name] of [["Nightly restart", "Nightly restart"], ["Hourly save", "Hourly world save"], ["Weekly restart when empty", "Weekly restart when empty"]]) {
           await page.getByRole("button", { name: "Add schedule", exact: true }).click();
           const modal = page.locator(".scheduleModalPanel");
