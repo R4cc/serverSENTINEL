@@ -315,6 +315,10 @@ export function describeCronExpression(cron: string): string | null {
     ? `${pad(hour)}:${pad(minute)}`
     : null;
 
+  if (hour === "*" && day === "*" && month === "*" && weekday === "*") {
+    if (minute === "*") return "Every minute";
+    if (exactNumber(minute) !== null) return minute === "0" ? "Every hour" : `Hourly at minute ${pad(minute)}`;
+  }
   if (minute.startsWith("*/") && hour === "*" && day === "*" && month === "*" && weekday === "*") {
     return `Every ${minute.slice(2)} minutes`;
   }

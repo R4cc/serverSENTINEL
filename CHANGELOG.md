@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.10.7 - 2026-10-04
+
+- Redesigned Schedules with a full-width liquid glass list, search and state filters, and a lighter recent-run activity view.
+- Streamlined the schedule editor and run history with consistent controls, responsive layouts, and concise hourly timing descriptions.
+
 ## 26.10.6 - 2026-10-04
 
 - Redesigned Properties with a continuous liquid glass configuration surface, aligned runtime fields, and responsive memory and network sections.

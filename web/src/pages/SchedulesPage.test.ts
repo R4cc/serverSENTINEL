@@ -159,6 +159,18 @@ describe("online-player schedule options", () => {
 });
 
 describe("schedule workspace rendering", () => {
+  it("keeps list controls and recent activity available on a locked workspace", () => {
+    const html = renderSchedulePage([schedule([{ type: "command", command: "save-all", delaySeconds: 0 }])], { disabled: true });
+
+    expect(html).toContain('uiGlassSurface');
+    expect(html).toContain('Search schedules</label>');
+    expect(html).toContain('aria-label="Filter schedules"');
+    expect(html).toContain('aria-label="Recent schedule activity"');
+    expect(html).toContain("Configured schedules");
+    expect(html).toContain("Recent runs");
+    expect(html).not.toContain('class="panel scheduledRunsCard"');
+  });
+
   it("omits summary metrics and keeps disabled and active states accessible", () => {
     const activeRun: ScheduledActiveRun = {
       id: "run-active",

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { ArrowRight, CalendarClock, Check, CircleX, Clock3, History, ListOrdered, Pause, ShieldCheck, Timer } from 'lucide-react';
 import {
   useTable,
   type ColumnDef,
@@ -16,7 +17,8 @@ import type { ScheduleNavigationTarget, ScheduleStep, ScheduledActiveRun, Schedu
 import { AppIcon } from '../components/FileTypeIcon';
 import { InlineState } from '../components/InlineState';
 import { SortHeaderButton, headerAriaSort } from '../components/TableControls';
-import { Button, EmptyState, HelpTooltip, PanelHeader, Toolbar } from '../components/UiPrimitives';
+import { Button, EmptyState, HelpTooltip, PanelHeader, StatusBadge, Surface, Toolbar } from '../components/UiPrimitives';
+import { SearchField } from '../components/SearchField';
 import { DialogSurface } from '../components/DialogSurface';
 import { ActionMenu } from '../components/ActionMenu';
 import { clientId } from '../utils/files';
@@ -219,6 +221,8 @@ export function SchedulePage({
   const [selectedRun, setSelectedRun] = useState<ScheduledRun | null>(null);
   const [historySchedule, setHistorySchedule] = useState<ScheduledExecution | null>(null);
   const [scheduleSorting, setScheduleSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+  const [search, setSearch] = useState("");
+  const [scheduleFilter, setScheduleFilter] = useState("all");
   const [relativeNow, setRelativeNow] = useState(() => Date.now());
   const initialLoading = loading && schedules.length === 0;
   const saveRunning = disabled && disabledReason?.toLowerCase().includes("saving");
@@ -254,6 +258,16 @@ export function SchedulePage({
 
   const runItems = useMemo(() => scheduleRunItems(schedules), [schedules]);
   const recentRunsKey = scheduleRunFeedKey(runItems);
+  const visibleSchedules = useMemo(() => schedules.filter((schedule) => {
+    const matchesState = scheduleFilter === "all"
+      || (scheduleFilter === "enabled" && schedule.enabled)
+      || (scheduleFilter === "paused" && !schedule.enabled)
+      || (scheduleFilter === "attention" && Boolean(scheduleHealth(schedule)));
+    const query = search.trim().toLowerCase();
+    return matchesState && (!query || `${schedule.name} ${schedule.cron} ${cronSummary(schedule.cron)} ${scheduleDescription(schedule)}`.toLowerCase().includes(query));
+  }), [schedules, search, scheduleFilter]);
+  const enabledCount = schedules.filter((schedule) => schedule.enabled).length;
+  const activeRunCount = runItems.filter((run) => run.kind === "active").length;
   const scheduleColumns = useMemo<ColumnDef<SortableTableFeatures, ScheduledExecution>[]>(() => [
     {
       id: "name",
@@ -282,7 +296,7 @@ export function SchedulePage({
   ], []);
   const scheduleTable = useTable({
     features: sortableTableFeatures,
-    data: schedules,
+    data: visibleSchedules,
     columns: scheduleColumns,
     getRowId: (schedule) => schedule.id,
     state: {
@@ -319,11 +333,16 @@ export function SchedulePage({
     const target = resolved.kind === "schedule"
       ? scheduleRowRefs.current.get(resolved.schedule.id)
       : runItemRefs.current.get(resolved.run.id);
+    if (resolved.kind === "schedule" && !target && (search || scheduleFilter !== "all")) {
+      setSearch("");
+      setScheduleFilter("all");
+      return;
+    }
     if (!target) return;
     target.scrollIntoView({ block: "center", behavior: "smooth" });
     target.focus({ preventScroll: true });
     onNavigationTargetHandled?.();
-  }, [navigationTarget, onNavigationTargetHandled, schedules]);
+  }, [navigationTarget, onNavigationTargetHandled, schedules, search, scheduleFilter]);
 
   useEffect(() => {
     setRelativeNow(Date.now());
@@ -442,7 +461,11 @@ export function SchedulePage({
     <section className="tabPage schedulePage scheduleWorkspacePage layoutWide">
       <Toolbar
         className="scheduleWorkspaceToolbar"
-        primary={<Button
+        primary={<div className="scheduleWorkspaceContext">
+          <span><span className="scheduleContextDot" aria-hidden="true" /><strong>{enabledCount}</strong> enabled</span>
+          <span title={`Schedule timezone: ${scheduleTimeZone}`}><Clock3 aria-hidden="true" /><strong>{scheduleTimeZone}</strong></span>
+        </div>}
+        secondary={<Button
           className="scheduleAddButton"
           onClick={() => setFormMode({ type: "create" })}
           disabled={disabled}
@@ -451,10 +474,6 @@ export function SchedulePage({
           <AppIcon name="plus" />
           <span>Add schedule</span>
         </Button>}
-        meta={<div className="scheduleWorkspaceContext">
-          <span>Cron timezone</span>
-          <strong>{scheduleTimeZone}</strong>
-        </div>}
       />
 
       {disabled && disabledReason && !saveRunning && (
@@ -473,11 +492,21 @@ export function SchedulePage({
       )}
 
       <div className="scheduleWorkspaceGrid">
-        <section className="panel scheduleTableCard">
+        <Surface material="glass" density="flush" className="scheduleTableCard">
           <PanelHeader
             className="scheduleCardHeader"
-            title="Configured schedules"
+            title={<><span className="scheduleSectionIcon" aria-hidden="true"><CalendarClock /></span>Configured schedules</>}
+            actions={<StatusBadge>{schedules.length} {schedules.length === 1 ? "schedule" : "schedules"}</StatusBadge>}
           />
+          <div className="scheduleListControls">
+            <SearchField label="Search schedules" value={search} onChange={setSearch} />
+            <select aria-label="Filter schedules" value={scheduleFilter} onChange={(event) => setScheduleFilter(event.target.value)}>
+              <option value="all">All schedules</option>
+              <option value="enabled">Enabled</option>
+              <option value="paused">Paused</option>
+              <option value="attention">Needs attention</option>
+            </select>
+          </div>
 
           <div className="scheduleTableFrame" role="table" aria-label="Schedules" aria-busy={loading}>
             <div className="scheduleTableHeader uiTableHeader" role="row">
@@ -524,6 +553,7 @@ export function SchedulePage({
                   tabIndex={-1}
                 >
                   <div className="scheduleNameCell" data-label="Name" role="cell">
+                    <span className={`scheduleRowIcon ${scheduleIsActive ? "active" : ""}`} aria-hidden="true">{scheduleIsActive ? <Timer /> : schedule.enabled ? <CalendarClock /> : <Pause />}</span>
                     <div className="scheduleCellValue scheduleNameValue">
                       <strong title={schedule.name}>{schedule.name}</strong>
                       <small title={scheduleDescription(schedule)}>{scheduleDescription(schedule)}</small>
@@ -539,8 +569,8 @@ export function SchedulePage({
                   </div>
                   <div className="scheduleCell" data-label="Schedule" role="cell">
                     <div className="scheduleCellValue">
+                      <span className="scheduleCadence" title={cronSummary(schedule.cron)}>{cronSummary(schedule.cron)}</span>
                       <code title={schedule.cron}>{schedule.cron}</code>
-                      <small title={cronSummary(schedule.cron)}>{cronSummary(schedule.cron)}</small>
                     </div>
                   </div>
                   <div className="scheduleCell" data-label="Last run" role="cell">
@@ -579,7 +609,7 @@ export function SchedulePage({
                           {relativeTimestamps ? nextRunRelativeTime(schedule.nextRunAt, relativeNow) : formatScheduleTime(schedule.nextRunAt, formatDate)}
                         </time>
                       ) : (
-                        <><span>{schedule.enabled ? "Not available" : "Disabled"}</span>{schedule.enabled && <small>Waiting for a valid cron match</small>}</>
+                        <><span className="scheduleMutedValue">{schedule.enabled ? "Not available" : "Paused"}</span>{schedule.enabled && <small>Waiting for a valid cron match</small>}</>
                       )}
                     </div>
                   </div>
@@ -662,16 +692,16 @@ export function SchedulePage({
               }) : (
                 <div className="scheduleNoRowsRow" role="row">
                   <div role="cell">
-                    <EmptyState compact className="scheduleNoRows" title="No schedules added" message="Use Add schedule to create automated commands or actions." />
+                    <EmptyState compact className="scheduleNoRows" title={schedules.length ? "No matching schedules" : "No schedules added"} action={schedules.length ? <Button variant="secondary" compact onClick={() => { setSearch(""); setScheduleFilter("all"); }}>Clear filters</Button> : undefined} />
                   </div>
                 </div>
               )}
             </div>
           </div>
-        </section>
+        </Surface>
 
-        <aside className="panel scheduledRunsCard">
-          <PanelHeader className="scheduleCardHeader compact" title="Scheduled Runs" />
+        <aside className="scheduledRunsCard" aria-label="Recent schedule activity">
+          <PanelHeader className="scheduleCardHeader compact" title={<><span className="scheduleSectionIcon" aria-hidden="true"><History /></span>Recent runs</>} actions={activeRunCount ? <StatusBadge tone="accent">{activeRunCount} active</StatusBadge> : <span className="scheduleRunCount">{runItems.length} recent</span>} />
           {runItems.length ? (
             <div ref={runsFeedRef} className="scheduledRunsFeed">
               {runItems.map((run) => (
@@ -684,7 +714,7 @@ export function SchedulePage({
                   className={`scheduledRunItem ${statusTone(run.status)} ${run.kind === "active" ? "active" : ""}`}
                   tabIndex={-1}
                 >
-                  <span className="scheduledRunMarker" aria-hidden="true"></span>
+                  <span className="scheduledRunMarker" aria-hidden="true">{run.kind === "active" ? <Timer /> : statusTone(run.status) === "success" ? <Check /> : run.status === "failed" ? <CircleX /> : <Pause />}</span>
                   <div className="scheduledRunDetails">
                     <strong title={run.scheduleName}>{run.scheduleName}</strong>
                     <small>{run.kind === "active" ? activeRunStatus(run) : statusLabel(run.status)}</small>
@@ -709,8 +739,8 @@ export function SchedulePage({
                   )}
                   {run.kind === "completed" && (
                     <div className="scheduledRunActions">
-                      <Button variant="secondary" compact className="scheduledRunDetailsButton" onClick={() => setSelectedRun(run)} aria-label={`View details for ${run.scheduleName}`} title={`View details for ${run.scheduleName}`}>
-                        Details
+                      <Button variant="ghost" iconOnly compact className="scheduledRunDetailsButton" onClick={() => setSelectedRun(run)} aria-label={`View details for ${run.scheduleName}`} title={`View details for ${run.scheduleName}`}>
+                        <ArrowRight aria-hidden="true" />
                       </Button>
                     </div>
                   )}
@@ -764,7 +794,7 @@ export function SchedulePage({
               <div className="scheduleEditorMain">
               <section className="scheduleEditorSection scheduleDetailsSection" aria-labelledby="schedule-details-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="hourglass" /></span><div><h3 id="schedule-details-heading">Timing</h3></div></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><Clock3 /></span><div><h3 id="schedule-details-heading">Timing</h3></div></div>
                   <span className="scheduleEditorMeta">Timezone: {scheduleTimeZone}</span>
                 </div>
                 <div className="userModalFields scheduleEditFields">
@@ -870,7 +900,7 @@ export function SchedulePage({
 
               <section className="scheduleEditorSection" aria-labelledby="schedule-steps-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="switch" /></span><div><h3 id="schedule-steps-heading">Steps</h3></div></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><ListOrdered /></span><div><h3 id="schedule-steps-heading">Steps</h3></div></div>
                 </div>
                 <div className="commandStack scheduleCommandStack">
                   <span className="visuallyHidden" role="status" aria-live="polite">{stepReorderMessage}</span>
@@ -980,7 +1010,7 @@ export function SchedulePage({
 
               <section className="scheduleEditorSection scheduleOptionsSection" aria-labelledby="schedule-options-heading">
                 <div className="scheduleEditorSectionHeader">
-                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><AppIcon name="shield" /></span><div><h3 id="schedule-options-heading">Run conditions</h3></div></div>
+                  <div className="scheduleEditorSectionTitle"><span className="scheduleEditorSectionIndex" aria-hidden="true"><ShieldCheck /></span><div><h3 id="schedule-options-heading">Run conditions</h3></div></div>
                 </div>
                 <div className="scheduleEditOptions">
                   <label className="scheduleOptionToggle scheduleEnabledOption">
