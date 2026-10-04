@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.10.8 - 2026-10-04
+
+- Refined Nodes with liquid glass host cards, icon-led fleet summaries, and a lighter health and runtime drawer.
+- Streamlined node setup and install instructions with responsive fullscreen dialogs and always-visible setup actions.
+
 ## 26.10.7 - 2026-10-04
 
 - Redesigned Schedules with a full-width liquid glass list, search and state filters, and a lighter recent-run activity view.

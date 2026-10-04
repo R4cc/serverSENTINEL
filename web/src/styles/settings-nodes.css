@@ -63,18 +63,23 @@
 }
 
 .nodeModalPanel {
-  width: min(1180px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
   padding: 0;
-  border-color: color-mix(in srgb, var(--border-muted) 72%, var(--surface));
-  border-radius: 18px;
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-elevated);
+  border-color: var(--glass-edge);
+  border-radius: var(--radius-md);
+  background: var(--glass-tint-strong);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
 }
 
 .nodeModalBackdrop {
-  z-index: 100;
+  z-index: 150;
 }
+
+.nodeModalPanel:focus { outline: none; }
 
 .nodeModalHeader,
 .nodeModalBody {
@@ -82,26 +87,67 @@
 }
 
 .nodeModalHeader {
-  border-bottom: var(--border-strong) solid var(--border);
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border-row);
 }
 
 .nodeModalBody {
   display: grid;
-  gap: var(--space-4);
+  flex: 1 1 auto;
+  align-content: start;
+  gap: var(--space-5);
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.nodeCreateForm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+}
+
+.nodeCreateForm > fieldset.nodeModalBody {
+  margin: 0;
+  padding: var(--space-5);
+}
+
+.nodeModalTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.nodeModalGlyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-soft);
+  box-shadow: var(--glass-highlight);
+  color: var(--accent);
+}
+
+.nodeModalGlyph svg {
+  width: 18px;
+  height: 18px;
 }
 
 .nodeConnectionSetup {
   display: grid;
   gap: var(--space-3);
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-  padding: var(--space-4);
+  border-block: 1px solid var(--border-row);
+  padding: var(--space-5) 0;
 }
 
 .nodeConnectionIntro {
   display: grid;
-  grid-template-columns: minmax(190px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-items: center;
 }
@@ -146,14 +192,9 @@
 }
 
 .nodeConnectionDirection span {
-  min-height: 42px;
   display: grid;
   place-items: center;
-  border: var(--border-strong) solid var(--border-muted);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  padding: var(--space-2);
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: var(--weight-title);
   line-height: 1.2;
@@ -161,14 +202,13 @@
 }
 
 .nodeConnectionDirection span:last-child {
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--border-muted));
   color: var(--accent);
 }
 
-.nodeConnectionDirection b {
+.nodeConnectionDirection svg {
+  width: 18px;
+  height: 18px;
   color: var(--accent);
-  font-size: 22px;
-  line-height: 1;
 }
 
 .nodeModalBody .fieldHint {
@@ -220,24 +260,40 @@
 .nodeInstallBox {
   display: grid;
   gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-row);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .installTabs {
   display: flex;
-  gap: var(--space-2);
+  gap: 4px;
   flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-soft);
 }
 
 .installTabs .uiButton {
   min-height: var(--control-height-compact);
-  background: var(--surface);
-  color: var(--text);
+  background: transparent;
+  color: var(--text-muted);
 }
 
 .installTabs .uiButton.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--swiss-white);
+  background: var(--glass-tint);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-highlight), var(--shadow-xs);
+  color: var(--text);
 }
 
 /* "Recommended" is a qualifier on the option, not part of its name, so it reads
@@ -348,7 +404,7 @@
   display: grid;
   justify-items: center;
   gap: var(--space-2);
-  background: var(--surface);
+  background: transparent;
   padding: 0 var(--space-2);
 }
 
@@ -359,7 +415,7 @@
   place-items: center;
   border: var(--border-strong) solid var(--border-muted);
   border-radius: 999px;
-  background: var(--surface);
+  background: var(--surface-raised);
   color: var(--text);
   font-size: 13px;
   font-weight: var(--weight-title);
@@ -395,10 +451,7 @@
   grid-template-columns: 56px minmax(0, 1fr);
   gap: var(--space-3);
   align-items: center;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  padding: var(--space-4);
+  padding: var(--space-3) 0;
 }
 
 .addNodeStatusCard h3 {
@@ -419,8 +472,7 @@
 }
 
 .addNodeStatusCard.success {
-  border-color: var(--sentinel-success);
-  background: color-mix(in srgb, var(--sentinel-success) 8%, var(--surface));
+  background: transparent;
 }
 
 .addNodeStatusCard.success h3,
@@ -433,12 +485,16 @@
   height: 56px;
   display: grid;
   place-items: center;
-  border: var(--border-strong) solid currentColor;
-  border-radius: 999px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-soft);
   font-size: 32px;
   font-weight: var(--weight-title);
   line-height: 1;
 }
+
+.addNodeStatusIcon svg { width: 24px; height: 24px; }
+.addNodeStepCircle svg { width: 18px; height: 18px; }
 
 /* The waiting card is a centred column, so the spinner opts out of stretching. */
 .addNodeSpinner {
@@ -455,7 +511,7 @@
 
 @media (max-width: 720px) {
   .nodeConnectionSetup {
-    padding: var(--space-3);
+    padding: var(--space-4) 0;
   }
 
   .nodeConnectionIntro,
@@ -2049,8 +2105,8 @@
 
 .nodeDrawerTitleLine {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
   min-width: 0;
 }
@@ -2058,9 +2114,9 @@
 .nodeDrawerTitleLine h2 {
   min-width: 0;
   overflow-wrap: anywhere;
-  margin: var(--space-2) 0 0;
+  margin: 0;
   color: var(--text);
-  font-size: var(--type-page-title-size);
+  font-size: var(--type-section-title-size);
   font-weight: var(--weight-heading);
   line-height: 1.25;
 }
@@ -2077,13 +2133,14 @@
 
 .nodeDrawerGlyph {
   display: grid;
-  width: 56px;
-  height: 56px;
-  flex: 0 0 56px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   place-items: center;
-  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 24%, var(--border-row));
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface-raised));
+  border: var(--border-subtle) solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-soft);
+  box-shadow: var(--glass-highlight);
   color: var(--accent);
 }
 
@@ -2113,26 +2170,21 @@
   grid-template-columns: 34px minmax(0, 1fr);
   align-items: start;
   gap: var(--space-3);
-  padding: var(--space-5);
-  border: var(--border-subtle) solid var(--border-row);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  padding: 0 0 var(--space-5);
+  border-bottom: 1px solid var(--border-row);
 }
 
 .nodeOperationStatus.online {
-  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-success) 7%, var(--surface-raised));
+  color: var(--status-success-foreground);
 }
 
 .nodeOperationStatus.working {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-row));
-  background: color-mix(in srgb, var(--accent) 8%, var(--surface-raised));
+  color: var(--accent);
 }
 
 .nodeOperationStatus.offline,
 .nodeOperationStatus.attention {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 40%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-warning) 8%, var(--surface-raised));
+  color: var(--status-warning-foreground);
 }
 
 .nodeOperationStatusIcon {
@@ -2152,13 +2204,13 @@
 .nodeOperationStatus strong {
   display: block;
   color: var(--text);
-  font-size: var(--type-card-title-size);
+  font-size: var(--type-body-size);
 }
 
 .nodeOperationStatus p {
   margin: 5px 0 0;
   color: var(--text-muted);
-  font-size: var(--type-body-size);
+  font-size: var(--type-helper-size);
   line-height: 1.6;
 }
 
@@ -2236,17 +2288,20 @@
 .nodeDrawerSection,
 .nodeTechnicalDetails {
   min-width: 0;
-  border: var(--border-subtle) solid var(--border-panel);
-  border-radius: var(--radius-md);
-  padding: var(--space-5);
-  background: var(--surface-raised);
+  border-top: 1px solid var(--border-row);
+  padding: var(--space-5) 0 0;
 }
 
 .nodeDrawerSection h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0 0 var(--space-2);
   color: var(--text);
-  font-size: var(--type-section-title-size);
+  font-size: var(--type-body-size);
 }
+
+.nodeDrawerSection h3 svg { width: 16px; height: 16px; color: var(--text-muted); }
 
 .nodeUpdateNotificationSetting {
   display: grid;
@@ -2491,19 +2546,21 @@
 
 .nodeDrawerEyebrow { color: var(--accent); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-badge); text-transform: uppercase; }
 .nodeVersionComparison { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); margin: 0; }
-.nodeVersionComparison > div { min-width: 0; padding: var(--space-5); border: 1px solid var(--border-panel); border-radius: var(--radius-md); background: var(--surface-raised); }
-.nodeVersionComparison > div:nth-child(2) { border-color: var(--accent); background: var(--sentinel-accent-soft); }
+.nodeVersionComparison > div { min-width: 0; padding: var(--space-2) 0; }
+.nodeVersionComparison > div:nth-child(2) { border-left: 1px solid var(--border-row); padding-left: var(--space-4); }
 .nodeVersionComparison dt { color: var(--text-muted); font-size: var(--type-meta-size); }
-.nodeVersionComparison dd { margin: var(--space-2) 0 0; overflow-wrap: anywhere; font-size: var(--type-section-title-size); font-weight: var(--weight-heading); }
+.nodeVersionComparison dd { margin: var(--space-2) 0 0; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--type-body-size); font-weight: var(--weight-heading); }
 @media (max-width: 720px) {
   .nodeDetailsDrawer { --node-details-padding: var(--space-4); }
   .nodeDrawerBody { gap: var(--space-4); }
-  .nodeDrawerSection, .nodeTechnicalDetails, .nodeOperationStatus { padding: var(--space-4); }
+  .nodeDrawerSection, .nodeTechnicalDetails { padding: var(--space-4) 0 0; }
+  .nodeOperationStatus { padding: 0 0 var(--space-4); }
   .nodeDrawerHeader { align-items: flex-start; }
 }
 @media (max-width: 400px) {
   .nodeDrawerFacts > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
   .nodeTechnicalDetails summary { flex-wrap: wrap; }
+  .nodeVersionComparison { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2527,9 +2584,7 @@
 @media (max-width: 640px) {
 
   .nodeModalPanel {
-    width: calc(100vw - 20px);
-    max-height: calc(100vh - 20px);
-    border-radius: 14px;
+    border-radius: 0;
   }
 }
 
@@ -2567,8 +2622,9 @@
   gap: var(--space-2);
   flex-wrap: wrap;
   margin-top: 0;
-  border-top: var(--border-strong) solid var(--border);
-  padding: var(--space-4);
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border-row);
+  padding: var(--space-4) var(--space-5);
 }
 
 @media (max-width: 720px) {
@@ -2579,6 +2635,12 @@
     height: 44px;
     min-height: 44px;
   }
+
+  .nodeCreateForm > fieldset.nodeModalBody { padding: var(--space-4); }
+  .nodeModalFooter.inline { padding: var(--space-3) var(--space-4); }
+  .nodeModalFooter .uiButton, .installTabs .uiButton { min-height: 44px; }
+  .installCopyButton.uiButton { width: 44px; min-width: 44px; height: 44px; }
+  .nodeCreateForm { flex: 1 1 auto; }
 
   .nodeDrawerBackdrop {
     height: var(--visual-viewport-height, 100dvh);
@@ -2609,11 +2671,16 @@
 .nodeModalHeader,
 .nodeModalFooter.inline {
   border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 78%, var(--surface-muted));
+  background: var(--glass-tint-soft);
 }
 
 .nodeModalBody {
-  background: var(--surface-raised);
+  background: transparent;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .nodeDetailsDrawer, .nodeModalPanel { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+  .nodeInstallBox { background: transparent; box-shadow: none; }
 }
 
 @media (max-width: 720px) {

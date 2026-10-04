@@ -10,10 +10,10 @@ const validInput = {
   dataMount: "/var/lib/serversentinel"
 };
 
-function renderAddNodeModal(browserPanelUrl: string) {
+function renderAddNodeModal(browserPanelUrl: string, busy = false) {
   return renderToStaticMarkup(
     <AddNodeModal
-      busy={false}
+      busy={busy}
       browserPanelUrl={browserPanelUrl}
       created={null}
       installMethod="run"
@@ -61,6 +61,17 @@ describe("new node panel address", () => {
 
     expect(html).toContain("Use this address");
     expect(html).toContain('name="panelUrl" value=""');
+  });
+
+  it("keeps setup actions outside the scrollable body and disabled while creating", () => {
+    const html = renderAddNodeModal("https://panel.example.com", true);
+
+    expect(html).toContain("uiDialog--mobileFullscreen");
+    expect(html).toContain('class="appForm nodeCreateForm"');
+    expect(html).toContain('</fieldset><footer class="nodeModalFooter inline">');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*type="submit"/);
+    expect(html).toContain('id="add-node-data"');
+    expect(html).toContain('for="add-node-data"');
   });
 });
 
@@ -161,6 +172,8 @@ describe("dense node fleets", () => {
     expect(html).toContain('aria-controls="node-servers-10000000-0000-4000-8000-000000000001"');
     expect(html).not.toContain('class="nodeTile"');
     expect(html).not.toContain("nodeServerTile");
+    expect(html.match(/uiSurface--glass uiGlassSurface nodeListItem/g)).toHaveLength(8);
+    expect(html.match(/nodeFleetMetric/g)).toHaveLength(3);
   });
 
   it("sizes every toolbar action the same", () => {

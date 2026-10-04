@@ -1,4 +1,5 @@
 import { ActionMenu, type ActionMenuItem } from "../components/ActionMenu";
+import { Activity, Bell, Network } from "lucide-react";
 import { DialogSurface } from "../components/DialogSurface";
 import { AppIcon } from "../components/FileTypeIcon";
 import { Banner, Button, Spinner, StatusBadge } from "../components/UiPrimitives";
@@ -92,11 +93,7 @@ function MoreIcon() {
 function NodeGlyph() {
   return (
     <span className="nodeDrawerGlyph" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="5" y="4" width="14" height="5" rx="1.5" />
-        <rect x="5" y="15" width="14" height="5" rx="1.5" />
-        <path d="M8 6.5h.1M8 17.5h.1M12 9v6" />
-      </svg>
+      <Network />
     </span>
   );
 }
@@ -325,7 +322,7 @@ export function NodeDetailsDrawer({
         </dl>
 
         <section className="nodeDrawerSection" aria-labelledby="node-health-title">
-          <h3 id="node-health-title">Health and runtime</h3>
+          <h3 id="node-health-title"><Activity aria-hidden="true" />Health and runtime</h3>
           <dl className="nodeDrawerFacts">
             <div><dt>Docker</dt><dd className={valueTone(node.dockerStatus)}>{nodeDockerLabel(node)}</dd></div>
             <div><dt>Data path</dt><dd className={valueTone(node.dataPathStatus)}>{nodeDataPathLabel(node)}</dd></div>
@@ -335,7 +332,7 @@ export function NodeDetailsDrawer({
         </section>
 
         <section className="nodeDrawerSection" aria-labelledby="node-notifications-title">
-          <h3 id="node-notifications-title">Notifications</h3>
+          <h3 id="node-notifications-title"><Bell aria-hidden="true" />Notifications</h3>
           <label className="nodeUpdateNotificationSetting">
             <span>
               <strong>Node update notifications</strong>
