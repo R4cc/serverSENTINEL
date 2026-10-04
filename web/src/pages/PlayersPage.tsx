@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   flexRender,
   useTable,
@@ -6,7 +6,7 @@ import {
   type SortingState
 } from "@tanstack/react-table";
 import { sortableTableFeatures, type SortableTableFeatures } from "../utils/tableFeatures";
-import { Activity, ChevronDown, Globe, MapPin, Wrench } from "lucide-react";
+import { Activity, ChartColumn, ChevronDown, Globe, MapPin, Users, Wifi, Wrench, type LucideIcon } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerRegionSummary } from "../types";
 import { SearchField } from "../components/SearchField";
 import { InlineState } from "../components/InlineState";
@@ -43,6 +43,10 @@ import {
 
 const rosterPageSize = 8;
 type PlayerMapScope = "online" | "all";
+
+function PlayerSectionTitle({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
+  return <><span className="playerSectionIcon" aria-hidden="true"><Icon /></span>{children}</>;
+}
 
 function LocationAccuracyBadge({ location }: { location: NonNullable<PlayerInsightsEntry["location"]> }) {
   const tooltipId = useId();
@@ -415,9 +419,9 @@ export function PlayersPage({
     ? insights?.players.filter((entry) => entry.online) ?? []
     : insights?.players ?? [];
   const roster = (
-    <Surface className="playerCard playerRosterCard">
+    <Surface className="playerCard playerRosterCard" material="glass">
       <PanelHeader
-        title="Players"
+        title={<PlayerSectionTitle icon={Users}>Players</PlayerSectionTitle>}
         help={<HelpTooltip label="player data">Locations are approximate. Ping is measured from the player's active TCP connection and is unavailable for offline or unmatched players.</HelpTooltip>}
         actions={summary && (
           <StatusBadge tone={summary.onlinePlayers ? "success" : "neutral"}>
@@ -499,13 +503,15 @@ export function PlayersPage({
         />
       </div>
 
+      {!compactLayout && roster}
+
       {compactLayout && <Button variant="secondary" className="playerGeographyToggle" aria-expanded={geographyExpanded} aria-controls={geographyId} onClick={() => setGeographyExpanded(current => !current)}><Globe aria-hidden="true" /> Player geography <ChevronDown aria-hidden="true" /></Button>}
       <div id={geographyId} hidden={compactLayout && !geographyExpanded} className="playerGeographyDisclosure">
         {(!compactLayout || geographyExpanded) && (
           <div className="playerGeographyRow">
-            <Surface className="playerCard playerGeographyCard">
+            <Surface className="playerCard playerGeographyCard" material="glass">
               <PanelHeader
-                title="Player geography"
+                title={<PlayerSectionTitle icon={Globe}>Player geography</PlayerSectionTitle>}
                 description={serverLocation?.location
                   ? `Measured from ${serverLocation.location.country ?? serverLocation.location.label}`
                   : serverLocation?.address
@@ -549,18 +555,18 @@ export function PlayersPage({
               />
             </Surface>
 
-            <Surface className="playerCard playerRegionCard">
-              <PanelHeader title="Region overview" />
+            <section className="playerCard playerRegionCard">
+              <PanelHeader title={<PlayerSectionTitle icon={MapPin}>Region overview</PlayerSectionTitle>} />
               <RegionTable regions={insights?.regions ?? []} />
-            </Surface>
+            </section>
           </div>
         )}
       </div>
 
       <div className="playerAnalysisRow">
-        <Surface className="playerCard playerLatencyCard">
+        <section className="playerCard playerLatencyCard">
           <PanelHeader
-            title="Connection quality"
+            title={<PlayerSectionTitle icon={Wifi}>Connection quality</PlayerSectionTitle>}
             help={<HelpTooltip label="connection quality">Ping is the Linux TCP round-trip time measured on the server host for directly matched, currently connected players. {pingMeasurement?.status === "unsupported" ? "This server node does not support measurement." : pingMeasurement?.status === "unavailable" ? "Measurement is temporarily unavailable." : "Hover or focus the chart to inspect a moment."}</HelpTooltip>}
             actions={(
               <div className="playerRangeSwitch" role="group" aria-label="Latency history range">
@@ -579,15 +585,13 @@ export function PlayersPage({
             )}
           />
           <ConnectionQualityChart points={insights?.latency ?? []} timeZone={insights?.timeZone ?? "UTC"} compact={compactLayout} />
-        </Surface>
+        </section>
 
-        <Surface className="playerCard playerActivityCard">
-          <PanelHeader title="Activity by hour" help={<HelpTooltip label="activity by hour">Average players for each hour of the day in {insights?.timeZone ?? "UTC"}.</HelpTooltip>} />
+        <section className="playerCard playerActivityCard">
+          <PanelHeader title={<PlayerSectionTitle icon={ChartColumn}>Activity by hour</PlayerSectionTitle>} help={<HelpTooltip label="activity by hour">Average players for each hour of the day in {insights?.timeZone ?? "UTC"}.</HelpTooltip>} />
           <ActivityHours hours={insights?.activityHours ?? []} timeZone={insights?.timeZone ?? "UTC"} />
-        </Surface>
+        </section>
       </div>
-
-      {!compactLayout && roster}
 
       <footer className="playerAttribution">
         <p>{insights?.attribution}</p>

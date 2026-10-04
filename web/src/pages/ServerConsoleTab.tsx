@@ -6,7 +6,8 @@ import type { TerminalSelection } from "../components/MinecraftTerminal";
 import { loadTerminalFonts, loadTerminalRenderer } from "../components/terminalResources";
 import { ConsolePrompt } from "../components/ConsolePrompt";
 import { TerminalLoadingSkeleton } from "../components/LoadingSkeletons";
-import { Surface } from "../components/UiPrimitives";
+import { PanelHeader, Surface } from "../components/UiPrimitives";
+import { SquareTerminal } from "lucide-react";
 import { copyToClipboard } from "../utils/clipboard";
 import { shouldCopyTerminalSelection } from "../utils/minecraftTerminal";
 
@@ -96,7 +97,12 @@ export function ServerConsoleTab({
 
   return (
     <section className="tabPage layoutWide consoleTabPage" hidden={!active}>
-      <Surface className="consolePanel" material="solid">
+      <Surface className="consolePanel" material="glass">
+        <PanelHeader
+          className="consolePanelHeader"
+          compact
+          title={<><span className="consoleSectionIcon" aria-hidden="true"><SquareTerminal /></span>Server output</>}
+        />
         <div className="terminal">
           <div
             className={`minecraftTerminalShell ${canSendCommands ? "" : "disabled"}`}

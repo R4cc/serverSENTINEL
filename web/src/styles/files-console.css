@@ -1111,8 +1111,57 @@
   flex-wrap: wrap;
 }
 
-.consolePanel,
-.fileEditorModal { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.consolePanel.uiGlassSurface,
+.fileEditorModal.uiGlassSurface {
+  border-color: var(--glass-edge);
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+}
+
+.consolePanelHeader {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0 0 var(--space-3);
+  border-bottom: 0;
+}
+
+.consolePanelHeader h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.consoleSectionIcon {
+  display: inline-grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  background: var(--glass-tint-soft);
+  box-shadow: var(--glass-highlight);
+  color: var(--sentinel-accent-strong);
+}
+
+.consoleSectionIcon svg { width: 17px; height: 17px; }
+
+.consoleTabPage .consolePanel { gap: 0; }
+.consoleTabPage .terminal { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--terminal-text) 4%, transparent); }
+
+.fileEditorModal.uiGlassSurface { background: var(--glass-tint-strong); }
+.fileEditorModal .fileEditorHeader,
+.fileEditorModal .fileEditorFooter { background: transparent; }
+.fileEditorModal .fileEditorBody { background: transparent; }
+.fileEditorModal .fileCodeEditor,
+.fileEditorModal .fileEditorStateFill { border-color: var(--border-row); box-shadow: none; }
+
+@media (prefers-reduced-transparency: reduce) {
+  .consolePanel.uiGlassSurface,
+  .fileEditorModal.uiGlassSurface { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 
 .fileEditorHeader {
   min-width: 0;
@@ -1154,6 +1203,8 @@
     height: calc(var(--visual-viewport-height, 100dvh) - 16px);
     max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
   }
+
+  .fileEditorModal.uiGlassSurface { -webkit-backdrop-filter: none; backdrop-filter: none; }
 
   .fileEditorBody {
     min-height: 0;
@@ -1212,6 +1263,8 @@
     overflow: hidden;
   }
 
+  .consolePanelHeader { display: none; }
+
   .workspacePage-console .consolePanel .terminal,
   .workspacePage-console .minecraftTerminal {
     height: auto;
@@ -1222,6 +1275,10 @@
     border-inline: 0;
     border-radius: 0;
   }
+}
+
+@media (max-height: 600px) {
+  .consolePanelHeader { display: none; }
 }
 
 .fileEditorHeader {

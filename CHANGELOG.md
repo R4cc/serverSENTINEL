@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.10.11 - 2026-10-04
+
+- Refined Settings with liquid glass panels, horizontal category tabs, compact module switches, and lighter system diagnostics.
+- Brought Players into the glass design, moved the desktop roster ahead of geography, and simplified the framing around region and activity analytics.
+
+## 26.10.10 - 2026-10-04
+
+- Brought Console, Files, and Mods into the liquid glass design with quieter toolbars, inset row states, and continuous file inspectors and mod details.
+- Kept terminal output and code previews opaque for readability, with responsive layouts and stable hover geometry.
+
 ## 26.10.9 - 2026-10-04
 
 - Fixed Recent runs hover and focus styling with rounded corners, balanced padding, and stable row geometry on desktop and mobile.

@@ -53,7 +53,10 @@ try {
         await route.fulfill({ response, json: { ...await response.json(), demo: false } });
       };
       await page.route("**/api/auth/session", sessionRoute);
-      const usersRoute = route => route.fulfill({ json: { users: [] } });
+      const usersRoute = route => route.fulfill({ json: { users: [
+        { id: "ui-viewer", username: "AtlasViewer", rolePreset: "viewer", permissions: ["servers.view"], createdAt: "2026-10-04T00:00:00.000Z" },
+        { id: "ui-operator", username: "OperatorWithALongDisplayName", rolePreset: "operator", permissions: ["servers.view"], createdAt: "2026-10-04T00:00:00.000Z" }
+      ] } });
       await page.route("**/api/users", usersRoute);
       await page.goto(harness.baseUrl);
       await page.locator(".appShell").waitFor();
@@ -72,6 +75,19 @@ try {
 
       if (width <= 720) await page.getByRole("combobox", {name:"Settings category"}).selectOption("users");
       else await page.getByRole("tab", { name: "Users", exact: true }).click();
+      await page.getByRole("searchbox", { name: "Search users and roles" }).waitFor();
+      await checkLayout(page, page.locator(".settingsHubContent"));
+      assert.equal(await page.locator(".usersTable tbody tr").count(), 2);
+      assert.equal(await page.locator(".usersSettings").evaluate(element => getComputedStyle(element).backgroundColor), "rgba(0, 0, 0, 0)", "User management still nests an opaque panel inside Settings");
+      const userSearch = page.getByRole("searchbox", { name: "Search users and roles" });
+      await userSearch.fill("AtlasViewer");
+      assert.equal(await page.locator(".usersTable tbody tr").count(), 1);
+      await page.getByRole("button", { name: "Clear search users and roles", exact: true }).click();
+      if (process.env.UI_CONSISTENCY_SCREENSHOTS) {
+        await mkdir(process.env.UI_CONSISTENCY_SCREENSHOTS, { recursive: true });
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        await page.screenshot({ path: `${process.env.UI_CONSISTENCY_SCREENSHOTS}/settings-users-${name}.png`, fullPage: true });
+      }
       await page.getByRole("button", { name: "New user", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "New user", exact: true });
       const close = dialog.getByRole("button", { name: "Close user dialog", exact: true });

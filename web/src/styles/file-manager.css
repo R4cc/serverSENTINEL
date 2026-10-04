@@ -659,8 +659,55 @@
   padding: var(--space-3);
 }
 
-.filesPanel,
-.fileDetailsPanel { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.filesPage .filesPanel.uiGlassSurface,
+.filesPage .fileDetailsPanel.uiGlassSurface {
+  border-color: var(--glass-edge);
+  background: var(--glass-tint);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  -webkit-backdrop-filter: var(--glass-filter-panel);
+  backdrop-filter: var(--glass-filter-panel);
+}
+
+.filesPage .fileNavBar {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.filesPage .fileListSurface {
+  border-inline: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.filesPage .fileListSurface > .selectionActionBar,
+.filesPage .fileTableFooter { background: transparent; }
+.filesPage .fileTableHead { background: var(--glass-tint-strong); -webkit-backdrop-filter: var(--glass-filter-chrome); backdrop-filter: var(--glass-filter-chrome); }
+.filesPage .fileTableRow { border-radius: var(--radius-sm); background: transparent; }
+.filesPage .fileTableRow:hover { background: var(--glass-tint-soft); }
+.filesPage .fileTableRow:focus-visible { outline-offset: -2px; }
+.filesPage .fileTableRow.selected { background: var(--sentinel-accent-soft); }
+.filesPage .fileBreadcrumbs button.active { background: var(--glass-tint-soft); box-shadow: var(--glass-highlight); }
+
+.filesPage .fileDetailsTitle {
+  padding: 0 0 var(--space-4);
+  border: 0;
+  border-bottom: 1px solid var(--border-row);
+  border-radius: 0;
+  background: transparent;
+}
+
+.filesPage .fileDetailsContent dl { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.filesPage .filePreviewPanel { padding-top: var(--space-3); border-top: 1px solid var(--border-row); }
+.filesPage .filePreviewPanel pre { background: var(--surface); }
+.filesPage .previewUnavailable { border: 0; background: var(--glass-tint-soft); }
+
+@media (prefers-reduced-transparency: reduce) {
+  .filesPage .filesPanel.uiGlassSurface,
+  .filesPage .fileDetailsPanel.uiGlassSurface,
+  .filesPage .fileTableHead { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 
 .fileTableRow {
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
