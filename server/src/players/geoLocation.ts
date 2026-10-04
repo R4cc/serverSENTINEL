@@ -125,15 +125,3 @@ export function locateAddress(reader: GeoCityReader | undefined, address: string
     return undefined;
   }
 }
-
-/** How a location should be written on one line, longest useful form first. */
-export function describeLocation(location: PlayerLocation | undefined) {
-  if (!location) return "Unknown location";
-  const parts = location.precision === "city"
-    ? [location.city, location.subdivision, location.country]
-    : location.precision === "region"
-      ? [location.subdivision, location.country]
-      : [location.country];
-  const described = parts.filter((part): part is string => Boolean(part));
-  return described.length ? [...new Set(described)].join(", ") : location.label;
-}

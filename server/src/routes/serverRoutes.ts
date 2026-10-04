@@ -1,3 +1,4 @@
+import { serverMutations } from "../servers/mutationCoordinator.js";
 import type { FastifyInstance } from "fastify";
 import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js";
 import { config, maxServerPort, minServerPort } from "../config.js";
@@ -12,7 +13,8 @@ import { requireNoActiveModMutation } from "../mods/modService.js";
 import { removeModHistoryArchives } from "../mods/modHistory.js";
 import { allocateQueryPort, assertNodePortsAvailable, assertUniqueDockerHostPorts, dockerPortsWithManagedEntries, isValidServerPort, normalizeCreateServerPorts, normalizeManagedPorts, queryPortEntry } from "../servers/ports.js";
 import { runtimeProfileForServer } from "../runtime/profile.js";
-import { requireRequestPermission } from "../auth/sessionService.js";
+import { currentSessionUser, requireRequestPermission } from "../auth/sessionService.js";
+import { watchSocketAuthorization } from "../auth/socketAuthorization.js";
 import { getServer, listManagedServers } from "../servers/store.js";
 import { publicServerStatus } from "../servers/publicViews.js";
 import { serverJarProvider, startProvisionOperation } from "../servers/provisioning.js";
@@ -94,29 +96,31 @@ app.put<{
   };
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.editSettings");
-  const server = await getServer(request.params.id);
-  await requireServerStoppedForMutableConfiguration(server);
-  const nextDisplayName = request.body.displayName?.trim() || server.displayName;
-  const servers = await listManagedServers();
-  if (servers.some((candidate) => candidate.id !== server.id && candidate.displayName.toLowerCase() === nextDisplayName.toLowerCase())) {
-    throw new Error("A managed server with this display name already exists");
-  }
-  const serverPort = request.body.serverPort?.trim();
-  if (serverPort && !isValidServerPort(serverPort)) {
-    throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
-  }
-  const requestedDockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
-  const currentQueryPort = server.managedPorts?.find((port) => port.type === "query")?.externalPort;
-  const queryPort = request.body.queryPort?.trim() || (currentQueryPort ? String(currentQueryPort) : undefined);
-  const allocatedQueryPort = allocateQueryPort(servers, server.nodeId, requestedDockerPorts || "", queryPort, { ignoreServerId: server.id });
-  const managedPorts = normalizeManagedPorts(requestedDockerPorts || "", [queryPortEntry(allocatedQueryPort)]);
-  const dockerPorts = dockerPortsWithManagedEntries(requestedDockerPorts || "", managedPorts);
-  if (dockerPorts) {
-    assertUniqueDockerHostPorts(dockerPorts);
-    assertNodePortsAvailable(servers, server.nodeId, dockerPorts, { ignoreServerId: server.id });
-  }
-  const updatedServer = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) }));
-  return runtimeForServer(updatedServer).publicServer(updatedServer);
+  return serverMutations.run(request.params.id, async () => {
+    const server = await getServer(request.params.id);
+    await requireServerStoppedForMutableConfiguration(server);
+    const nextDisplayName = request.body.displayName?.trim() || server.displayName;
+    const servers = await listManagedServers();
+    if (servers.some((candidate) => candidate.id !== server.id && candidate.displayName.toLowerCase() === nextDisplayName.toLowerCase())) {
+      throw new Error("A managed server with this display name already exists");
+    }
+    const serverPort = request.body.serverPort?.trim();
+    if (serverPort && !isValidServerPort(serverPort)) {
+      throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
+    }
+    const requestedDockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
+    const currentQueryPort = server.managedPorts?.find((port) => port.type === "query")?.externalPort;
+    const queryPort = request.body.queryPort?.trim() || (currentQueryPort ? String(currentQueryPort) : undefined);
+    const allocatedQueryPort = allocateQueryPort(servers, server.nodeId, requestedDockerPorts || "", queryPort, { ignoreServerId: server.id });
+    const managedPorts = normalizeManagedPorts(requestedDockerPorts || "", [queryPortEntry(allocatedQueryPort)]);
+    const dockerPorts = dockerPortsWithManagedEntries(requestedDockerPorts || "", managedPorts);
+    if (dockerPorts) {
+      assertUniqueDockerHostPorts(dockerPorts);
+      assertNodePortsAvailable(servers, server.nodeId, dockerPorts, { ignoreServerId: server.id });
+    }
+    const updatedServer = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) }));
+    return runtimeForServer(updatedServer).publicServer(updatedServer);
+  });
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/runtime", async (request) => {
@@ -132,19 +136,20 @@ app.get<{ Params: { id: string } }>("/api/servers/:id/runtime", async (request) 
 
 app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/:id/runtime/refresh", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.editSettings");
-  const server = await getServer(request.params.id);
-  await requireServerStoppedForMutableConfiguration(server);
-  const runtimeProfile = runtimeProfileForServer(server);
-  const runtimeDefinition = serverRuntimeDefinition(runtimeProfile.runtimeType);
-  if (!runtimeDefinition.managedProvisioning) {
-    throw new Error(`${runtimeDefinition.displayName} runtime refresh is not available until its provider is enabled`);
-  }
-  const refreshed = await serverJarProvider.resolveServerJar({
-    runtimeType: runtimeProfile.runtimeType,
-    minecraftVersion: runtimeProfile.minecraftVersion,
-    runtimeVersion: runtimeProfile.runtimeVersion || "latest",
-    preferStable: true,
-    forceRefresh: request.body.refresh === true
+  return serverMutations.run(request.params.id, async () => {
+    const server = await getServer(request.params.id);
+    await requireServerStoppedForMutableConfiguration(server);
+    const runtimeProfile = runtimeProfileForServer(server);
+    const runtimeDefinition = serverRuntimeDefinition(runtimeProfile.runtimeType);
+    if (!runtimeDefinition.managedProvisioning) {
+      throw new Error(`${runtimeDefinition.displayName} runtime refresh is not available until its provider is enabled`);
+    }
+    const refreshed = await serverJarProvider.resolveServerJar({
+      runtimeType: runtimeProfile.runtimeType,
+      minecraftVersion: runtimeProfile.minecraftVersion,
+      runtimeVersion: runtimeProfile.runtimeVersion || "latest",
+      preferStable: true,
+      forceRefresh: request.body.refresh === true
   });
   const nextProfile: ServerRuntimeProfile = {
     ...refreshed,
@@ -165,6 +170,7 @@ app.post<{ Params: { id: string }; Body: { refresh?: boolean } }>("/api/servers/
     server: await runtimeForServer(updatedServer).publicServer(updatedServer, undefined, await listManagedServers()),
     warnings: []
   };
+  });
 });
 
 app.delete<{
@@ -175,24 +181,26 @@ app.delete<{
   };
 }>("/api/servers/:id", destructiveRateLimit, async (request) => {
   await requireRequestPermission(request, "servers.delete");
-  const server = await getServer(request.params.id);
-  // `withMutation` only excludes exports. Without this, deleting a server whose files another
-  // operation is still writing — a ZIP extraction runs in the background after returning 202 — races
-  // the recursive remove: the container goes first, the tree is partly removed, and an ENOTEMPTY
-  // from a directory that refilled mid-walk aborts before the database row is deleted.
-  const active = services.operationsRepository.listActive(server.id);
-  requireNoActiveModMutation(server.id);
-  if (active.length > 0) {
-    throwHttp(409, `Wait for the ${active[0].type} operation to finish before deleting this server`, { code: "OPERATION_IN_PROGRESS" });
-  }
-  const deleted = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
-  await removeModHistoryArchives(server).catch((error) => {
-    logWarn({ serverId: server.id, ...errorLogFields(error) }, "Could not remove deleted server's mod history archives");
+  return serverMutations.run(request.params.id, async () => {
+    const server = await getServer(request.params.id);
+    // `withMutation` only excludes exports. Without this, deleting a server whose files another
+    // operation is still writing — a ZIP extraction runs in the background after returning 202 — races
+    // the recursive remove: the container goes first, the tree is partly removed, and an ENOTEMPTY
+    // from a directory that refilled mid-walk aborts before the database row is deleted.
+    const active = services.operationsRepository.listActive(server.id);
+    requireNoActiveModMutation(server.id);
+    if (active.length > 0) {
+      throwHttp(409, `Wait for the ${active[0].type} operation to finish before deleting this server`, { code: "OPERATION_IN_PROGRESS" });
+    }
+    const deleted = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).deleteServer(server, request.body));
+    await removeModHistoryArchives(server).catch((error) => {
+      logWarn({ serverId: server.id, ...errorLogFields(error) }, "Could not remove deleted server's mod history archives");
   });
   // The buffer and its upstream follow outlive the container otherwise: `dispose` is only reached
   // by the idle timer, which never runs while a viewer is still attached.
   consoleHub.dispose(server.id);
   return deleted;
+  });
 });
 
 app.get<{ Params: { id: string } }>("/api/servers/:id/status", async (request) => {
@@ -270,30 +278,50 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
   const url = new URL(request.url, "http://localhost");
   const serverId = url.searchParams.get("serverId") ?? undefined;
   let stopHeartbeat: (() => void) | undefined;
+  let stopAuthorization: (() => void) | undefined;
+  let detachSession: (() => void) | undefined;
+  let closed = false;
+  socket.on("close", () => { closed = true; });
   try {
     await requireRequestPermission(request, "console.view");
     const server = await getServer(serverId);
+    if (closed || socket.readyState !== 1) return;
+    const authorization = watchSocketAuthorization(() => {
+      const user = currentSessionUser(request.headers.cookie);
+      return Boolean(user && hasPermission(user, "console.view"));
+    }, () => {
+      stopHeartbeat?.();
+      detachSession?.();
+      socket.close(1008, "Console access revoked");
+    });
+    stopAuthorization = authorization.stop;
+    socket.on("close", authorization.stop);
+    if (!authorization.allow()) return;
     stopHeartbeat = startConsoleHeartbeat(client);
     socket.on("close", stopHeartbeat);
     // `attach` below subscribes synchronously and then awaits its upstream, which for a remote node
     // is a round trip. A viewer that gives up inside that window would otherwise register its close
     // handler on an already-closed socket, stranding the subscriber and holding the upstream follow
     // open for the life of the process.
-    let closedDuringAttach = false;
-    socket.on("close", () => { closedDuringAttach = true; });
     logDebug({ ...serverLogFields(server), source: "console_websocket" }, "Console stream connected");
 
     // Per viewer, not per buffer: a viewer that cannot keep up drops its own frames and resumes
     // from its cursor, rather than slowing the output everyone else is reading.
     const sender = createConsoleSender(client);
     const session = await consoleHub.attach(server, {
-      lines: (lines, epoch) => { sender.send({ type: "log", epoch, lines }); },
-      unavailable: (message, options) => { sender.send({ type: "unavailable", message, ...options }); },
-      empty: (message) => { sender.send({ type: "empty", message }); }
+      lines: (lines, epoch) => { if (authorization.allow()) sender.send({ type: "log", epoch, lines }); },
+      unavailable: (message, options) => { if (authorization.allow()) sender.send({ type: "unavailable", message, ...options }); },
+      empty: (message) => { if (authorization.allow()) sender.send({ type: "empty", message }); }
     }, consoleCursor(url.searchParams));
-    socket.on("close", session.detach);
-    if (closedDuringAttach) {
+    let detached = false;
+    detachSession = () => {
+      if (detached) return;
+      detached = true;
       session.detach();
+    };
+    socket.on("close", detachSession);
+    if (closed || !authorization.allow()) {
+      detachSession();
       return;
     }
 
@@ -303,14 +331,18 @@ app.get("/ws/console", { websocket: true }, async (socket, request) => {
     sender.send({ type: "status" });
   } catch (error) {
     stopHeartbeat?.();
+    stopAuthorization?.();
+    detachSession?.();
     logWarn({ serverId, source: "console_websocket", ...errorLogFields(error) }, "Console stream unavailable");
-    const streamError = error as Error & { code?: string };
+    const streamError = error as Error & { code?: string; statusCode?: number };
+    if (socket.readyState !== 1) return;
     client.send(JSON.stringify({
       type: "unavailable",
       message: streamError.message,
       code: streamError.code?.toUpperCase(),
       retryable: streamError.code === "node_offline" || streamError.code === "command_timeout"
     }));
+    if (streamError.statusCode === 401 || streamError.statusCode === 403) socket.close(1008, "Console access unavailable");
   }
 });
 

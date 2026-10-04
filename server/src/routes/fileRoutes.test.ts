@@ -1,3 +1,5 @@
+import { OperationService } from "../operations/operationService.js";
+import { OperationsRepository } from "../storage/operationsRepository.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import { setImmediate } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,6 +8,7 @@ import type { ManagedServer, Permission, StoredUser } from "../types.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { FileEditLeasesRepository, fileEditLeaseTimeoutMs } from "../storage/fileEditLeasesRepository.js";
 import { fileContentRevision } from "../files/fileService.js";
+import { serverMutations } from "../servers/mutationCoordinator.js";
 import { registerFileRoutes } from "./fileRoutes.js";
 
 const context = vi.hoisted(() => ({
@@ -103,6 +106,54 @@ function save(leaseId: string, content: string, path = "config.txt", revision = 
 }
 
 describe("file edit concurrency", () => {
+  it.each([false, true])("drains ZIP extraction and its durable settlement (failure: %s)", async (fail) => {
+    const operations = new OperationsRepository(storage);
+    context.services.operationsRepository = operations;
+    const service = new OperationService(operations, { markRestartRequired: vi.fn(), clearRestartRequired: vi.fn(), errorDetails: String });
+    context.services.operationService = service;
+    context.services.exportCoordinator.assertMutationAllowed = () => {};
+    context.runtime!.planArchiveExtraction = async () => ({ blocked: [], outputPaths: [] }) as never;
+    let finish!: () => void;
+    context.runtime!.extractArchive = () => new Promise((resolve, reject) => {
+      finish = () => fail ? reject(new Error("extraction failed")) : resolve({ ok: true } as never);
+    });
+    const response = await app.inject({ method: "POST", url: "/api/servers/server/files/archive/extract",
+      payload: { path: "archive.zip", destinationPath: "extracted", conflictPolicy: "skip" } });
+    expect(response.statusCode, response.body).toBe(202);
+    const operationId = response.json().id as string;
+    const drained = vi.fn();
+    const draining = service.drain().then(drained);
+    await setImmediate();
+    expect(drained).not.toHaveBeenCalled();
+    expect(serverMutations.isActive("server")).toBe(true);
+    finish();
+    await draining;
+    expect(operations.find(operationId)!.status).toBe(fail ? "failed" : "succeeded");
+    expect(serverMutations.isActive("server")).toBe(false);
+  });
+
+  it("refuses saves during lifecycle or settings mutations before reading the file", async () => {
+    const leaseId = await acquire();
+    readFile.mockClear();
+    const reservation = serverMutations.acquire("server");
+    try {
+      const response = await save(leaseId, "updated");
+      expect(response.statusCode, response.body).toBe(409);
+      expect(readFile).not.toHaveBeenCalled();
+      expect(writeFile).not.toHaveBeenCalled();
+    } finally { reservation.release(); }
+    expect((await save(leaseId, "updated")).statusCode).toBe(200);
+  });
+
+  it("rechecks stopped state after a settings save reads the current revision", async () => {
+    context.user!.permissions.push("servers.editSettings");
+    contents.set("server.properties", "original");
+    const leaseId = await acquire("server.properties");
+    readFile.mockImplementationOnce(async () => { context.running = true; return { content: "original" }; });
+    const response = await save(leaseId, "updated", "server.properties");
+    expect(response.statusCode, response.body).toBe(409);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
   it("allows one save for a lease and rejects a concurrent stale save", async () => {
     const leaseId = await acquire();
     const entered = Promise.withResolvers<void>();

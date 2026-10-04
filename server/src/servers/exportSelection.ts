@@ -157,22 +157,28 @@ async function collectDirectory(
     if (isMissingPathError(error)) return;
     throw error;
   }
+  const files = listing.entries.filter((entry) => entry.type === "file");
+  // Validate every file, but overlap the local realpath calls instead of issuing them serially.
+  // Settle the whole batch before surfacing an error so no validation outlives the walk.
+  for (let offset = 0; offset < files.length; offset += 32) {
+    const batch = files.slice(offset, offset + 32);
+    const resolvedFiles = await Promise.allSettled(batch.map(async (entry) => runtime.resolveExistingPath(server, entry.path)));
+    for (let index = 0; index < batch.length; index += 1) {
+      const result = resolvedFiles[index];
+      if (result.status === "rejected") {
+        // Files deleted since the directory snapshot are genuinely gone.
+        if (isMissingPathError(result.reason)) continue;
+        throw result.reason;
+      }
+      const entry = batch[index];
+      collected.push({ relativePath: `${relativePath}/${entry.name}`, sourcePath: result.value, size: entry.size, modifiedAt: entry.modifiedAt });
+      assertWithinEntryBudget(collected.length);
+    }
+  }
   for (const entry of listing.entries) {
-    const childRelative = `${relativePath}/${entry.name}`;
     if (entry.type === "directory") {
-      await collectDirectory(runtime, server, entry.path, childRelative, collected, depth + 1);
-      continue;
+      await collectDirectory(runtime, server, entry.path, `${relativePath}/${entry.name}`, collected, depth + 1);
     }
-    let childResolved: string;
-    try {
-      childResolved = await runtime.resolveExistingPath(server, entry.path);
-    } catch (error) {
-      // The listing is a snapshot; a file deleted between listing and resolution is genuinely gone.
-      if (isMissingPathError(error)) continue;
-      throw error;
-    }
-    collected.push({ relativePath: childRelative, sourcePath: childResolved, size: entry.size, modifiedAt: entry.modifiedAt });
-    assertWithinEntryBudget(collected.length);
   }
 }
 

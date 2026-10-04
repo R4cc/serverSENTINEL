@@ -3,9 +3,7 @@ import { archiveModSnapshot, modHistoryChanges, modHistoryRepository, pruneModHi
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { runtimeForServer, services } from "../appServices.js";
 import { durationSince, errorLogFields, logError, logInfo, logOperationFailure, logWarn } from "../logging.js";
 import { operationInProgress } from "../http/errors.js";
@@ -16,15 +14,16 @@ import { ModHashCache } from "../modHashCache.js";
 import { normalizeInstalledModMetadata } from "../installedModMetadata.js";
 import { findCachedIconFile } from "../iconFileCache.js";
 import { diffModSnapshots, snapshotMods } from "../modRestartState.js";
+import { downloadModrinthJarStream } from "../modrinth/jarDownload.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 
 import { assessRequiredModDependencies } from "../modrinth/dependencyHealth.js";
 import { createModUpdatePlan } from "../modrinth/updatePlan.js";
 import type { ModUpdateScan } from "../modrinth/updatePlanCoordinator.js";
-import { assertDownloadableModrinthFile, assertModrinthDownloadSize, assertModrinthJarHashes, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
+import { assertDownloadableModrinthFile, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
-import { activeModMutations, assertJarBuffer, modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer, verifyDownloadedJar, withModMutationLock } from "./managedContent.js";
+import { activeModMutations, assertJarBuffer, modFileSizeLimit, uploadManagedContentBuffer, withModMutationLock } from "./managedContent.js";
 import { managedContentRuntime } from "../servers/versions.js";
 
 import { blockingRuntimeOperations } from "../servers/lifecycle.js";
@@ -813,27 +812,9 @@ export async function localUploadMod(server: ManagedServer, filenameInput: unkno
 }
 
 export async function downloadModrinthJar(file: NonNullable<ReturnType<typeof modrinthJarFile>>) {
-  if (!file.url.startsWith("https://")) {
-    throw new Error("Refusing to download a non-HTTPS Modrinth JAR");
-  }
-  if (file.size && file.size > modFileSizeLimit) {
-    throw new Error(`Modrinth JAR is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
-  }
-  const response = await modrinthFetch(file.url);
-  if (!response.ok) {
-    throw new Error(`Modrinth JAR download failed: ${response.statusText}`);
-  }
-  const contentLength = Number(response.headers.get("content-length") ?? "0");
-  if (Number.isFinite(contentLength) && contentLength > modFileSizeLimit) {
-    throw new Error(`Modrinth JAR is larger than ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
-  }
-  const content = Buffer.from(await response.arrayBuffer());
-  if (!content.length || content.length > modFileSizeLimit) {
-    throw new Error(`Modrinth JAR must be between 1 byte and ${Math.floor(modFileSizeLimit / 1024 / 1024)} MiB`);
-  }
-  assertJarBuffer(content);
-  assertModrinthJarHashes(content, file);
-  return content;
+  const chunks: Buffer[] = [];
+  for await (const chunk of await downloadModrinthJarStream(file)) chunks.push(chunk);
+  return Buffer.concat(chunks);
 }
 
 async function replaceManagedContentJar(
@@ -1440,24 +1421,11 @@ export async function localInstallMod(server: ManagedServer, input: unknown) {
         throw new Error(`A ${contentDefinition.singular} with that filename already exists`);
       }
       const temporaryDestination = `${destination}.serversentinel-${randomUUID()}.tmp`;
-      const downloadResponse = await modrinthFetch(planned.file.url);
-      if (!downloadResponse.ok) {
-        throw new Error(`Mod download failed: ${downloadResponse.statusText}`);
-      }
-      if (!downloadResponse.body) {
-        throw new Error("Mod download returned no body");
-      }
-      const contentLength = Number(downloadResponse.headers.get("content-length") ?? "0");
-      if (Number.isFinite(contentLength)) {
-        assertModrinthDownloadSize(contentLength, { singular: contentDefinition.singular, maximumBytes: modFileSizeLimit });
-      }
       try {
         await pipeline(
-          Readable.fromWeb(downloadResponse.body as unknown as NodeReadableStream<Uint8Array>),
-          sizeLimitTransform(modFileSizeLimit),
-          createWriteStream(temporaryDestination)
+          await downloadModrinthJarStream(planned.file, { singular: contentDefinition.singular }),
+          createWriteStream(temporaryDestination, { flags: "wx" })
         );
-        await verifyDownloadedJar(temporaryDestination, planned.file);
       } catch (error) {
         await rm(temporaryDestination, { force: true }).catch(() => {});
         throw error;

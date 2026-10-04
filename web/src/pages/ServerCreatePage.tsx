@@ -1,6 +1,6 @@
+import { useJavaMemory, useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { defaultDockerImageForMinecraftVersion, javaMajorVersionForMinecraft, serverRuntimeDefinitions, serverRuntimeTypes, type ServerRuntimeDefinition, type ServerRuntimeType } from "@serversentinel/contracts";
-import { api } from "../api";
 import { dockerContainerNameInputPattern } from "../utils/inputPatterns";
 import type { ContextNode, RuntimeVersion } from "../types";
 import {
@@ -16,9 +16,7 @@ import { AppIcon } from "../components/FileTypeIcon";
 import { Banner, Button, EmptyState, HelpTooltip } from "../components/UiPrimitives";
 import { validateDisplayName, validateDockerContainerName, validateJavaArgs, validateRuntimeJarFilename } from "../utils/validation";
 import {
-  clampNumber,
   fallbackFabricRuntimeVersions,
-  fallbackMinecraftVersions,
   findAvailablePort,
   formatNodeUptime,
   makeCreatePortBinding,
@@ -28,7 +26,6 @@ import {
   nodeStatusTextLabel,
   preferredMinecraftVersion,
   runtimeMinecraftOptions,
-  syncJavaMemoryArgs,
   usedPortKeysForNode,
   wizardDockerPorts,
   wizardJavaArgs,
@@ -69,13 +66,8 @@ export function ManagedServerForm({
   const [minecraftVersion, setMinecraftVersion] = useState("");
   const [runtimeVersion, setRuntimeVersion] = useState("");
   const [showSnapshots, setShowSnapshots] = useState(false);
-  const [runtimeMinecraftVersions, setRuntimeMinecraftVersions] = useState<CreateWizardMinecraftVersion[]>([]);
-  const [loadedMinecraftRuntimeType, setLoadedMinecraftRuntimeType] = useState<ServerRuntimeType | "">("");
-  const [compatibleRuntimeVersions, setCompatibleRuntimeVersions] = useState<RuntimeVersion[]>([]);
-  const [loadedRuntimeVersionsKey, setLoadedRuntimeVersionsKey] = useState("");
-  const [minimumHeapGb, setMinimumHeapGb] = useState(2);
-  const [maximumHeapGb, setMaximumHeapGb] = useState(8);
-  const [javaArgs, setJavaArgs] = useState(() => wizardJavaArgs(2, 8));
+  const { versions: runtimeMinecraftVersions, loading: minecraftVersionsLoading, resetVersions: resetMinecraftVersions } = useMinecraftVersions(runtimeType);
+  const { versions: compatibleRuntimeVersions, loading: runtimeVersionsLoading, resetVersions: resetRuntimeVersions } = useRuntimeVersions(runtimeType, minecraftVersion);
   const [serverPort, setServerPort] = useState(String(defaultServerPort));
   const [queryPort, setQueryPort] = useState(String(defaultQueryPort));
   const [serverPortCustomized, setServerPortCustomized] = useState(false);
@@ -87,6 +79,9 @@ export function ManagedServerForm({
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const nodeMemoryTotal = selectedNode?.totalMemory || totalMemory;
   const memoryBounds = useMemo(() => memoryBoundsForNode(nodeMemoryTotal), [nodeMemoryTotal]);
+  const { minimumHeapGb, maximumHeapGb, javaArgs, updateMinimumHeap, updateMaximumHeap, updateJavaArgs } = useJavaMemory(
+    memoryBounds, { min: 2, max: 8, args: wizardJavaArgs(2, 8) }, true
+  );
   const placementBlocked = nodes.length === 0 || usableNodes.length === 0 || !selectedNode || !isNodeRuntimeUsable(selectedNode);
   const placementBlockedReason = nodes.length === 0
     ? "Add a node before creating a server."
@@ -101,13 +96,10 @@ export function ManagedServerForm({
   const javaArgsError = validateJavaArgs(javaArgs);
   const identityReady = !displayNameError;
   const nextDisabled = provisioning || placementBlocked || !identityReady;
-  const minecraftVersionsLoading = loadedMinecraftRuntimeType !== runtimeType;
   const minecraftOptions = useMemo(
     () => runtimeMinecraftOptions(runtimeMinecraftVersions, showSnapshots),
     [runtimeMinecraftVersions, showSnapshots]
   );
-  const runtimeVersionsKey = `${runtimeType}:${minecraftVersion}`;
-  const runtimeVersionsLoading = Boolean(minecraftVersion) && loadedRuntimeVersionsKey !== runtimeVersionsKey;
   const runtimeOptions = useMemo(() => {
     const source = compatibleRuntimeVersions.length > 0
       ? compatibleRuntimeVersions
@@ -175,31 +167,6 @@ export function ManagedServerForm({
   }, [preferredNodeId, selectedNodeId, usableNodes]);
 
   useEffect(() => {
-    let cancelled = false;
-    api<{ runtimeType: ServerRuntimeType; versions: Array<{ id: string; type?: "release" | "snapshot" | "unknown"; supported?: boolean; recommended?: boolean }> }>(`/api/runtime/${runtimeType}/minecraft-versions`)
-      .then((result) => {
-        if (!cancelled) {
-          setRuntimeMinecraftVersions(result.versions.map((version) => ({
-            version: version.id,
-            stable: version.type === "release" && version.supported !== false,
-            recommended: version.recommended,
-            type: version.type ?? "unknown"
-          })));
-          setLoadedMinecraftRuntimeType(runtimeType);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRuntimeMinecraftVersions(runtimeType === "fabric" ? fallbackMinecraftVersions : []);
-          setLoadedMinecraftRuntimeType(runtimeType);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [runtimeType]);
-
-  useEffect(() => {
     if (minecraftOptions.some((version) => version.version === minecraftVersion)) return;
     setMinecraftVersion(preferredMinecraftVersion(minecraftOptions));
     setRuntimeVersion("");
@@ -218,31 +185,6 @@ export function ManagedServerForm({
   }, [queryPort, queryPortCustomized, selectedNode, serverPort, serverPortCustomized, usedPortKeys]);
 
   useEffect(() => {
-    if (!minecraftVersion) {
-      setCompatibleRuntimeVersions([]);
-      setLoadedRuntimeVersionsKey("");
-      return;
-    }
-    let cancelled = false;
-    api<{ runtimeType: ServerRuntimeType; minecraftVersion: string; runtimeVersions: RuntimeVersion[] }>(`/api/runtime/${runtimeType}/versions?minecraftVersion=${encodeURIComponent(minecraftVersion)}`)
-      .then((result) => {
-        if (!cancelled) {
-          setCompatibleRuntimeVersions(result.runtimeVersions);
-          setLoadedRuntimeVersionsKey(`${runtimeType}:${minecraftVersion}`);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCompatibleRuntimeVersions([]);
-          setLoadedRuntimeVersionsKey(`${runtimeType}:${minecraftVersion}`);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [minecraftVersion, runtimeType]);
-
-  useEffect(() => {
     if (runtimeVersionsLoading) return;
     if (runtimeOptions.some((version) => version.runtimeVersion === runtimeVersion)) return;
     setRuntimeVersion(recommendedRuntime?.runtimeVersion || runtimeOptions[0]?.runtimeVersion || "");
@@ -251,15 +193,6 @@ export function ManagedServerForm({
   useEffect(() => {
     if (!serverJarCustomized) setServerJar(runtimeDefinition.serverJarFilename);
   }, [runtimeDefinition.serverJarFilename, serverJarCustomized]);
-
-  useEffect(() => {
-    setMinimumHeapGb((current) => Math.min(clampNumber(current, memoryBounds.min, memoryBounds.max), maximumHeapGb));
-    setMaximumHeapGb((current) => Math.max(clampNumber(current, memoryBounds.min, memoryBounds.max), minimumHeapGb));
-  }, [maximumHeapGb, memoryBounds.max, memoryBounds.min, minimumHeapGb]);
-
-  useEffect(() => {
-    setJavaArgs((current) => wizardJavaArgs(minimumHeapGb, maximumHeapGb, current));
-  }, [minimumHeapGb, maximumHeapGb]);
 
   useEffect(() => {
     if (!dockerImageCustomized) {
@@ -272,21 +205,6 @@ export function ManagedServerForm({
       setWizardError("");
     }
   }, [identityReady, placementBlocked, resourcesReady, runtimeCompatible, wizardError]);
-
-  function updateMinimumHeap(value: number) {
-    const next = clampNumber(Math.round(value), memoryBounds.min, memoryBounds.max);
-    setMinimumHeapGb(Math.min(next, maximumHeapGb));
-  }
-
-  function updateMaximumHeap(value: number) {
-    const next = clampNumber(Math.round(value), memoryBounds.min, memoryBounds.max);
-    setMaximumHeapGb(Math.max(next, minimumHeapGb));
-  }
-
-  function updateJavaArgs(value: string) {
-    setJavaArgs(value);
-    syncJavaMemoryArgs(value, memoryBounds, minimumHeapGb, maximumHeapGb, setMinimumHeapGb, setMaximumHeapGb);
-  }
 
   function updateDockerImage(value: string) {
     setDockerImageCustomized(true);
@@ -454,9 +372,8 @@ export function ManagedServerForm({
             onRuntimeTypeChange={(value) => {
               if (value === runtimeType) return;
               setRuntimeType(value);
-              setRuntimeMinecraftVersions([]);
-              setCompatibleRuntimeVersions([]);
-              setLoadedRuntimeVersionsKey("");
+              resetMinecraftVersions();
+              resetRuntimeVersions();
               setMinecraftVersion("");
               setRuntimeVersion("");
             }}

@@ -1,3 +1,4 @@
+import { serverMutations } from "./servers/mutationCoordinator.js";
 import Fastify, { LogController } from "fastify";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -9,7 +10,7 @@ import { config } from "./config.js";
 import { panelNodeConnections, runtimeForServer, services } from "./appServices.js";
 import { dockerAction, dockerResourceStats, serverLogFields } from "./runtime/local/dockerContainers.js";
 import { parseLogEvent } from "./servers/logEvents.js";
-import { findScheduledRun, getServer, listManagedServers, listRuntimeServers, normalizeManagedServer, publicSchedule } from "./servers/store.js";
+import { getServer, listManagedServers, listRuntimeServers, normalizeManagedServer, publicSchedule } from "./servers/store.js";
 import { publicServer } from "./servers/publicViews.js";
 import { supportsManagedMods } from "./servers/versions.js";
 import { fileRenamePermission, isModsPath, isServerSettingsFile, localResolveExistingPath, localResolveWritablePath, toPublicPath } from "./files/fileService.js";
@@ -92,7 +93,7 @@ import { readLocalPlayerObservation, resourceStatsHistoryWindow, serverOverviewD
 import { localServerStorage } from "./servers/storageSpace.js";
 import { createManagedServer } from "./servers/provisioning.js";
 import { localCreateFolder, localDeleteFile, localDeleteServer, localDownloadArchive, localDownloadFile, localDuplicateFile, localExtractArchive, localListFiles, localMoveFile, localPlanArchiveExtraction, localPreviewFile, localReadEditableFile, localRenameFile, localSendConsoleCommand, localServerLogs, localServerStatus, localStreamConsole, localUpdateServer, localUploadFile, localWriteEditableFile } from "./servers/localRuntimeAdapter.js";
-import { resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, startScheduleExecution, tickSchedules } from "./schedules/engine.js";
+import { resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, startScheduleExecution, stopScheduleExecutions, tickSchedules } from "./schedules/engine.js";
 
 const resourceStatsPollMs = 5_000;
 const timelineEventPollMs = 10_000;
@@ -453,10 +454,10 @@ registerModuleRoutes(app, {
 await services.moduleRegistry.registerRoutes(app, "schedules", (scope) => registerScheduleRoutes(scope, {
   destructiveRateLimit,
   requireRequestPermission,
-  getServer,
+  getServer: (serverId) => getServer(serverId, { scheduleSummaries: true }),
   parseSchedule: scheduleFromBody,
   publicSchedule,
-  findScheduledRun,
+  findScheduledRun: (server, scheduleId, runId) => services.serversRepository.findScheduledRun(server.id, scheduleId, runId),
   createSchedule: (serverId, schedule, updatedAt) => { services.serversRepository.createSchedule(serverId, schedule, updatedAt); },
   updateSchedule: (serverId, schedule, updatedAt) => { services.serversRepository.updateSchedule(serverId, schedule, updatedAt); },
   deleteSchedule: (serverId, scheduleId, updatedAt) => { services.serversRepository.deleteSchedule(serverId, scheduleId, updatedAt); },
@@ -623,7 +624,8 @@ services.runtimeRegistry = new NodeRuntimeRegistry(
     async (serverId) => {
       services.serversRepository.delete(serverId);
     },
-    services.remoteObservationCoordinator
+    services.remoteObservationCoordinator,
+    (serverId) => services.serversRepository.findForRuntime(serverId)
   )
 );
 services.remoteObservationCoordinator.start();
@@ -647,7 +649,7 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
     if (!node || !panelNodeConnections.isConnected(node.id)) throw new Error(`Node ${server.nodeId} is offline`);
     return `${node.id}:${node.connectedAt || "connected"}`;
   },
-  canRestore: (server) => blockingRuntimeOperations(server.id).length === 0 && !activeModMutations.has(server.id) && !activeLifecycleActions.has(server.id),
+  canRestore: (server) => !serverMutations.isActive(server.id) && blockingRuntimeOperations(server.id).length === 0 && !activeModMutations.has(server.id) && !activeLifecycleActions.has(server.id),
   restoreServer: (server) => recordOperation({
     type: "server.start",
     serverId: server.id,
@@ -798,6 +800,7 @@ app.addHook("onClose", async () => {
   services.resourceStatsCollector?.stop();
   services.timelineEventCollector?.stop();
   services.playerSnapshotCoordinator?.stop();
+  stopScheduleExecutions();
   await services.operationService.drain();
 });
 

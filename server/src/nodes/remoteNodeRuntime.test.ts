@@ -5,6 +5,7 @@ import type { PanelNodeConnections } from "./panelConnections.js";
 import { nodeCapabilities, nodeFeatures, nodeProtocolVersion } from "./protocol.js";
 import { parseLogEvent } from "../servers/logEvents.js";
 import { RemoteNodeRuntime } from "./remoteNodeRuntime.js";
+import { serverConfigurationFingerprint } from "./serverUpdateRecovery.js";
 
 function testRuntimeProfile(): ServerRuntimeProfile {
   return {
@@ -247,8 +248,8 @@ describe("RemoteNodeRuntime payload projection", () => {
     expect(payloads).toHaveLength(1);
     const sent = payloads[0].server as Record<string, unknown>;
     expect(Object.keys(sent).sort()).toEqual([
-      "displayName", "dockerContainer", "dockerImage", "dockerMountSource", "dockerPorts", "dockerWorkingDir",
-      "id", "javaArgs", "managedPorts", "nodeId", "runtimeProfile", "serverDir", "storageName"
+      "configurationRevision", "displayName", "dockerContainer", "dockerImage", "dockerMountSource", "dockerPorts", "dockerWorkingDir",
+      "id", "javaArgs", "managedPorts", "nodeId", "runtimeProfile", "serverDir", "startOnNodeStart", "storageName"
     ]);
     expect(sent).not.toHaveProperty("schedules");
     expect(sent).not.toHaveProperty("restartRequiredModBaseline");
@@ -640,5 +641,81 @@ describe("RemoteNodeRuntime command timeouts", () => {
     expect(calls).toEqual([
       { command: "files.download", timeoutMs: 120_000 }
     ]);
+  });
+});
+
+
+describe("remote update reconciliation", () => {
+  it("persists committed node configuration even though the original update RPC fails", async () => {
+    const server = testServer();
+    const failure = new Error("Container creation failed");
+    const applied = { ...server, dockerImage: "new:image", updatedAt: "2026-10-03T20:00:00.000Z" };
+    const request = vi.fn(async (_node, command) => {
+      if (command === "server.update") throw failure;
+      return { previousFingerprint: serverConfigurationFingerprint(server), server: applied };
+    });
+    const persist = vi.fn(async () => {});
+    const runtime = new RemoteNodeRuntime(server.nodeId, async () => testNode(), { request } as unknown as PanelNodeConnections, async value => value as never, async () => {}, persist, async () => {});
+    await expect(runtime.updateServer(server, {})).rejects.toBe(failure);
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({ id: server.id, nodeId: server.nodeId, dockerImage: "new:image", createdAt: server.createdAt }));
+  });
+
+  it("reconciles a lost update reply from a later status and strips the private recovery envelope", async () => {
+    const server = testServer();
+    const applied = { ...server, dockerImage: "new:image", updatedAt: "2026-10-03T20:00:00.000Z" };
+    const request = vi.fn(async () => ({ docker: { running: false }, configurationUpdate: { previousFingerprint: serverConfigurationFingerprint(server), server: applied } }));
+    const persist = vi.fn(async () => {});
+    const runtime = new RemoteNodeRuntime(server.nodeId, async () => testNode(), { request } as unknown as PanelNodeConnections, async value => value as never, async () => {}, persist, async () => {});
+    expect(await runtime.serverStatus(server)).toEqual({ docker: { running: false } });
+    expect(persist).toHaveBeenCalledOnce();
+    expect(server.dockerImage).toBe("new:image");
+  });
+
+  it("does not replace newer panel configuration with an older observation", async () => {
+    const server = testServer();
+    const newer = { ...server, updatedAt: "newer", dockerImage: "newer:image" };
+    const request = vi.fn(async () => ({ docker: { running: false }, configurationUpdate: { previousFingerprint: serverConfigurationFingerprint(server), server: { ...server, dockerImage: "stale:image" } } }));
+    const persist = vi.fn(async () => {});
+    const runtime = new RemoteNodeRuntime(server.nodeId, async () => testNode(), { request } as unknown as PanelNodeConnections, async value => value as never, async () => {}, persist, async () => {}, undefined, () => newer);
+    await runtime.serverStatus(server);
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it("reconciles lifecycle replies while keeping their recovery metadata private", async () => {
+    const server = testServer();
+    const request = vi.fn(async () => ({ docker: { running: false }, configurationUpdate: { previousFingerprint: serverConfigurationFingerprint(server), server: { ...server, dockerImage: "applied:image" } } }));
+    const persist = vi.fn(async () => {});
+    const runtime = new RemoteNodeRuntime(server.nodeId, async () => testNode(), { request } as unknown as PanelNodeConnections, async value => value as never, async () => {}, persist, async () => {});
+    expect(await runtime.lifecycle(server, "stop")).toEqual({ docker: { running: false } });
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({ dockerImage: "applied:image" }));
+  });
+
+  it("ignores a delayed update after the panel explicitly restores the original configuration", async () => {
+    const server = testServer();
+    const newer = { ...server, configurationRevision: "explicit-revert" };
+    const request = vi.fn(async () => ({ configurationUpdate: { previousFingerprint: serverConfigurationFingerprint(server), server: { ...server, dockerImage: "stale:image" } } }));
+    const persist = vi.fn(async () => {});
+    const runtime = new RemoteNodeRuntime(server.nodeId, async () => testNode(), { request } as unknown as PanelNodeConnections, async value => value as never, async () => {}, persist, async () => {}, undefined, () => newer);
+    await runtime.serverStatus(server);
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it("reconciles despite a newer bookkeeping timestamp and preserves panel lifecycle intent", async () => {
+    const server = testServer();
+    const stored = { ...server, updatedAt: "bookkeeping timestamp", runtimeIntent: "running" as const };
+    const request = vi.fn(async () => ({ configurationUpdate: { previousFingerprint: serverConfigurationFingerprint(server), server: { ...server, dockerImage: "applied:image" } } }));
+    const persist = vi.fn(async () => {});
+    const runtime = new RemoteNodeRuntime(server.nodeId, async () => testNode(), { request } as unknown as PanelNodeConnections, async value => value as never, async () => {}, persist, async () => {}, undefined, () => stored);
+    await runtime.serverStatus(server);
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({ dockerImage: "applied:image", runtimeIntent: "running" }));
+  });
+
+  it("rejects a recovery record for another server without changing ownership", async () => {
+    const server = testServer();
+    const request = vi.fn(async () => ({ configurationUpdate: { previousFingerprint: serverConfigurationFingerprint(server), server: { ...server, id: "44444444-4444-4444-8444-444444444444" } } }));
+    const persist = vi.fn(async () => {});
+    const runtime = new RemoteNodeRuntime(server.nodeId, async () => testNode(), { request } as unknown as PanelNodeConnections, async value => value as never, async () => {}, persist, async () => {});
+    await expect(runtime.serverStatus(server)).rejects.toThrow("for a request about server");
+    expect(persist).not.toHaveBeenCalled();
   });
 });

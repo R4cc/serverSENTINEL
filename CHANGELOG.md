@@ -1,5 +1,16 @@
 # Changelog
 
+## 26.10.5 - 2026-10-03
+
+- Hid internal operation diagnostics and restricted operation results and captured console output to the corresponding permissions.
+- Coordinated lifecycle, scheduled commands, content, settings, and file changes per server to prevent conflicting mutations.
+- Added recoverable remote configuration updates: interrupted file changes roll back, and applied changes reconcile with the panel after Docker failures or lost replies.
+
+## 26.10.4 - 2026-10-03
+
+- Hardened panel and node runtime file reads and writes against credential exposure and unsafe filesystem links.
+- Restricted Docker console logs to the server's verified container, revoked live console access when sessions or permissions change, and rechecked administrator access before account changes finish.
+
 ## 26.10.3 - 2026-10-02
 
 - Made phone workspaces more compact with expandable server controls, a Settings category picker, and a player roster before expandable geography.

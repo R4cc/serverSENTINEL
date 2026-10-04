@@ -1,3 +1,5 @@
+import { serverConfigurationFingerprint, type AppliedServerUpdate } from "./serverUpdateRecovery.js";
+import { serverMutations } from "../servers/mutationCoordinator.js";
 import { basename, dirname } from "node:path";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { createZipArchiveStream, type FileArchiveEntry } from "../downloadArchive.js";
@@ -67,7 +69,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
     private readonly persistServer: PersistServerFn,
     private readonly updateServerRecord: UpdateServerRecordFn,
     private readonly deleteServerRecord: DeleteServerRecordFn,
-    private readonly observations?: RemoteObservationCoordinator
+    private readonly observations?: RemoteObservationCoordinator,
+    private readonly readServerRecord?: (serverId: string) => ManagedServer | undefined
   ) {
     this.nodeId = nodeId;
   }
@@ -152,8 +155,8 @@ export class RemoteNodeRuntime implements NodeRuntime {
    *
    * So the stored record is the base and only what a node owns is taken from its reply. Running the
    * reply back through `compactNodeServerSpec` ties that set to the same projection the request was
-   * built from, so a field added to one side cannot be forgotten on the other. `startOnNodeStart` is
-   * outside the projection but is resolved from the update input, so the node's answer stands.
+   * built from, so a field added to one side cannot be forgotten on the other. The node's answer
+   * also resolves the startup policy from the update input.
    */
   private applyNodeServerUpdate(stored: ManagedServer, result: ManagedServer): ManagedServer {
     const bound = this.bindServerIdentity(result, stored.id);
@@ -165,12 +168,33 @@ export class RemoteNodeRuntime implements NodeRuntime {
     };
   }
 
+  private async reconcileConfiguration(server: ManagedServer, value: unknown) {
+    if (!value || typeof value !== "object") return;
+    const update = value as AppliedServerUpdate;
+    if (typeof update.previousFingerprint !== "string" || !update.server) throw new Error("Node returned a malformed configuration update");
+    await serverMutations.run(server.id, async () => {
+      const stored = this.readServerRecord ? this.readServerRecord(server.id) : server;
+      if (!stored || serverConfigurationFingerprint(stored) !== update.previousFingerprint) return;
+      const updated = this.applyNodeServerUpdate(stored, update.server);
+      await this.updateServerRecord(updated);
+      Object.assign(server, this.readServerRecord?.(server.id) ?? updated);
+      this.invalidateObservations(server);
+    });
+  }
+
   async updateServer(server: ManagedServer, input: unknown): Promise<ManagedServer> {
-    const result = await this.command(server, "server.update", { input }, provisioningCommandTimeoutMs) as ManagedServer;
-    this.invalidateObservations(server);
-    const updated = this.applyNodeServerUpdate(server, result);
-    await this.updateServerRecord(updated);
-    return updated;
+    try {
+      const result = await this.command(server, "server.update", { input }, provisioningCommandTimeoutMs) as ManagedServer;
+      const updated = this.applyNodeServerUpdate(server, result);
+      await this.updateServerRecord(updated);
+      return this.readServerRecord?.(server.id) ?? updated;
+    } catch (error) {
+      try {
+        const node = await this.lookupNode(server.nodeId);
+        if (node && nodeAdvertisesCapability(node, "server.configuration.read")) await this.reconcileConfiguration(server, await this.command(server, "server.configuration.read"));
+      } catch { /* Offline nodes reconcile through their next status observation. */ }
+      throw error;
+    } finally { this.invalidateObservations(server); }
   }
 
   async deleteServer(server: ManagedServer, input: unknown) {
@@ -180,10 +204,19 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   async serverStatus(server: ManagedServer) {
-    if (this.observations && await this.supportsObservations(server)) {
-      return this.observations.read(server, "status", 6_000);
+    const status = this.observations && await this.supportsObservations(server)
+      ? await this.observations.read(server, "status", 6_000)
+      : await this.command(server, "server.inspect");
+    return this.reconciledStatus(server, status);
+  }
+
+  private async reconciledStatus(server: ManagedServer, status: unknown) {
+    const { configurationUpdate, ...publicStatus } = (status ?? {}) as Record<string, unknown>;
+    if (configurationUpdate) {
+      try { await this.reconcileConfiguration(server, configurationUpdate); }
+      catch (error) { if ((error as { code?: string }).code !== "SERVER_MUTATION_IN_PROGRESS") throw error; }
     }
-    return this.command(server, "server.inspect");
+    return publicStatus;
   }
 
   serverStorage(server: ManagedServer) {
@@ -193,7 +226,7 @@ export class RemoteNodeRuntime implements NodeRuntime {
   async lifecycle(server: ManagedServer, action: RuntimeAction) {
     const command = action === "start" ? "server.start" : action === "stop" ? "server.stop" : "server.restart";
     this.invalidateObservations(server, ["status", "stats", "players", "logs"]);
-    const result = await this.command(server, command, undefined, action === "start" ? defaultRemoteCommandTimeoutMs : lifecycleCommandTimeoutMs);
+    const result = await this.reconciledStatus(server, await this.command(server, command, undefined, action === "start" ? defaultRemoteCommandTimeoutMs : lifecycleCommandTimeoutMs));
     this.invalidateObservations(server, ["status", "stats", "players", "logs"]);
     if (action !== "start" && action !== "restart") return result;
     const commandConfirmedRunning = Boolean((result as { running?: boolean; docker?: { running?: boolean } } | undefined)?.running

@@ -534,19 +534,18 @@ describe("mod health", () => {
     }));
 
     const healthyHtml = render(updatePlan({ totalInstalled: 4, upToDate: 4 }));
-    expect(healthyHtml).toContain("modUpdatesCard--healthy");
     expect(healthyHtml).toContain("<h2>Mod updates</h2>");
     expect(healthyHtml).not.toContain("No updates available");
-    expect(healthyHtml).toContain("Everything is up to date");
+    expect(healthyHtml).toContain("No updates found");
     expect(healthyHtml).toContain("overviewCardStateItem");
     expect(healthyHtml).toContain("overviewCardStateCopy");
     expect(healthyHtml).not.toContain("modUpdatesHealthyState");
-    expect(healthyHtml).toContain("Open Mods, no mod updates available");
+    expect(healthyHtml).toContain("Open Mods, no updates found");
     const attentionHtml = render(updatePlan({ totalInstalled: 4, blockedUpdates: 1, unknown: 1, upToDate: 2 }));
-    expect(attentionHtml).not.toContain("modUpdatesCard--healthy");
     expect(attentionHtml).not.toContain("Everything is up to date");
-    expect(attentionHtml).toContain("Some versions could not be checked");
-    expect(attentionHtml).toContain("Open Mods to review unchecked versions");
+    expect(attentionHtml).toContain("No updates found");
+    expect(attentionHtml).not.toContain("Some versions could not be checked");
+    expect(attentionHtml).not.toContain("Open Mods to review unchecked versions");
     expect(render(updatePlan({ safeUpdates: 1 }), false)).toBe("");
   });
 
@@ -584,12 +583,12 @@ describe("mod health", () => {
   });
 
   it("describes the completed refresh result for mods and plugins", () => {
-    expect(modUpdateRefreshResultMessage(updatePlan({ totalInstalled: 4, upToDate: 4 }), "mods")).toBe("Everything is up to date");
-    expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 1 }), "mods")).toBe("1 mod update available");
-    expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 2, reviewUpdates: 1 }), "plugins")).toBe("3 plugin updates available");
-    expect(modUpdateRefreshResultMessage(updatePlan({ unknown: 1, upToDate: 3 }), "mods")).toBe("Some versions could not be checked");
-    expect(modUpdateRefreshResultMessage(updatePlan({ blockedUpdates: 1, upToDate: 3 }), "mods")).toBe("No recommended updates");
-    expect(modUpdateRefreshResultMessage(updatePlan({ totalInstalled: 0, upToDate: 0 }), "plugins")).toBe("No plugins installed");
+    expect(modUpdateRefreshResultMessage(updatePlan({ totalInstalled: 4, upToDate: 4 }), "mods")).toBe("No updates found");
+    expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 1 }), "mods")).toBe("1 mod update found");
+    expect(modUpdateRefreshResultMessage(updatePlan({ safeUpdates: 2, reviewUpdates: 1 }), "plugins")).toBe("3 plugin updates found");
+    expect(modUpdateRefreshResultMessage(updatePlan({ unknown: 1, upToDate: 3 }), "mods")).toBe("No updates found");
+    expect(modUpdateRefreshResultMessage(updatePlan({ blockedUpdates: 1, upToDate: 3 }), "mods")).toBe("No updates found");
+    expect(modUpdateRefreshResultMessage(updatePlan({ totalInstalled: 0, upToDate: 0 }), "plugins")).toBe("No updates found");
   });
 
   it("offers navigation and a recheck when no update plan is available", () => {
@@ -599,7 +598,8 @@ describe("mod health", () => {
       onOpenMods: () => undefined,
       onRefresh: () => undefined
     }));
-    expect(html).toContain("Updates not checked");
+    expect(html).toContain("No updates found");
+    expect(html).not.toContain("Updates not checked");
     expect(html).toContain('aria-label="Recheck mods for updates"');
     expect(html).not.toContain("modUpdatesCardSkeleton");
     expect(html).not.toContain('disabled=""');

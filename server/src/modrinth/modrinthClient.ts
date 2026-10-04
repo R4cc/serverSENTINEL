@@ -44,19 +44,66 @@ function modrinthPublicError(message: string, statusCode = 424, code = "MODRINTH
   return httpError(statusCode, message, { code, details });
 }
 
-async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs: number, signal?: AbortSignal) {
+async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs: number, options: ModrinthFetchOptions) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+  const timeoutError = () => modrinthPublicError(`Modrinth request timed out after ${timeoutMs}ms`, 424, "MODRINTH_REQUEST_TIMED_OUT");
+  const timeout = setTimeout(() => controller.abort(timeoutError()), timeoutMs);
   timeout.unref?.();
+  let removeAbortListener = () => {};
+  const cleanup = () => { clearTimeout(timeout); removeAbortListener(); };
   try {
-    return await fetch(url, { headers, signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, redirect: "error" });
+    const response = await fetch(url, {
+      ...(options.method === "POST" || options.json !== undefined ? {
+        method: options.method ?? "POST",
+        body: options.json === undefined ? undefined : JSON.stringify(options.json)
+      } : {}),
+      headers, signal, redirect: "error"
+    });
+    if (!response.body) { cleanup(); return response; }
+    const reader = response.body.getReader();
+    let finished = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(stream) {
+        const onAbort = () => {
+          if (finished) return;
+          finished = true;
+          stream.error(signal.reason);
+          cleanup();
+          void reader.cancel(signal.reason).catch(() => undefined);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        removeAbortListener = () => signal.removeEventListener("abort", onAbort);
+        if (signal.aborted) onAbort();
+      },
+      async pull(stream) {
+        try {
+          const chunk = await reader.read();
+          if (finished) return;
+          if (chunk.done) {
+            finished = true;
+            cleanup();
+            stream.close();
+          } else stream.enqueue(chunk.value);
+        } catch (error) {
+          if (finished) return;
+          finished = true;
+          cleanup();
+          stream.error(signal.aborted ? signal.reason : error);
+        }
+      },
+      cancel(reason) {
+        finished = true;
+        cleanup();
+        return reader.cancel(reason);
+      }
+    });
+    // Retain the deadline until EOF, cancellation or failure, including a stalled body after headers.
+    return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
   } catch (error) {
-    if (controller.signal.aborted && !signal?.aborted) {
-      throw modrinthPublicError(`Modrinth request timed out after ${timeoutMs}ms`, 424, "MODRINTH_REQUEST_TIMED_OUT");
-    }
+    cleanup();
+    if (controller.signal.aborted && !options.signal?.aborted) throw timeoutError();
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -184,21 +231,7 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
       const remainingMs = deadlineAt - Date.now();
       if (remainingMs <= 0) throw modrinthPublicError("Modrinth request exceeded its overall deadline", 424, "MODRINTH_REQUEST_TIMED_OUT", { deadlineMs });
       const attemptTimeoutMs = Math.max(1, Math.min(timeoutMs, remainingMs));
-      if (options.method === "POST" || options.json !== undefined) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), attemptTimeoutMs);
-        timeout.unref?.();
-        try {
-          response = await fetch(url, { method: options.method ?? "POST", headers, body: options.json === undefined ? undefined : JSON.stringify(options.json), signal: options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal, redirect: "error" });
-        } catch (error) {
-          if (controller.signal.aborted && !options.signal?.aborted) throw modrinthPublicError(`Modrinth request timed out after ${attemptTimeoutMs}ms`, 424, "MODRINTH_REQUEST_TIMED_OUT");
-          throw error;
-        } finally {
-          clearTimeout(timeout);
-        }
-      } else {
-        response = await fetchWithTimeout(url, headers, attemptTimeoutMs, options.signal);
-      }
+      response = await fetchWithTimeout(url, headers, attemptTimeoutMs, options);
     } catch (error) {
       if (options.signal?.aborted) throw error;
       if (attempt === retryAttempts - 1) {
@@ -217,7 +250,7 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
     if (canRetryPublicGetWithoutAuthorization && (response.status === 401 || response.status === 403)) {
       canRetryPublicGetWithoutAuthorization = false;
       headers = modrinthRequestHeaders(url, "");
-      await response.arrayBuffer().catch(() => undefined);
+      await response.body?.cancel().catch(() => undefined);
       attempt -= 1;
       continue;
     }
@@ -226,11 +259,12 @@ async function executeModrinthFetch(url: string, options: ModrinthFetchOptions =
     }
     const retryable = response.status === 429 || (response.status >= 500 && response.status < 600);
     if (!retryable || attempt === retryAttempts - 1) {
+      await response.body?.cancel().catch(() => undefined);
       const code = response.status === 429 ? "MODRINTH_RATE_LIMITED" : "MODRINTH_REQUEST_FAILED";
       throw modrinthPublicError(`Modrinth request failed: ${response.status} ${response.statusText}`, 424, code, upstreamDetails(response, attempt));
     }
     const delayMs = response.status === 429 ? retryDelayMs(response, attempt) : transientRetryDelayMs(attempt);
-    await response.arrayBuffer().catch(() => undefined);
+    await response.body?.cancel().catch(() => undefined);
     await waitWithinDeadline(delayMs, deadlineAt, response.status === 429 ? "MODRINTH_RATE_LIMITED" : "MODRINTH_REQUEST_TIMED_OUT");
   }
   throw new Error("Modrinth request failed after retries");
@@ -247,7 +281,7 @@ export function resetModrinthClientStateForTests() {
 export async function modrinthFetch(url: string, options: ModrinthFetchOptions = {}) {
   url = assertModrinthUrl(url);
   const isGet = (options.method ?? "GET") === "GET" && options.json === undefined;
-  if (!isGet || options.signal) return executeModrinthFetch(url, options);
+  if (!isGet || options.signal || !isModrinthApiUrl(url)) return executeModrinthFetch(url, options);
   const pending = inFlightGetRequests.get(url);
   if (pending) return (await pending).clone();
   const request = executeModrinthFetch(url, options).finally(() => inFlightGetRequests.delete(url));

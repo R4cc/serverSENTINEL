@@ -13,6 +13,58 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Modrinth client", () => {
+  it.each(["GET", "POST"] as const)("keeps the %s deadline active through a stalled body", async (method) => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn();
+      fetchMock.mockImplementation(async () => new Response(new ReadableStream({
+        start(stream) { stream.enqueue(new TextEncoder().encode("partial")); }, cancel
+      })));
+      const response = await modrinthFetch("https://cdn.modrinth.com/stalled", { method, timeoutMs: 500, deadlineMs: 100 });
+      const consumed = expect(response.text()).rejects.toMatchObject({ code: "MODRINTH_REQUEST_TIMED_OUT" });
+      await vi.advanceTimersByTimeAsync(100);
+      await consumed;
+      expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+      expect(cancel).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("aborts body consumption when the caller cancels after headers", async () => {
+    const cancel = vi.fn();
+    fetchMock.mockImplementation(async () => new Response(new ReadableStream({ cancel })));
+    const controller = new AbortController();
+    const response = await modrinthFetch("https://cdn.modrinth.com/cancelled", { signal: controller.signal });
+    const consumed = expect(response.text()).rejects.toThrow("Cancelled by caller");
+    controller.abort(new Error("Cancelled by caller"));
+    await consumed;
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("clears a body deadline after EOF and after explicit cancellation", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementation(async () => new Response("complete"));
+      const response = await modrinthFetch("https://cdn.modrinth.com/complete", { timeoutMs: 100 });
+      expect(await response.text()).toBe("complete");
+      await vi.advanceTimersByTimeAsync(200);
+      expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(false);
+      fetchMock.mockImplementation(async () => new Response(new ReadableStream()));
+      const unused = await modrinthFetch("https://cdn.modrinth.com/unused", { timeoutMs: 100 });
+      await unused.body!.cancel();
+      await vi.advanceTimersByTimeAsync(200);
+      expect(fetchMock.mock.calls[1][1]?.signal?.aborted).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("cancels failed response bodies before retrying without waiting for EOF", async () => {
+    const cancel = vi.fn();
+    fetchMock.mockImplementationOnce(async () => new Response(new ReadableStream({ cancel }), { status: 503 }))
+      .mockImplementationOnce(async () => new Response("ok"));
+    const response = await modrinthFetch("https://cdn.modrinth.com/retry");
+    expect(await response.text()).toBe("ok");
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
   it("rejects non-Modrinth and non-HTTPS outbound URLs before fetching", async () => {
     await expect(modrinthFetch("https://127.0.0.1/internal")).rejects.toThrow("modrinth.com host");
     await expect(modrinthFetch("http://api.modrinth.com/v2/search")).rejects.toThrow("HTTPS");
@@ -46,7 +98,7 @@ describe("Modrinth client", () => {
   });
 
   it("passes an abort signal to external requests so stalled Modrinth calls time out", async () => {
-    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }) as never);
+    fetchMock.mockImplementation(async () => new Response("{}", { status: 200 }) as never);
 
     await modrinthFetch("https://api.modrinth.com/v2/project/fabric-api", { timeoutMs: 1234 });
 
@@ -56,7 +108,7 @@ describe("Modrinth client", () => {
   });
 
   it("marks upstream Modrinth failures as public dependency errors", async () => {
-    fetchMock.mockResolvedValue(new Response("nope", { status: 401, statusText: "Unauthorized" }) as never);
+    fetchMock.mockImplementation(async () => new Response("nope", { status: 401, statusText: "Unauthorized" }) as never);
 
     await expect(modrinthFetch("https://api.modrinth.com/v2/search")).rejects.toMatchObject({
       message: "Modrinth request failed: 401 Unauthorized",
@@ -84,7 +136,7 @@ describe("Modrinth client", () => {
 
   it("does not remove authentication from POST requests", async () => {
     configureModrinthApiKeyProvider(async () => "expired-token");
-    fetchMock.mockResolvedValue(new Response("unauthorized", { status: 401, statusText: "Unauthorized" }) as never);
+    fetchMock.mockImplementation(async () => new Response("unauthorized", { status: 401, statusText: "Unauthorized" }) as never);
 
     await expect(modrinthFetch("https://api.modrinth.com/v2/version_files", { method: "POST", json: { hashes: [] } })).rejects.toMatchObject({
       statusCode: 424,
@@ -107,7 +159,7 @@ describe("Modrinth client", () => {
   });
 
   it("uses a stable rate-limit error code after retries", async () => {
-    fetchMock.mockResolvedValue(new Response("limited", { status: 429, statusText: "Too Many Requests", headers: { "retry-after": "0" } }) as never);
+    fetchMock.mockImplementation(async () => new Response("limited", { status: 429, statusText: "Too Many Requests", headers: { "retry-after": "0" } }) as never);
 
     await expect(modrinthFetch("https://api.modrinth.com/v2/search?rate-test=1")).rejects.toMatchObject({
       statusCode: 424,
@@ -117,7 +169,7 @@ describe("Modrinth client", () => {
   });
 
   it("bounds rate-limit waiting by the overall request deadline", async () => {
-    fetchMock.mockResolvedValue(new Response("limited", { status: 429, statusText: "Too Many Requests", headers: { "retry-after": "60" } }) as never);
+    fetchMock.mockImplementation(async () => new Response("limited", { status: 429, statusText: "Too Many Requests", headers: { "retry-after": "60" } }) as never);
 
     await expect(modrinthFetch("https://api.modrinth.com/v2/search?deadline-test=1", { deadlineMs: 20 })).rejects.toMatchObject({
       statusCode: 424,
@@ -131,7 +183,7 @@ describe("Modrinth client", () => {
     try {
       fetchMock
         .mockResolvedValueOnce(new Response("limited", { status: 429, headers: { "retry-after": "1" } }) as never)
-        .mockResolvedValue(new Response("{}", { status: 200 }) as never);
+        .mockImplementation(async () => new Response("{}", { status: 200 }) as never);
 
       const first = modrinthFetch("https://api.modrinth.com/v2/search?cooldown-a=1", { deadlineMs: 5_000 });
       await vi.advanceTimersByTimeAsync(0);
@@ -210,7 +262,7 @@ describe("Modrinth client", () => {
   });
 
   it("supports JSON POST requests for batched hash resolution", async () => {
-    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }) as never);
+    fetchMock.mockImplementation(async () => new Response("{}", { status: 200 }) as never);
 
     await modrinthFetch("https://api.modrinth.com/v2/version_files", { method: "POST", json: { hashes: ["abc"], algorithm: "sha1" } });
 
@@ -222,7 +274,7 @@ describe("Modrinth client", () => {
   });
 
   it("coalesces simultaneous GET requests", async () => {
-    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }) as never);
+    fetchMock.mockImplementation(async () => new Response("{}", { status: 200 }) as never);
 
     await Promise.all([
       modrinthFetch("https://api.modrinth.com/v2/project/shared"),

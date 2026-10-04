@@ -1,8 +1,8 @@
-import { constants as fsConstants } from "node:fs";
-import { lstat, open, realpath, type FileHandle } from "node:fs/promises";
+import { type Stats, constants as fsConstants } from "node:fs";
+import { lstat, open, realpath, rename, rm, type FileHandle } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
-import type { Stats } from "node:fs";
 
 export type ServerPathScope = {
   serverDir: string;
@@ -54,8 +54,12 @@ function ensureResolvedInsideServer(server: ServerPathScope, targetPath: string)
 
 async function realServerDir(server: ServerPathScope) {
   try {
+    if ((await lstat(server.serverDir)).isSymbolicLink()) {
+      throw pathSafetyError("Managed server root cannot be a symbolic link", "ELOOP");
+    }
     return await realpath(server.serverDir);
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") throw error;
     throw pathSafetyError(inaccessibleServerRootMessage, "ENOENT");
   }
 }
@@ -116,6 +120,31 @@ export async function ensureWritableResolvedInsideServer(server: ServerPathScope
   return ensureWritableTargetInsideServer(server, target);
 }
 
+/** Publishes runtime bytes by replacement, without following symlinks or overwriting a linked inode. */
+export async function writeContainedFile(server: ServerPathScope, userPath: string, content: string | Buffer) {
+  const target = await ensureWritableInsideServer(server, userPath);
+  const current = await lstat(target).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+    return undefined;
+  });
+  if (current && !current.isFile()) throw new Error("Managed server target is not a regular file");
+  const mode = current?.mode ?? (0o666 & ~process.umask());
+  const temporary = `${target}.serversentinel-${randomUUID()}.tmp`;
+  try {
+    const handle = await open(temporary, "wx", mode);
+    try {
+      await handle.writeFile(content);
+      await handle.chmod(mode);
+    } finally {
+      await handle.close();
+    }
+    await ensureWritableInsideServer(server, userPath);
+    await rename(temporary, target);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+
 /**
  * Containment validation and the filesystem call that follows are two separate resolutions of the same
  * pathname, and a managed workload has write access inside its own server root. Between the two it can
@@ -133,7 +162,9 @@ export async function ensureWritableResolvedInsideServer(server: ServerPathScope
 const openNoFollowSupported = typeof fsConstants.O_NOFOLLOW === "number";
 
 function noFollowReadFlags() {
-  return openNoFollowSupported ? fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW : fsConstants.O_RDONLY;
+  // A workload can replace a log or configuration file with a FIFO. Opening it must not
+  // occupy a worker indefinitely before the caller gets a chance to reject its type.
+  return fsConstants.O_RDONLY | (openNoFollowSupported ? fsConstants.O_NOFOLLOW : 0) | (fsConstants.O_NONBLOCK ?? 0);
 }
 
 function symlinkRefusal(): never {
@@ -160,21 +191,6 @@ export async function openContainedFile(target: string): Promise<FileHandle> {
   }
 }
 
-/**
- * Stats a validated path through an open handle so the stat and any later read cannot disagree. Rejects
- * anything that is not a regular file, which also covers a swap to a directory or device node.
- */
-export async function statContainedFile(target: string): Promise<Stats> {
-  const handle = await openContainedFile(target);
-  try {
-    const stats = await handle.stat();
-    if (!stats.isFile()) notRegularFileRefusal();
-    return stats;
-  } finally {
-    await handle.close();
-  }
-}
-
 /** Reads a validated path in one resolution, enforcing `maxBytes` against the opened inode's own size. */
 export async function readContainedFile(target: string, maxBytes?: number): Promise<Buffer> {
   const handle = await openContainedFile(target);
@@ -184,7 +200,18 @@ export async function readContainedFile(target: string, maxBytes?: number): Prom
     if (maxBytes !== undefined && stats.size > maxBytes) {
       throw pathSafetyError(`File is larger than the ${maxBytes} byte limit`, "EFBIG");
     }
-    return await handle.readFile();
+    if (maxBytes === undefined) return await handle.readFile();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    while (size <= maxBytes) {
+      const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes - size + 1));
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+      if (!bytesRead) return Buffer.concat(chunks, size);
+      size += bytesRead;
+      if (size > maxBytes) throw pathSafetyError(`File is larger than the ${maxBytes} byte limit`, "EFBIG");
+      chunks.push(buffer.subarray(0, bytesRead));
+    }
+    throw pathSafetyError(`File is larger than the ${maxBytes} byte limit`, "EFBIG");
   } finally {
     await handle.close();
   }

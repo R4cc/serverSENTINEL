@@ -1,5 +1,9 @@
+import { ensureDockerImage } from "../docker/dockerImages.js";
+import { minecraftContainerCreateSettings, reconcileContainerRestartPolicy } from "../runtime/containerPolicy.js";
+import { NodeServerUpdateRecovery } from "./serverUpdateRecovery.js";
+import { serverMutations } from "../servers/mutationCoordinator.js";
 import { existsSync } from "node:fs";
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, posix, relative, resolve, sep } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
@@ -15,7 +19,8 @@ import { storageSpaceForPath } from "../servers/storageSpace.js";
 import { mutableServerConfigurationBlockedReason } from "../servers/mutableConfigurationGate.js";
 import { appBuildId, appUserAgentFor, appVersion } from "../buildInfo.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../consoleLogs.js";
-import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, openContainedReadStream, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer } from "../core.js";
+import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedInsideServer, openContainedFile, openContainedReadStream, readContainedFile, parseDockerPorts, safeInstalledModFilename, safeModFilename, validateExistingInsideServer, writeContainedFile } from "../core.js";
+import { readServerConfiguration, writeServerConfiguration } from "../runtime/local/configurationFiles.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerReachable, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { dockerLiveRestoreEnabled, dockerLiveRestoreGuidance, dockerStopQuery, dockerStopRequestTimeoutMs } from "../docker/dockerDaemon.js";
 import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
@@ -23,12 +28,11 @@ import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, vali
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import {
   assertDownloadableModrinthFile,
-  assertModrinthJarHashes,
   assertVersionInstallable,
   compatibilityFromSelectedVersion,
   managedContentNaming
 } from "../modrinth/installPolicy.js";
-import { modrinthFetch } from "../modrinth/modrinthClient.js";
+import { downloadModrinthJarStream } from "../modrinth/jarDownload.js";
 import { ModHashCache } from "../modHashCache.js";
 import { managedContentFileSizeLimit } from "../managedContentLimits.js";
 import { registerShutdownHandlers } from "../shutdown.js";
@@ -43,18 +47,20 @@ import {
   listServerDirectory,
   moveServerEntry,
   previewServerFile,
+  publishRuntimeUpload,
   publicZipExtractionPlan,
   readServerTextFile,
   renameServerEntry,
   safeFileManagerName,
   toPublicServerPath,
-  writeServerTextFile
+  writeServerTextFile,
+  writeRuntimeUpload
 } from "../runtime/local/fileService.js";
 import { detectedTotalMemory, minecraftContainerNetworkingConfig } from "../runtime/local/dockerContainers.js";
 import { detailedError, detailedErrorMessage } from "../logging.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { runtimeSelection } from "../runtime/selection.js";
-import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../runtime/terminal.js";
+import { minecraftTerminalConfigFingerprint } from "../runtime/terminal.js";
 import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
 import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
@@ -243,6 +249,7 @@ async function serverRoot(server: ManagedServer) {
   const root = resolve(serversRoot, id);
   if (root !== serversRoot && !root.startsWith(serversRoot + sep)) throw new Error("Invalid server root");
   await mkdir(root, { recursive: true });
+  if ((await lstat(root)).isSymbolicLink()) throw new Error("Managed server root cannot be a symbolic link");
   return root;
 }
 
@@ -296,23 +303,6 @@ function runtimeConfigHash(server: ManagedServer, options = { includeTerminal: f
   return createHash("sha256").update(JSON.stringify(runtimeConfigHashInput(server, options))).digest("hex");
 }
 
-async function reconcileRestartPolicy(server: ManagedServer, details: NodeContainerInspect) {
-  if (!isManagedContainerFor(details.Config?.Labels, server.id)) return;
-  const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
-  if (!restartPolicy || restartPolicy === "no") return;
-  await dockerJsonRequest(
-    "POST",
-    `/containers/${encodeURIComponent(containerName(server))}/update`,
-    { RestartPolicy: { Name: "no" } },
-    200
-  );
-  details.HostConfig = { ...details.HostConfig, RestartPolicy: { Name: "no" } };
-}
-
-function minecraftContainerEnvironment() {
-  return [...minecraftTerminalContainerConfig().Env, `TZ=${config.timeZone}`];
-}
-
 async function dockerServerRoot(server: ManagedServer) {
   const root = await serverRoot(server);
   const rel = relative(config.nodeDataDir, root);
@@ -343,49 +333,36 @@ function ensureQueryDockerPort(dockerPorts: string, queryPort: number) {
 async function writeVersionMetadata(server: ManagedServer) {
   const now = new Date().toISOString();
   const targetRuntime = runtimeTarget(server);
-  const target = await writableInside(server, ".serversentinel-version.json");
+  const scope = { serverDir: await serverRoot(server) };
   let createdAt = now;
   try {
-    const existing = JSON.parse(await readFile(target, "utf8")) as { createdAt?: string };
+    const existing = JSON.parse(await readServerConfiguration(scope, ".serversentinel-version.json")) as { createdAt?: string };
     createdAt = existing.createdAt ?? now;
   } catch {
     createdAt = now;
   }
-  await writeFile(target, `${JSON.stringify({
+  await writeServerConfiguration(scope, ".serversentinel-version.json", `${JSON.stringify({
     minecraftVersion: targetRuntime.minecraftVersion,
     runtimeType: targetRuntime.runtimeType,
     runtimeVersion: targetRuntime.runtimeVersion,
     createdAt,
     updatedAt: now
-  }, null, 2)}\n`, "utf8");
-}
-
-async function pullImage(image: string) {
-  validateDockerImageName(image);
-  const [fromImage, tag] = image.includes(":") ? image.split(/:(.*)/, 2) : [image, "latest"];
-  await dockerBufferRequest("POST", `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag || "latest")}`, [200, 201]);
+  }, null, 2)}\n`);
 }
 
 async function createContainer(server: ManagedServer, networkingConfig?: NodeNetworkingConfig) {
   const targetRuntime = runtimeTarget(server);
   const image = validateDockerImageName(server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion));
-  await pullImage(image);
+  await ensureDockerImage(image);
   const root = await dockerServerRoot(server);
   const binds = [`${root}:/data`];
   const { exposedPorts, portBindings } = parseDockerPorts(server.dockerPorts ?? "25565:25565/tcp");
   const command = minecraftContainerCommand(server);
-  const terminalConfig = minecraftTerminalContainerConfig();
   await dockerJsonRequest("POST", `/containers/create?name=${encodeURIComponent(validateDockerContainerName(containerName(server)))}`, {
     Image: image,
     WorkingDir: "/data",
     Cmd: command,
-    OpenStdin: true,
-    AttachStdin: true,
-    // Applies to every stop this container ever receives, including the one the daemon issues to
-    // all containers when Docker itself is restarted or upgraded, which the node agent never sees.
-    StopTimeout: config.minecraftStopTimeoutSeconds,
-    ...terminalConfig,
-    Env: minecraftContainerEnvironment(),
+    ...minecraftContainerCreateSettings(config.timeZone),
     ExposedPorts: exposedPorts,
     HostConfig: { Binds: binds, PortBindings: portBindings, RestartPolicy: { Name: "no" } },
     NetworkingConfig: networkingConfig ?? minecraftContainerNetworkingConfig(await inspectCurrentContainer().catch(() => null)),
@@ -432,7 +409,7 @@ async function ensureContainer(server: ManagedServer, preferredNetworkingConfig?
   if (!isManagedContainerFor(details.Config?.Labels, server.id)) {
     throw new Error(`Container ${containerName(server)} exists but is not managed by serverSENTINEL; refusing to control it`);
   }
-  await reconcileRestartPolicy(server, details);
+  await reconcileContainerRestartPolicy(server.id, containerName(server), details);
   const configHash = containerConfigHash(details.Config?.Labels);
   const compatibleConfigHash = configHash === runtimeConfigHash(server)
     || configHash === runtimeConfigHash(server, { includeTerminal: false, includeRestartPolicy: false })
@@ -492,8 +469,7 @@ async function downloadServerJar(server: ManagedServer, signal?: AbortSignal) {
   }
   const content = await readRuntimeArtifact(res);
   verifyRuntimeArtifact(profile, content);
-  const target = await writableInside(server, artifact.filename);
-  await writeFile(target, content);
+  await writeContainedFile({ serverDir: await serverRoot(server) }, artifact.filename, content);
 }
 
 function createdServerRecord(input: CreateInput, resolvedRuntime: ServerRuntimeProfile, now = new Date().toISOString()) {
@@ -600,25 +576,36 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
     updatedAt: new Date().toISOString()
   };
 
-  if (jarChanged) {
-    await downloadServerJar(updated, signal);
-  }
-  await writeVersionMetadata(updated);
-  if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
-    const propertiesPath = await writableInside(updated, "server.properties");
-    let props: Record<string, string> = {};
-    try {
-      props = parseServerProperties(await readFile(propertiesPath, "utf8"));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  const recovery = new NodeServerUpdateRecovery(nodeStorage());
+  const root = await serverRoot(server);
+  await recovery.prepare(server, updated, root, [".serversentinel-version.json", "server.properties", ...(jarChanged ? [updated.runtimeProfile.jarArtifact.filename] : [])]);
+  try {
+    if (jarChanged) {
+      await downloadServerJar(updated, signal);
     }
-    await writeFile(propertiesPath, serializeServerProperties({
-      ...props,
-      ...(serverPort ? { "server-port": serverPort } : {}),
-      "enable-query": "true",
-      "query.port": String(queryPort)
-    }), "utf8");
+    await writeVersionMetadata(updated);
+    if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
+      const scope = { serverDir: await serverRoot(updated) };
+      let props: Record<string, string> = {};
+      try {
+        props = parseServerProperties(await readServerConfiguration(scope, "server.properties"));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      await writeServerConfiguration(scope, "server.properties", serializeServerProperties({
+        ...props,
+        ...(serverPort ? { "server-port": serverPort } : {}),
+        "enable-query": "true",
+        "query.port": String(queryPort)
+      }));
+    }
+    signal?.throwIfAborted();
+    recovery.applied(server.id);
+  } catch (error) {
+    await recovery.recover(server.id, root);
+    throw error;
   }
+  await recovery.recover(server.id, root);
   if (containerConfigChanged && dockerAvailable() && !running) {
     const networkingConfig = minecraftContainerNetworkingConfig(await inspectOrMissing(server));
     await removeManagedContainer(server);
@@ -656,7 +643,7 @@ async function runtimeStatus(server: ManagedServer, prefetchedDetails?: NodeCont
   const details = prefetchedDetails === undefined ? await inspectOrMissing(server) : prefetchedDetails;
   const running = Boolean(details?.State?.Running);
   const managed = isManagedContainerFor(details?.Config?.Labels, server.id);
-  if (details && managed) await reconcileRestartPolicy(server, details);
+  if (details && managed) await reconcileContainerRestartPolicy(server.id, containerName(server), details);
   const stdinReady = Boolean(details?.Config?.OpenStdin && details?.Config?.AttachStdin);
   const configured = Boolean(server.dockerContainer);
   const available = dockerAvailable();
@@ -717,8 +704,7 @@ async function resourceStats(server: ManagedServer, details?: NodeContainerInspe
 }
 
 async function playerObservation(server: ManagedServer, details?: NodeContainerInspect | null) {
-  const propsPath = await inside(server, "server.properties", false);
-  const props = parseServerProperties(await readFile(propsPath, "utf8").catch(() => ""));
+  const props = parseServerProperties(await readServerConfiguration({ serverDir: await serverRoot(server) }, "server.properties").catch(() => ""));
   const minecraftInspect = assertContainerOwnership(server, details === undefined ? await inspectOrMissing(server) : details);
   const running = minecraftInspect?.State?.Running === true;
   const callerInspect = running ? await inspectCurrentContainer().catch(() => null) : null;
@@ -767,77 +753,88 @@ function startConsoleStream(server: ManagedServer, streamId: string, socket: Web
     return () => undefined;
   }
 
-  const name = encodeURIComponent(containerName(server));
-  const request = http.request(
-    {
-      socketPath: config.dockerSocket,
-      path: `/containers/${name}/logs?stdout=1&stderr=1&tail=200&follow=1`,
-      method: "GET"
-    },
-    (response) => {
-      if (response.statusCode !== 200) {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () => {
-          const message = dockerErrorMessage(Buffer.concat(chunks).toString("utf8"), response.statusCode);
-          sendStreamData(socket, streamId, { type: "unavailable", message });
-          finish();
-        });
-        return;
-      }
+  let request: http.ClientRequest | undefined;
+  const follow = async () => {
+    const details = assertContainerOwnership(server, await inspectOrMissing(server));
+    if (closed) return;
+    if (!details?.Id) throw new Error("Runtime container was not found");
+    const name = encodeURIComponent(details.Id);
+    request = http.request(
+      {
+        socketPath: config.dockerSocket,
+        path: `/containers/${name}/logs?stdout=1&stderr=1&tail=200&follow=1`,
+        method: "GET"
+      },
+      (response) => {
+        if (response.statusCode !== 200) {
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk: Buffer) => chunks.push(chunk));
+          response.on("end", () => {
+            const message = dockerErrorMessage(Buffer.concat(chunks).toString("utf8"), response.statusCode);
+            sendStreamData(socket, streamId, { type: "unavailable", message });
+            finish();
+          });
+          return;
+        }
 
-      const decoder = new DockerLogDecoder();
-      let drainTimer: NodeJS.Timeout | undefined;
-      // A container can write faster than the panel's socket drains — a crash loop, a mod logging
-      // per tick. Every other high-volume path here awaits its send; this one cannot, so it pauses
-      // the docker response instead. Without it the frames queue in the agent's heap without limit
-      // and take the whole node down, not just the console.
-      const applyBackpressure = () => {
-        if (closed || drainTimer || socket.bufferedAmount <= consoleStreamHighWaterMark) return;
-        response.pause();
-        drainTimer = setInterval(() => {
-          if (closed || socket.readyState !== WebSocket.OPEN) {
+        const decoder = new DockerLogDecoder();
+        let drainTimer: NodeJS.Timeout | undefined;
+        // A container can write faster than the panel's socket drains — a crash loop, a mod logging
+        // per tick. Every other high-volume path here awaits its send; this one cannot, so it pauses
+        // the docker response instead. Without it the frames queue in the agent's heap without limit
+        // and take the whole node down, not just the console.
+        const applyBackpressure = () => {
+          if (closed || drainTimer || socket.bufferedAmount <= consoleStreamHighWaterMark) return;
+          response.pause();
+          drainTimer = setInterval(() => {
+            if (closed || socket.readyState !== WebSocket.OPEN) {
+              clearInterval(drainTimer);
+              drainTimer = undefined;
+              return;
+            }
+            if (socket.bufferedAmount > consoleStreamHighWaterMark) return;
             clearInterval(drainTimer);
             drainTimer = undefined;
-            return;
+            response.resume();
+          }, consoleStreamDrainPollMs);
+          drainTimer.unref?.();
+        };
+        response.on("data", (chunk: Buffer) => {
+          const text = decoder.write(chunk).toString("utf8");
+          if (text) {
+            sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
+            applyBackpressure();
           }
-          if (socket.bufferedAmount > consoleStreamHighWaterMark) return;
-          clearInterval(drainTimer);
+        });
+        response.on("close", () => {
+          if (drainTimer) clearInterval(drainTimer);
           drainTimer = undefined;
-          response.resume();
-        }, consoleStreamDrainPollMs);
-        drainTimer.unref?.();
-      };
-      response.on("data", (chunk: Buffer) => {
-        const text = decoder.write(chunk).toString("utf8");
-        if (text) {
-          sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
-          applyBackpressure();
-        }
-      });
-      response.on("close", () => {
-        if (drainTimer) clearInterval(drainTimer);
-        drainTimer = undefined;
-      });
-      response.on("end", () => finish());
-      response.on("error", (error) => {
-        sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
-        finish();
-      });
-    }
-  );
+        });
+        response.on("end", () => finish());
+        response.on("error", (error) => {
+          sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+          finish();
+        });
+      }
+    );
 
-  request.on("error", (error) => {
+    request.on("error", (error) => {
+      if (closed) return;
+      sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+      finish();
+    });
+    request.end();
+  };
+  void follow().catch((error) => {
     if (closed) return;
-    sendStreamData(socket, streamId, { type: "unavailable", message: error.message });
+    sendStreamData(socket, streamId, { type: "unavailable", message: (error as Error).message });
     finish();
   });
-  request.end();
 
   return () => {
     if (closed) return;
     closed = true;
-    request.destroy();
+    request?.destroy();
     onDone();
   };
 }
@@ -1295,7 +1292,7 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
     if (lineLimit !== undefined) {
       return { text: await readConsoleLogTail(target, lineLimit), source: "logs/latest.log" as const };
     }
-    const handle = await open(target, "r");
+    const handle = await openContainedFile(target);
     try {
       const fileStat = await handle.stat();
       if (!fileStat.isFile()) throw new Error("logs/latest.log is not a file");
@@ -1308,7 +1305,9 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
       await handle.close();
     }
   } catch {
-    const name = encodeURIComponent(containerName(server));
+    const details = assertContainerOwnership(server, await inspectOrMissing(server));
+    if (!details?.Id) throw new Error("Runtime container was not found");
+    const name = encodeURIComponent(details.Id);
     const tail = lineLimit === undefined ? 300 : consoleLogLineLimit(lineLimit);
     const text = stripDockerLogHeaders(await dockerBufferRequest("GET", `/containers/${name}/logs?stdout=1&stderr=1&tail=${tail}`, 200, 15000, undefined, dockerLogTailMaxBytes)).toString("utf8");
     return { text, source: "docker" as const };
@@ -1318,7 +1317,7 @@ async function readRecentServerLogs(server: ManagedServer, lineLimit?: number) {
 async function readServerLogDelta(server: ManagedServer, cursor?: ServerLogCursor) {
   try {
     const target = await inside(server, "logs/latest.log");
-    const handle = await open(target, "r");
+    const handle = await openContainedFile(target);
     try {
       const fileStat = await handle.stat();
       if (!fileStat.isFile()) throw new Error("logs/latest.log is not a file");
@@ -1352,8 +1351,18 @@ function observationError(error: unknown) {
   return { code: "observation_failed", message: error instanceof Error ? error.message : "Observation failed", details: detailedErrorMessage(error), retryable: true };
 }
 
+async function recoverServerUpdate(recovery: NodeServerUpdateRecovery, server: ManagedServer) {
+  if (recovery.needsRecovery(server.id)) {
+    await serverMutations.run(server.id, async () => recovery.recover(server.id, await serverRoot(server)));
+  }
+}
+
 async function observeServer(item: ServerObservationItem): Promise<ServerObservationResultItem> {
-  const server = item.server as unknown as ManagedServer;
+  const requested = item.server as unknown as ManagedServer;
+  const recovery = new NodeServerUpdateRecovery(nodeStorage());
+  if (!serverMutations.isActive(requested.id)) await recoverServerUpdate(recovery, requested);
+  const pending = recovery.pending(requested);
+  const server = pending ? { ...requested, ...pending.server } : requested;
   const sections = new Set<ServerObservationSection>(item.sections);
   const result: ServerObservationResultItem = { serverId: server.id };
   const errors: ServerObservationResultItem["errors"] = {};
@@ -1374,13 +1383,13 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   const run = (section: ServerObservationSection, operation: () => Promise<unknown>, assign: (value: any) => void) => {
     tasks.push(operation().then(assign).catch((error) => { errors[section] = observationError(error); }));
   };
-  if (!inspectionFailed && sections.has("status")) run("status", () => runtimeStatus(server, details), (value) => { result.status = value; });
+  if (!inspectionFailed && sections.has("status")) run("status", () => runtimeStatus(server, details), (value) => { result.status = pending ? { ...value, configurationUpdate: pending } : value; });
   if (!inspectionFailed && sections.has("stats")) run("stats", () => resourceStats(server, details), (value) => { result.stats = value; });
   if (!inspectionFailed && sections.has("players")) run("players", () => playerObservation(server, details), (value) => { result.players = value; });
   if (sections.has("logs")) run("logs", () => readServerLogDelta(server, item.logCursor), (value) => { result.logs = value; });
   if (sections.has("overviewFiles")) run("overviewFiles", async () => ({
-    properties: await readFile(await inside(server, "server.properties", false), "utf8").catch(() => ""),
-    eula: await readFile(await inside(server, "eula.txt", false), "utf8").catch(() => "")
+    properties: await readServerConfiguration({ serverDir: await serverRoot(server) }, "server.properties").catch(() => ""),
+    eula: await readServerConfiguration({ serverDir: await serverRoot(server) }, "eula.txt").catch(() => "")
   }), (value) => { result.overviewFiles = value; });
   await Promise.all(tasks);
   if (Object.keys(errors).length) result.errors = errors;
@@ -1426,7 +1435,11 @@ async function archivePlan(server: ManagedServer, path: unknown, destinationPath
 function startArchiveExtractionStream(server: ManagedServer, payload: Record<string, unknown>, streamId: string, socket: WebSocket, onDone: () => void) {
   let closed = false;
   const controller = new AbortController();
-  void (async () => {
+  void serverMutations.run(server.id, async () => {
+    const recovery = new NodeServerUpdateRecovery(nodeStorage());
+    await recoverServerUpdate(recovery, server);
+    const pending = recovery.pending(server);
+    if (pending) server = { ...server, ...pending.server };
     const root = await serverRoot(server);
     const archive = await inside(server, payload.path);
     const destination = await writableInside(server, payload.destinationPath);
@@ -1450,23 +1463,13 @@ function startArchiveExtractionStream(server: ManagedServer, payload: Record<str
       sendStreamData(socket, streamId, { type: "result", result: { ...result, destinationPath: publicPath(root, result.destinationPath) } });
       sendStreamEnd(socket, streamId);
     }
-  })().catch((error) => {
+  }).catch((error) => {
     if (!closed) sendStreamEnd(socket, streamId, { code: "archive_extraction_failed", message: (error as Error).message, details: detailedErrorMessage(error) });
   }).finally(onDone);
   return () => {
     closed = true;
     controller.abort();
   };
-}
-
-async function writeRelativeFile(server: ManagedServer, path: unknown, content: Buffer | string) {
-  const root = await serverRoot(server);
-  const target = await writableInside(server, path);
-  if (existsSync(target)) {
-    throw new Error("A file or folder with that name already exists");
-  }
-  await writeFile(target, content);
-  return { ok: true, path: publicPath(root, target), size: Buffer.byteLength(content) };
 }
 
 async function writeEditableFile(server: ManagedServer, path: unknown, content: unknown) {
@@ -1494,7 +1497,7 @@ async function modsList(server: ManagedServer) {
         };
         try {
           const target = await inside(server, posix.join(runtime.contentDirectory, filename));
-          const sha1 = await modHashCache.sha1(`${server.id}:${filename}`, entry.size, entry.modifiedAt, () => readFile(target));
+          const sha1 = await modHashCache.sha1(`${server.id}:${filename}`, entry.size, entry.modifiedAt, () => readContainedFile(target, uploadLimit));
           return { ...base, sha1 };
         } catch {
           return base;
@@ -1504,15 +1507,20 @@ async function modsList(server: ManagedServer) {
   return { mods };
 }
 
-async function writeManagedContentBuffer(server: ManagedServer, filename: unknown, content: Buffer) {
+async function downloadManagedContent(server: ManagedServer, metadata: { url: string; filename: string; hashes?: Record<string, string> }, signal?: AbortSignal) {
   const { directory, singular, Singular } = managedContentNaming(runtimeTarget(server).runtimeType);
-  const name = safeModFilename(safeInstalledModFilename(filename as string | undefined));
-  if (!name.endsWith(".jar")) throw new Error(`${Singular} uploads must be .jar files`);
-  if (!content.length || content.length > uploadLimit) throw new Error(`Uploaded ${singular} must be between 1 byte and ${Math.floor(uploadLimit / 1024 / 1024)} MiB`);
-  assertJarBuffer(content, singular);
+  const name = safeModFilename(safeInstalledModFilename(metadata.filename));
+  if (!name.endsWith(".jar")) throw new Error(`${Singular} downloads must be .jar files`);
   await mkdir(await inside(server, directory, false), { recursive: true });
-  await inside(server, directory);
-  return writeRelativeFile(server, posix.join(directory, name), content);
+  const target = await writableInside(server, posix.join(directory, name));
+  if (existsSync(target)) throw new Error("A file or folder with that name already exists");
+  const stream = await downloadModrinthJarStream(metadata, { singular, maximumBytes: uploadLimit, signal });
+  try {
+    const size = await writeRuntimeUpload(target, { stream }, {
+      maximumBytes: uploadLimit, allowEmpty: false, label: `${Singular} download`
+    });
+    return { ok: true, path: publicPath(await serverRoot(server), target), size };
+  } finally { stream.destroy(); }
 }
 
 type PreparedBinaryUpload = {
@@ -1571,11 +1579,12 @@ async function prepareBinaryDownload(message: NodeTransferStartMessage) {
   if (!server) throw new Error("server payload is required");
   if (message.command === "files.download") {
     const target = await inside(server, payload.path);
-    const targetStat = await stat(target);
-    if (!targetStat.isFile()) throw new Error("Download path is not a file");
-    if (targetStat.size > (message.maxBytes ?? uploadLimit)) throw new Error("File exceeds the configured download limit");
-    const handle = await open(target, "r");
-    return { filename: basename(target), size: targetStat.size, stream: handle.createReadStream() };
+    const download = await openContainedReadStream(target);
+    if (download.size > (message.maxBytes ?? uploadLimit)) {
+      download.stream.destroy();
+      throw new Error("File exceeds the configured download limit");
+    }
+    return { filename: basename(target), size: download.size, stream: download.stream };
   }
   if (message.command === "exports.download") {
     const manifest = payload.manifest;
@@ -1633,7 +1642,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const channel: ReleaseChannel = payload.channel === "alpha" || payload.channel === "beta" ? payload.channel : "release";
   const targetRuntime = runtimeTarget(server);
   const naming = managedContentNaming(targetRuntime.runtimeType);
-  const { singular, Singular } = naming;
+  const { singular } = naming;
   if (!targetRuntime.minecraftVersion) throw new Error(`A resolved ${naming.displayName} runtime profile is required before installing compatible ${naming.plural}`);
 
   if (!versionId) {
@@ -1642,11 +1651,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
     const file = compatibility.file;
     if (!file?.url || !file.filename) throw new Error("No installable .jar file was found for that version");
     assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
-    const response = await modrinthFetch(file.url, { signal });
-    if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
-    const content = Buffer.from(await response.arrayBuffer());
-    assertModrinthJarHashes(content, file);
-    const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
+    const written = await downloadManagedContent(server, file, signal);
     return { ...written, filename: file.filename, projectId, version: compatibility.matchedVersionNumber, compatibility };
   }
 
@@ -1676,11 +1681,7 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   const { file, matchesMinecraft } = candidate;
   if (!matchesMinecraft && !forceIncompatible) throw new Error("Set forceIncompatible to true when installing a Minecraft version override.");
   assertDownloadableModrinthFile(file, { singular, maximumBytes: uploadLimit });
-  const response = await modrinthFetch(file.url, { signal });
-  if (!response.ok) throw new Error(`${Singular} download failed: ${response.statusText}`);
-  const content = Buffer.from(await response.arrayBuffer());
-  assertModrinthJarHashes(content, file);
-  const written = await writeManagedContentBuffer(server, safeModFilename(file.filename), content);
+  const written = await downloadManagedContent(server, file, signal);
   return {
     ...written,
     filename: file.filename,
@@ -1697,7 +1698,25 @@ async function modInstall(server: ManagedServer, input: unknown, signal?: AbortS
   };
 }
 
-async function handleCommand(command: string, payload: any, signal?: AbortSignal) {
+const nodeMutationCommands = new Set(["server.update", "server.delete", "server.start", "server.stop", "server.restart", "server.console.send", "files.write", "files.delete", "files.rename", "files.move", "files.copy", "files.mkdir", "files.archive.extract", "mods.install", "mods.enableDisable", "mods.remove", "content.install", "content.enableDisable", "content.remove"]);
+
+async function handleCommand(command: string, payload: any, signal?: AbortSignal): Promise<unknown> {
+  const server = payload?.server as ManagedServer | undefined;
+  if (!server) return handleCommandImpl(command, payload, signal);
+  const action = async () => {
+    const recovery = new NodeServerUpdateRecovery(nodeStorage());
+    if (nodeMutationCommands.has(command) || !serverMutations.isActive(server.id)) await recoverServerUpdate(recovery, server);
+    const pending = recovery.pending(server);
+    if (command === "server.configuration.read") return pending ?? null;
+    const effective = pending ? { ...server, ...pending.server } : server;
+    const result = await handleCommandImpl(command, { ...payload, server: effective }, signal);
+    if (pending && ["server.inspect", "server.start", "server.stop", "server.restart"].includes(command)) return { ...(result as object), configurationUpdate: pending };
+    return result;
+  };
+  return nodeMutationCommands.has(command) ? serverMutations.run(server.id, action, command === "files.write" && !isMutableConfigurationPath(payload?.path)) : action();
+}
+
+async function handleCommandImpl(command: string, payload: any, signal?: AbortSignal) {
   if (!isNodeCapability(command)) {
     throw new Error(`Unsupported node command ${command}`);
   }
@@ -1840,16 +1859,18 @@ async function handleCommand(command: string, payload: any, signal?: AbortSignal
 }
 
 export const __nodeAgentTestHooks = {
+  closeStorage: () => { nodeStorageDatabase?.close(); nodeStorageDatabase = undefined; },
   cleanupPreviousNodeContainers,
   createdServerRecord,
   handleCommand,
   minecraftContainerNetworkingConfig,
-  minecraftContainerEnvironment,
+  minecraftContainerEnvironment: () => minecraftContainerCreateSettings(config.timeZone).Env,
   minecraftContainerCommand,
   runtimeConfigHash,
   nodeReconnectDelayMs,
   prepareBinaryUpload,
   prepareBinaryDownload,
+  startConsoleStream,
   nodeReplacementContainerConfig,
   selfUpdateContainer
 };
@@ -1893,9 +1914,10 @@ export async function startNodeAgent() {
     const activeStreams = new Map<string, () => void>();
     const activeRequests = new Map<string, AbortController>();
     type ActiveTransfer =
-      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void>; cancelled: boolean; writeError?: Error }
+      | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void>; cancelled: boolean; writeError?: Error; release: () => void }
       | { direction: "download"; stream?: NodeJS.ReadableStream; cancelled: boolean };
     const activeTransfers = new Map<string, ActiveTransfer>();
+    const preparingUploads = new Map<string, { cancelled: boolean }>();
     let accepted = false;
     let lastPanelPingAt = Date.now();
     let heartbeatWatchdog: NodeJS.Timeout | undefined;
@@ -1905,12 +1927,14 @@ export async function startNodeAgent() {
       activeStreams.clear();
       for (const controller of activeRequests.values()) controller.abort();
       activeRequests.clear();
+      for (const upload of preparingUploads.values()) upload.cancelled = true;
       for (const transfer of activeTransfers.values()) {
         if (transfer.direction === "upload") {
           transfer.cancelled = true;
           void transfer.writes.catch(() => undefined)
             .then(() => transfer.file.close().catch(() => undefined))
-            .then(() => rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined));
+            .then(() => rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined))
+            .finally(transfer.release);
         } else {
           transfer.cancelled = true;
           if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();
@@ -2062,23 +2086,41 @@ export async function startNodeAgent() {
         return;
       }
       if (message.type === "transferStart") {
-        if (activeTransfers.has(message.id)) {
+        if (activeTransfers.has(message.id) || preparingUploads.has(message.id)) {
           socket.close(1002, "Duplicate transfer id");
           return;
         }
-        if (activeTransfers.size >= nodeProtocolMaxActiveTransfers) {
+        if (activeTransfers.size + preparingUploads.size >= nodeProtocolMaxActiveTransfers) {
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "node_overloaded", message: "Node transfer limit reached", retryable: true } } satisfies NodeTransferResultMessage));
           return;
         }
         if (message.direction === "upload") {
+          const preparation = { cancelled: false };
+          preparingUploads.set(message.id, preparation);
+          let release: (() => void) | undefined;
           try {
-            const prepared = await prepareBinaryUpload(message);
+            const server = (message.payload as { server?: ManagedServer })?.server;
+            if (!server) throw new Error("server payload is required");
+            const lease = serverMutations.acquire(server.id);
+            release = lease.release;
+            const prepared = await lease.run(async () => {
+              const recovery = new NodeServerUpdateRecovery(nodeStorage());
+              await recoverServerUpdate(recovery, server);
+              const pending = recovery.pending(server);
+              return prepareBinaryUpload(pending ? { ...message, payload: { ...message.payload as object, server: { ...server, ...pending.server } } } : message);
+            });
             const file = await open(prepared.temporaryPath, "wx");
-            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve(), cancelled: false });
+            if (preparation.cancelled || socket.readyState !== WebSocket.OPEN) {
+              await file.close();
+              await rm(prepared.temporaryPath, { force: true });
+              throw new Error("Node disconnected while preparing upload");
+            }
+            activeTransfers.set(message.id, { direction: "upload", prepared, file, expectedSize: message.size!, received: 0, hash: createHash("sha256"), writes: Promise.resolve(), cancelled: false, release: lease.release });
             socket.send(JSON.stringify({ type: "transferReady", id: message.id }));
           } catch (error) {
-            socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_rejected", message: (error as Error).message } } satisfies NodeTransferResultMessage));
-          }
+            release?.();
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_rejected", message: (error as Error).message } } satisfies NodeTransferResultMessage));
+          } finally { preparingUploads.delete(message.id); }
           return;
         }
         const transfer: ActiveTransfer = { direction: "download", cancelled: false };
@@ -2117,6 +2159,7 @@ export async function startNodeAgent() {
         if (!transfer || transfer.direction !== "upload") return;
         try {
           await transfer.writes;
+          if (transfer.cancelled) throw new Error("Transfer was cancelled");
           if (transfer.writeError) throw transfer.writeError;
           if (transfer.received !== transfer.expectedSize || transfer.received !== message.size || transfer.hash.digest("hex") !== message.sha256) {
             throw new Error("Transfer size or SHA-256 did not match");
@@ -2132,13 +2175,16 @@ export async function startNodeAgent() {
               await headerHandle.close();
             }
           }
-          await rename(transfer.prepared.temporaryPath, transfer.prepared.targetPath);
+          if (transfer.cancelled) throw new Error("Transfer was cancelled");
+          await publishRuntimeUpload(transfer.prepared.temporaryPath, transfer.prepared.targetPath);
           activeTransfers.delete(message.id);
+          transfer.release();
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: true, result: { ok: true, path: transfer.prepared.publicTargetPath, size: transfer.received } } satisfies NodeTransferResultMessage));
         } catch (error) {
           await transfer.file.close().catch(() => undefined);
           await rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
           activeTransfers.delete(message.id);
+          transfer.release();
           socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_failed", message: (error as Error).message } } satisfies NodeTransferResultMessage));
         }
         return;
@@ -2152,6 +2198,8 @@ export async function startNodeAgent() {
         return;
       }
       if (message.type === "transferCancel") {
+        const preparation = preparingUploads.get(message.id);
+        if (preparation) preparation.cancelled = true;
         const transfer = activeTransfers.get(message.id);
         activeTransfers.delete(message.id);
         if (transfer?.direction === "upload") {
@@ -2159,6 +2207,7 @@ export async function startNodeAgent() {
           await transfer.writes.catch(() => undefined);
           await transfer.file.close().catch(() => undefined);
           await rm(transfer.prepared.temporaryPath, { force: true }).catch(() => undefined);
+          transfer.release();
         } else if (transfer) {
           transfer.cancelled = true;
           if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();

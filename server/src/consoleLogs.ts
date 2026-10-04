@@ -1,4 +1,4 @@
-import { open } from "node:fs/promises";
+import { openContainedFile } from "./core.js";
 
 const defaultConsoleLogLineLimit = 5_000;
 const maxConsoleLogLineLimit = 25_000;
@@ -24,7 +24,7 @@ export function tailConsoleLogText(text: string, requestedLineLimit: number, sta
 
 export async function readConsoleLogTail(path: string, requestedLineLimit: number) {
   const lineLimit = consoleLogLineLimit(requestedLineLimit);
-  const handle = await open(path, "r");
+  const handle = await openContainedFile(path);
   try {
     const fileStat = await handle.stat();
     if (!fileStat.isFile()) throw new Error("Console log is not a file");

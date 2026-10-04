@@ -1,9 +1,11 @@
+import { ensureDockerImage } from "../../docker/dockerImages.js";
+import { minecraftContainerCreateSettings, reconcileContainerRestartPolicy } from "../containerPolicy.js";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { totalmem } from "node:os";
 import { config } from "../../config.js";
-import { dockerHostPortBindings, ensureInsideServer, parseDockerPorts, validateExistingInsideServer } from "../../core.js";
+import { dockerHostPortBindings, openContainedFile, parseDockerPorts, validateExistingInsideServer } from "../../core.js";
+import { readServerConfiguration, writeServerConfiguration } from "./configurationFiles.js";
 import { consoleLogLineLimit, readConsoleLogTail } from "../../consoleLogs.js";
 import { validateDockerContainerName, validateDockerImageName, validateJavaArgs } from "../../http/validation.js";
 import { defaultServerContainerName } from "../../storage/serverIdentity.js";
@@ -17,12 +19,9 @@ import { dockerStopQuery, dockerStopRequestTimeoutMs } from "../../docker/docker
 import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
 import { shellQuote } from "../../docker/shell.js";
 import { durationSince, errorLogFields, logError, logInfo, logWarn, type LogFields } from "../../logging.js";
-import { minecraftTerminalConfigFingerprint, minecraftTerminalContainerConfig } from "../terminal.js";
+import { minecraftTerminalConfigFingerprint } from "../terminal.js";
 import { parseServerProperties, serializeServerProperties } from "./../serverProperties.js";
 import type { DockerState, ManagedServer } from "../../types.js";
-
-/** A cold pull of a Minecraft runtime image routinely takes minutes on a slow registry link. */
-const imagePullTimeoutMs = 10 * 60 * 1000;
 
 export type DockerContainerInspect = {
   Id?: string;
@@ -130,12 +129,18 @@ function dockerContainerMountValid(server: ManagedServer, details: DockerContain
  * container name drive that sibling's runtime, so every local Docker path checks ownership instead.
  * Returns the refusal message, or undefined when the container really belongs to this server.
  */
-function containerOwnershipRefusal(server: ManagedServer, labels: ContainerLabels, verb: "control" | "delete") {
+function containerOwnershipRefusal(server: ManagedServer, labels: ContainerLabels, verb: "control" | "delete" | "access") {
   if (isManagedContainerFor(labels, server.id)) return undefined;
   const cause = isManagedContainer(labels)
     ? "belongs to a different managed server"
     : "exists but is not managed by serverSENTINEL";
   return `Container ${dockerContainerName(server)} ${cause}; refusing to ${verb} it`;
+}
+
+export function assertDockerContainerOwnership(server: ManagedServer, details: DockerContainerInspect) {
+  const refusal = containerOwnershipRefusal(server, details.Config?.Labels, "access");
+  if (refusal) throw new Error(refusal);
+  return details;
 }
 
 async function removeDockerContainer(server: ManagedServer) {
@@ -154,61 +159,6 @@ export async function removeManagedDockerContainer(server: ManagedServer) {
   }
   await removeDockerContainer(server);
   return true;
-}
-
-function splitImage(image: string) {
-  // A digest-pinned reference keeps its whole digest as the tag. Splitting on the last colon would
-  // cut `sha256` off the hash and produce a reference the registry cannot resolve.
-  const digestIndex = image.lastIndexOf("@");
-  if (digestIndex > 0) {
-    return { fromImage: image.slice(0, digestIndex), tag: image.slice(digestIndex + 1) };
-  }
-  const slashIndex = image.lastIndexOf("/");
-  const colonIndex = image.lastIndexOf(":");
-  if (colonIndex > slashIndex) {
-    return { fromImage: image.slice(0, colonIndex), tag: image.slice(colonIndex + 1) };
-  }
-  return { fromImage: image, tag: "latest" };
-}
-
-/**
- * `POST /images/create` answers 200 and then streams progress, so a pull that fails on
- * authentication, a rate limit, or an unknown tag reports its reason inside a successful response.
- * Left unread, provisioning continued and failed later with "No such image", naming the wrong cause.
- */
-function assertDockerPullSucceeded(image: string, body: Buffer) {
-  for (const line of body.toString("utf8").split("\n")) {
-    if (!line.trim()) continue;
-    let parsed: { error?: string; errorDetail?: { message?: string } };
-    try {
-      parsed = JSON.parse(line) as typeof parsed;
-    } catch {
-      continue;
-    }
-    const message = parsed.errorDetail?.message ?? parsed.error;
-    if (message) throw new Error(`Could not pull Docker image ${image}: ${message}`);
-  }
-}
-
-async function ensureDockerImage(image: string) {
-  try {
-    await dockerRequest("GET", `/images/${encodeURIComponent(image)}/json`, 200);
-    return;
-  } catch (error) {
-    // Only a genuinely absent image is worth a pull. A daemon that is unreachable or unconfigured
-    // must surface that, not be retried as if the image were merely missing.
-    if (!dockerAvailable()) throw error;
-  }
-  logInfo({ image }, "Pulling Minecraft runtime image");
-  const { fromImage, tag } = splitImage(image);
-  const body = await dockerBufferRequest(
-    "POST",
-    `/images/create?fromImage=${encodeURIComponent(fromImage)}&tag=${encodeURIComponent(tag)}`,
-    200,
-    // A first pull of a Minecraft runtime image routinely outruns the default socket idle timeout.
-    imagePullTimeoutMs
-  );
-  assertDockerPullSucceeded(image, body);
 }
 
 export async function inspectDockerContainer(server: ManagedServer) {
@@ -249,17 +199,8 @@ export function dockerRuntimeConfigHash(server: ManagedServer, options: { includ
 }
 
 export async function reconcileDockerRestartPolicy(server: ManagedServer, details: DockerContainerInspect) {
-  if (!isManagedContainerFor(details.Config?.Labels, server.id)) return;
-  const restartPolicy = details.HostConfig?.RestartPolicy?.Name;
-  if (!restartPolicy || restartPolicy === "no") return;
-  await dockerJsonRequest(
-    "POST",
-    `/containers/${encodeURIComponent(dockerContainerName(server))}/update`,
-    { RestartPolicy: { Name: "no" } },
-    200
-  );
-  details.HostConfig = { ...details.HostConfig, RestartPolicy: { Name: "no" } };
-  logInfo({ ...serverLogFields(server), previousRestartPolicy: restartPolicy }, "Updated Minecraft runtime restart policy");
+  const previousRestartPolicy = await reconcileContainerRestartPolicy(server.id, dockerContainerName(server), details);
+  if (previousRestartPolicy) logInfo({ ...serverLogFields(server), previousRestartPolicy }, "Updated Minecraft runtime restart policy");
 }
 
 export async function detectedTotalMemory() {
@@ -359,15 +300,10 @@ export async function ensureDockerContainer(server: ManagedServer, preferredNetw
         Image: image,
         WorkingDir: workingDir,
         Cmd: ["sh", "-lc", command],
-        OpenStdin: true,
         StdinOnce: false,
-        AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
-        // Applies to every stop this container ever receives, including the one the daemon issues to
-        // all containers when Docker itself is restarted or upgraded, which serverSENTINEL never sees.
-        StopTimeout: config.minecraftStopTimeoutSeconds,
-        ...minecraftTerminalContainerConfig(),
+        ...minecraftContainerCreateSettings(),
         ExposedPorts: exposedPorts,
         HostConfig: {
           Privileged: false,
@@ -588,9 +524,12 @@ export async function dockerRecentLogs(server: ManagedServer, lineLimit = 200) {
     throw new Error("Console logs are not configured for this managed server instance");
   }
   const tail = consoleLogLineLimit(lineLimit, 200);
+  const details = await inspectDockerContainer(server);
+  if (!details?.Id) throw new Error("Runtime container was not found");
+  assertDockerContainerOwnership(server, details);
   const response = await dockerBufferRequest(
     "GET",
-    `/containers/${encodeURIComponent(dockerContainerName(server))}/logs?stdout=1&stderr=1&tail=${tail}`,
+    `/containers/${encodeURIComponent(details.Id)}/logs?stdout=1&stderr=1&tail=${tail}`,
     200,
     15000,
     undefined,
@@ -652,16 +591,19 @@ export async function dockerResourceStats(server: ManagedServer) {
   };
 }
 
-export function readFileRange(filePath: string, start: number, end: number) {
-  return new Promise<Buffer>((resolveRead, rejectRead) => {
+export async function readFileRange(filePath: string, start: number, end: number) {
+  const handle = await openContainedFile(filePath);
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error("Console log is not a file");
     const chunks: Buffer[] = [];
-    const stream = createReadStream(filePath, { start, end });
-    stream.on("data", (chunk) => {
+    const stream = handle.createReadStream({ start, end, autoClose: false });
+    for await (const chunk of stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    stream.on("error", rejectRead);
-    stream.on("end", () => resolveRead(Buffer.concat(chunks)));
-  });
+    }
+    return Buffer.concat(chunks);
+  } finally {
+    await handle.close();
+  }
 }
 
 export async function readLatestServerLog(server: ManagedServer, lineLimit?: number) {
@@ -680,14 +622,13 @@ export async function readLatestServerLog(server: ManagedServer, lineLimit?: num
 }
 
 export async function updateServerProperties(server: ManagedServer, updates: Record<string, string>) {
-  const path = ensureInsideServer(server, "server.properties");
   let values: Record<string, string> = {};
   try {
-    values = parseServerProperties(await readFile(path, "utf8"));
+    values = parseServerProperties(await readServerConfiguration(server, "server.properties"));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  await writeFile(path, serializeServerProperties({ ...values, ...updates }), "utf8");
+  await writeServerConfiguration(server, "server.properties", serializeServerProperties({ ...values, ...updates }));
 }
 
 export function normalizeJavaRuntime(server: ManagedServer) {

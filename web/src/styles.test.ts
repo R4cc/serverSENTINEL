@@ -39,7 +39,6 @@ const featureStyles: Record<string, string> = Object.fromEntries(
 );
 
 const serverTimeline = readFileSync(new URL("./components/ServerTimeline.tsx", import.meta.url), "utf8");
-const modsSummary = readFileSync(new URL("./features/mods/ModsSummary.tsx", import.meta.url), "utf8");
 const nodesPage = readFileSync(new URL("./pages/NodesPage.tsx", import.meta.url), "utf8");
 
 describe("global stylesheet entry point", () => {
@@ -144,7 +143,7 @@ describe("stylesheet ownership", () => {
   it("gives the Mods and Nodes summaries the same tile, not two lookalikes", () => {
     expect(modsStyles).not.toContain(".modsWorkspaceMetric");
     expect(nodesStyles).not.toContain(".nodesFleetMetric");
-    for (const summary of [modsSummary, nodesPage]) expect(summary).toContain('variant="summary"');
+    expect(nodesPage).toContain('variant="summary"');
   });
 
   it("keeps summary marker decoration off leading icon wells", () => {

@@ -11,13 +11,15 @@ import type { ManagedServer } from "../../types.js";
 
 const dockerRequestMock = vi.fn();
 const dockerJsonRequestMock = vi.fn();
+const dockerBufferRequestMock = vi.fn();
 const sendDockerContainerStdinLineMock = vi.fn();
 
 vi.mock("../../docker/dockerClient.js", () => ({
   dockerAvailable: () => true,
   dockerRequest: (...args: unknown[]) => dockerRequestMock(...args),
   dockerJsonRequest: (...args: unknown[]) => dockerJsonRequestMock(...args),
-  dockerBufferRequest: vi.fn(),
+  dockerBufferRequest: (...args: unknown[]) => dockerBufferRequestMock(...args),
+  dockerLogTailMaxBytes: 16 * 1024 * 1024,
   isMissingDockerNetworkError: () => false,
   sendDockerContainerStdinLine: (...args: unknown[]) => sendDockerContainerStdinLineMock(...args)
 }));
@@ -73,8 +75,24 @@ describe("local Docker container ownership", () => {
   beforeEach(() => {
     dockerRequestMock.mockReset();
     dockerJsonRequestMock.mockReset();
+    dockerBufferRequestMock.mockReset();
     sendDockerContainerStdinLineMock.mockReset();
     dockerRequestMock.mockResolvedValue(neighbourInspect());
+  });
+
+  it.each([{}, managedContainerLabels(neighbourId, "hash")])("refuses to read logs from an unmanaged or differently owned container", async (labels) => {
+    dockerRequestMock.mockResolvedValue({ ...neighbourInspect(), Config: { Labels: labels } });
+    const { dockerRecentLogs } = await import("./dockerContainers.js");
+    await expect(dockerRecentLogs(attacker)).rejects.toThrow("refusing to access");
+    expect(dockerBufferRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("pins log reads to the inspected owned container ID", async () => {
+    dockerRequestMock.mockResolvedValue({ ...neighbourInspect(), Config: { Labels: managedContainerLabels(ownerId, "hash") } });
+    dockerBufferRequestMock.mockResolvedValue(Buffer.from("normal output\n"));
+    const { dockerRecentLogs } = await import("./dockerContainers.js");
+    expect(await dockerRecentLogs(attacker)).toBe("normal output\n");
+    expect(dockerBufferRequestMock.mock.calls[0][1]).toContain("/containers/container-owned-by-neighbour/logs?");
   });
 
   it("refuses to send console commands to a container owned by another server", async () => {

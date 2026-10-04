@@ -58,7 +58,8 @@ export class OperationService {
     while (this.inFlight.size) await Promise.allSettled([...this.inFlight]);
   }
 
-  private track<T>(request: Promise<T>) {
+  /** Track jobs with their own durable lifecycle, including their settlement and cleanup. */
+  track<T>(request: Promise<T>) {
     this.inFlight.add(request);
     void request.then(() => this.inFlight.delete(request), () => this.inFlight.delete(request));
     return request;

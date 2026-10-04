@@ -17,6 +17,7 @@ export const nodeCapabilities = [
   "node.remove",
   "server.create",
   "server.update",
+  "server.configuration.read",
   "server.delete",
   "server.start",
   "server.stop",
@@ -154,8 +155,8 @@ export type ServerObservationSection = "status" | "stats" | "players" | "logs" |
 type NodeServerSpec = Pick<ManagedServer,
   | "id" | "nodeId" | "displayName" | "serverDir" | "storageName"
   | "dockerContainer" | "dockerImage" | "dockerMountSource" | "dockerWorkingDir" | "dockerPorts" | "managedPorts" | "javaArgs"
-  | "runtimeProfile"
->;
+  | "runtimeProfile" | "startOnNodeStart"
+> & { configurationRevision?: string };
 
 export type ServerLogCursor = {
   source: "logs/latest.log" | "docker";
@@ -192,7 +193,7 @@ export function compactNodeServerSpec(server: ManagedServer): NodeServerSpec {
   return {
     id: server.id, nodeId: server.nodeId, displayName: server.displayName, serverDir: server.serverDir, storageName: server.storageName,
     dockerContainer: server.dockerContainer, dockerImage: server.dockerImage, dockerMountSource: server.dockerMountSource, dockerWorkingDir: server.dockerWorkingDir,
-    dockerPorts: server.dockerPorts, managedPorts: server.managedPorts, javaArgs: server.javaArgs, runtimeProfile: server.runtimeProfile
+    dockerPorts: server.dockerPorts, managedPorts: server.managedPorts, javaArgs: server.javaArgs, runtimeProfile: server.runtimeProfile, startOnNodeStart: server.startOnNodeStart, configurationRevision: server.configurationRevision
   };
 }
 

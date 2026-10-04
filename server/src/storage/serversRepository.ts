@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { ManagedServer, ManagedServerPort, RestartRequiredChange, RestartRequiredModSnapshot, ScheduleStep, ScheduledExecution, ScheduledRun } from "../types.js";
 import type { StorageDatabase } from "./database.js";
@@ -28,7 +29,10 @@ type ServerRow = {
   restart_required_mod_baseline_json: string | null;
   created_at: string;
   updated_at: string;
+  configuration_revision?: string | null;
 };
+
+const serverSelection = "SELECT servers.*, (SELECT value FROM storage_metadata WHERE key = 'server-configuration-revision:' || servers.id) AS configuration_revision FROM servers";
 
 type PortRow = {
   server_id: string;
@@ -125,20 +129,16 @@ export class ServersRepository {
     private readonly normalize: (value: unknown) => ManagedServer
   ) {}
 
-  list(): ManagedServer[] {
-    return this.listRecords(true);
-  }
-
-  /** Runtime pollers need current configuration and intent, but never captured schedule logs. */
-  listForRuntime(): ManagedServer[] {
-    return this.listRecords(false);
-  }
+  /** Configuration includes schedule definitions, but no retained run history. */
+  list(): ManagedServer[] { return this.listRecords("configuration"); }
+  listWithScheduleSummaries(): ManagedServer[] { return this.listRecords("summary"); }
+  listForRuntime(): ManagedServer[] { return this.listRecords("runtime"); }
 
   exists(id: string): boolean {
     return Boolean(this.storage.connection.prepare<[string]>("SELECT 1 FROM servers WHERE id = ?").get(id));
   }
 
-  private listRecords(includeSchedules: boolean): ManagedServer[] {
+  private listRecords(projection: "runtime" | "configuration" | "summary"): ManagedServer[] {
     const database = this.storage.connection;
     const portsByServer = new Map<string, ManagedServerPort[]>();
     for (const row of database.prepare<[], PortRow>("SELECT * FROM managed_ports ORDER BY rowid").all()) {
@@ -146,68 +146,56 @@ export class ServersRepository {
       ports.push(portFromRow(row));
       portsByServer.set(row.server_id, ports);
     }
-
-    if (!includeSchedules) {
-      return database.prepare<[], ServerRow>("SELECT * FROM servers ORDER BY created_at, id").all()
-        .map((row) => this.serverFromRow(row, portsByServer.get(row.id) ?? [], []));
-    }
-
-    const runsBySchedule = new Map<string, ScheduledRun[]>();
-    for (const row of database.prepare<[], RunRow>(`
-      SELECT id, server_id, schedule_id, schedule_name, status, message, ran_at, details_json
-      FROM scheduled_runs ORDER BY ran_at DESC, id DESC
-    `).all()) {
-      const key = `${row.server_id}:${row.schedule_id}`;
-      const runs = runsBySchedule.get(key) ?? [];
-      if (runs.length < 25) runs.push(runFromRow(row));
-      runsBySchedule.set(key, runs);
-    }
-
     const schedulesByServer = new Map<string, ScheduledExecution[]>();
-    for (const row of database.prepare<[], ScheduleRow>("SELECT * FROM schedules ORDER BY rowid").all()) {
-      const schedules = schedulesByServer.get(row.server_id) ?? [];
-      schedules.push(scheduleFromRow(row, runsBySchedule.get(`${row.server_id}:${row.id}`) ?? []));
-      schedulesByServer.set(row.server_id, schedules);
+    if (projection !== "runtime") {
+      for (const row of database.prepare<[], ScheduleRow>("SELECT * FROM schedules ORDER BY rowid").all()) {
+        const schedules = schedulesByServer.get(row.server_id) ?? [];
+        schedules.push(scheduleFromRow(row, projection === "configuration" ? [] : this.scheduleRuns(row.server_id, row.id)));
+        schedulesByServer.set(row.server_id, schedules);
+      }
     }
-
-    return database.prepare<[], ServerRow>("SELECT * FROM servers ORDER BY created_at, id").all()
+    return database.prepare<[], ServerRow>(`${serverSelection} ORDER BY created_at, id`).all()
       .map((row) => this.serverFromRow(row, portsByServer.get(row.id) ?? [], schedulesByServer.get(row.id) ?? []));
   }
 
-  find(id: string): ManagedServer | undefined {
-    return this.findRecord(id, true);
-  }
+  find(id: string): ManagedServer | undefined { return this.findRecord(id, "configuration"); }
+  findWithScheduleSummaries(id: string): ManagedServer | undefined { return this.findRecord(id, "summary"); }
+  findForRuntime(id: string): ManagedServer | undefined { return this.findRecord(id, "runtime"); }
 
-  findForRuntime(id: string): ManagedServer | undefined {
-    return this.findRecord(id, false);
-  }
-
-  private findRecord(id: string, includeSchedules: boolean): ManagedServer | undefined {
+  private findRecord(id: string, projection: "runtime" | "configuration" | "summary"): ManagedServer | undefined {
     const database = this.storage.connection;
-    const row = database.prepare<[string], ServerRow>("SELECT * FROM servers WHERE id = ?").get(id);
+    const row = database.prepare<[string], ServerRow>(`${serverSelection} WHERE id = ?`).get(id);
     if (!row) return undefined;
-
     const ports = database.prepare<[string], PortRow>("SELECT * FROM managed_ports WHERE server_id = ? ORDER BY rowid").all(id).map(portFromRow);
-    if (!includeSchedules) return this.serverFromRow(row, ports, []);
-
-    const runsBySchedule = new Map<string, ScheduledRun[]>();
-    for (const runRow of database.prepare<[string], RunRow>(`
-      SELECT id, server_id, schedule_id, schedule_name, status, message, ran_at, details_json
-      FROM scheduled_runs WHERE server_id = ? ORDER BY ran_at DESC, id DESC
-    `).all(id)) {
-      const runs = runsBySchedule.get(runRow.schedule_id) ?? [];
-      if (runs.length < 25) runs.push(runFromRow(runRow));
-      runsBySchedule.set(runRow.schedule_id, runs);
-    }
-
-    const schedules = database.prepare<[string], ScheduleRow>("SELECT * FROM schedules WHERE server_id = ? ORDER BY rowid").all(id)
-      .map((scheduleRow) => scheduleFromRow(scheduleRow, runsBySchedule.get(scheduleRow.id) ?? []));
-
+    const schedules = projection === "runtime" ? [] : database.prepare<[string], ScheduleRow>("SELECT * FROM schedules WHERE server_id = ? ORDER BY rowid").all(id)
+      .map((schedule) => scheduleFromRow(schedule, projection === "configuration" ? [] : this.scheduleRuns(id, schedule.id)));
     return this.serverFromRow(row, ports, schedules);
   }
 
+  private scheduleRuns(serverId: string, scheduleId: string) {
+    // Apply LIMIT through the schedule index before materializing or parsing captured logs.
+    // SQLite removes logs for summaries, so they never cross into the application heap.
+    const details = `CASE
+      WHEN json_type(details_json, '$.steps') = 'array' THEN json_set(details_json, '$.steps', json((
+        SELECT json_group_array(json_remove(value, '$.logs')) FROM json_each(details_json, '$.steps')
+      ))) ELSE details_json END`;
+    return this.storage.connection.prepare<[string, string], RunRow>(`
+      SELECT id, server_id, schedule_id, schedule_name, status, message, ran_at, ${details} AS details_json
+      FROM (SELECT * FROM scheduled_runs WHERE server_id = ? AND schedule_id = ? ORDER BY ran_at DESC, id DESC LIMIT 25)
+      ORDER BY ran_at DESC, id DESC
+    `).all(serverId, scheduleId).map(runFromRow);
+  }
+
+  findScheduledRun(serverId: string, scheduleId: string, runId: string): ScheduledRun | undefined {
+    const row = this.storage.connection.prepare<[string, string, string, string, string], RunRow>(`
+      SELECT * FROM scheduled_runs WHERE server_id = ? AND schedule_id = ? AND id = ?
+        AND id IN (SELECT id FROM scheduled_runs WHERE server_id = ? AND schedule_id = ? ORDER BY ran_at DESC, id DESC LIMIT 25)
+    `).get(serverId, scheduleId, runId, serverId, scheduleId);
+    return row ? runFromRow(row) : undefined;
+  }
+
   private serverFromRow(row: ServerRow, managedPorts: ManagedServerPort[], schedules: ScheduledExecution[]): ManagedServer {
-    return this.normalize({
+    const server = this.normalize({
       id: row.id,
       nodeId: row.node_id,
       displayName: row.display_name,
@@ -236,6 +224,8 @@ export class ServersRepository {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     });
+    if (row.configuration_revision) server.configurationRevision = row.configuration_revision;
+    return server;
   }
 
   create(value: ManagedServer) {
@@ -264,6 +254,7 @@ export class ServersRepository {
       }
       this.upsertServer(database, server, true);
       this.syncPorts(database, server);
+      this.storage.setMetadata(`server-configuration-revision:${server.id}`, randomUUID());
     });
   }
 
@@ -271,8 +262,8 @@ export class ServersRepository {
     return this.storage.transaction((database) => {
       const deleted = database.prepare("DELETE FROM servers WHERE id = ?").run(id).changes > 0;
       if (deleted) {
-        database.prepare("DELETE FROM storage_metadata WHERE key IN (?, ?, ?)")
-          .run(`mod-update-plan:${id}`, `mod-preferences-revision:${id}`, `mod-installed-snapshot:${id}`);
+        database.prepare("DELETE FROM storage_metadata WHERE key IN (?, ?, ?, ?)")
+          .run(`mod-update-plan:${id}`, `mod-preferences-revision:${id}`, `mod-installed-snapshot:${id}`, `server-configuration-revision:${id}`);
       }
       return deleted;
     });

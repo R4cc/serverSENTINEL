@@ -400,19 +400,8 @@ export function ModHealthPanel({
   if (!updatePlan && loading) return <ModHealthPanelSkeleton contentPlural={contentPlural} />;
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
   const contentSingularTitle = contentPlural === "plugins" ? "Plugin" : "Mod";
-  if (!updatePlan) return (
-    <OverviewCard
-      className="modsHealthPanel modUpdatesCard"
-      title={`${contentSingularTitle} updates`}
-      actions={<ModUpdatesRefreshButton contentPlural={contentPlural} onRefresh={onRefresh} />}
-    >
-      <OverviewCardState title="Updates not checked" message={`Check for updates or open ${contentPluralTitle} for details.`} icon={<AppIcon name="refresh" />} onClick={onOpenMods} ariaLabel={`Open ${contentPluralTitle}, updates not checked`} />
-    </OverviewCard>
-  );
-
-  const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
-  const fullyChecked = updatePlan.counts.totalInstalled > 0 && updatePlan.counts.unknown === 0 && updatePlan.counts.blockedUpdates === 0;
-  const availableUpdates = updatePlan.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review");
+  const updateCount = updatePlan ? updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates : 0;
+  const availableUpdates = updatePlan?.updates.filter((entry) => entry.status === "safe_update" || entry.status === "needs_review") ?? [];
   const visibleUpdates = availableUpdates.slice(0, overviewSupportCardSlotCount);
   const remainingUpdates = Math.max(0, availableUpdates.length - visibleUpdates.length);
   const actions = (
@@ -423,7 +412,7 @@ export function ModHealthPanel({
 
   return (
     <OverviewCard
-      className={`modsHealthPanel modUpdatesCard${updateCount === 0 && fullyChecked ? " modUpdatesCard--healthy" : ""}`}
+      className="modsHealthPanel modUpdatesCard"
       title={`${contentSingularTitle} updates`}
       actions={actions}
       loading={loading}
@@ -432,12 +421,10 @@ export function ModHealthPanel({
         {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
         {updateCount === 0 ? (
           <OverviewCardState
-            title={modUpdateRefreshResultMessage(updatePlan, contentPlural)}
-            message={updatePlan.counts.unknown > 0 ? `Open ${contentPluralTitle} to review unchecked versions.` : updatePlan.counts.blockedUpdates > 0 ? "Available versions are not recommended for this server." : undefined}
-            icon={<AppIcon name={fullyChecked ? "check" : "search"} />}
-            tone={fullyChecked ? "success" : "neutral"}
+            title="No updates found"
+            icon={<AppIcon name="check" />}
             onClick={onOpenMods}
-            ariaLabel={fullyChecked ? `Open ${contentPluralTitle}, no ${contentSingular} updates available` : `Open ${contentPluralTitle}, ${modUpdateRefreshResultMessage(updatePlan, contentPlural).toLowerCase()}`}
+            ariaLabel={`Open ${contentPluralTitle}, no updates found`}
           />
         ) : visibleUpdates.map((entry) => (
           <button
@@ -525,13 +512,7 @@ function ModHealthPanelSkeleton({
 export function modUpdateRefreshResultMessage(updatePlan: ModUpdatePlan, contentPlural: "mods" | "plugins") {
   const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
   const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
-  if (updatePlan.counts.totalInstalled === 0) return `No ${contentPlural} installed`;
-  if (updateCount === 0) {
-    if (updatePlan.counts.unknown > 0) return "Some versions could not be checked";
-    if (updatePlan.counts.blockedUpdates > 0) return "No recommended updates";
-    return "Everything is up to date";
-  }
-  return `${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} available`;
+  return updateCount === 0 ? "No updates found" : `${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} found`;
 }
 
 type UpcomingScheduleSnapshot = {

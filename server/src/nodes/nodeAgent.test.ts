@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import http from "node:http";
+import type WebSocket from "ws";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ManagedServer, ServerRuntimeProfile } from "../types.js";
+import { managedContainerLabels } from "../runtime/containerLabels.js";
 import { config } from "../config.js";
 import { readZipEntryBuffer } from "../zipArchive.js";
 
@@ -45,6 +48,62 @@ describe("node reconnect backoff", () => {
 });
 
 describe("node lifecycle action exclusion", () => {
+  it("excludes lifecycle actions while a node file mutation is awaiting I/O", async () => {
+    const server = testServer();
+    await mkdir(server.serverDir, { recursive: true });
+    await writeFile(join(server.serverDir, "config.txt"), "old");
+    const writing = hooks.handleCommand("files.write", { server, path: "config.txt", content: "updated" });
+    await expect(hooks.handleCommand("server.start", { server })).rejects.toMatchObject({ statusCode: 409, code: "SERVER_MUTATION_IN_PROGRESS" });
+    await writing;
+    expect(await readFile(join(server.serverDir, "config.txt"), "utf8")).toBe("updated");
+    await expect(hooks.handleCommand("files.write", { server, path: "config.txt", content: "retry" })).resolves.toMatchObject({ ok: true });
+  });
+
+  it("keeps applied settings recoverable when Docker creation fails after the file commit", async () => {
+    const server = { ...testServer(), dockerContainer: "serversentinel-survival" };
+    await mkdir(server.serverDir, { recursive: true });
+    await writeFile(join(server.serverDir, "server.properties"), "server-port=25565\nquery.port=25566\n");
+    mockDockerAvailable = true;
+    const inspected = { Id: "minecraft-container-id", State: { Running: false, Status: "exited" }, Config: { Labels: managedContainerLabels(server.id, "stale"), OpenStdin: true, AttachStdin: true } };
+    let removed = false;
+    mockDockerRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === "GET" && path.startsWith("/containers/")) {
+        if (removed) throw new Error("No such container");
+        return inspected;
+      }
+      if (method === "DELETE") { removed = true; return {}; }
+      if (path.startsWith("/images/")) return {};
+      throw new Error(`Unexpected Docker request ${method} ${path}`);
+    });
+    mockDockerJsonRequest.mockRejectedValue(new Error("container creation failed"));
+    await expect(hooks.handleCommand("server.update", { server, input: { dockerPorts: "25567:25565/tcp,25566:25566/udp", displayName: "Updated" } })).rejects.toThrow("container creation failed");
+    const recovery = await hooks.handleCommand("server.configuration.read", { server }) as { server: ManagedServer };
+    expect(recovery.server).toMatchObject({ id: server.id, displayName: "Updated", dockerPorts: "25567:25565/tcp,25566:25566/udp" });
+    const observation = await hooks.handleCommand("server.observe", { items: [{ server, sections: ["status"] }] }) as { items: Array<{ status: { configurationUpdate: unknown } }> };
+    expect(observation.items[0].status.configurationUpdate).toMatchObject({ server: { displayName: "Updated" } });
+  });
+  it("does not disclose files outside a node server through overview configuration", async () => {
+    const server = testServer();
+    const outside = join(tempRoot, "outside");
+    await mkdir(server.serverDir, { recursive: true });
+    await mkdir(outside);
+    await writeFile(join(outside, "secret"), "node credentials");
+    await symlink(outside, join(server.serverDir, "server.properties"), process.platform === "win32" ? "junction" : "dir");
+    const response = await hooks.handleCommand("server.observe", { items: [{ server, sections: ["overviewFiles"] }] }) as { items: Array<{ overviewFiles: { properties: string; eula: string } }> };
+    expect(response.items[0].overviewFiles).toEqual({ properties: "", eula: "" });
+    expect(JSON.stringify(response)).not.toContain("node credentials");
+  });
+
+  it.skipIf(process.platform === "win32")("does not disclose host credentials through a symlinked node properties file", async () => {
+    const server = testServer();
+    await mkdir(server.serverDir, { recursive: true });
+    const outside = join(tempRoot, "node-secret");
+    await writeFile(outside, "node credentials");
+    await symlink(outside, join(server.serverDir, "server.properties"));
+    const response = await hooks.handleCommand("server.observe", { items: [{ server, sections: ["overviewFiles"] }] }) as { items: Array<{ overviewFiles: { properties: string } }> };
+    expect(response.items[0].overviewFiles.properties).toBe("");
+  });
+
   it("isolates a failed inspection from independent sections and healthy servers in a batch", async () => {
     const failed = { ...testServer("failed"), dockerContainer: "failed-container" };
     const healthy = { ...testServer("healthy"), id: "00000000-0000-4000-8000-000000000002", dockerContainer: "healthy-container" };
@@ -197,6 +256,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  hooks.closeStorage();
+  vi.restoreAllMocks();
   delete process.env.SERVERSENTINEL_DATA_DIR;
   delete process.env.HOSTNAME;
   vi.resetModules();
@@ -283,6 +344,21 @@ describe("remote node create and Docker command safety", () => {
 });
 
 describe("remote node recent server logs", () => {
+  it.each([{}, managedContainerLabels("another-server", "hash")])("refuses a live console for a container this server does not own", async (labels) => {
+    mockDockerAvailable = true;
+    mockDockerRequest.mockResolvedValue({ Id: "panel-or-node", Config: { Labels: labels } });
+    const request = vi.spyOn(http, "request");
+    const send = vi.fn();
+    const done = vi.fn();
+    const stop = hooks.startConsoleStream(testServer(), "stream", { readyState: 1, send } as unknown as WebSocket, done);
+    await vi.waitFor(() => expect(done).toHaveBeenCalledOnce());
+    expect(request).not.toHaveBeenCalled();
+    expect(send.mock.calls.map(([message]) => JSON.parse(message))).toContainEqual(expect.objectContaining({
+      type: "streamData", event: expect.objectContaining({ type: "unavailable", message: expect.stringContaining("refusing to access") })
+    }));
+    stop();
+  });
+
   it("prefers a bounded tail of logs/latest.log", async () => {
     const server = testServer();
     const logsDir = join(server.serverDir, "logs");
@@ -318,6 +394,7 @@ describe("remote node recent server logs", () => {
 
   it("falls back to recent Docker logs when latest.log is unavailable", async () => {
     const server = testServer();
+    mockDockerRequest.mockResolvedValue({ Id: "owned-container-id", Config: { Labels: managedContainerLabels(server.id, "hash") } });
     mockDockerBufferRequest.mockResolvedValue(Buffer.from("[12:00:00] [Server thread/INFO]: Alex joined the game\n", "utf8"));
 
     const result = await hooks.handleCommand("server.logs.recent", { server }) as { text: string; source: string };
@@ -326,12 +403,18 @@ describe("remote node recent server logs", () => {
     expect(result.text).toContain("Alex joined the game");
     expect(mockDockerBufferRequest).toHaveBeenCalledWith(
       "GET",
-      "/containers/serversentinel-00000000-0000-4000-8000-000000000001/logs?stdout=1&stderr=1&tail=300",
+      "/containers/owned-container-id/logs?stdout=1&stderr=1&tail=300",
       200,
       15000,
       undefined,
       16 * 1024 * 1024
     );
+  });
+
+  it.each([{}, managedContainerLabels("another-server", "hash")])("refuses Docker log fallback for a container this server does not own", async (labels) => {
+    mockDockerRequest.mockResolvedValue({ Id: "panel-or-sibling", Config: { Labels: labels } });
+    await expect(hooks.handleCommand("server.logs.recent", { server: testServer() })).rejects.toThrow("refusing to access");
+    expect(mockDockerBufferRequest).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { OperationService } from "../operations/operationService.js";
 import type { ManagedServer, OperationRecord, ScheduledExecution } from "../types.js";
 
 const operationsRepository = {
@@ -20,12 +21,16 @@ const exportCoordinator = {
   withMutation: vi.fn(async (_serverId: string, action: () => Promise<unknown>) => action())
 };
 
+const operationService = new OperationService(operationsRepository as never, {
+  markRestartRequired: vi.fn(), clearRestartRequired: vi.fn(), errorDetails: String
+});
+
 vi.mock("../appServices.js", () => ({
-  services: { operationsRepository, serversRepository, exportCoordinator, playerSnapshotCoordinator: { freshOnlineCount } },
+  services: { operationService, operationsRepository, serversRepository, exportCoordinator, playerSnapshotCoordinator: { freshOnlineCount } },
   runtimeForServer: () => ({ serverStatus, sendConsoleCommand, serverLogs: async () => ({ text: "" }) })
 }));
 
-const { executeMatchedSchedule, resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, scheduleRequiresRunningServer, scheduleStartupWasValidated, startScheduleExecution, waitUntilServerIsEmpty } = await import("./engine.js");
+const { executeMatchedSchedule, resumableScheduleWaitOperations, resumeWaitingScheduleExecutions, scheduleFromBody, scheduleRequiresRunningServer, scheduleStartupWasValidated, startScheduleExecution, stopScheduleExecutions, waitUntilServerIsEmpty } = await import("./engine.js");
 const { activeScheduleExecutions, cancelActiveScheduleRunsForSchedule, runningSchedules } = await import("./activeRuns.js");
 
 const server = { id: "server-1", nodeId: "local", displayName: "Survival" } as ManagedServer;
@@ -52,6 +57,45 @@ describe("scheduled run bookkeeping", () => {
     exportCoordinator.withMutation.mockImplementation(async (_serverId: string, action: () => Promise<unknown>) => action());
     operationsRepository.find.mockReturnValue(undefined);
     serversRepository.find.mockReturnValue(undefined);
+  });
+
+  it("drains a scheduled job through its durable settlement", async () => {
+    let finish!: (value: { docker: { running: boolean } }) => void;
+    serverStatus.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    startScheduleExecution(server, schedule);
+    const drained = vi.fn();
+    const draining = operationService.drain().then(drained);
+    await vi.waitFor(() => expect(serverStatus).toHaveBeenCalled());
+    expect(drained).not.toHaveBeenCalled();
+    finish({ docker: { running: true } });
+    await draining;
+    expect(operationsRepository.succeed).toHaveBeenCalledOnce();
+    expect(activeScheduleExecutions.size).toBe(0);
+    expect(runningSchedules.size).toBe(0);
+  });
+
+  it("preserves a player-wait checkpoint and drains its execution on shutdown", async () => {
+    freshOnlineCount.mockResolvedValue(2);
+    startScheduleExecution(server, { ...schedule, steps: [{ type: "command", command: "save-all", delaySeconds: 0 }], onlyWhenNoPlayers: true, waitForPlayersToLeave: true });
+    await vi.waitFor(() => expect(freshOnlineCount).toHaveBeenCalled());
+    stopScheduleExecutions();
+    await operationService.drain();
+    expect(activeScheduleExecutions.size).toBe(0);
+    expect(runningSchedules.size).toBe(0);
+    expect(serversRepository.recordScheduledRun).not.toHaveBeenCalled();
+    expect(operationsRepository.succeed).not.toHaveBeenCalled();
+    expect(operationsRepository.cancel).not.toHaveBeenCalled();
+    expect(operationsRepository.create.mock.results[0].value.result).toMatchObject({ phase: "waiting" });
+  });
+
+  it("settles a delayed command as interrupted without sending it during shutdown", async () => {
+    startScheduleExecution(server, { ...schedule, steps: [{ type: "command", command: "save-all", delaySeconds: 3600 }] });
+    await vi.waitFor(() => expect([...activeScheduleExecutions.values()][0]?.waitingUntil).toBeDefined());
+    stopScheduleExecutions();
+    await operationService.drain();
+    expect(sendConsoleCommand).not.toHaveBeenCalled();
+    expect(operationsRepository.cancel).toHaveBeenCalledWith("operation-1", "Interrupted by panel shutdown");
+    expect(serversRepository.recordScheduledRun).toHaveBeenCalledWith(server.id, schedule.id, expect.objectContaining({ status: "cancelled" }));
   });
 
   it("clears the active run and resolves the operation after a successful run", async () => {

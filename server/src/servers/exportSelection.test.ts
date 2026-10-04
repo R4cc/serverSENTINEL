@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { categoryTargets, collectServerCategories, isMissingPathError, measureWorldSize, normalizeExportSelection, worldDirectories } from "./exportSelection.js";
 import { inaccessibleServerRootMessage, missingParentMessage, missingPathMessage } from "../core.js";
 import type { ManagedServer } from "../types.js";
+import { config } from "../config.js";
 
 function server(runtimeType: "fabric" | "paper"): ManagedServer {
   return {
@@ -101,6 +102,65 @@ describe("export selection", () => {
     } as unknown as Parameters<typeof collectServerCategories>[0];
 
     await expect(collectServerCategories(runtime, server("fabric"), ["world"])).rejects.toThrow(/offline/);
+  });
+
+  it("bounds concurrent file validation, follows nested directories and omits vanished files", async () => {
+    let active = 0;
+    let peak = 0;
+    const runtime = {
+      resolveExistingPath: async (_server: ManagedServer, path: string) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        try {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          if (path.endsWith("/deleted")) throw Object.assign(new Error("gone"), { code: "ENOENT" });
+          return path;
+        } finally { active -= 1; }
+      },
+      listFiles: async (_server: ManagedServer, path: string) => ({ path, entries: path === "/world" ? [
+        { name: "nested", path: "/world/nested", type: "directory", size: 0 },
+        ...Array.from({ length: 65 }, (_, index) => ({ name: `file-${index}`, path: `/world/file-${index}`, type: "file", size: 2 })),
+        { name: "deleted", path: "/world/deleted", type: "file", size: 100 }
+      ] : path === "/world/nested" ? [{ name: "level.dat", path: "/world/nested/level.dat", type: "file", size: 3 }] : [] }),
+      readFile: async () => ({ content: "level-name=world\n" })
+    } as unknown as Parameters<typeof collectServerCategories>[0];
+    const [world] = await collectServerCategories(runtime, server("fabric"), ["world"]);
+    expect(peak).toBe(32);
+    expect(active).toBe(0);
+    expect(world.totalBytes).toBe(133);
+    expect(world.files).toHaveLength(66);
+    expect(world.files.map((file) => file.relativePath)).toEqual(world.files.map((file) => file.relativePath).sort((a, b) => a.localeCompare(b)));
+    expect(world.files.find((file) => file.relativePath === "world/nested/level.dat")?.sourcePath).toBe("/world/nested/level.dat");
+  });
+
+  it("settles the current batch before rejecting a real path-safety error", async () => {
+    let active = 0;
+    let resolved = 0;
+    const runtime = {
+      resolveExistingPath: async (_server: ManagedServer, path: string) => {
+        if (!path.startsWith("/mods/")) return path;
+        if (path === "/mods/0") throw new Error("Path escapes the managed server directory through a symlink");
+        active += 1;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        active -= 1;
+        resolved += 1;
+        return path;
+      },
+      listFiles: async (_server: ManagedServer, path: string) => ({ path, entries: Array.from({ length: 65 }, (_, index) => ({ name: String(index), path: `/mods/${index}`, type: "file", size: 1 })) })
+    } as unknown as Parameters<typeof collectServerCategories>[0];
+    await expect(collectServerCategories(runtime, server("fabric"), ["content"])).rejects.toThrow(/symlink/);
+    expect(active).toBe(0);
+    expect(resolved).toBe(31);
+  });
+
+  it("retains the entry and nesting limits when walking a selection", async () => {
+    const runtime = {
+      resolveExistingPath: async (_server: ManagedServer, path: string) => path,
+      listFiles: async (_server: ManagedServer, path: string) => ({ path, entries: Array.from({ length: config.fileDownloadMaxEntries + 1 }, (_, index) => ({ name: String(index), path: `/mods/${index}`, type: "file", size: 1 })) })
+    } as unknown as Parameters<typeof collectServerCategories>[0];
+    await expect(collectServerCategories(runtime, server("fabric"), ["content"])).rejects.toThrow(/more than .* files/);
+    runtime.listFiles = async (_server, path) => ({ path, entries: [{ name: "nested", path: `${path}/nested`, type: "directory", size: 0 }] });
+    await expect(collectServerCategories(runtime, server("fabric"), ["content"])).rejects.toThrow(/nested deeper than 64/);
   });
 
   it("normalizes a selection into canonical order and rejects unknown input", () => {

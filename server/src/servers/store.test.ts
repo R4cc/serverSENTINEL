@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { findScheduledRun, publicSchedule, scheduledRunSummary } from "./store.js";
-import type { ManagedServer, ScheduledExecution, ScheduledRun } from "../types.js";
+import { publicSchedule, scheduledRunSummary } from "./store.js";
+import type { ScheduledExecution, ScheduledRun } from "../types.js";
 
 const scheduleId = "22222222-2222-2222-2222-222222222222";
 
@@ -86,12 +86,4 @@ describe("scheduled run projections", () => {
     }
   });
 
-  it("finds a stored run with its console output intact", () => {
-    const stored = run("run-1", ["saved"]);
-    const server = { id: "server-1", schedules: [schedule([stored])] } as ManagedServer;
-
-    expect(findScheduledRun(server, scheduleId, "run-1")?.details?.steps?.[0].logs).toEqual(["saved"]);
-    expect(findScheduledRun(server, scheduleId, "missing")).toBeUndefined();
-    expect(findScheduledRun(server, "other-schedule", "run-1")).toBeUndefined();
-  });
 });

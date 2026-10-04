@@ -91,7 +91,7 @@ export function sessionExpired(session: Pick<Session, "createdAt">, now = Date.n
   return !Number.isFinite(createdAt) || now - createdAt > sessionMaxAgeSeconds * 1000;
 }
 
-export async function currentUserFromCookie(cookieHeader?: string) {
+export function currentSessionUser(cookieHeader?: string) {
   const sessionId = parseCookies(cookieHeader).get(sessionCookieName);
   if (!sessionId) return null;
   const session = services.sessionsRepository.find(sessionId);
@@ -101,6 +101,10 @@ export async function currentUserFromCookie(cookieHeader?: string) {
     return null;
   }
   return services.usersRepository.findById(session.userId) ?? null;
+}
+
+export async function currentUserFromCookie(cookieHeader?: string) {
+  return currentSessionUser(cookieHeader);
 }
 
 async function requireAuthenticated(request: AuthenticatedRequest) {

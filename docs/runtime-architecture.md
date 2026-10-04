@@ -74,6 +74,12 @@ A path that is absent is not an export failure; any other filesystem or node err
 
 Export is started from a single server's properties page and the API is given that one server id, though the endpoints still accept a list. The selected server must be stopped: a world copied from a running server can contain half-written chunks, so this is a refusal rather than a warning, checked both when the request arrives and again inside the operation. Import stays on the Nodes page because an archive can carry several servers and needs a node to restore onto; imports always create new servers and are restored onto the panel's own node, since the panel writes the files to its own servers directory.
 
+## Mutation and operation boundaries
+
+A shared per-server reservation covers lifecycle actions (including scheduled actions and crash recovery), managed content, settings, deletion, and file mutations. It is acquired before mutable-state checks and held through background extraction or upload completion. Nested helpers share their reservation. Independent editor saves retain per-file serialization and may proceed concurrently, while lifecycle and settings changes exclude them. Conflicting requests receive `SERVER_MUTATION_IN_PROGRESS` and can be retried after the current change finishes.
+
+Stored operation records retain internal diagnostics for support. Public list, detail, and cancellation responses omit diagnostic summaries and host paths; results require the corresponding feature permission and captured console output additionally requires `console.view`. Export download links remain restricted to the operation owner.
+
 ## Upgrade floor
 
 The direct upgrade floor is application version 1.6.2, SQLite schema 20, export schema 4, and panel-node protocol 3.1. Older databases must first be opened by version 1.6.2 so its migrations can complete.

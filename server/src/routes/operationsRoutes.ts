@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
 import { apiErrorResponse, badRequest } from "../http/errors.js";
 import { optionalBoundedInteger, validateOperationId, validateServerId } from "../http/validation.js";
 import type { OperationRecord, OperationStatus, Permission, StoredUser } from "../types.js";
+import { publicOperation } from "../operations/publicOperation.js";
 
 type OperationListFilters = {
   serverId?: string;
@@ -22,24 +23,6 @@ export type OperationsRoutesContext = {
   };
   cancelOperation?: (operation: OperationRecord, message: string) => OperationRecord | undefined | Promise<OperationRecord | undefined>;
 };
-
-/**
- * An export operation's result carries the artifact's absolute path on the panel host and a
- * download URL. `/api/servers/:id/exports` already blanks the URL for anyone who did not create the
- * export; these endpoints returned the raw record to every `servers.view` holder, so the two
- * disagreed on the boundary. The download route enforces ownership either way — this stops the
- * listing from handing out the location.
- */
-function withoutForeignArtifactLocation(operation: OperationRecord, user: StoredUser): OperationRecord {
-  const result = operation.result;
-  if (operation.type !== "export.run" || !result || typeof result !== "object") return operation;
-  if (operation.createdBy && operation.createdBy === user.id) return operation;
-  const { artifactPath: _artifactPath, artifact, ...rest } = result as Record<string, unknown>;
-  const redactedArtifact = artifact && typeof artifact === "object"
-    ? (({ downloadUrl: _downloadUrl, ...artifactRest }) => artifactRest)(artifact as Record<string, unknown>)
-    : artifact;
-  return { ...operation, result: { ...rest, ...(artifact === undefined ? {} : { artifact: redactedArtifact }) } };
-}
 
 function optionalOperationStatus(value: unknown): OperationStatus | undefined {
   if (value === undefined) return undefined;
@@ -61,7 +44,7 @@ export function registerOperationsRoutes(app: FastifyInstance, context: Operatio
         serverId,
         status,
         limit
-      }).map((operation) => withoutForeignArtifactLocation(operation, user))
+      }).map((operation) => publicOperation(operation, user))
     };
   });
 
@@ -72,7 +55,7 @@ export function registerOperationsRoutes(app: FastifyInstance, context: Operatio
       return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
     }
     if (operation.serverId) await context.assertServerExists(operation.serverId);
-    return withoutForeignArtifactLocation(operation, user);
+    return publicOperation(operation, user);
   });
 
   /**
@@ -102,6 +85,6 @@ export function registerOperationsRoutes(app: FastifyInstance, context: Operatio
     if (!operation) {
       return reply.code(404).send(apiErrorResponse("OPERATION_NOT_FOUND", "Operation not found"));
     }
-    return operation;
+    return publicOperation(operation, user);
   });
 }

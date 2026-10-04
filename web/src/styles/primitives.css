@@ -479,6 +479,11 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 }
 .actionMenuPopover--end { right: 0; }
 .actionMenuPopover--start { left: 0; }
+.actionMenuPopover--portal {
+  z-index: 200;
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
+}
 .contextMenuPopover {
   position: fixed;
   z-index: 200;

@@ -135,11 +135,6 @@ export function publicSchedule(serverId: string, schedule: ScheduledExecution): 
   };
 }
 
-export function findScheduledRun(server: ManagedServer, scheduleId: string, runId: string) {
-  const schedule = server.schedules?.find((candidate) => candidate.id === scheduleId);
-  return schedule?.recentRuns?.find((run) => run.id === runId);
-}
-
 function safeNextCronRun(cron: string) {
   try {
     return nextCronRun(cron);
@@ -245,6 +240,10 @@ export async function readServers() {
   return services.serversRepository.list();
 }
 
+export async function listScheduleServers() {
+  return services.serversRepository.listWithScheduleSummaries();
+}
+
 export function listManagedServers() {
   return readServers();
 }
@@ -253,11 +252,13 @@ export async function listRuntimeServers() {
   return services.serversRepository.listForRuntime();
 }
 
-export async function getServer(serverId?: string) {
+export async function getServer(serverId?: string, options: { scheduleSummaries?: boolean } = {}) {
   if (serverId !== undefined) {
     validateServerId(serverId);
   }
-  const server = serverId ? services.serversRepository.find(serverId) : (await listManagedServers())[0];
+  const server = serverId
+    ? options.scheduleSummaries ? services.serversRepository.findWithScheduleSummaries(serverId) : services.serversRepository.find(serverId)
+    : (options.scheduleSummaries ? await listScheduleServers() : await listManagedServers())[0];
   if (!server) {
     // A plain Error here fell through the expected-user-error allowlist and became a 500
     // INTERNAL_ERROR, which is also what a client polling a server another tab just deleted saw.

@@ -3,7 +3,10 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { openContainedFile, openContainedReadStream, readContainedFile, statContainedFile } from "./core.js";
+import { openContainedFile, openContainedReadStream, readContainedFile } from "./core.js";
+import { readConsoleLogTail } from "./consoleLogs.js";
+import { readFileRange } from "./runtime/local/dockerContainers.js";
+import { copyServerFile } from "./runtime/local/fileService.js";
 
 /**
  * A managed workload can write inside its own server root, so it can replace a validated path with a
@@ -42,13 +45,6 @@ describe("contained file reads", () => {
     expect((await readContainedFile(join(root, "server.properties"))).toString("utf8")).toBe("level-name=world\n");
   });
 
-  it("reports the size of the inode it opened", async () => {
-    const root = await temporaryRoot();
-    await writeFile(join(root, "log.txt"), "0123456789", "utf8");
-
-    expect((await statContainedFile(join(root, "log.txt"))).size).toBe(10);
-  });
-
   it("streams a regular file and closes its handle", async () => {
     const root = await temporaryRoot();
     await writeFile(join(root, "world.dat"), "payload", "utf8");
@@ -72,11 +68,22 @@ describe("contained file reads", () => {
     const root = await temporaryRoot();
     await mkdir(join(root, "config"));
 
-    await expect(statContainedFile(join(root, "config"))).rejects.toMatchObject({ code: "EINVAL" });
+    await expect(readContainedFile(join(root, "config"))).rejects.toMatchObject({ code: "EINVAL" });
   });
 });
 
 describeSymlinks("contained file reads against a swapped path", () => {
+  it("refuses log-tail and range reads and file duplication through a swapped symlink", async () => {
+    const root = await temporaryRoot();
+    await mkdir(join(root, "server"));
+    await writeFile(join(root, "secret"), "host credentials");
+    const swapped = join(root, "server", "latest.log");
+    await symlink(join(root, "secret"), swapped);
+    await expect(readConsoleLogTail(swapped, 100)).rejects.toMatchObject({ code: "ELOOP" });
+    await expect(readFileRange(swapped, 0, 15)).rejects.toMatchObject({ code: "ELOOP" });
+    await expect(copyServerFile({ serverDir: join(root, "server") }, swapped, join(root, "server"), "copy.log")).rejects.toMatchObject({ code: "ELOOP" });
+  });
+
   it("refuses to open a symlink pointing outside the server root", async () => {
     const root = await temporaryRoot();
     const outside = join(root, "outside-secret");
