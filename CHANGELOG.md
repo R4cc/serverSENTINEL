@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.10.6 - 2026-10-04
+
+- Redesigned Properties with a continuous liquid glass configuration surface, aligned runtime fields, and responsive memory and network sections.
+- Made server deletion an expandable action and streamlined exports and the unsaved-changes controls.
+
 ## 26.10.5 - 2026-10-03
 
 - Hid internal operation diagnostics and restricted operation results and captured console output to the corresponding permissions.

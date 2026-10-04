@@ -45,7 +45,7 @@ function renderForm(disabled = false, disabledReason = "", saving = false) {
 }
 
 describe("ServerEditForm", () => {
-  it("renders distinct configuration cards with one advanced disclosure and no idle actions", () => {
+  it("keeps configuration fields in one form with an advanced disclosure and no idle actions", () => {
     const html = renderForm();
 
     expect(html.match(/propertiesSettingsSurface/g)).toHaveLength(1);
@@ -91,7 +91,7 @@ describe("ServerEditForm", () => {
     const formEnd = html.indexOf("</form>");
 
     expect(html).toContain("propertiesExportZone");
-    expect(html).toContain("propertiesSideCards--paired");
+    expect(html).toContain("propertiesMaintenance");
     expect(html).toContain("Export server");
     expect(html).toContain(`aria-label="Exports for ${server.displayName}"`);
     expect(html).not.toContain(`Download ${server.displayName} as a ZIP archive`);

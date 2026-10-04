@@ -1,5 +1,6 @@
 import { useJavaMemory, useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Archive, ChevronDown, Cpu, Network, Power, Save, Settings2, SlidersHorizontal, Trash2, Undo2 } from "lucide-react";
 import { defaultDockerImageForMinecraftVersion, serverRuntimeDefinition } from "@serversentinel/contracts";
 import { dockerContainerNameInputPattern, runtimeJarFilenameInputPattern } from "../utils/inputPatterns";
 import type { ManagedServer } from "../types";
@@ -290,21 +291,22 @@ export function ServerEditForm({
   return (
     <div className="serverPropertiesWorkspace">
       <form id={formId} onSubmit={submitForm} onChange={() => setDirty(true)} className="serverPropertiesForm">
-        {disabled && disabledReason && !saving && <Banner tone="warning" title={disabledReason} />}
+        {disabled && disabledReason && !saving && <Banner tone="warning" compact title={disabledReason} />}
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
-          <Surface density="flush" className="propertiesSettingsSurface">
+          <Surface density="flush" material="glass" className="propertiesSettingsSurface" aria-label="Server configuration">
             <section className="propertiesSection propertiesSectionGeneral">
               <PanelHeader
-                title="General"
-                description="Server identity, version, and automatic startup."
+                title={<><span className="propertiesSectionIcon" aria-hidden="true"><Settings2 /></span>General</>}
+                description="Identity, runtime versions, and startup."
+                actions={<StatusBadge>{runtime.displayName}</StatusBadge>}
               />
               <div className="propertiesSectionBody">
                 <div className="propertiesFieldGrid three">
                   <FormField htmlFor="properties-display-name" label="Display name" required>
                     <input id="properties-display-name" name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
                   </FormField>
-                  <FormField htmlFor="properties-minecraft-version" label="Minecraft version" description={<>Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</>}>
+                  <FormField htmlFor="properties-minecraft-version" label="Minecraft version" descriptionPlacement="after" description={<>Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</>}>
                     <select id="properties-minecraft-version" name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
                       setMinecraftVersion(event.target.value);
                       setRuntimeVersion("");
@@ -316,7 +318,7 @@ export function ServerEditForm({
                       )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
                     </select>
                   </FormField>
-                  <FormField htmlFor="properties-runtime-version" label={runtime.versionLabel} description={<>Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</>}>
+                  <FormField htmlFor="properties-runtime-version" label={runtime.versionLabel} descriptionPlacement="after" description={<>Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</>}>
                     <select id="properties-runtime-version" name="runtimeVersion" value={runtimeVersion} onChange={(event) => setRuntimeVersion(event.target.value)}>
                       {runtime.managedProvisioning && <option value="">Latest stable</option>}
                       {runtimeVersion && (!runtime.managedProvisioning || !currentRuntimeVersionListed) && <option value={runtimeVersion}>{runtimeVersion}</option>}
@@ -327,6 +329,10 @@ export function ServerEditForm({
                   </FormField>
                 </div>
                 <label className="propertiesStartupToggle">
+                  <span className="propertiesStartupCopy">
+                    <Power aria-hidden="true" />
+                    <strong>Start when node starts</strong>
+                  </span>
                   <span className="switch">
                     <input
                       name="startOnNodeStart"
@@ -336,80 +342,84 @@ export function ServerEditForm({
                     />
                     <span className="slider" />
                   </span>
-                  <span>
-                    <strong>Start when node starts</strong>
-                  </span>
                 </label>
               </div>
             </section>
 
-            <section className="propertiesSection propertiesSectionResources">
-              <PanelHeader
-                title="Resources"
-                description="Set how much memory Minecraft can use."
-              />
-              <section className="resourceStepSection propertiesMemorySection" aria-label="Minecraft memory">
-                <div className="memoryRangeLayout">
-                  <MemoryRangeControl
-                    bounds={memoryBounds}
-                    minimumHeapGb={minimumHeapGb}
-                    maximumHeapGb={maximumHeapGb}
-                    onMinimumHeapChange={updateMinimumHeap}
-                    onMaximumHeapChange={updateMaximumHeap}
-                  />
-                  <div className="memoryNumberFields">
-                    <MemoryNumberInput
-                      id="edit-minimum-heap"
-                      label="Minimum heap (Xms)"
-                      value={minimumHeapGb}
-                      min={memoryBounds.min}
-                      max={maximumHeapGb}
-                      onChange={updateMinimumHeap}
+            <div className="propertiesSecondarySections">
+              <section className="propertiesSection propertiesSectionResources">
+                <PanelHeader
+                  title={<><span className="propertiesSectionIcon" aria-hidden="true"><Cpu /></span>Resources</>}
+                  description="Memory reserved for the Minecraft runtime."
+                />
+                <section className="resourceStepSection propertiesMemorySection" aria-label="Minecraft memory">
+                  <div className="memoryRangeLayout">
+                    <MemoryRangeControl
+                      bounds={memoryBounds}
+                      minimumHeapGb={minimumHeapGb}
+                      maximumHeapGb={maximumHeapGb}
+                      onMinimumHeapChange={updateMinimumHeap}
+                      onMaximumHeapChange={updateMaximumHeap}
                     />
-                    <span className="memoryHeapDivider" aria-hidden="true">/</span>
-                    <MemoryNumberInput
-                      id="edit-maximum-heap"
-                      label="Maximum heap (Xmx)"
-                      value={maximumHeapGb}
-                      min={minimumHeapGb}
-                      max={memoryBounds.max}
-                      onChange={updateMaximumHeap}
-                    />
+                    <div className="memoryNumberFields">
+                      <MemoryNumberInput
+                        id="edit-minimum-heap"
+                        label="Minimum heap (Xms)"
+                        value={minimumHeapGb}
+                        min={memoryBounds.min}
+                        max={maximumHeapGb}
+                        onChange={updateMinimumHeap}
+                      />
+                      <MemoryNumberInput
+                        id="edit-maximum-heap"
+                        label="Maximum heap (Xmx)"
+                        value={maximumHeapGb}
+                        min={minimumHeapGb}
+                        max={memoryBounds.max}
+                        onChange={updateMaximumHeap}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="memoryRangeMeta">
-                  <span>Recommended: {memoryBounds.recommendedMin} GB - {memoryBounds.recommendedMax} GB</span>
-                  <span>Total available: {memoryBounds.max} GB</span>
-                </div>
-                {memoryWarning && (
-                  <Banner tone="warning" compact title="Leave some RAM for the host" message="Using nearly all available memory may cause host instability." />
-                )}
-                <input type="hidden" name="javaArgs" value={javaArgs} />
+                  <div className="memoryRangeMeta">
+                    <span>Recommended <strong>{memoryBounds.recommendedMin}-{memoryBounds.recommendedMax} GB</strong></span>
+                    <span>Host capacity <strong>{memoryBounds.max} GB</strong></span>
+                  </div>
+                  {memoryWarning && (
+                    <Banner tone="warning" compact title="Leave some RAM for the host" message="Using nearly all available memory may cause host instability." />
+                  )}
+                  <input type="hidden" name="javaArgs" value={javaArgs} />
+                </section>
               </section>
-            </section>
 
-            <section className="propertiesSection propertiesSectionNetwork">
-              <PanelHeader
-                title="Network"
-                description="Connection ports for players and server monitoring."
-              />
-              <MinecraftPortsSection
-                serverPort={serverPort}
-                queryPort={queryPort}
-                onServerPortChange={setServerPort}
-                onQueryPortChange={setQueryPort}
-                serverPortValid={serverPortValid}
-                queryPortValid={queryPortValid}
-                portConflict={portConflict}
-              />
-            </section>
+              <section className="propertiesSection propertiesSectionNetwork">
+                <PanelHeader
+                  title={<><span className="propertiesSectionIcon" aria-hidden="true"><Network /></span>Network</>}
+                  description="Connection ports for players and monitoring."
+                />
+                <MinecraftPortsSection
+                  serverPort={serverPort}
+                  queryPort={queryPort}
+                  onServerPortChange={setServerPort}
+                  onQueryPortChange={setQueryPort}
+                  serverPortValid={serverPortValid}
+                  queryPortValid={queryPortValid}
+                  portConflict={portConflict}
+                />
+                <div className="propertiesNetworkProtocols">
+                  <span><span className="propertiesProtocol">TCP</span>Minecraft clients</span>
+                  <span><span className="propertiesProtocol">UDP</span>Query metrics</span>
+                </div>
+              </section>
+            </div>
 
             <details className="resourceDisclosure advancedResourceDisclosure propertiesDisclosure">
               <summary>
+                <span className="propertiesSectionIcon" aria-hidden="true"><SlidersHorizontal /></span>
                 <span className="propertiesDisclosureCopy">
                   <strong>Advanced</strong>
                   <small>Container runtime, Java arguments, and additional ports.</small>
                 </span>
+                <ChevronDown className="propertiesDisclosureChevron" aria-hidden="true" />
               </summary>
               <div className="advancedResourceBody propertiesAdvancedBody">
                 {/* The same field primitive the General section uses, so a label,
@@ -477,13 +487,13 @@ export function ServerEditForm({
           </Surface>
         </fieldset>
         {(dirty || saving) && (
-          <div className="propertiesSaveDock" aria-live="polite">
+          <div className="propertiesSaveDock uiGlassSurface uiGlassSurface--floating" aria-live="polite">
             <div className="propertiesSaveDockCopy">
               <strong>Unsaved changes</strong>
-              <span>Apply or discard your server configuration changes.</span>
             </div>
             <div className="propertiesActionButtons">
               <Button variant="secondary" onClick={resetFormState} disabled={saving}>
+                <Undo2 aria-hidden="true" />
                 Discard
               </Button>
               <Button
@@ -492,7 +502,7 @@ export function ServerEditForm({
                 aria-busy={saving}
                 reserveLabel="Saving changes"
               >
-                {saving ? <><Spinner size="xs" tone="current" />Saving changes</> : "Save changes"}
+                {saving ? <><Spinner size="xs" tone="current" />Saving changes</> : <><Save aria-hidden="true" />Save changes</>}
               </Button>
             </div>
           </div>
@@ -501,7 +511,7 @@ export function ServerEditForm({
 
       {/* Both live outside the settings form so their own buttons cannot submit it. */}
       {(exportPanel || dangerZone) && (
-        <div className={`propertiesSideCards${exportPanel && dangerZone ? " propertiesSideCards--paired" : ""}`}>
+        <div className="propertiesMaintenance">
           {exportPanel && <div className="propertiesExportZone">{exportPanel}</div>}
           {dangerZone && <div className="propertiesDangerZone">{dangerZone}</div>}
         </div>
@@ -554,9 +564,9 @@ export function ExportServerPanel({
   const retainedIsPrevious = Boolean(artifact && latest && artifact.operationId !== latest.id);
 
   return (
-    <Surface className="propertiesSideCard exportPanel" aria-label={`Exports for ${server.displayName}`}>
+    <section className="propertiesSideCard exportPanel" aria-label={`Exports for ${server.displayName}`}>
       <PanelHeader
-        title="Exports"
+        title={<><span className="propertiesSectionIcon" aria-hidden="true"><Archive /></span>Exports</>}
         actions={<StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>}
       />
       {latest ? (
@@ -633,7 +643,7 @@ export function ExportServerPanel({
           </Button>
         )}
       </div>
-    </Surface>
+    </section>
   );
 }
 
@@ -654,34 +664,37 @@ export function DeleteServerPanel({
   }, [server.id]);
 
   return (
-    <Surface className="propertiesSideCard dangerPanel">
-      <PanelHeader
-        title="Danger zone"
-        description="Deleting a server is permanent and cannot be undone."
-      />
+    <details className="propertiesSideCard dangerPanel propertiesDeleteDisclosure">
+      <summary>
+        <span className="propertiesSectionIcon" aria-hidden="true"><Trash2 /></span>
+        <span className="propertiesDisclosureCopy">
+          <strong>Delete server</strong>
+          <small>Deleting a server is permanent and cannot be undone.</small>
+        </span>
+        <ChevronDown className="propertiesDisclosureChevron" aria-hidden="true" />
+      </summary>
       <form onSubmit={onSubmit} className="appForm">
         <fieldset disabled={disabled}>
-        <label>
-          Type server name to confirm
-          <input
-            name="confirmName"
-            placeholder={server.displayName}
-            value={confirmName}
-            onChange={(event) => setConfirmName(event.target.value)}
-            required
-            autoComplete="off"
-            aria-invalid={confirmName.length > 0 && !deleteConfirmed}
-            aria-describedby="delete-server-confirm-hint"
-          />
-          <small id="delete-server-confirm-hint" className="fieldHint">Enter “{server.displayName}” exactly to enable deletion.</small>
-        </label>
-        <label className="checkLine dangerCheck">
-          <input name="deleteFiles" type="checkbox" />
-          Also delete this server's files from disk
-        </label>
-        <Button type="submit" variant="critical" disabled={!deleteConfirmed} title={deleteConfirmed ? "Permanently delete this server" : `Enter “${server.displayName}” exactly to enable deletion`}>Delete server</Button>
+          <FormField htmlFor="delete-server-confirm" label="Type server name to confirm" descriptionPlacement="after" description={<span id="delete-server-confirm-hint">Enter “{server.displayName}” exactly to enable deletion.</span>}>
+            <input
+              id="delete-server-confirm"
+              name="confirmName"
+              placeholder={server.displayName}
+              value={confirmName}
+              onChange={(event) => setConfirmName(event.target.value)}
+              required
+              autoComplete="off"
+              aria-invalid={confirmName.length > 0 && !deleteConfirmed}
+              aria-describedby="delete-server-confirm-hint"
+            />
+          </FormField>
+          <label className="checkLine dangerCheck">
+            <input name="deleteFiles" type="checkbox" />
+            Also delete this server's files from disk
+          </label>
+          <Button type="submit" variant="critical" disabled={!deleteConfirmed} title={deleteConfirmed ? "Permanently delete this server" : `Enter “${server.displayName}” exactly to enable deletion`}><Trash2 aria-hidden="true" />Delete server</Button>
         </fieldset>
       </form>
-    </Surface>
+    </details>
   );
 }
