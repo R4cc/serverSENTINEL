@@ -26,7 +26,7 @@ function payloadError(payload: ApiPayload) {
   return payload && typeof payload.error === "object" && payload.error !== null ? payload.error : undefined;
 }
 
-export async function apiErrorFromResponse(response: Response, fallback?: string) {
+async function apiErrorFromResponse(response: Response, fallback?: string) {
   const payload = await response.json().catch(() => ({})) as ApiPayload;
   const error = payloadError(payload);
   const message = typeof error?.message === "string"

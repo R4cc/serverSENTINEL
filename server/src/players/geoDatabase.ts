@@ -28,12 +28,12 @@ import { extractFirstTarMember } from "./tarEntries.js";
  * or unexpected download costs an installation an error message rather than its geography.
  */
 
-export const geoLite2Edition = "GeoLite2-City";
+const geoLite2Edition = "GeoLite2-City";
 export const geoDatabaseFilename = `${geoLite2Edition}.mmdb`;
 /** MaxMind publishes twice a week; checking daily is courteous and still never more than a day behind. */
-export const geoDatabaseRefreshIntervalMs = 24 * 60 * 60 * 1000;
+const geoDatabaseRefreshIntervalMs = 24 * 60 * 60 * 1000;
 /** Below this age the file on disk is considered current and no request is made at all. */
-export const geoDatabaseFreshMs = 3 * 24 * 60 * 60 * 1000;
+const geoDatabaseFreshMs = 3 * 24 * 60 * 60 * 1000;
 const downloadTimeoutMs = 10 * 60 * 1000;
 /** GeoLite2-City is around 60 MB expanded; anything far past that is not the archive we asked for. */
 const maxDatabaseBytes = 512 * 1024 * 1024;

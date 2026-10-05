@@ -30,7 +30,8 @@
     "demo:reset": "npm --workspace server run demo:reset",
     "screenshots:update": "node scripts/update-readme-screenshots.mjs",
     "start": "npm --workspace server run start",
-    "test:ui-consistency": "npm run build && node scripts/ui-consistency-smoke.mjs"
+    "test:ui-consistency": "npm run build && node scripts/ui-consistency-smoke.mjs",
+    "test:ui-spacing": "npm run build && node scripts/icon-banner-spacing-smoke.mjs"
   },
   "devDependencies": {
     "@fontsource-variable/cascadia-code": "^5.3.0",

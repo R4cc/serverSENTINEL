@@ -78,7 +78,7 @@ export async function archiveModSnapshot(server: ManagedServer, snapshots: ModHi
   }
 }
 
-export function sameModState(left: ModHistorySnapshot | null | undefined, right: ModHistorySnapshot | null | undefined) {
+function sameModState(left: ModHistorySnapshot | null | undefined, right: ModHistorySnapshot | null | undefined) {
   return !left || !right ? !left && !right : Boolean(left.sha1 && left.sha1 === right.sha1 && left.filename === right.filename && left.enabled === right.enabled);
 }
 

@@ -18,7 +18,7 @@ export type StoredModHistoryEntry = Omit<ModHistoryEntry, "before" | "after" | "
   after: ModHistorySnapshot | null;
 };
 
-export const modHistoryRetention = 500;
+const modHistoryRetention = 500;
 
 export class ModHistoryRepository {
   constructor(private readonly storage: StorageDatabase) {}
