@@ -4,7 +4,6 @@
      load, or a machine without the bundled files, shifts the layout as little as
      possible. */
   --font-sans: "Switzer", Inter, "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-page-heading: var(--font-sans);
   --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --swiss-white: #ffffff;
   --swiss-black: #000000;
@@ -143,7 +142,6 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
-  --space-7: 48px;
   --sidebar-width: 280px;
   --sidebar-collapsed-width: 76px;
   --sidebar-rail-size: 44px;

@@ -277,12 +277,19 @@ describe("retired class families stay retired", () => {
     "nodeDetailsBody",
     "overflowButton",
     "overflowDropdown",
-    "overflowMenuContainer"
+    "overflowMenuContainer",
+    "applicationModsSummary",
+    "applicationModsMetric",
+    "playerMapGrid"
   ])("has no %s rules left in any stylesheet", (retired) => {
     const owners = Object.entries(featureStyles)
       .filter(([, sheet]) => sheet.includes(retired))
       .map(([name]) => name);
     expect(owners).toEqual([]);
+  });
+
+  it.each(["--font-page-heading", "--space-7"])("has no unused %s token left", (retired) => {
+    expect(tokenStyles).not.toContain(retired);
   });
 
   it("keeps the console command line in the console stylesheet", () => {

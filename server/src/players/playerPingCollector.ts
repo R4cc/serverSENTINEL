@@ -5,8 +5,8 @@ import { playerGeoKey } from "../storage/playerGeoRepository.js";
 import type { PlayerLoginAddress } from "./loginAddresses.js";
 import type { PlayerConnectionObservation, PlayerTcpConnection } from "./dockerPlayerConnections.js";
 
-export const playerPingPollMs = 10_000;
-export const playerPingAverageWindowMs = 60_000;
+const playerPingPollMs = 10_000;
+const playerPingAverageWindowMs = 60_000;
 const playerPingAverageMaxSamples = 6;
 const maxFreshPingAgeMs = 15_000;
 

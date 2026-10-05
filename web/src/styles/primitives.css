@@ -771,8 +771,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .applicationFilesDetailsPanel { display: grid; }
 
 .applicationModsSkeleton { display: flex; flex-direction: column; gap: 14px; }
-.applicationModsSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.applicationModsMetric { height: 76px; }
 .applicationModsToolbar { min-height: var(--toolbar-min-height); }
 .applicationModsTable { flex: 1 1 auto; min-height: 0; align-content: start; }
 
@@ -811,7 +809,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   .applicationScheduleGrid { grid-template-columns: minmax(0, 1fr); }
   .applicationFilesDetailsPanel,
   .applicationScheduleGrid > .applicationSkeletonPanel:last-child { display: none; }
-  .applicationModsSummary { grid-template-columns: 1fr; }
   .applicationFilesToolbar,
   .applicationModsToolbar { align-items: stretch; flex-direction: column; }
   .applicationSkeletonButtonGroup,
