@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { PassThrough, type Readable } from "node:stream";
 import type WebSocket from "ws";
 import type { ManagedNode } from "../types.js";
-import { assertNodeSupports, decodeTransferChunk, encodeTransferChunk, nodeAdvertisesFeature, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolVersion, normalizeNodeToPanelMessage, requireNodeCapability, structuredNodeProtocolError } from "./protocol.js";
+import { assertNodeSupports, decodeTransferChunk, nodeAdvertisesFeature, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolVersion, normalizeNodeToPanelMessage, requireNodeCapability, structuredNodeProtocolError } from "./protocol.js";
+import { NodeReadBackpressure, sendTransferBody } from "./transport.js";
 import type { NodeCancelMessage, NodeCapability, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamEvent, NodeStreamStartMessage, NodeStreamStopMessage, NodeTransferCancelMessage, NodeTransferFinishMessage, NodeTransferReadyMessage, NodeTransferResultMessage, NodeTransferStartMessage } from "./protocol.js";
 
 const heartbeatIntervalMs = 15_000;
@@ -22,7 +23,7 @@ type ConnectedNode = {
     command: NodeCapability;
     resolve: (value: unknown) => void;
     reject: (error: Error) => void;
-    timeout: NodeJS.Timeout;
+    cleanup: () => void;
   }>;
   streams: Map<string, {
     onData: (event: NodeStreamEvent) => void;
@@ -32,11 +33,7 @@ type ConnectedNode = {
   transfers: Map<string, TransferState>;
   lastPongAt: number;
   lastPingAt: number;
-  /**
-   * When the panel paused this socket because a download consumer fell behind. Nothing is read from
-   * the socket while it is set, pongs included, so the heartbeat must not read the pong clock.
-   */
-  readPausedAt: number | undefined;
+  backpressure: NodeReadBackpressure;
 };
 
 type TransferState = {
@@ -63,7 +60,8 @@ export class PanelNodeConnections {
     this.disconnect(node.id);
     if (previous && previous.socket.readyState === previous.socket.OPEN) previous.socket.close(4000, "Replaced by a newer node session");
     const connectedAt = Date.now();
-    const connected: ConnectedNode = { node, socket, pending: new Map(), streams: new Map(), transfers: new Map(), lastPongAt: connectedAt, lastPingAt: connectedAt, readPausedAt: undefined };
+    const backpressure = new NodeReadBackpressure(socket, () => { connected.lastPongAt = Date.now(); });
+    const connected: ConnectedNode = { node, socket, pending: new Map(), streams: new Map(), transfers: new Map(), lastPongAt: connectedAt, lastPingAt: connectedAt, backpressure };
     this.connected.set(node.id, connected);
     socket.on("message", (raw, isBinary) => {
       // A replaced socket can still deliver buffered frames while its close handshake finishes.
@@ -83,7 +81,7 @@ export class PanelNodeConnections {
     if (socket && connected.socket !== socket) return;
     this.connected.delete(nodeId);
     for (const pending of connected.pending.values()) {
-      clearTimeout(pending.timeout);
+      pending.cleanup();
       pending.reject(structuredNodeProtocolError("node_offline", `Node ${connected.node.name} disconnected before ${pending.command} completed`));
     }
     connected.pending.clear();
@@ -122,7 +120,8 @@ export class PanelNodeConnections {
     }
   }
 
-  async request(node: ManagedNode, command: NodeCapability, payload?: unknown, timeoutMs = 15000) {
+  async request(node: ManagedNode, command: NodeCapability, payload?: unknown, timeoutMs = 15000, signal?: AbortSignal) {
+    if (signal?.aborted) throw structuredNodeProtocolError("command_cancelled", `Node command ${command} was cancelled`);
     const connected = this.connected.get(node.id);
     if (!connected || connected.socket.readyState !== connected.socket.OPEN) {
       throw structuredNodeProtocolError("node_offline", `Node ${node.name} is offline`);
@@ -145,19 +144,28 @@ export class PanelNodeConnections {
       throw structuredNodeProtocolError("message_too_large", "Protocol 3.1 control messages are limited to 8 MiB; use a streamed transfer");
     }
     return new Promise<unknown>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        connected.pending.delete(id);
-        if (nodeAdvertisesFeature(connected.node, "request-cancel") && connected.socket.readyState === connected.socket.OPEN) {
-          const cancel: NodeCancelMessage = { type: "cancel", id, reason: `Command ${command} timed out` };
-          connected.socket.send(JSON.stringify(cancel));
-        }
-        reject(structuredNodeProtocolError("command_timeout", `Node command ${command} timed out`));
-      }, timeoutMs);
-      timeout.unref?.();
-      connected.pending.set(id, { command, resolve, reject, timeout });
-      void this.send(connected.socket, serialized).catch((error) => {
+      const cleanup = () => {
         clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
         connected.pending.delete(id);
+      };
+      const cancel = (code: string, reason: string) => {
+        if (!connected.pending.has(id)) return;
+        cleanup();
+        if (nodeAdvertisesFeature(connected.node, "request-cancel") && connected.socket.readyState === connected.socket.OPEN) {
+          const message: NodeCancelMessage = { type: "cancel", id, reason };
+          void this.send(connected.socket, JSON.stringify(message)).catch(() => undefined);
+        }
+        reject(structuredNodeProtocolError(code, reason));
+      };
+      const onAbort = () => cancel("command_cancelled", `Node command ${command} was cancelled`);
+      const timeout = setTimeout(() => cancel("command_timeout", `Node command ${command} timed out`), timeoutMs);
+      timeout.unref?.();
+      connected.pending.set(id, { command, resolve, reject, cleanup });
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) { onAbort(); return; }
+      void this.send(connected.socket, serialized).catch((error) => {
+        cleanup();
         reject(structuredNodeProtocolError("command_failed", error.message));
       });
     });
@@ -242,20 +250,9 @@ export class PanelNodeConnections {
     try {
       await this.send(connected.socket, JSON.stringify(start));
       await Promise.race([ready, result.then(() => { throw new Error("Transfer completed before it became ready"); })]);
-      const hash = createHash("sha256");
-      let sent = 0;
-      for await (const raw of source) {
-        const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-        for (let offset = 0; offset < buffer.byteLength; offset += 256 * 1024) {
-          const chunk = buffer.subarray(offset, offset + 256 * 1024);
-          sent += chunk.byteLength;
-          if (sent > size) throw new Error("Upload exceeded its declared size");
-          hash.update(chunk);
-          await this.send(connected.socket, encodeTransferChunk(id, chunk), true);
-        }
-      }
-      if (sent !== size) throw new Error(`Upload declared ${size} bytes but streamed ${sent}`);
-      const finish: NodeTransferFinishMessage = { type: "transferFinish", id, size: sent, sha256: hash.digest("hex") };
+      const observed = await sendTransferBody(source, id, size, (frame) => this.send(connected.socket, frame, true));
+      if (observed.size !== size) throw new Error(`Upload declared ${size} bytes but streamed ${observed.size}`);
+      const finish: NodeTransferFinishMessage = { type: "transferFinish", id, ...observed };
       await this.send(connected.socket, JSON.stringify(finish));
       return await result;
     } catch (error) {
@@ -285,7 +282,7 @@ export class PanelNodeConnections {
     // A consumer that abandons the download never drains it, so a socket paused for backpressure
     // would stay paused for the rest of the session.
     stream.once("close", () => {
-      this.resumeReads(connected);
+      connected.backpressure.resume(stream);
       if (connected.transfers.has(id)) this.cancelTransfer(connected, id, "Download consumer closed");
     });
     let readyResolve!: (message: NodeTransferReadyMessage) => void;
@@ -323,10 +320,8 @@ export class PanelNodeConnections {
         // A node can push chunks faster than the HTTP client drains them. `write` returning false means
         // the PassThrough is over its high-water mark, so stop reading the node socket until it drains
         // instead of letting the difference accumulate in panel memory.
-        if (!transfer.stream.write(payload) && connected.readPausedAt === undefined) {
-          connected.readPausedAt = Date.now();
-          connected.socket.pause();
-          transfer.stream.once("drain", () => this.resumeReads(connected));
+        if (!transfer.stream.write(payload) && connected.backpressure.pause(transfer.stream)) {
+          transfer.stream.once("drain", () => connected.backpressure.resume(transfer.stream!));
         }
       } catch (error) {
         connected.socket.close(1002, "Invalid binary transfer frame");
@@ -407,8 +402,7 @@ export class PanelNodeConnections {
     if (message.type !== "response") return;
     const pending = connected.pending.get(message.id);
     if (!pending) return;
-    connected.pending.delete(message.id);
-    clearTimeout(pending.timeout);
+    pending.cleanup();
     if (message.ok) {
       pending.resolve(message.result);
       return;
@@ -449,18 +443,6 @@ export class PanelNodeConnections {
     if (connected.socket.readyState === connected.socket.OPEN) connected.socket.send(JSON.stringify({ type: "transferCancel", id, reason }));
   }
 
-  /**
-   * Resumes reads that were paused for backpressure. The pong clock restarts from here: no pong could
-   * be read while the socket was paused, so the age it accumulated describes the panel's own consumer
-   * rather than the node, and charging it to the node terminates a healthy session.
-   */
-  private resumeReads(connected: ConnectedNode) {
-    if (connected.readPausedAt === undefined) return;
-    connected.readPausedAt = undefined;
-    connected.lastPongAt = Date.now();
-    if (connected.socket.readyState === connected.socket.OPEN) connected.socket.resume();
-  }
-
   private send(socket: WebSocket, payload: string | Buffer, binary = false) {
     return new Promise<void>((resolve, reject) => socket.send(payload, { binary }, (error) => error ? reject(error) : resolve()));
   }
@@ -474,7 +456,7 @@ export class PanelNodeConnections {
         // export can hold that pause open for longer than the timeout. The pong clock describes the
         // panel's own consumer there, not the node, so only the readyState check applies. Pings keep
         // going out either way, which is what the node's own watchdog measures.
-        const stalePong = connected.readPausedAt === undefined && now - connected.lastPongAt >= heartbeatTimeoutMs;
+        const stalePong = !connected.backpressure.paused && now - connected.lastPongAt >= heartbeatTimeoutMs;
         if (connected.socket.readyState !== connected.socket.OPEN || stalePong) {
           connected.socket.terminate();
           this.disconnect(nodeId, connected.socket);

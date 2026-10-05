@@ -11,6 +11,7 @@ import {
   normalizePanelToNodeMessage,
   normalizePanelWelcome,
   encodeTransferChunk,
+  createTransferChunkEncoder,
   decodeTransferChunk
 } from "./protocol.js";
 
@@ -89,11 +90,36 @@ describe("node protocol v3.1", () => {
   });
 
   it("negotiates only known 3.1 transport features", () => {
-    expect(normalizePanelWelcome({ type: "welcome", nodeId: "node-1", accepted: true, protocolVersion: "3.1", features: ["binary-transfer"] })).toMatchObject({
+    expect(normalizePanelWelcome({ type: "welcome", nodeId: "node-1", accepted: true, protocolVersion: "3.1", features: [...nodeFeatures] })).toMatchObject({
       protocolVersion: "3.1",
-      features: ["binary-transfer"]
+      features: [...nodeFeatures]
     });
     expect(() => normalizePanelWelcome({ type: "welcome", nodeId: "node-1", accepted: true, features: ["future-feature"] })).toThrow("unsupported features");
+  });
+
+  it("requires the current protocol and both transport features only for accepted welcomes", () => {
+    const welcome = { type: "welcome", nodeId: "node-1", accepted: true, protocolVersion: nodeProtocolVersion, features: [...nodeFeatures] };
+    expect(() => normalizePanelToNodeMessage({ ...welcome, features: ["binary-transfer"] })).toThrow("missing required protocol features");
+    expect(() => normalizePanelWelcome({ ...welcome, features: undefined })).toThrow("missing required protocol features");
+    expect(() => normalizePanelWelcome({ ...welcome, protocolVersion: "3.0" })).toThrow("unsupported protocol 3.0");
+    expect(() => normalizePanelWelcome({ ...welcome, protocolVersion: undefined })).toThrow("unsupported protocol unknown");
+    expect(normalizePanelWelcome({ type: "welcome", accepted: false, error: "Authentication failed" })).toMatchObject({ accepted: false, error: "Authentication failed" });
+    expect(normalizePanelWelcome({ ...welcome, features: [...nodeFeatures, ...nodeFeatures] }).features).toEqual([...nodeFeatures]);
+  });
+
+  it("reuses a transfer header without changing 3.1 frame bytes or sharing mutable frames", () => {
+    const id = "00112233-4455-6677-8899-aabbccddeeff";
+    const encode = createTransferChunkEncoder(id);
+    const first = encode(Buffer.from("first"));
+    const second = encode(Buffer.from("second"));
+    expect(first).toEqual(Buffer.concat([Buffer.from("0100112233445566778899aabbccddeeff", "hex"), Buffer.from("first")]));
+    first.fill(0);
+    expect(decodeTransferChunk(second)).toEqual({ id, payload: Buffer.from("second") });
+    expect(decodeTransferChunk(encode(Buffer.alloc(0)))).toEqual({ id, payload: Buffer.alloc(0) });
+    expect(decodeTransferChunk(encode(Buffer.alloc(256 * 1024))).payload.byteLength).toBe(256 * 1024);
+    expect(() => encode(Buffer.alloc(256 * 1024 + 1))).toThrow("256 KiB");
+    expect(() => createTransferChunkEncoder(`${id}deadbeef`)).toThrow("UUID");
+    expect(() => createTransferChunkEncoder(id.replaceAll("-", ""))).toThrow("UUID");
   });
 
   it("encodes bounded binary chunks with raw UUID transfer ids", () => {
