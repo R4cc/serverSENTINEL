@@ -370,13 +370,18 @@ export function normalizePanelWelcome(value: unknown): PanelWelcome {
   const accepted = requiredBoolean(welcome.accepted, "accepted");
   const rawFeatures = welcome.features === undefined ? [] : requiredStringArray(welcome.features, "features");
   if (rawFeatures.some((feature) => !nodeFeatureSet.has(feature))) throw new Error("Panel welcome contains unsupported features");
+  const protocolVersion = optionalString(welcome.protocolVersion, "protocolVersion");
+  if (accepted) {
+    if (protocolVersion !== nodeProtocolVersion) throw new Error(`Panel negotiated unsupported protocol ${protocolVersion ?? "unknown"}`);
+    if (nodeFeatures.some((feature) => !rawFeatures.includes(feature))) throw new Error("Panel welcome is missing required protocol features");
+  }
   return {
     type: "welcome",
     nodeId: accepted ? requiredString(welcome.nodeId, "nodeId") : optionalString(welcome.nodeId, "nodeId") ?? "",
     nodeSecret: optionalString(welcome.nodeSecret, "nodeSecret"),
     accepted,
-    protocolVersion: optionalString(welcome.protocolVersion, "protocolVersion"),
-    features: rawFeatures as NodeFeature[],
+    protocolVersion,
+    features: [...new Set(rawFeatures)] as NodeFeature[],
     timeZone: optionalString(welcome.timeZone, "timeZone"),
     error: optionalString(welcome.error, "error")
   };
@@ -407,10 +412,22 @@ export function normalizePanelToNodeMessage(value: unknown): PanelToNodeMessage 
 }
 
 export function encodeTransferChunk(id: string, payload: Buffer) {
-  if (payload.byteLength > nodeProtocolTransferChunkBytes) throw new Error("Transfer chunk exceeds the 256 KiB protocol limit");
-  const uuid = Buffer.from(id.replaceAll("-", ""), "hex");
-  if (uuid.byteLength !== 16) throw new Error("Transfer id must be a UUID");
-  return Buffer.concat([Buffer.from([0x01]), uuid, payload]);
+  return createTransferChunkEncoder(id)(payload);
+}
+
+/** Cache the UUID header once per transfer, rather than parsing it for every chunk. */
+export function createTransferChunkEncoder(id: string) {
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)) throw new Error("Transfer id must be a UUID");
+  const header = Buffer.allocUnsafe(17);
+  header[0] = 0x01;
+  Buffer.from(id.replaceAll("-", ""), "hex").copy(header, 1);
+  return (payload: Buffer) => {
+    if (payload.byteLength > nodeProtocolTransferChunkBytes) throw new Error("Transfer chunk exceeds the 256 KiB protocol limit");
+    const frame = Buffer.allocUnsafe(header.byteLength + payload.byteLength);
+    header.copy(frame);
+    payload.copy(frame, header.byteLength);
+    return frame;
+  };
 }
 
 export function decodeTransferChunk(frame: Buffer) {

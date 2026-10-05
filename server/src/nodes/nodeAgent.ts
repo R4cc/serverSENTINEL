@@ -66,7 +66,8 @@ import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../typ
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
 import { readDockerPlayerConnections } from "../players/dockerPlayerConnections.js";
-import { decodeTransferChunk, encodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolTransferChunkBytes, nodeProtocolVersion, normalizeNodeUpdateFailure, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
+import { decodeTransferChunk, isNodeCapability, nodeCapabilities, nodeFeatures, nodeProtocolControlMessageMaxBytes, nodeProtocolMaxActiveRequests, nodeProtocolMaxActiveStreams, nodeProtocolMaxActiveTransfers, nodeProtocolVersion, normalizeNodeUpdateFailure, normalizePanelToNodeMessage, normalizeServerObservationRequest } from "./protocol.js";
+import { NodeReadBackpressure, sendTransferBody, writeTransferChunk } from "./transport.js";
 import type { NodeCancelMessage, NodeHello, NodeRequestMessage, NodeResponseMessage, NodeStreamDataMessage, NodeStreamEndMessage, NodeStreamStartMessage, NodeStreamStopMessage, NodeTransferCancelMessage, NodeTransferFinishMessage, NodeTransferResultMessage, NodeTransferStartMessage, PanelWelcome, ServerLogCursor, ServerObservationItem, ServerObservationResponse, ServerObservationResultItem, ServerObservationSection } from "./protocol.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { initializeRuntimeDataRoot } from "../storage/runtimePaths.js";
@@ -614,8 +615,8 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
   return updated;
 }
 
-async function inspect(server: ManagedServer) {
-  return dockerRequest("GET", `/containers/${encodeURIComponent(containerName(server))}/json`);
+async function inspect(server: ManagedServer, signal?: AbortSignal) {
+  return dockerRequest("GET", `/containers/${encodeURIComponent(containerName(server))}/json`, 200, signal);
 }
 
 function isMissingContainerError(error: unknown) {
@@ -623,9 +624,9 @@ function isMissingContainerError(error: unknown) {
   return /No such container|Docker API (?:request )?(?:returned|failed with) 404|status(?:Code)? 404/i.test(message);
 }
 
-async function inspectOrMissing(server: ManagedServer) {
+async function inspectOrMissing(server: ManagedServer, signal?: AbortSignal) {
   try {
-    return await inspect(server) as NodeContainerInspect;
+    return await inspect(server, signal) as NodeContainerInspect;
   } catch (error) {
     if (isMissingContainerError(error)) return null;
     throw error;
@@ -1357,7 +1358,8 @@ async function recoverServerUpdate(recovery: NodeServerUpdateRecovery, server: M
   }
 }
 
-async function observeServer(item: ServerObservationItem): Promise<ServerObservationResultItem> {
+async function observeServer(item: ServerObservationItem, signal?: AbortSignal): Promise<ServerObservationResultItem> {
+  signal?.throwIfAborted();
   const requested = item.server as unknown as ManagedServer;
   const recovery = new NodeServerUpdateRecovery(nodeStorage());
   if (!serverMutations.isActive(requested.id)) await recoverServerUpdate(recovery, requested);
@@ -1371,7 +1373,7 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   let inspectionFailed = false;
   if (needsInspect) {
     try {
-      details = await inspectOrMissing(server);
+      details = await inspectOrMissing(server, signal);
     } catch (error) {
       inspectionFailed = true;
       for (const section of ["status", "stats", "players"] as const) {
@@ -1379,6 +1381,7 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
       }
     }
   }
+  signal?.throwIfAborted();
   const tasks: Promise<void>[] = [];
   const run = (section: ServerObservationSection, operation: () => Promise<unknown>, assign: (value: any) => void) => {
     tasks.push(operation().then(assign).catch((error) => { errors[section] = observationError(error); }));
@@ -1396,16 +1399,18 @@ async function observeServer(item: ServerObservationItem): Promise<ServerObserva
   return result;
 }
 
-async function observeServers(payload: unknown): Promise<ServerObservationResponse> {
+async function observeServers(payload: unknown, signal?: AbortSignal): Promise<ServerObservationResponse> {
+  signal?.throwIfAborted();
   const normalized = normalizeServerObservationRequest(payload).items;
   const results = new Array<ServerObservationResultItem>(normalized.length);
   let nextIndex = 0;
   await Promise.all(Array.from({ length: Math.min(4, normalized.length) }, async () => {
     while (nextIndex < normalized.length) {
+      signal?.throwIfAborted();
       const index = nextIndex;
       nextIndex += 1;
       try {
-        results[index] = await observeServer(normalized[index]);
+        results[index] = await observeServer(normalized[index], signal);
       } catch (error) {
         results[index] = {
           serverId: normalized[index].server.id,
@@ -1414,6 +1419,7 @@ async function observeServers(payload: unknown): Promise<ServerObservationRespon
       }
     }
   }));
+  signal?.throwIfAborted();
   return { observedAt: new Date().toISOString(), items: results };
 }
 
@@ -1725,7 +1731,7 @@ async function handleCommandImpl(command: string, payload: any, signal?: AbortSi
   if (command === "node.restart") return prepareNodeRestart();
   if (command === "node.remove") return prepareNodeRemoval();
   if (command === "server.create") return createServer(payload?.input as CreateInput, signal);
-  if (command === "server.observe") return observeServers(payload);
+  if (command === "server.observe") return observeServers(payload, signal);
   if (!server) throw new Error("server payload is required");
   const name = encodeURIComponent(containerName(server));
   if (command === "server.update") {
@@ -1915,11 +1921,12 @@ export async function startNodeAgent() {
     const activeRequests = new Map<string, AbortController>();
     type ActiveTransfer =
       | { direction: "upload"; prepared: PreparedBinaryUpload; file: Awaited<ReturnType<typeof open>>; expectedSize: number; received: number; hash: ReturnType<typeof createHash>; writes: Promise<void>; cancelled: boolean; writeError?: Error; release: () => void }
-      | { direction: "download"; stream?: NodeJS.ReadableStream; cancelled: boolean };
+      | { direction: "download"; stream?: Readable; cancelled: boolean };
     const activeTransfers = new Map<string, ActiveTransfer>();
     const preparingUploads = new Map<string, { cancelled: boolean }>();
     let accepted = false;
     let lastPanelPingAt = Date.now();
+    const backpressure = new NodeReadBackpressure(socket, () => { lastPanelPingAt = Date.now(); });
     let heartbeatWatchdog: NodeJS.Timeout | undefined;
     let stableSessionTimer: NodeJS.Timeout | undefined;
     const stopAllStreams = () => {
@@ -1937,7 +1944,7 @@ export async function startNodeAgent() {
             .finally(transfer.release);
         } else {
           transfer.cancelled = true;
-          if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();
+          transfer.stream?.destroy();
         }
       }
       activeTransfers.clear();
@@ -1994,7 +2001,7 @@ export async function startNodeAgent() {
       if (socket.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(hello));
       heartbeatWatchdog = setInterval(() => {
-        if (Date.now() - lastPanelPingAt >= panelHeartbeatTimeoutMs) socket.terminate();
+        if (!backpressure.paused && Date.now() - lastPanelPingAt >= panelHeartbeatTimeoutMs) socket.terminate();
       }, 5_000);
       heartbeatWatchdog.unref?.();
     });
@@ -2013,13 +2020,14 @@ export async function startNodeAgent() {
           // Pause the shared socket until this chunk reaches disk. Without this backpressure a slow
           // volume retained every upload chunk in a promise chain (up to the full transfer limit),
           // and an early ENOSPC rejection could go unobserved until transferFinish.
-          socket.pause();
-          transfer.writes = transfer.writes.then(async () => { await transfer.file.write(payload); });
-          void transfer.writes.then(
-            () => { if (socket.readyState === WebSocket.OPEN) socket.resume(); },
+          backpressure.pause(transfer);
+          const writes = transfer.writes.then(() => writeTransferChunk(transfer.file, payload));
+          transfer.writes = writes;
+          void writes.then(
+            () => { if (transfer.writes === writes) backpressure.resume(transfer); },
             (error) => {
               transfer.writeError = error as Error;
-              if (socket.readyState === WebSocket.OPEN) socket.resume();
+              if (transfer.writes === writes) backpressure.resume(transfer);
             }
           );
         } catch {
@@ -2042,14 +2050,6 @@ export async function startNodeAgent() {
         if (!message.accepted) {
           console.error(`Node registration rejected: ${message.error ?? "unknown error"}`);
           socket.close();
-          return;
-        }
-        if (message.protocolVersion !== nodeProtocolVersion) {
-          socket.close(1002, `Panel negotiated unsupported protocol ${message.protocolVersion ?? "unknown"}`);
-          return;
-        }
-        if ((message.features ?? []).some((feature) => !nodeFeatures.includes(feature))) {
-          socket.close(1002, "Panel negotiated an unsupported transport feature");
           return;
         }
         accepted = true;
@@ -2129,24 +2129,20 @@ export async function startNodeAgent() {
           try {
             const prepared = await prepareBinaryDownload(message);
             transfer.stream = prepared.stream;
-            await sendWebSocket(socket, JSON.stringify({ type: "transferReady", id: message.id, filename: prepared.filename, size: prepared.size }));
-            const hash = createHash("sha256");
-            let sent = 0;
-            for await (const rawChunk of prepared.stream) {
-              if (transfer.cancelled) throw new Error("Transfer was cancelled");
-              const buffer = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
-              for (let offset = 0; offset < buffer.byteLength; offset += nodeProtocolTransferChunkBytes) {
-                const chunk = buffer.subarray(offset, offset + nodeProtocolTransferChunkBytes);
-                hash.update(chunk);
-                sent += chunk.byteLength;
-                if (sent > (message.maxBytes ?? Number.MAX_SAFE_INTEGER)) throw new Error("Download exceeded its declared limit");
-                await sendWebSocket(socket, encodeTransferChunk(message.id, chunk), true);
-              }
+            if (transfer.cancelled || socket.readyState !== WebSocket.OPEN) {
+              prepared.stream.destroy();
+              return;
             }
-            if (prepared.size !== undefined && sent !== prepared.size) throw new Error(`Download declared ${prepared.size} bytes but streamed ${sent}`);
-            await sendWebSocket(socket, JSON.stringify({ type: "transferFinish", id: message.id, size: sent, sha256: hash.digest("hex") } satisfies NodeTransferFinishMessage));
+            await sendWebSocket(socket, JSON.stringify({ type: "transferReady", id: message.id, filename: prepared.filename, size: prepared.size }));
+            const observed = await sendTransferBody(prepared.stream, message.id, message.maxBytes ?? Number.MAX_SAFE_INTEGER, (frame) => {
+              if (transfer.cancelled) throw new Error("Transfer was cancelled");
+              return sendWebSocket(socket, frame, true);
+            });
+            if (prepared.size !== undefined && observed.size !== prepared.size) throw new Error(`Download declared ${prepared.size} bytes but streamed ${observed.size}`);
+            await sendWebSocket(socket, JSON.stringify({ type: "transferFinish", id: message.id, ...observed } satisfies NodeTransferFinishMessage));
           } catch (error) {
             activeTransfers.delete(message.id);
+            transfer.stream?.destroy();
             if (!transfer.cancelled && socket.readyState === WebSocket.OPEN) {
               socket.send(JSON.stringify({ type: "transferResult", id: message.id, ok: false, error: { code: "transfer_failed", message: (error as Error).message } } satisfies NodeTransferResultMessage));
             }
@@ -2210,7 +2206,7 @@ export async function startNodeAgent() {
           transfer.release();
         } else if (transfer) {
           transfer.cancelled = true;
-          if (transfer.stream && "destroy" in transfer.stream) (transfer.stream as { destroy: () => void }).destroy();
+          transfer.stream?.destroy();
         }
         return;
       }

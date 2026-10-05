@@ -48,6 +48,30 @@ describe("node reconnect backoff", () => {
 });
 
 describe("node lifecycle action exclusion", () => {
+  it("does not start a cancelled observation batch", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(hooks.handleCommand("server.observe", { items: [{ server: testServer(), sections: ["status"] }] }, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(mockDockerRequest).not.toHaveBeenCalled();
+  });
+
+  it("passes cancellation to Docker and stops scheduling servers after an observation is cancelled", async () => {
+    const controller = new AbortController();
+    const releases: Array<() => void> = [];
+    mockDockerRequest.mockImplementation((_method: string, _path: string, _status: number, signal: AbortSignal) => {
+      expect(signal).toBe(controller.signal);
+      return new Promise((resolve) => { releases.push(() => resolve(null)); });
+    });
+    const items = Array.from({ length: 8 }, (_, index) => ({ server: { ...testServer(), id: `server-${index}` }, sections: ["status"] }));
+    const pending = hooks.handleCommand("server.observe", { items }, controller.signal);
+    const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    await vi.waitFor(() => expect(mockDockerRequest).toHaveBeenCalledTimes(4));
+    controller.abort();
+    for (const release of releases) release();
+    await rejected;
+    expect(mockDockerRequest).toHaveBeenCalledTimes(4);
+  });
+
   it("excludes lifecycle actions while a node file mutation is awaiting I/O", async () => {
     const server = testServer();
     await mkdir(server.serverDir, { recursive: true });
