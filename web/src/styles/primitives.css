@@ -39,7 +39,7 @@
 .uiButton--compact { min-height: var(--control-height-compact); padding-inline: var(--space-3); font-size: var(--type-meta-size); }
 .uiButton--icon,
 .iconButton,
-.iconOnlyButton { width: var(--control-icon-button-size); min-width: var(--control-icon-button-size); height: var(--control-icon-button-size); min-height: var(--control-icon-button-size); padding: 0; }
+.iconOnlyButton { width: var(--control-icon-button-size); min-width: var(--control-icon-button-size); height: var(--control-icon-button-size); min-height: var(--control-icon-button-size); padding: 0; gap: 0; flex-shrink: 0; }
 .uiButton:active:not(:disabled),
 .iconButton:active:not(:disabled),
 .iconOnlyButton:active:not(:disabled) { transform: none; }
@@ -252,9 +252,10 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
 .uiBanner {
   --ui-banner-tone: var(--sentinel-info);
+  --ui-banner-icon-size: 38px;
   min-width: 0;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: var(--ui-banner-icon-size) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
   border: var(--border-subtle) solid color-mix(in srgb, var(--ui-banner-tone) 42%, var(--glass-edge));
@@ -267,29 +268,32 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   -webkit-backdrop-filter: var(--glass-filter-panel);
   backdrop-filter: var(--glass-filter-panel);
 }
-.uiBannerIcon { width: 38px; height: 38px; display: grid; place-items: center; align-self: start; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ui-banner-tone) 17%, transparent); color: var(--ui-banner-tone); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--ui-banner-tone) 34%, transparent); }
-.uiBannerIcon svg { width: 19px; height: 19px; }
+.uiBanner:has(> .uiBannerAction) { grid-template-columns: var(--ui-banner-icon-size) minmax(0, 1fr) auto; }
+.uiBannerIcon { width: var(--ui-banner-icon-size); height: var(--ui-banner-icon-size); display: grid; place-items: center; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ui-banner-tone) 17%, transparent); color: var(--ui-banner-tone); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--ui-banner-tone) 34%, transparent); }
+.uiBanner:has(.uiBannerMessage, .uiBannerDetails) > .uiBannerIcon { align-self: start; }
+.uiBannerIcon svg { display: block; width: 19px; height: 19px; }
 .uiBannerCopy { min-width: 0; display: grid; gap: var(--space-1); }
-.uiBannerCopy > strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); line-height: 1.3; }
+.uiBannerCopy > strong { min-width: 0; overflow-wrap: anywhere; color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); line-height: 1.3; }
 .uiBannerMessage { min-width: 0; color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.45; overflow-wrap: anywhere; }
-.uiBannerDetails { min-width: 0; color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.45; }
+.uiBannerDetails { min-width: 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.45; }
 .uiBannerAction { min-width: 0; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2); }
 .uiBanner.uiBanner--info { --ui-banner-tone: var(--sentinel-info); }
 .uiBanner.uiBanner--success { --ui-banner-tone: var(--sentinel-success); }
 .uiBanner.uiBanner--warning { --ui-banner-tone: var(--sentinel-warning); }
 .uiBanner.uiBanner--error { --ui-banner-tone: var(--sentinel-danger); }
 .uiBanner.inlineState { box-shadow: var(--glass-highlight), var(--shadow-xs); }
-.uiBanner--compact { grid-template-columns: 30px minmax(0, 1fr) auto; gap: var(--space-2); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); }
-.uiBanner--compact .uiBannerIcon { width: 30px; height: 30px; }
+.uiBanner--compact { --ui-banner-icon-size: 30px; gap: var(--space-2); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); }
 .uiBanner--compact .uiBannerIcon svg { width: 16px; height: 16px; }
 .uiBanner--compact .uiBannerMessage,
 .uiBanner--compact .uiBannerDetails { font-size: var(--type-meta-size); }
 
-@media (max-width: 640px) {
-  .uiBanner { grid-template-columns: 38px minmax(0, 1fr); align-items: start; padding: var(--space-3); }
+@media (max-width: 720px) {
+  .uiBanner,
+  .uiBanner:has(> .uiBannerAction) { grid-template-columns: var(--ui-banner-icon-size) minmax(0, 1fr); }
+  .uiBanner { padding: var(--space-3); }
   .uiBannerAction { grid-column: 2; justify-content: stretch; }
   .uiBannerAction > .uiButton { width: 100%; }
-  .uiBanner--compact { grid-template-columns: 30px minmax(0, 1fr); }
+  .uiBanner--compact { padding: var(--space-2) var(--space-3); }
 }
 
 .uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: color-mix(in srgb, var(--surface-raised) 82%, var(--glass-tint-soft)); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -373,9 +377,9 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiEmptyState strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); }
 .uiEmptyState span { max-width: 58ch; color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.5; }
 
-.inlineState { min-height: 64px; border-color: var(--border-row); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); background: var(--surface-raised); box-shadow: none; }
-.inlineState strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-ui); line-height: 1.35; text-transform: none; }
-.inlineState span { color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
+.inlineState:not(.uiBanner) { min-height: 64px; border-color: var(--border-row); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); background: var(--surface-raised); box-shadow: none; }
+.inlineState:not(.uiBanner) strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-ui); line-height: 1.35; text-transform: none; }
+.inlineState:not(.uiBanner) span { color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
 
 .uiSortHeaderButton { width: 100%; min-height: var(--control-height-compact); justify-content: flex-start; gap: var(--space-1); border: 0; border-radius: var(--radius-sm); padding: 0 var(--space-2); background: transparent; color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-align: left; text-transform: uppercase; box-shadow: none; }
 .uiSortHeaderButton:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); transform: none; }
@@ -539,9 +543,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   .uiToolbarPrimary .uiButton,
   .uiToolbarSecondary .uiButton { width: 100%; }
   .uiToolbarMeta { white-space: normal; }
-  .uiBanner { align-items: stretch; flex-direction: column; }
-  .uiBannerAction,
-  .uiBannerAction .uiButton { width: 100%; }
   .uiPanelHeader { align-items: flex-start; }
 }
 /* Busy indicator. Every spinner in the app is this rule at a different size, so

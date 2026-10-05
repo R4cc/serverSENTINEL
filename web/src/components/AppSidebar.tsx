@@ -134,6 +134,7 @@ export function AppSidebar({
           <div className="serverSwitcher">
             <ActionMenu
               label={activeServer ? `Switch server. Current server: ${activeServer.displayName}` : "Select server"}
+              iconOnly={false}
               className="serverSwitcherAction"
               triggerClassName="serverSwitcherTrigger"
               menuClassName="serverSwitcherMenu"

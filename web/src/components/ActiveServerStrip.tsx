@@ -122,7 +122,7 @@ export function ActiveServerStrip({
             </div>
           </div>
         </div>
-        <Button variant="secondary" className="serverControlsToggle" aria-expanded={controlsOpen} aria-controls={controlsId} onClick={() => setExpandedServerId(controlsOpen ? null : server.id)}><AppIcon name="chevronDown" /> Server controls</Button>
+        <Button variant="secondary" iconOnly className="serverControlsToggle" aria-label="Server controls" title="Server controls" aria-expanded={controlsOpen} aria-controls={controlsId} onClick={() => setExpandedServerId(controlsOpen ? null : server.id)}><AppIcon name="chevronDown" /></Button>
         <div className="serverStripRight" id={controlsId}>
           <RuntimeControls
             status={status}
