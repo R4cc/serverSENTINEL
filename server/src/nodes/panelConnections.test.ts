@@ -100,6 +100,69 @@ describe("PanelNodeConnections", () => {
     connections.close();
   });
 
+  it("does not send a request when its caller has already cancelled", async () => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    connections.connect(node(), socket as unknown as WebSocket);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(connections.request(node(), "server.inspect", {}, 1_000, controller.signal)).rejects.toMatchObject({ code: "command_cancelled" });
+    expect(socket.sent).toEqual([]);
+    connections.close();
+  });
+
+  it("cancels on caller abort once, frees request capacity, and ignores late replies", async () => {
+    vi.useFakeTimers();
+    const connections = new PanelNodeConnections();
+    try {
+      const socket = new FakeSocket();
+      connections.connect(node(), socket as unknown as WebSocket);
+      for (let index = 0; index < 65; index += 1) {
+        const controller = new AbortController();
+        const remove = vi.spyOn(controller.signal, "removeEventListener");
+        const pending = connections.request(node(), "server.inspect", {}, 1_000, controller.signal);
+        const request = JSON.parse(String(socket.sent.at(-1)));
+        controller.abort();
+        await expect(pending).rejects.toMatchObject({ code: "command_cancelled" });
+        expect(remove).toHaveBeenCalledTimes(1);
+        emitJson(socket, { type: "response", id: request.id, ok: true });
+      }
+      vi.advanceTimersByTime(1_000);
+      const frames = socket.sent.map(String).map((value) => JSON.parse(value));
+      expect(frames.filter((message) => message.type === "request")).toHaveLength(65);
+      expect(frames.filter((message) => message.type === "cancel")).toHaveLength(65);
+    } finally {
+      connections.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["response", "error", "disconnect"])("releases caller-abort listeners after %s", async (completion) => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, "removeEventListener");
+    connections.connect(node(), socket as unknown as WebSocket);
+    try {
+      if (completion === "error") socket.onSend = () => { throw new Error("Send failed"); };
+      const pending = connections.request(node(), "server.inspect", {}, 1_000, controller.signal);
+      const request = JSON.parse(String(socket.sent[0]));
+      if (completion === "response") {
+        emitJson(socket, { type: "response", id: request.id, ok: true, result: "done" });
+        await expect(pending).resolves.toBe("done");
+      } else {
+        if (completion === "disconnect") socket.close();
+        await expect(pending).rejects.toMatchObject({ code: completion === "disconnect" ? "node_offline" : "command_failed" });
+      }
+      expect(remove).toHaveBeenCalledTimes(1);
+      controller.abort();
+      expect(socket.sent).toHaveLength(1);
+    } finally {
+      connections.close();
+      remove.mockRestore();
+    }
+  });
+
   it("closes a superseded socket and rejects its pending work", async () => {
     const connections = new PanelNodeConnections();
     const first = new FakeSocket();
@@ -326,6 +389,36 @@ describe("PanelNodeConnections", () => {
       connections.close();
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it.each(["drain", "close"])("does not resume another blocked download when the first consumer %s occurs", async (action) => {
+    const connections = new PanelNodeConnections();
+    const socket = new FakeSocket();
+    const ids: string[] = [];
+    socket.onSend = (value) => {
+      if (typeof value !== "string") return;
+      const message = JSON.parse(value);
+      if (message.type !== "transferStart") return;
+      ids.push(message.id);
+      queueMicrotask(() => emitJson(socket, { type: "transferReady", id: message.id, filename: "world.zip", size: 1024 * 1024 }));
+    };
+    connections.connect(node(), socket as unknown as WebSocket);
+    try {
+      const first = await connections.download(node(), "files.download", {}, 1024 * 1024);
+      const second = await connections.download(node(), "files.download", {}, 1024 * 1024);
+      // A paused ws receiver can still deliver frames already buffered before the pause.
+      for (const id of ids) socket.emit("message", encodeTransferChunk(id, Buffer.alloc(256 * 1024)), true);
+      expect(socket.paused).toBe(true);
+      if (action === "drain") first.stream.resume();
+      else first.stream.destroy();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(socket.paused).toBe(true);
+      second.stream.resume();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(socket.paused).toBe(false);
+    } finally {
+      connections.close();
     }
   });
 

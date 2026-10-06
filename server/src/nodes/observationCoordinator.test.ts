@@ -25,6 +25,27 @@ function server(index: number): ManagedServer {
 }
 
 describe("RemoteObservationCoordinator", () => {
+  it.each([1, 16])("cancels %i outstanding observation RPCs when collection stops", async (count) => {
+    const observedServers = Array.from({ length: count }, (_, index) => server(index));
+    let signal: AbortSignal | undefined;
+    const request = vi.fn((_node: ManagedNode, _command: string, _payload: unknown, _timeout: number, requestSignal: AbortSignal) => {
+      signal = requestSignal;
+      return new Promise((_resolve, reject) => requestSignal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true }));
+    });
+    const coordinator = new RemoteObservationCoordinator({
+      readServers: async () => observedServers, lookupNode: async () => node(),
+      connections: { isConnected: () => true, request } as unknown as PanelNodeConnections
+    });
+    const pending = Promise.all(observedServers.map((observed) => coordinator.read(observed, "status", 60_000)));
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(count));
+    expect(signal?.aborted).toBe(false);
+    coordinator.stop();
+    expect(signal?.aborted).toBe(true);
+    await rejected;
+    expect(request).toHaveBeenCalledTimes(count);
+  });
+
   it("discards background log deltas and cursors invalidated by a mutation", async () => {
     const observedServer = server(0);
     const source = "logs/latest.log";

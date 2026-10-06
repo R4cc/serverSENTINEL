@@ -91,11 +91,20 @@ export const MinecraftTerminal = memo(function MinecraftTerminal({ entries, gene
       terminal.textarea.setAttribute("aria-hidden", "true");
     }
     terminalRef.current = terminal;
+    let terminalDisposed = false;
     let revealListener: { dispose(): void } | null = null;
+    let viewportInteraction = 0;
+    // Retain follow intent across delayed xterm resize callbacks until the reader intervenes.
+    let resizeFollowInteraction: number | null = null;
+    const handleViewportInteraction = () => { viewportInteraction++; };
+    // xterm consumes wheel events before they bubble out of its viewport.
+    container.addEventListener("wheel", handleViewportInteraction, { passive: true, capture: true });
+    container.addEventListener("touchstart", handleViewportInteraction, { passive: true, capture: true });
+    container.addEventListener("pointerdown", handleViewportInteraction, { passive: true, capture: true });
     const writer = new ConsoleTerminalWriter(terminal, (replaced, completedGeneration) => {
       // React may already have committed a replacement whose passive effect has not run yet.
       if (generationRef.current !== completedGeneration) return;
-      if (replaced) terminal.scrollToBottom();
+      if (replaced || resizeFollowInteraction === viewportInteraction) terminal.scrollToBottom();
       else if (!terminalViewportAtBottom(terminal.buffer.active.viewportY, terminal.buffer.active.baseY)) setNewOutputAvailable(true);
       // A write callback means parsed, not painted. Reveal on the final renderer frame,
       // so users never see the intermediate rows of a large snapshot.
@@ -122,7 +131,6 @@ export const MinecraftTerminal = memo(function MinecraftTerminal({ entries, gene
       webglAddon = null;
     };
     let contextLoss: { dispose(): void } | undefined;
-    let terminalDisposed = false;
     const activateWebgl = async () => {
       try {
         // Fetch while the snapshot is in flight; the optional renderer and data can prepare
@@ -198,10 +206,27 @@ export const MinecraftTerminal = memo(function MinecraftTerminal({ entries, gene
     // a terminal that mounts behind `hidden`, or one frame ahead of its own layout, ends up a
     // handful of columns wide with every line of output wrapped to match. Reporting whether a fit
     // happened lets the first write wait for a real one instead of drawing into that.
+    let followFitFrame: number | null = null;
+    let followFitInteraction = 0;
     const fit = () => {
       if (!container.clientWidth || !container.clientHeight) return false;
       try {
+        const following = resizeFollowInteraction === viewportInteraction
+          || terminalViewportAtBottom(terminal.buffer.active.viewportY, terminal.buffer.active.baseY);
+        const previousRows = terminal.rows;
+        const previousCols = terminal.cols;
         fitAddon.fit();
+        if (following && (previousRows !== terminal.rows || previousCols !== terminal.cols)) {
+          // Resizing can move xterm off the tail and mark it as user-scrolled.
+          // Wait for its queued viewport sync to update scroll dimensions first.
+          if (followFitFrame !== null) window.cancelAnimationFrame(followFitFrame);
+          resizeFollowInteraction = viewportInteraction;
+          followFitInteraction = viewportInteraction;
+          followFitFrame = window.requestAnimationFrame(() => {
+            followFitFrame = null;
+            if (!terminalDisposed && followFitInteraction === viewportInteraction) terminal.scrollToBottom();
+          });
+        }
         return true;
       } catch {
         return false;
@@ -250,10 +275,14 @@ export const MinecraftTerminal = memo(function MinecraftTerminal({ entries, gene
 
     return () => {
       if (fitFrame !== null) window.cancelAnimationFrame(fitFrame);
+      if (followFitFrame !== null) window.cancelAnimationFrame(followFitFrame);
       revealListener?.dispose();
       writer.dispose();
       writerRef.current = null;
       resizeObserver.disconnect();
+      container.removeEventListener("wheel", handleViewportInteraction, true);
+      container.removeEventListener("touchstart", handleViewportInteraction, true);
+      container.removeEventListener("pointerdown", handleViewportInteraction, true);
       container.removeEventListener("touchstart", handleTouchStart);
       container.removeEventListener("touchmove", handleTouchMove);
       container.removeEventListener("touchend", handleTouchEnd);

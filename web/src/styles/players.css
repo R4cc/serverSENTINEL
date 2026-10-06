@@ -500,14 +500,6 @@ button.playerMapServer {
   font-style: italic;
 }
 
-.playerMapGrid {
-  fill: none;
-  stroke: var(--border-muted);
-  stroke-width: 0.5;
-  opacity: 0.35;
-  vector-effect: non-scaling-stroke;
-}
-
 .playerMapLeader {
   stroke: var(--accent);
   stroke-width: 1;

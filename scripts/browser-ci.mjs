@@ -16,6 +16,7 @@ const suites = [
   ["loading-workflows", "scripts/loading-workflows-smoke.mjs"],
   ["overview-mods", "scripts/overview-mods-polish-smoke.mjs"],
   ["ui-consistency", "scripts/ui-consistency-smoke.mjs"],
+  ["ui-spacing", "scripts/icon-banner-spacing-smoke.mjs"],
   ["ui-cohesion", "scripts/ui-cohesion-smoke.mjs"]
 ];
 

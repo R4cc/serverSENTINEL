@@ -1,3 +1,4 @@
+import { setMaxListeners } from "node:events";
 import type { ManagedNode, ManagedServer } from "../types.js";
 import { compactNodeServerSpec, nodeAdvertisesCapability, nodeProtocolObservationBatchSize, normalizeServerObservationResponse, structuredNodeProtocolError } from "./protocol.js";
 import type { ServerLogCursor, ServerObservationResultItem, ServerObservationSection } from "./protocol.js";
@@ -32,6 +33,7 @@ const overviewInterestMs = 2 * 60 * 1000;
 const observationSections: ServerObservationSection[] = ["status", "stats", "players", "logs", "overviewFiles"];
 
 export class RemoteObservationCoordinator {
+  private readonly shutdown = new AbortController();
   private readonly cache = new Map<string, CachedServer>();
   private readonly inFlightNodes = new Map<string, Promise<void>>();
   private readonly inFlightForeground = new Map<string, Promise<void>>();
@@ -45,6 +47,8 @@ export class RemoteObservationCoordinator {
 
   constructor(private readonly options: ObservationCoordinatorOptions) {
     this.pollMs = options.pollMs ?? 5_000;
+    // This owned signal broadcasts to the whole fleet; each RPC removes its listener on completion.
+    setMaxListeners(0, this.shutdown.signal);
   }
 
   start() {
@@ -56,6 +60,7 @@ export class RemoteObservationCoordinator {
 
   stop() {
     this.closed = true;
+    this.shutdown.abort();
     if (this.interval) clearInterval(this.interval);
     this.interval = undefined;
     this.cache.clear();
@@ -223,7 +228,7 @@ export class RemoteObservationCoordinator {
       });
       const response = normalizeServerObservationResponse(await this.options.connections.request(node, "server.observe", {
         items: requested
-      }, 15_000));
+      }, 15_000, this.shutdown.signal));
       if (this.closed) return;
       try {
         this.validateResponse(requested.map((item) => ({ serverId: item.server.id, sections: item.sections })), response.items);

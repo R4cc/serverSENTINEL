@@ -1,6 +1,6 @@
 import type { ModuleRuntime } from "./moduleRegistry.js";
 
-export const schedulePollIntervalMs = 30_000;
+const schedulePollIntervalMs = 30_000;
 
 /**
  * The schedules module's background work: the poll that decides which schedules are due.

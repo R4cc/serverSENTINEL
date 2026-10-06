@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.10.12 - 2026-10-06
+
+- Kept toolbar search fields usable on phones when their clear button appears.
+- Preserved console following when new output arrives after navigation, without moving readers who scroll up.
+
 ## 26.10.11 - 2026-10-04
 
 - Refined Settings with liquid glass panels, horizontal category tabs, compact module switches, and lighter system diagnostics.

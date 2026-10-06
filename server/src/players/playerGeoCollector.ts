@@ -20,9 +20,9 @@ import type { PlayerLoginAddress } from "./loginAddresses.js";
  */
 
 /** Retention for derived geography. Timeline history is a week, so this is generous by design. */
-export const playerGeoRetentionMs = 90 * 24 * 60 * 60 * 1000;
+const playerGeoRetentionMs = 90 * 24 * 60 * 60 * 1000;
 /** Pruning and forgetting deleted servers are housekeeping, not a poll; hourly is plenty. */
-export const playerGeoMaintenanceIntervalMs = 60 * 60 * 1000;
+const playerGeoMaintenanceIntervalMs = 60 * 60 * 1000;
 
 type ObservedLogs = {
   server: ManagedServer;

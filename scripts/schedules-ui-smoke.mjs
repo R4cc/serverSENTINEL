@@ -163,6 +163,9 @@ try {
         await page.locator(".scheduleHistoryPanel").waitFor();
         await page.keyboard.press("Escape");
         await action(page, "Hourly world save", "Edit");
+        // The editor seeds its controlled fields in an effect, just as duplication
+        // above does. Wait for that seed before typing, especially in mobile WebKit.
+        await page.waitForFunction(() => document.querySelector('.scheduleModalPanel input[name="name"]')?.value === "Hourly world save");
         await modal.getByLabel("Name", { exact: true }).fill("Paused hourly save");
         await modal.getByRole("combobox", { name: "How often this schedule repeats" }).selectOption("advanced");
         await modal.locator(".scheduleCronField input").fill("not cron");

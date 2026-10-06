@@ -10,6 +10,8 @@ Protocol 3.1 JSON control frames are limited to 8 MiB. Each connection permits 6
 
 Requests include relative deadlines when cancellation is negotiated. The panel sends `cancel` after a deadline or caller cancellation. Cooperative work aborts where possible, and responses produced after cancellation are ignored. Filesystem mutations that have crossed their commit point may complete, but their response is discarded.
 
+Stopping the panel observation coordinator cancels its in-flight RPCs immediately. The node passes that signal to Docker inspection and stops scheduling the remaining servers in a cancelled batch. Completed requests, failed sends, and disconnected sessions release both deadline timers and caller-abort listeners.
+
 ## Server payloads
 
 Every panel-to-node payload that carries a server sends the compact specification, never the panel's stored record. The compact form is the complete set of fields a node reads; the stored record additionally carries schedules with their runs, the restart-required mod baseline, and crash history, all of which are panel bookkeeping. Node responses do not echo the specification back — the panel projects status from the record it already holds.
@@ -45,5 +47,9 @@ The command runs the bundled static TCP RTT probe inside the managed Minecraft c
 ## Binary transfers and HTTP uploads
 
 Transfers use `transferStart`, `transferReady`, `transferFinish`, `transferResult`, and `transferCancel`. A binary chunk contains byte `0x01`, the transfer UUID as 16 raw bytes, and at most 256 KiB of payload. Send callbacks serialize chunks and bound sender buffering. The finish control carries the observed length and SHA-256 digest.
+
+Senders cache the UUID header per transfer and allocate only the final frame for each chunk. Receivers share an owner-tracked socket pause: every blocked download consumer or queued upload writer must release its pause before reads resume. Queued writes retain their pause until the last write completes, and partial filesystem writes are retried without losing bytes. Heartbeat clocks exclude local read pauses and restart when reads resume. Pausing still affects all traffic on that connection; these safeguards do not introduce per-transfer flow-control messages.
+
+These transport improvements retain protocol 3.1 and byte-identical frames. Accepted welcomes must echo both required transport features; rejected welcomes do not need to negotiate a session.
 
 Uploads write to a temporary sibling, validate the declared length, configured limit, file type, and digest, then atomically rename the file. Disconnects, cancellation, validation failures, and shutdown remove partial files. Downloads, panel-generated archive bundles, and manual mod/plugin uploads always use the streamed binary-transfer path. Web upload routes accept multipart form data only; clients must not set the multipart `Content-Type` boundary themselves.
