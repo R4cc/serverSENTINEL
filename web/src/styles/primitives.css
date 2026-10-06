@@ -540,8 +540,9 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   .uiToolbarSecondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .uiToolbarPrimary > :only-child,
   .uiToolbarSecondary > :only-child { grid-column: 1 / -1; }
-  .uiToolbarPrimary .uiButton,
-  .uiToolbarSecondary .uiButton { width: 100%; }
+  /* Nested controls, such as a search field's clear button, keep their own width. */
+  .uiToolbarPrimary > .uiButton,
+  .uiToolbarSecondary > .uiButton { width: 100%; }
   .uiToolbarMeta { white-space: normal; }
   .uiPanelHeader { align-items: flex-start; }
 }

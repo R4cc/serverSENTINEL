@@ -206,10 +206,17 @@ try {
         await navigate("console");
         await waitForTail(count + 101);
         assert.equal(connections.at(-1), count + 101, "navigation did not retain the cursor for the queued line");
+        // Reconnect notices and the mobile viewport can change the terminal's row
+        // count. A reader following output must keep following after that resize.
+        await page.setViewportSize({ width, height: 870 });
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         // Replayed overlapping lines must not appear twice, even when their text is identical.
         const overlap = payload(2, count + 101);
         lines.push(overlap[1]);
         socket.send(JSON.stringify({ type: "log", epoch, lines: overlap }));
+        await waitForTail(count + 102);
+        await page.setViewportSize({ width, height: 900 });
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         await waitForTail(count + 102);
         const visibleText = await page.locator(".xterm-rows").textContent();
         assert.equal(visibleText.split(`ROW_${count + 101}_END`).length - 1, 1, "overlap duplicated output");
