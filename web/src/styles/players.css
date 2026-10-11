@@ -1549,16 +1549,6 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .playerAccuracyTooltip,
-  .playerActivityBar,
-  .playerActivityBarFill,
-  .playerActivityHourLabel,
-  .playerLocationDisclosureToggle > svg {
-    transition: none;
-  }
-}
-
 @media (prefers-reduced-transparency: reduce) {
   .playerSummaryGrid .uiMetricTile { background: var(--surface-raised); }
   .playerRosterCard.uiGlassSurface,

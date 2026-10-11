@@ -14,6 +14,8 @@ const suites = [
   ["mobile-navigation", "scripts/mobile-ui-smoke.mjs", "--navigation-only"],
   ["console", "scripts/console-smoke.mjs"],
   ["loading-workflows", "scripts/loading-workflows-smoke.mjs"],
+  ["micro-motion", "scripts/micro-motion-smoke.mjs"],
+  ["toast-progress", "scripts/toast-progress-smoke.mjs"],
   ["overview-mods", "scripts/overview-mods-polish-smoke.mjs"],
   ["ui-consistency", "scripts/ui-consistency-smoke.mjs"],
   ["ui-spacing", "scripts/icon-banner-spacing-smoke.mjs"],

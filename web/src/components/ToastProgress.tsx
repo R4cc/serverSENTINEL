@@ -18,7 +18,6 @@ export function ToastProgress({ progress, status = "running", children }: {
       displayed.current = 0;
     }
     previousStatus.current = status;
-    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0;
     let previous = performance.now();
     const paint = () => {
@@ -28,7 +27,6 @@ export function ToastProgress({ progress, status = "running", children }: {
       const elapsed = Math.min(now - previous, 100);
       previous = now;
       if (status === "succeeded") displayed.current = 100;
-      else if (motion.matches) displayed.current = Math.min(99, measured ?? 0);
       else if (active) {
         // Catch up gently to real reports, then creep toward 95% over a long wait.
         // Preserve forward movement across stages whose reported percentage resets.
@@ -39,7 +37,7 @@ export function ToastProgress({ progress, status = "running", children }: {
         displayed.current += Math.max(0, ceiling - displayed.current) * (1 - Math.exp(-elapsed / 25000));
       }
       paint();
-      if (active && !motion.matches) frame = requestAnimationFrame(tick);
+      if (active) frame = requestAnimationFrame(tick);
     };
     const restart = () => {
       cancelAnimationFrame(frame);
@@ -47,10 +45,8 @@ export function ToastProgress({ progress, status = "running", children }: {
       tick(previous);
     };
     restart();
-    motion.addEventListener("change", restart);
     return () => {
       cancelAnimationFrame(frame);
-      motion.removeEventListener("change", restart);
     };
   }, [active, measured, status]);
 

@@ -165,7 +165,9 @@
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 55%, transparent));
 }
 
-.sideNav button.active::after {
+.sideNav button.active::after,
+.sideNav button:hover:not(:disabled)::after,
+.sideNav button:focus-visible:not(:disabled)::after {
   content: "";
   position: absolute;
   inset: 1px;
@@ -242,87 +244,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* The named rules below cancel this file's own choreography, but the promise
-     has to hold for motion that arrives from a dependency, from an inline style,
-     or from a stylesheet written after this one was last read. Collapsing every
-     duration is the only version of it that cannot go stale. A duration is not
-     enough on its own -- it makes a movement instant rather than absent -- so
-     the rules that follow still clear the transforms and the looping
-     animations. */
-  *,
-  *::before,
-  *::after {
-    animation-duration: 1ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    transition-delay: 0ms !important;
-  }
-
+  /* Keep small hover, status and loading effects alive. Only larger surface
+     entrances and scrolling change with the system motion preference. */
   html {
     scroll-behavior: auto !important;
   }
 
-  /* The element-level hover lift in `tokens.css` is a transform, so a zero
-     duration would only make it jump rather than stop. */
-  button:hover:not(:disabled) {
-    transform: none;
-  }
-
-  .serverCommandStatusDot.running::after,
-  .serverSwitcherStatus.running::after,
-  .serverCommandStatusDot.starting::after,
-  .serverSwitcherStatus.starting::after,
-  .activeServerStrip.runtimeAction-start .serverCommandStatusDot::after,
-  .activeServerStrip.runtimeAction-restart .serverCommandStatusDot::after {
-    animation: none;
-    opacity: 0.32;
-    transform: scale(1);
-  }
-
-  .runtimeControlButton .controlGlyphSVG,
-  .sideNav button .sideIcon,
-  .serverStripIcon,
-  .serverStripIcon .server-icon-cube {
-    transition: none;
-  }
-
-  .runtimeControlButton:hover:not(:disabled) .controlGlyphSVG,
-  .runtimeControlButton:active:not(:disabled) .controlGlyphSVG,
-  .sideNav button:hover:not(:disabled) .sideIcon,
-  .serverStripIcon:hover,
-  .serverStripIcon:hover .server-icon-cube {
-    transform: none;
-  }
-
-  .activeServerStrip.runtimeFeedback-start,
-  .activeServerStrip.runtimeFeedback-restart,
-  .activeServerStrip.runtimeFeedback-start .serverStripIcon,
-  .activeServerStrip.runtimeFeedback-restart .serverStripIcon,
-  .sideNav button.active::after,
-  .sonnerToast[data-type="success"],
-  .sonnerToast[data-type="success"] .toastSeverityIcon,
   .actionMenuPopover,
   .modalBackdrop,
   .modalPanel,
   .authPanel {
     animation: none;
   }
-
-  .sideNav button.active::after {
-    display: none;
-  }
-
-  .uiSurface,
-  .panel,
-  .uiGlassSurface,
-  .uiGlassSurface::after,
-  .uiMetricTile,
-  .uiButton--secondary,
-  .iconButton,
-  .restartRequirementTooltip,
-  .uiHelpTooltipContent {
-    transition: none;
-  }
-
 }

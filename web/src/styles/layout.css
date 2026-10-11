@@ -714,11 +714,7 @@ button .buttonIcon {
   transition: transform 250ms linear;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .toastProgress[data-status="succeeded"] .toastProgressFill {
-    transition: none;
-  }
-}
+.sonnerToast .uiSpinner { display: block; }
 
 .sonnerToast [data-button] {
   min-height: 30px !important;
@@ -1792,13 +1788,18 @@ button .buttonIcon {
   .brandBlock,
   .brandLockup,
   .brandLockup > div,
-  .sideNav button,
   .navLabel,
   .accountChip,
   .accountName,
   .accountLogoutButton,
   .sideNav .accountLogoutButton {
     transition: none;
+  }
+
+  .appShell { transition: none; }
+
+  .sideNav button {
+    transition: background-color 100ms, border-color 100ms, color 100ms;
   }
 }
 

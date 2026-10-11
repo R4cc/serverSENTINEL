@@ -1785,16 +1785,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .scheduleTableRow,
-  .scheduledRunItem,
-  .scheduleStepCard,
-  .scheduleOptionToggle,
-  .scheduleRunLogs summary .buttonIcon {
-    transition-duration: .01ms !important;
-  }
-}
-
 @media (prefers-reduced-transparency: reduce) {
   .scheduleTableCard.uiGlassSurface { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

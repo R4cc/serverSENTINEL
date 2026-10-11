@@ -277,10 +277,6 @@
   .modsDetailsDrawer {
     animation: none;
   }
-
-  .modsWorkspaceRow {
-    transition: none;
-  }
 }
 
 @media (max-width: 1100px) {
