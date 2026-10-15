@@ -23,7 +23,9 @@ try {
     await page.evaluate(() => {
       const fixture = document.createElement("div");
       fixture.id = "micro-motion-fixture";
-      fixture.style.cssText = "position:fixed;bottom:8px;right:8px;pointer-events:none";
+      // Real loading labels are flex containers, which makes the spinner a
+      // transformable box rather than an inline span with ignored dimensions.
+      fixture.style.cssText = "position:fixed;bottom:8px;right:8px;pointer-events:none;display:flex;align-items:center;gap:8px";
       fixture.innerHTML = '<span class="uiSpinner"></span><span class="uiSkeleton uiSkeleton--text"></span><span class="serverCommandStatusDot running"></span>';
       document.body.append(fixture);
     });
@@ -31,8 +33,8 @@ try {
       await page.emulateMedia({ reducedMotion });
       const label = `${width}/${theme}/${reducedMotion}`;
       const spinner = page.locator("#micro-motion-fixture .uiSpinner");
-      const skeleton = page.locator("#micro-motion-fixture .uiSkeleton");
-      for (const [target, pseudo, name] of [[spinner, null, "spinner"], [skeleton, "::after", "skeleton"]]) {
+      for (const [selector, pseudo, name] of [[".uiSpinner", null, "spinner"], [".uiSkeleton", "::after", "skeleton"]]) {
+        const target = page.locator(`#micro-motion-fixture ${selector}`);
         const style = await target.evaluate((element, pseudo) => {
           const style = getComputedStyle(element, pseudo);
           return { name: style.animationName, iterations: style.animationIterationCount, duration: parseFloat(style.animationDuration) };
@@ -42,8 +44,15 @@ try {
         assert(style.duration > 0.1, `${label}: ${name} duration is not collapsed`);
         const transform = () => target.evaluate((element, pseudo) => getComputedStyle(element, pseudo).transform, pseudo);
         const before = await transform();
-        await page.waitForTimeout(150);
-        assert.notEqual(await transform(), before, `${label}: ${name} actually moves`);
+        // Observe a changed painted frame rather than assuming CI rendered one
+        // during a fixed sleep. A stopped animation still fails within 3 seconds.
+        try {
+          await page.waitForFunction(({ selector, pseudo, before }) =>
+            getComputedStyle(document.querySelector(`#micro-motion-fixture ${selector}`), pseudo).transform !== before,
+          { selector, pseudo, before }, { timeout: 3000, polling: "raf" });
+        } catch (cause) {
+          throw new Error(`${label}: ${name} actually moves`, { cause });
+        }
       }
       await page.waitForTimeout(1500);
       assert.notEqual(await spinner.evaluate(element => getComputedStyle(element).transform), "none", `${label}: spinner survives a full cycle`);
