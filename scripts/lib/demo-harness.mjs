@@ -116,6 +116,21 @@ export async function launchBrowser(engine, options = {}) {
   }
 }
 
+/** Reuse each engine's process while callers keep cookies/storage in fresh contexts. */
+export function createBrowserPool() {
+  const browsers = new Map();
+  return {
+    async get(engine) {
+      if (!browsers.has(engine)) browsers.set(engine, await launchBrowser(engine));
+      return browsers.get(engine);
+    },
+    async close() {
+      await Promise.all([...browsers.values()].map(browser => browser.close()));
+      browsers.clear();
+    }
+  };
+}
+
 /**
  * Waits for the authenticated shell to mount. A failure here means demo startup did not
  * provision `demo / demo`, so it is reported as a broken demo rather than a flaky wait.

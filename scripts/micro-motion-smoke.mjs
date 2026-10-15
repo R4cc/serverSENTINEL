@@ -55,8 +55,19 @@ try {
       await nav.hover();
       assert.equal(await nav.evaluate(element => getComputedStyle(element, "::after").animationName), "sentinelNavGlint", `${label}: hover shines`);
       assert(await nav.evaluate(element => parseFloat(getComputedStyle(element, "::after").animationDuration) > 0.1), `${label}: shine has a visible duration`);
-      await page.waitForTimeout(180);
-      assert(await nav.evaluate(element => Number(getComputedStyle(element, "::after").opacity) > 0), `${label}: shine paints`);
+      // A busy CI runner can resume after the entire short shine has finished.
+      // Inspect its painted phase through the browser's real CSS animation clock.
+      assert(await nav.evaluate(async element => {
+        const animation = element.getAnimations({ subtree: true }).find(animation => animation.animationName === "sentinelNavGlint");
+        if (!animation) return false;
+        await animation.ready;
+        animation.pause();
+        animation.currentTime = Number(animation.effect.getTiming().duration) * 0.32;
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const painted = Number(getComputedStyle(element, "::after").opacity) > 0;
+        animation.play();
+        return painted;
+      }), `${label}: shine paints`);
       const afterHover = await nav.boundingBox();
       for (const dimension of ["x", "y", "width", "height"]) assert(Math.abs(afterHover[dimension] - beforeHover[dimension]) < 1, `${label}: hover preserves ${dimension}`);
       assert.notEqual(await nav.locator(".sideIcon").evaluate(element => getComputedStyle(element).transform), "none", `${label}: icon responds to hover`);

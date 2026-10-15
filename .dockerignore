@@ -7,8 +7,8 @@ node_modules
 **/node_modules
 
 # The build stage compiles every workspace from source and never reads a `dist` from the
-# context. `.github/workflows/dockerpush.yml` skips `npm run build` in CI on the strength of
-# this exclusion, so it has to cover the workspace outputs and not just a root `dist`.
+# context. CI produces host artifacts for the browser shards, but Docker must still
+# build from source, so exclude workspace outputs as well as a root `dist`.
 dist
 **/dist
 
