@@ -1,15 +1,15 @@
 /* Cohesive Mods workspace */
 .modsMobileActions { display: none; }
-.modHistoryPage { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.modHistoryPage { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; min-height: 0; }
 .modHistoryHeading h2 { margin: 0 0 var(--space-2); }
 .modHistoryHeading p { margin: 0; color: var(--text-muted); }
-.modHistorySurface { min-width: 0; overflow: hidden; }
-.modHistoryTableScroll { overflow-x: auto; }
-.modHistoryTable { width: 100%; border-collapse: collapse; text-align: left; }
-.modHistoryTable th, .modHistoryTable td { font-size: var(--type-body-size); overflow-wrap: anywhere; min-width: 120px; }
-.modHistoryTable th { color: var(--text-muted); font-size: var(--type-meta-size); white-space: nowrap; }
-.modHistoryTable td { font-size: .85rem; overflow-wrap: anywhere; min-width: 120px; }
-.modHistoryTable td:first-child { min-width: 180px; }
+.modHistorySurface { display: flex; flex-direction: column; gap: var(--space-3); flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+.modHistoryTableScroll { flex: 1 1 auto; min-height: 0; max-height: 65dvh; overflow: auto; overflow-anchor: none; overscroll-behavior: contain; }
+.modHistoryTable { min-width: 900px; }
+.modHistoryTable th, .modHistoryTable td { overflow-wrap: anywhere; min-width: 100px; }
+.modHistoryTable thead { position: sticky; top: 0; z-index: 1; background: var(--surface-raised); }
+.modHistoryTable th { white-space: nowrap; }
+.modHistoryTable td:first-child { min-width: 240px; }
 .modHistoryTable small { display: block; color: var(--text-muted); margin-top: var(--space-1); max-width: 260px; }
 .modHistoryAction, .modHistoryTable .modHistoryRevert { display: inline-flex; align-items: center; gap: var(--space-2); }
 .modHistoryTable .modHistoryRevert { display: flex; }
@@ -18,16 +18,10 @@
 .modHistoryIdentity > div { min-width: 0; }
 .modHistoryIdentity img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: var(--radius-sm); object-fit: cover; }
 .modHistoryArrow { color: var(--text-muted); margin-inline: .25em; }
-.modHistoryPagination { padding: var(--space-3) var(--space-4); }
+.modHistorySurface > .uiPanelHeader, .modHistorySurface > .uiSearchField, .modHistoryPagination { flex: 0 0 auto; }
+.modHistoryPagination { border-top: 1px solid var(--border); padding-top: var(--space-3); }
 @media (max-width: 700px) {
-  .modHistoryTable thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .modHistoryTable, .modHistoryTable tbody { display: block; width: 100%; }
-  .modHistoryTable tr { display: grid; gap: var(--space-2); padding: var(--space-4) 0; border-bottom: 1px solid var(--border); }
-  .modHistoryTable td, .modHistoryTable td:first-child { display: block; min-width: 0; padding: 0; border: 0; }
-  .modHistoryTable td[data-label] { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--space-2); }
-  .modHistoryTable td[data-label]::before { content: attr(data-label); color: var(--text-muted); }
-  .modHistoryTable small { max-width: none; }
-  .modHistoryTable td:last-child .uiButton { min-height: 44px; margin-top: var(--space-1); }
+  .modHistoryTable .uiSortHeaderButton, .modHistoryTable td:last-child .uiButton { min-height: 44px; }
 }
 .modsWorkspacePage { display: flex; flex-direction: column; gap: var(--space-4); height: max(560px, calc(100vh - 238px)); min-height: 0; max-width: none; }
 /* The metric tiles are the shared uiMetricTile--summary variant; this file only
@@ -276,10 +270,6 @@
   .modsWorkflowDrawer,
   .modsDetailsDrawer {
     animation: none;
-  }
-
-  .modsWorkspaceRow {
-    transition: none;
   }
 }
 

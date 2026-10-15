@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { chromium, webkit } from "playwright";
-import { launchBrowser, signInThroughApi, startDemoHarness } from "./lib/demo-harness.mjs";
+import { createBrowserPool, signInThroughApi, startDemoHarness } from "./lib/demo-harness.mjs";
+import { checkSpacing, checkBannerVariants } from "./lib/ui-spacing.mjs";
 
-const harness = await startDemoHarness({ dataDirectoryPrefix: "serversentinel-ui-cohesion-" });
+let harness;
 const screenshots = process.env.UI_COHESION_SCREENSHOTS;
 if (screenshots) await mkdir(screenshots, { recursive: true });
 
@@ -13,6 +14,7 @@ async function navigate(page, name) {
   // Check its responsive visibility only after the item exists.
   await target.waitFor({ state: "attached" });
   if (!await target.isVisible()) await page.getByRole("button", { name: "Expand navigation" }).click();
+  await checkSpacing(page, `${name} navigation`);
   await target.click();
   await page.locator(`.workspacePage-${name}`).waitFor();
 }
@@ -22,8 +24,7 @@ async function checkOverflow(page) {
 }
 
 async function snapshot(page, name) {
-  await checkOverflow(page);
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await checkSpacing(page, name);
   if (screenshots) await page.screenshot({ path: `${screenshots}/${name}.png`, fullPage: !/dialog|editor/.test(name) });
 }
 
@@ -84,13 +85,18 @@ async function checkDialog(page, dialog, phone) {
   await checkOverflow(page);
 }
 
+const browsers = createBrowserPool();
 try {
   for (const width of [1440, 768, 390, 320]) {
+    // Fresh server state per viewport avoids aggregating every case into the
+    // production rate limiter. Keep the more expensive browser processes warm.
+    await harness?.stop();
+    harness = await startDemoHarness({ dataDirectoryPrefix: "serversentinel-ui-cohesion-" });
     for (const theme of ["light", "dark"]) {
-      const browser = await launchBrowser(width === 320 ? webkit : chromium);
+      const browser = await browsers.get(width === 320 ? webkit : chromium);
+      const phone = width <= 720;
+      const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: phone, reducedMotion: "reduce" });
       try {
-        const phone = width <= 720;
-        const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: phone, reducedMotion: "reduce" });
         await context.addInitScript(theme => localStorage.setItem("serversentinel-theme", theme), theme);
         await signInThroughApi(context, harness.baseUrl);
         const page = await context.newPage();
@@ -99,6 +105,14 @@ try {
         await page.goto(harness.baseUrl);
         await page.locator(".appShell").waitFor();
         const label = `${width}-${theme}`;
+        if (width > 1100) {
+          await page.getByRole("button", { name: "Collapse navigation" }).click();
+          await checkSpacing(page, `${label} collapsed navigation`);
+          await page.getByRole("button", { name: "Expand navigation" }).click();
+        }
+        await navigate(page, "overview");
+        await page.locator(".overviewSummary").waitFor();
+        await snapshot(page, `${label}-overview`);
 
         await navigate(page, "mods");
         await page.locator(".modsWorkspaceRow").first().waitFor();
@@ -154,10 +168,17 @@ try {
           return box.top >= header.bottom - 1 && box.height >= 180 && prompt.bottom <= innerHeight + 1;
         }), "Console chrome overlaps output or clips the command prompt");
         await snapshot(page, `${label}-console`);
+        if (phone) {
+          const toggle = page.getByRole("button", { name: "Server controls", exact: true });
+          await toggle.click();
+          await checkSpacing(page, `${label} expanded controls`);
+          await toggle.click();
+        }
 
         await navigate(page, "files");
         await page.getByRole("table", { name: "Server files", exact: true }).waitFor();
         await checkGlassPanel(page.locator(".filesPanel"));
+        await checkSpacing(page, `${label} files`);
         await checkStableHover(page.locator(".fileTableRow").first());
         assert.equal(await page.locator(".fileDetailsPanel").count(), 0, "Empty inspector still consumes space");
         const file = page.getByRole("rowheader", { name: "server.properties", exact: true });
@@ -200,6 +221,7 @@ try {
           assert.equal(await page.getByRole("tablist", { name: "Settings categories" }).isVisible(), false);
           await picker.selectOption("console");
           assert(await page.getByRole("combobox", { name: "Terminal font size" }).isVisible());
+          await checkSpacing(page, `${label} settings console`);
           await picker.selectOption("appearance");
         } else {
           const tabs = page.getByRole("tablist", { name: "Settings categories" });
@@ -219,6 +241,7 @@ try {
           await page.keyboard.press("ArrowRight");
           await page.waitForFunction(() => document.activeElement?.id === "settings-tab-console");
           await page.getByRole("combobox", { name: "Terminal font size" }).waitFor();
+          await checkSpacing(page, `${label} settings console`);
           await page.keyboard.press("ArrowLeft");
           await page.waitForFunction(() => document.activeElement?.id === "settings-tab-appearance");
           assert.equal(await page.getByRole("tab", { name: "Appearance", exact: true }).getAttribute("aria-selected"), "true");
@@ -309,7 +332,13 @@ try {
         await page.keyboard.press("Escape");
         await page.locator(".scheduleModalPanel").waitFor({ state: "detached" });
 
+        await navigate(page, "properties");
+        await page.locator(".propertiesSection").first().waitFor();
+        await snapshot(page, `${label}-properties`);
+
         await navigate(page, "nodes");
+        await page.locator(".nodeListRow").first().waitFor();
+        await snapshot(page, `${label}-nodes`);
         const details = page.getByRole("button", { name: "Details", exact: true }).first();
         await details.scrollIntoViewIfNeeded();
         const scrollBeforeDetails = await page.evaluate(() => document.scrollingElement.scrollTop);
@@ -322,8 +351,9 @@ try {
         await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Details");
         assert(await details.evaluate(element => element === document.activeElement), "Node details did not regain focus");
         assert.equal(errors.length, 0, errors.join("\n"));
-        console.log(`UI cohesion passed: ${label}`);
-      } finally { await browser.close(); }
+        await checkBannerVariants(page, label);
+        console.log(`UI cohesion and icon/banner spacing passed: ${label}`);
+      } finally { await context.close(); }
     }
   }
-} finally { await harness.stop(); }
+} finally { await browsers.close().finally(() => harness?.stop()); }

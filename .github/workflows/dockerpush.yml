@@ -24,9 +24,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  ci:
+  checks:
+    name: Build and unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    outputs:
+      browser_required: ${{ steps.browser.outputs.required }}
+      version: ${{ steps.version.outputs.value }}
 
     permissions:
       contents: read
@@ -64,18 +68,85 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Install smoke browsers
+      - name: Build browser test artifacts
         if: steps.browser.outputs.required == 'true'
-        run: npx playwright install --with-deps --only-shell chromium webkit
+        run: npm run build
 
-      # Keep this in the existing ci check so browser regressions block PRs and publishing.
-      # The suite builds once and exercises the production UI against isolated demo servers.
-      - name: Browser regression gate (loading, console continuity, mobile navigation)
+      - name: Upload browser test artifacts
         if: steps.browser.outputs.required == 'true'
-        timeout-minutes: 15
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-build
+          path: |
+            shared/dist
+            server/dist
+            web/dist
+          retention-days: 1
+          compression-level: 1
+          if-no-files-found: error
+
+  browser:
+    name: Browser tests (${{ matrix.shard }}/2)
+    needs: checks
+    if: needs.checks.outputs.browser_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    container:
+      # Keep aligned with playwright and the screenshot workflow. Browsers and OS
+      # libraries are already installed; npm lifecycle compilation is unnecessary.
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install browser test dependencies
+        run: |
+          npm ci --ignore-scripts
+          node -e "const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.exec('SELECT 1'); db.close()"
+
+      - name: Download browser test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: browser-build
+          path: .
+
+      - name: Browser regression gate
         env:
           CONSOLE_LOADING_REPEATS: '1'
-        run: npm run test:browser:ci
+        run: node scripts/browser-ci.mjs --shard=${{ matrix.shard }}/2
+
+  # Retain the existing required check name. Fail closed on failed/cancelled
+  # prerequisites, allowing skipped browser jobs only for known documentation.
+  ci:
+    needs: [checks, browser]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify all validation jobs succeeded
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          BROWSER_REQUIRED: ${{ needs.checks.outputs.browser_required }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: node scripts/verify-ci-results.mjs
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -92,7 +163,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            VERSION="${{ steps.version.outputs.value }}"
+            VERSION="${{ needs.checks.outputs.version }}"
             echo "tags=nl2109/serversentinel:latest,nl2109/serversentinel:${VERSION},nl2109/serversentinel:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           elif [ "${GITHUB_REF_NAME}" = "dev" ]; then
             echo "tags=nl2109/serversentinel:dev,nl2109/serversentinel:dev-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
@@ -112,6 +183,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             SS_BUILD_ID=${{ github.sha }}
-            SS_VERSION=${{ steps.version.outputs.value }}
+            SS_VERSION=${{ needs.checks.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

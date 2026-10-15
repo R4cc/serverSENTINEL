@@ -876,14 +876,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .settingsModuleCard,
-  .settingsHubToggleTrack,
-  .settingsHubToggleTrack > span {
-    transition: none;
-  }
-}
-
 /* Settings layout cohesion */
 .keyForm {
   display: block;

@@ -5,7 +5,38 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { browserCoverage, isDocumentation } from "./browser-ci-changes.mjs";
-import { runSuites } from "./browser-ci.mjs";
+import { runSuites, selectSuites } from "./browser-ci.mjs";
+import { validationSucceeded } from "./verify-ci-results.mjs";
+
+test("shards cover every suite exactly once and schedule long suites first", () => {
+  const all = selectSuites();
+  assert.equal(all.length, 14);
+  assert.equal(all[0][0], "ui-cohesion");
+  assert.equal(all[1][0], "schedules-ui");
+  for (const count of [1, 2, 3, all.length]) {
+    const shards = Array.from({ length: count }, (_, index) => selectSuites(`${index + 1}/${count}`));
+    const entries = shards.flat();
+    assert.equal(new Set(entries.map(([name]) => name)).size, all.length);
+    assert.deepEqual(entries.map(([name]) => name).sort(), all.map(([name]) => name).sort());
+    assert(shards.every(entries => entries.length > 0));
+    assert.deepEqual(shards, Array.from({ length: count }, (_, index) => selectSuites(`${index + 1}/${count}`)));
+  }
+  assert.deepEqual(selectSuites().find(([name]) => name === "mobile-navigation").slice(1), ["scripts/mobile-ui-smoke.mjs", "--navigation-only"]);
+  for (const shard of ["0/2", "3/2", "1/0", "1/15", "1.5/2", "1", "", "1/9007199254740992"]) {
+    assert.throws(() => selectSuites(shard), /Invalid browser shard/);
+  }
+});
+
+test("required ci check blocks publishing on failures, cancellations, and missing coverage", () => {
+  for (const checks of ["success", "failure", "cancelled", "skipped", undefined]) {
+    for (const required of ["true", "false", "", undefined]) {
+      for (const browser of ["success", "failure", "cancelled", "skipped", undefined]) {
+        assert.equal(validationSucceeded(checks, required, browser), checks === "success"
+          && (required === "true" && browser === "success" || required === "false" && browser === "skipped"));
+      }
+    }
+  }
+});
 
 test("only explicitly allowed documentation paths bypass browsers", () => {
   for (const path of ["README.md", "docs/modules.md", "docs/screenshots/console.png", "scripts/browser-smoke.md", "web/AGENTS.md"]) {

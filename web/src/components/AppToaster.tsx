@@ -1,5 +1,6 @@
 import { Toaster } from "sonner";
 import { CheckCircle2, CircleAlert, Info, TriangleAlert } from "lucide-react";
+import { Spinner } from "./UiPrimitives";
 
 function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "error" }) {
   const Icon = type === "success" ? CheckCircle2 : type === "info" ? Info : type === "warning" ? TriangleAlert : CircleAlert;
@@ -13,6 +14,7 @@ export function AppToaster({ darkMode }: { darkMode: boolean }) {
       expand
       gap={8}
       icons={{
+        loading: <Spinner size="sm" tone="current" />,
         success: <ToastSeverityIcon type="success" />,
         info: <ToastSeverityIcon type="info" />,
         warning: <ToastSeverityIcon type="warning" />,

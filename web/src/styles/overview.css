@@ -1350,19 +1350,6 @@ button.overviewCardRow:focus-visible {
   .serverTimelineMetricBand.is-compact { height: 145px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .serverTimelinePanel * { transition: none !important; animation: none !important; }
-
-  .overviewCardRow,
-  .timelineSeriesToggle {
-    transition: none;
-  }
-
-  .modUpdatesRefreshButton.isRefreshing > svg {
-    animation: none;
-  }
-}
-
 .overviewSupportMore {
   justify-self: start;
   max-width: 100%;

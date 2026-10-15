@@ -1,6 +1,6 @@
 # Browser regression gate
 
-The `ci` workflow runs `npm run test:browser:ci` on pull requests to `dev` and
+The `ci` workflow runs the browser gate on pull requests to `dev` and
 `main`, pushes to either branch, and manual runs. Documentation/screenshot-only
 PRs and pushes to `dev` skip browser installation and execution; default manual runs and
 pushes to `main` always run them. A failed smoke fails the existing
@@ -20,11 +20,20 @@ commit using the same allowlist. Dispatches without that optional input run the
 browser gate; missing/invalid comparison commits also run it. Runs on `main`
 always run the gate, regardless of the input.
 
-The focused suite builds the production app once, then runs two smoke scripts at
-a time against their own demo servers. The longer console-loading and mobile
-suites start first. Every suite finishes (including cleanup) even if another
-fails; any failure fails the gate. Output is prefixed with the suite name and
-each suite reports its duration. The suite includes:
+The build-and-unit-test job builds the production app once and uploads its three
+workspace outputs. Two browser jobs download those same artifacts and use the
+version-pinned Playwright container, including its browser binaries and OS libraries.
+Each job installs the locked npm dependencies without lifecycle compilation and
+probes the SQLite prebuild before running two scripts at a time against isolated
+demo servers. Suites are assigned deterministically by estimated duration, with
+the longest starting first. Each shard logs its suites and elapsed time in the job
+summary. Every suite finishes (including cleanup) even if another fails.
+
+The final job retains the required `ci` check name and verifies that unit/build
+checks and both browser shards succeeded before building or publishing Docker.
+Failed, cancelled, or unexpectedly skipped prerequisites fail that check.
+Documentation-only skips remain explicit; no branch rules or release tags change.
+The suite includes:
 
 - `loading-workflows-smoke.mjs`: Overview storage refresh/recovery, cached Files
   navigation, overlapping reads, server switches, and permission denial.
@@ -35,6 +44,12 @@ each suite reports its duration. The suite includes:
   epoch replacement, and server switches.
 - `mobile-ui-smoke.mjs --navigation-only`: Chromium/WebKit navigation, restored pages, responsive
   layouts, and console viewport/keyboard behavior.
+- `ui-cohesion-smoke.mjs`: cohesion and the shared icon/banner spacing assertions
+  during the same page/dialog visits at four widths in both themes. Browser
+  processes are reused per engine, with fresh contexts for every viewport/theme.
+  Each viewport has a fresh demo server so rapid test requests do not accumulate
+  against production rate limits; those limits remain enabled.
+  `npm run test:ui-spacing` still runs the standalone spacing suite.
 
 Install the locked npm dependencies and browser binaries before running locally:
 
@@ -43,6 +58,9 @@ npm ci
 npx playwright install --with-deps --only-shell chromium webkit
 npm run test:browser:ci
 ```
+
+To reproduce a CI shard after building, run `node scripts/browser-ci.mjs --shard=1/2`
+or `--shard=2/2`. Omitting the flag runs every suite, longest first.
 
 Installation keeps Chromium's headless shell and WebKit, omitting the unused full
 Chromium browser. CI sets `CONSOLE_LOADING_REPEATS=1` to exercise every backlog/width scenario once.

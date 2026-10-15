@@ -214,6 +214,3 @@
   .propertiesMemorySection .memoryNumberFields,
   .propertiesNetworkProtocols { grid-template-columns: minmax(0, 1fr); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .propertiesDisclosureChevron { transition: none; }
-}

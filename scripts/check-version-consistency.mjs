@@ -35,16 +35,16 @@ for (const [path, expected] of expectedText) {
   if (!readText(path).includes(expected)) failures.push(`${path} is missing ${expected}`);
 }
 
-// The screenshot workflow runs the browser scripts inside Playwright's own container, which ships
+// Browser workflows run the scripts inside Playwright's own container, which ships
 // only the browser build its release pins. Bumping the playwright package without the image leaves
 // the job to fail on missing binaries after the whole environment is already up. `.github` is not
 // COPYed into the Docker build stage, so this check only runs from a checkout.
-const screenshotWorkflow = "../.github/workflows/readme-screenshots.yml";
-if (existsSync(new URL(screenshotWorkflow, import.meta.url))) {
+for (const workflow of [".github/workflows/readme-screenshots.yml", ".github/workflows/dockerpush.yml"]) {
+  if (!existsSync(new URL(`../${workflow}`, import.meta.url))) continue;
   const playwrightVersion = readJson("package.json").devDependencies.playwright.replace(/^\D*/, "");
   const expectedImage = `mcr.microsoft.com/playwright:v${playwrightVersion}-noble`;
-  if (!readText(".github/workflows/readme-screenshots.yml").includes(expectedImage)) {
-    failures.push(`.github/workflows/readme-screenshots.yml is missing ${expectedImage}`);
+  if (!readText(workflow).includes(expectedImage)) {
+    failures.push(`${workflow} is missing ${expectedImage}`);
   }
 }
 

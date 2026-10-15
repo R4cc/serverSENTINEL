@@ -220,9 +220,6 @@ describe("stylesheet ownership", () => {
 
   it("keeps one spinner rather than a per-feature lookalike in each stylesheet", () => {
     expect(primitiveStyles).toContain(".uiSpinner");
-    // Every busy ring reduces to a static state for reduced-motion users; that
-    // only holds while there is a single rule to apply it to.
-    expect(primitiveStyles).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.uiSpinner \{/);
     for (const [name, sheet] of Object.entries(featureStyles)) {
       if (name === "primitives.css") continue;
       expect(`${name}: ${/^\s*\.[\w-]*[sS]pinner\s*\{[^}]*animation:/m.test(sheet)}`).toBe(`${name}: false`);

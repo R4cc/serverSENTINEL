@@ -1571,11 +1571,3 @@ textarea:hover:not(:disabled),
 .sidebar .sideNav button.active:active {
   background: color-mix(in srgb, var(--accent) 78%, var(--text));
 }
-
-/* The server switcher's chevron is the one shell transition declared in this
-   file rather than in `motion.css`, so it is switched off here too. */
-@media (prefers-reduced-motion: reduce) {
-  .serverSwitcherChevron {
-    transition: none;
-  }
-}

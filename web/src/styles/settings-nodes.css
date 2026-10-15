@@ -2571,10 +2571,6 @@
   .nodeDetailsDrawer {
     animation: none;
   }
-
-  .nodeTechnicalDetails summary::after {
-    transition: none;
-  }
 }
 
 /* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */

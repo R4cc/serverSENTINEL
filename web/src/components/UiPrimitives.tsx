@@ -255,7 +255,7 @@ export function EmptyState({
 /**
  * The one busy indicator. Always decorative — the surrounding `role="status"`
  * region or button label is what announces progress, so this stays hidden from
- * assistive technology and reduces to a static ring under reduced motion.
+ * assistive technology. Loading feedback always stays animated.
  */
 export function Spinner({
   size = "md",

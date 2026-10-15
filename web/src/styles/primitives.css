@@ -546,8 +546,8 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   .uiToolbarMeta { white-space: normal; }
   .uiPanelHeader { align-items: flex-start; }
 }
-/* Busy indicator. Every spinner in the app is this rule at a different size, so
-   the ring geometry, timing and reduced-motion fallback are defined once. */
+/* Busy indicator. Every spinner in the app shares the same ring and timing.
+   Loading feedback stays animated regardless of the system motion preference. */
 .uiSpinner {
   --spinner-size: 20px;
   --spinner-thickness: 2px;
@@ -572,14 +572,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiSpinner--current {
   --spinner-track: color-mix(in srgb, currentColor 28%, transparent);
   --spinner-indicator: currentColor;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .uiSpinner {
-    animation: none;
-    border-color: var(--spinner-indicator);
-    opacity: 0.5;
-  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -659,10 +651,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 @keyframes skeletonSweep {
   from { transform: translateX(-100%); }
   to { transform: translateX(100%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .uiSkeleton::after { animation: none; transform: translateX(0); opacity: 0.35; }
 }
 
 .authLoadingSkeleton { min-height: 420px; }

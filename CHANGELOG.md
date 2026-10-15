@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.10.14 - 2026-10-15
+
+- Made mod update history searchable and sortable with standard table controls, pagination, and working vertical and horizontal scrolling.
+
+## 26.10.13 - 2026-10-11
+
+- Kept small hover highlights, sidebar shines, loading spinners, skeleton shimmer, and progress feedback enabled regardless of the system reduced-motion preference.
+
 ## 26.10.12 - 2026-10-06
 
 - Kept toolbar search fields usable on phones when their clear button appears.
