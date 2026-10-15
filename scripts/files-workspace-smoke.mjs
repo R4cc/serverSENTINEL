@@ -36,7 +36,7 @@ const bundle = await build({
     window.unmount = () => root.unmount();
     root.render(<Harness />);
   `, resolveDir: repositoryRoot, loader: "tsx" },
-  bundle: true, write: false, platform: "browser", format: "iife",
+  bundle: true, write: false, outdir: "fixture", platform: "browser", format: "iife",
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [{ name: "deferred-api", setup(builder) {
     builder.onResolve({ filter: /\/api$/ }, () => ({ path: "api", namespace: "mock" }));
@@ -59,7 +59,7 @@ try {
   page.setDefaultTimeout(5000);
   await page.route("http://files.test/", route => route.fulfill({ contentType: "text/html", body: '<div id="root"></div>' }));
   await page.goto("http://files.test/");
-  await page.addStyleTag({ content: styles.outputFiles[0].text });
+  await page.addStyleTag({ content: styles.outputFiles[0].text + bundle.outputFiles.filter(file => file.path.endsWith(".css")).map(file => file.text).join("\n") });
   await page.addScriptTag({ content: bundle.outputFiles[0].text });
   await page.waitForFunction(() => window.workspace);
   const frame = () => page.evaluate(() => new Promise(requestAnimationFrame));

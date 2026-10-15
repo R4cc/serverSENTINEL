@@ -10,7 +10,7 @@ import { validationSucceeded } from "./verify-ci-results.mjs";
 
 test("shards cover every suite exactly once and schedule long suites first", () => {
   const all = selectSuites();
-  assert.equal(all.length, 14);
+  assert.equal(all.length, 15);
   assert.equal(all[0][0], "ui-cohesion");
   assert.equal(all[1][0], "schedules-ui");
   for (const count of [1, 2, 3, all.length]) {
@@ -22,7 +22,7 @@ test("shards cover every suite exactly once and schedule long suites first", () 
     assert.deepEqual(shards, Array.from({ length: count }, (_, index) => selectSuites(`${index + 1}/${count}`)));
   }
   assert.deepEqual(selectSuites().find(([name]) => name === "mobile-navigation").slice(1), ["scripts/mobile-ui-smoke.mjs", "--navigation-only"]);
-  for (const shard of ["0/2", "3/2", "1/0", "1/15", "1.5/2", "1", "", "1/9007199254740992"]) {
+  for (const shard of ["0/2", "3/2", "1/0", "1/16", "1.5/2", "1", "", "1/9007199254740992"]) {
     assert.throws(() => selectSuites(shard), /Invalid browser shard/);
   }
 });

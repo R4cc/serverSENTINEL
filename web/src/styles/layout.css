@@ -162,6 +162,32 @@ button .buttonIcon {
   margin-top: auto;
 }
 
+.sidebarNodeUpdateDot {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  color: var(--sentinel-warning);
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
+.sidebarNodeUpdateDot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+}
+
+.sidebarCollapsed .sidebarNodeUpdateDot {
+  top: 6px;
+  right: 5px;
+  transform: none;
+}
+
 .sideNav button {
   width: 100%;
   min-height: 48px;
@@ -736,6 +762,43 @@ button .buttonIcon {
   outline: 2px solid var(--toast-severity) !important;
   outline-offset: 2px !important;
 }
+
+/* Keep both choices readable without squeezing the update message between them. */
+.sonnerToast.nodeUpdateToast {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 8px !important;
+  padding: 14px 16px !important;
+}
+
+.nodeUpdateToast [data-content] {
+  grid-column: 1 / -1;
+  padding-left: 48px;
+  padding-right: 20px;
+}
+
+.nodeUpdateToast [data-icon] {
+  top: 14px !important;
+  transform: none !important;
+}
+
+.nodeUpdateToast [data-button] {
+  margin: 0 !important;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.sonnerToast.nodeUpdateToast [data-cancel] {
+  justify-self: start;
+  border-color: var(--border-row) !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+}
+.sonnerToast.nodeUpdateToast [data-cancel]:hover {
+  background: var(--surface-muted) !important;
+  color: var(--text) !important;
+}
+.nodeUpdateToast [data-action] { justify-self: end; }
 
 @media (max-width: 600px) {
   .sonnerToast [data-button] {
@@ -2009,4 +2072,49 @@ button .buttonIcon {
   .usersTable td[colspan] { grid-column: 1 / -1; }
   .usersTable .userNameCell strong { white-space: normal; overflow-wrap: anywhere; }
   .usersTable .roleCell { flex-wrap: wrap; }
+}
+
+/* Shared runtime controls also appear before Overview has been opened. */
+.uiButton.runtimeControlButton {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--control-padding-inline);
+  box-shadow: none;
+}
+
+.uiButton.runtimeControlButton.start {
+  border-color: var(--sentinel-success);
+  background: var(--sentinel-success);
+  color: var(--sentinel-success-contrast);
+}
+
+.uiButton.runtimeControlButton.start:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sentinel-success) 80%, var(--text));
+  background: color-mix(in srgb, var(--sentinel-success) 84%, var(--text));
+}
+
+.uiButton.runtimeControlButton.stop {
+  border-color: var(--sentinel-danger);
+  background: var(--sentinel-danger);
+  color: var(--sentinel-danger-contrast);
+}
+
+.uiButton.runtimeControlButton.restart {
+  border-color: var(--border-muted);
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
+  color: var(--text);
+}
+
+.uiButton.runtimeControlButton.restart:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
+  background: var(--sentinel-accent-soft);
+  color: var(--sentinel-accent-strong);
+}
+
+.uiButton.runtimeControlButton:disabled {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  opacity: 0.62;
 }

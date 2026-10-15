@@ -1,3 +1,4 @@
+import "../../styles/file-manager.css";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";

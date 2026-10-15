@@ -1,3 +1,4 @@
+import "../styles/server-properties.css";
 import { useJavaMemory, useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { Archive, ChevronDown, Cpu, Network, Power, Save, Settings2, SlidersHorizontal, Trash2, Undo2 } from "lucide-react";

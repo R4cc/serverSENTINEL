@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ScheduleNavigationTarget,
   ServerTimelineEvent,
@@ -1019,7 +1019,7 @@ export function ServerTimeline({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = visualizationRef.current;
     if (!element) return;
     const updateWidth = () => {
@@ -1331,12 +1331,14 @@ export function ServerTimeline({
           <div className="serverTimelineLayerGroup" role="group" aria-label="Event layers">
             <span className="serverTimelineLayerHeading">Events</span>
             <div className="serverTimelineSeries">
-              {annotationOptions.filter((annotation) => annotation.key !== "automation" || data?.scheduleAnnotationsAvailable).map((annotation) => (
+              {annotationOptions.map((annotation) => (
                 <button
                   type="button"
                   key={annotation.key}
                   className={`timelineSeriesToggle timelineAnnotationToggle tone-${annotation.key}${annotationEnabled[annotation.key] ? " active" : ""}`}
                   aria-pressed={annotationEnabled[annotation.key]}
+                  disabled={annotation.key === "automation" && !data?.scheduleAnnotationsAvailable}
+                  title={annotation.key === "automation" && !data?.scheduleAnnotationsAvailable ? "Automation annotations are unavailable" : undefined}
                   onClick={() => {
                     setSelectedCluster(null);
                     setAnnotationEnabled((current) => ({ ...current, [annotation.key]: !current[annotation.key] }));

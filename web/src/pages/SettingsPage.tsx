@@ -1,3 +1,4 @@
+import "../styles/settings.css";
 import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
 import { Blocks, CalendarDays, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
 import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";

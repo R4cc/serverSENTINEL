@@ -45,6 +45,9 @@ const setup = await build({
 });
 const styles = await build({ entryPoints: ["web/src/styles.css"], absWorkingDir: repositoryRoot,
   bundle: true, write: false, loader: { ".woff2": "dataurl" }, external: ["*.woff", "*.ttf", "*.svg", "*.png"] });
+const notifications = await build({ entryPoints: ["scripts/fixtures/node-update-notifications.tsx"],
+  absWorkingDir: repositoryRoot, bundle: true, write: false, platform: "browser", format: "iife",
+  define: { "process.env.NODE_ENV": '"production"' } });
 
 const harness = await startDemoHarness({ dataDirectoryPrefix: "serversentinel-nodes-ui-" });
 const screenshots = process.env.NODES_SCREENSHOTS;
@@ -162,6 +165,79 @@ try {
       await capture(page, `${width}-${theme}-connected`);
       await page.getByRole("button", { name: "Done", exact: true }).click();
       await page.locator(".nodeModalPanel").waitFor({ state: "detached" });
+
+      const mountNotifications = async (multiple = false) => {
+        await page.goto("http://nodes.test/");
+        await page.evaluate(({ theme, multiple }) => {
+          document.documentElement.className = theme === "dark" ? "themeDark" : "themeLight";
+          window.nodeUpdateInitialMultiple = multiple;
+        }, { theme, multiple });
+        await page.addStyleTag({ content: styles.outputFiles[0].text });
+        await page.addScriptTag({ content: notifications.outputFiles[0].text });
+      };
+      await mountNotifications();
+      const updateToast = page.locator(".nodeUpdateToast");
+      const dot = page.locator(".sidebarNodeUpdateDot");
+      await updateToast.getByText("Alpha has an update available.", { exact: true }).waitFor();
+      assert.equal(await dot.getAttribute("title"), "Update available for node: Alpha");
+      const nodesButton = page.locator('[data-nav-page="nodes"]');
+      await nodesButton.focus();
+      const descriptionId = await nodesButton.getAttribute("aria-describedby");
+      assert.equal(await page.locator(`[id="${descriptionId}"]`).innerText(), "Update available for node: Alpha");
+      assert.equal(await dot.evaluate(element => getComputedStyle(element, "::after").animationIterationCount), "infinite");
+      assert(await dot.evaluate(element => parseFloat(getComputedStyle(element, "::after").animationDuration) > 0.1));
+      const assertToastFits = async () => {
+        // Sonner mounts the toast before its entrance transition has settled.
+        await page.waitForFunction(() => [...document.querySelectorAll('.nodeUpdateToast button')].every(element => {
+          const box = element.getBoundingClientRect();
+          return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight;
+        }), undefined, { timeout: 3000 });
+        for (const button of await updateToast.getByRole("button").all()) {
+          assert(await button.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight
+              && element.scrollWidth <= element.clientWidth + 1;
+          }), "Node update toast action is clipped");
+        }
+      };
+      await assertToastFits();
+      await capture(page, `${width}-${theme}-node-update-toast`);
+      await updateToast.getByRole("button", { name: "View node", exact: true }).click();
+      await updateToast.waitFor({ state: "detached" });
+      assert.equal(await page.locator("#node-update-selection").innerText(), "nodes:alpha");
+      await page.evaluate(() => window.nodeUpdates.current());
+      await dot.waitFor({ state: "detached" });
+      await mountNotifications(true);
+      await updateToast.getByText("Multiple nodes have an update available.", { exact: true }).waitFor();
+      assert.equal(await dot.getAttribute("title"), "Update available for nodes: Alpha, Beta");
+      assert.equal(await updateToast.locator("[data-description]").innerText(), "Alpha, Beta");
+      await assertToastFits();
+      await updateToast.getByRole("button", { name: "View nodes", exact: true }).click();
+      await updateToast.waitFor({ state: "detached" });
+      assert.equal(await page.locator("#node-update-selection").innerText(), "nodes:fleet");
+      await mountNotifications(true);
+      await updateToast.getByRole("button", { name: "Remind in 3 days", exact: true }).click();
+      await updateToast.waitFor({ state: "detached" });
+      const muteRemaining = await page.evaluate(() => Number(localStorage.getItem("serversentinel.nodeUpdateNotificationsMutedUntil")) - Date.now());
+      assert(muteRemaining > 3 * 86400_000 - 5000 && muteRemaining <= 3 * 86400_000);
+      await mountNotifications(true);
+      await dot.waitFor({ state: "visible" });
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await updateToast.count(), 0, "Snoozed visit displayed another toast");
+      assert.equal(await dot.getAttribute("title"), "Update available for nodes: Alpha, Beta", "Snoozing hid the sidebar indicator");
+      await dot.hover();
+      if (width > 1100) {
+        await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+        assert(await dot.isVisible(), "Collapsed desktop sidebar hid the update dot");
+        assert(await dot.evaluate(element => {
+          const box = element.getBoundingClientRect();
+          const button = element.closest("button").getBoundingClientRect();
+          return box.left >= button.left && box.right <= button.right && box.top >= button.top && box.bottom <= button.bottom;
+        }), "Collapsed sidebar clips the update dot");
+        await capture(page, `${width}-${theme}-node-update-collapsed`);
+      }
+      await page.evaluate(() => window.nodeUpdates.current());
+      await dot.waitFor({ state: "detached" });
       assert.deepEqual(errors, []);
       console.log(`Nodes UI passed: ${width}px ${theme}`);
     } finally { await browser.close(); }

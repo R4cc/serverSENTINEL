@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { ModHistoryPage } from "./ModHistoryPage";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { lazyPage } from "../../app/lazyPage";
+import { FeaturePageLoadingSkeleton } from "../../components/LoadingSkeletons";
 import { useDemoModHistory } from "./useDemoModHistory";
 import { toast } from "sonner";
 import { ToastProgress } from "../../components/ToastProgress";
@@ -7,12 +8,16 @@ import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import type { ServerRuntimeType } from "@serversentinel/contracts";
 import type { ActivePage, GeneralJob, InstalledMod, ManagedServer, ModUpdatePlan, Notify, ServerStatus } from "../../types";
 import { errorMessage } from "../../utils/appHelpers";
-import { ModsPage } from "../../pages/ModsPage";
-import { modUpdateRefreshResultMessage } from "../../pages/OverviewPage";
+import { modUpdateRefreshResultMessage } from "./modUpdatePlan";
 import type { ManagedContentTerminology } from "./contentTerminology";
 import { resolveModGuards } from "./modAccess";
 import { useModsWorkspace } from "./useModsWorkspace";
 import { modUpdateCheckProgressLabel, modUpdateCheckProgressPercent } from "./modUpdatePlan";
+
+// Overview needs the update-plan controller, but the editor and history only
+// belong to the Mods workspace. Their CSS follows the same lazy boundaries.
+const { Component: ModsPage } = lazyPage(() => import("../../pages/ModsPage"), (module) => module.ModsPage);
+const { Component: ModHistoryPage } = lazyPage(() => import("./ModHistoryPage"), (module) => module.ModHistoryPage);
 
 /**
  * The managed-content module's browser surface: the mods workspace and its page, behind one dynamic
@@ -186,7 +191,7 @@ export function ModsModule(props: ModsModuleProps) {
 
   if (!props.active || !props.activeServer) return null;
 
-  if (historyOpen) return <ModHistoryPage key={props.activeServer.id} serverId={props.activeServer.id}
+  if (historyOpen) return <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading update history" page="mods" />}><ModHistoryPage key={props.activeServer.id} serverId={props.activeServer.id}
     terminology={props.managedContent} installedMods={workspace.data.installedMods} locked={guards.modsLocked || mutating}
     requestConfirmation={props.requestConfirmation} onBack={() => setHistoryOpen(false)}
     onChanged={async () => {
@@ -196,9 +201,10 @@ export function ModsModule(props: ModsModuleProps) {
         props.refreshFiles(props.activeServer.id, `/${props.managedContent.directory}`)
       ]);
     }}
-    formatDate={props.formatDate} handleStaleSession={props.handleStaleSession} source={demoHistory} />;
+    formatDate={props.formatDate} handleStaleSession={props.handleStaleSession} source={demoHistory} /></Suspense>;
 
   return (
+    <Suspense fallback={<FeaturePageLoadingSkeleton label={`Loading ${props.managedContent.plural}`} page="mods" />}>
     <ModsPage
       onHistory={() => setHistoryOpen(true)}
       workspace={workspace}
@@ -223,5 +229,6 @@ export function ModsModule(props: ModsModuleProps) {
       relativeTimestamps={props.relativeTimestamps}
       formatters={{ date: props.formatDate, number: props.formatNumber }}
     />
+    </Suspense>
   );
 }

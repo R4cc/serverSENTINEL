@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NodeView } from "../../types";
+import { nodesWithAvailableUpdates } from "../../utils/nodeUpdates";
 import {
   muteNodeUpdateVisitNotification,
   nodeUpdateNotificationMuteMs,
@@ -22,6 +23,15 @@ function node(name: string, overrides: Partial<NodeView> = {}): NodeView {
 }
 
 describe("node update visit notifications", () => {
+  it("keeps sidebar updates visible independently of toast notification preferences", () => {
+    expect(nodesWithAvailableUpdates([
+      node("Muted", { updateNotificationsEnabled: false }),
+      node("Current", { agentVersion: "1.12.0", buildId: "new-build" }),
+      node("Internal", { isInternal: true }),
+      node("Rebuilt", { agentVersion: "1.12.0", buildId: "old-build" })
+    ], "1.12.0", "new-build").map((entry) => entry.name)).toEqual(["Muted", "Rebuilt"]);
+  });
+
   it("names one node and collapses multiple updates into one fleet message", () => {
     expect(nodeUpdateVisitNotificationText([node("Alpha")], "1.12.0", "new-build"))
       .toBe("Alpha has an update available.");

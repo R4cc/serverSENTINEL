@@ -1,3 +1,4 @@
+import "../styles/server-properties.css";
 import { useJavaMemory, useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { defaultDockerImageForMinecraftVersion, javaMajorVersionForMinecraft, serverRuntimeDefinitions, serverRuntimeTypes, type ServerRuntimeDefinition, type ServerRuntimeType } from "@serversentinel/contracts";

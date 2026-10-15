@@ -6,7 +6,11 @@ import { InlineState } from "../components/InlineState";
 import { ServerTimelineLoadingSkeleton } from "../components/LoadingSkeletons";
 import type { ManagedContentTerminology } from "../features/mods/contentTerminology";
 import { useServerStorageSummary } from "../features/overview/useServerStorageSummary";
-import { ActivePlayersPanel, ModHealthPanel, OverviewSummary, RecentEventsPanel, SchedulePanel } from "./OverviewPage";
+import { ActivePlayersPanel, ModHealthPanel, OverviewSummary, OverviewCard, SchedulePanel } from "./OverviewPage";
+
+import { LoadingLabel, SkeletonBlock } from "../components/UiPrimitives";
+
+const { Component: RecentEventsPanel } = lazyPage(() => import("./RecentEventsPanel"), (module) => module.RecentEventsPanel);
 
 const { Component: ServerTimeline, preload: loadServerTimeline } = lazyPage(
   () => import("../components/ServerTimeline"),
@@ -156,6 +160,10 @@ export function ServerOverviewTab({
             onOpenSchedules={onOpenSchedules}
           />
         </div>
+        <Suspense fallback={<OverviewCard className="eventsPanel" title="Server events" loading>
+          <LoadingLabel>Loading server events</LoadingLabel>
+          <div className="serverEventsSkeleton" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <SkeletonBlock className="eventSkeletonRow" key={index} />)}</div>
+        </OverviewCard>}>
         <RecentEventsPanel
           events={overviewData.events}
           eventsStatus={overviewData.eventsStatus}
@@ -167,6 +175,7 @@ export function ServerOverviewTab({
           onOpenConsole={onOpenConsole}
           loading={overviewLoading && overviewData.events.length === 0}
         />
+        </Suspense>
       </div>
     </section>
   );

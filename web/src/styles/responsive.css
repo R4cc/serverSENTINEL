@@ -5,8 +5,9 @@
  * responsive rules belong in their owner's stylesheet next to the base rule;
  * `styles.test.ts` enforces that boundary.
  *
- * Cascade: this loads after every feature stylesheet except `nodes.css`, so
- * rules here win ties. Sections are ordered by intent, not by breakpoint, and
+ * Cascade: feature sheets arrive with their lazy pages. Shell geometry uses
+ * enough specificity to keep ownership as they arrive. Sections are ordered by
+ * intent, not by breakpoint, and
  * some later blocks deliberately re-open an earlier breakpoint. Moving a
  * shared block can therefore change which rule wins.
  *
@@ -120,7 +121,7 @@
     overflow: hidden;
   }
 
-  .workspace {
+  .appShell > .workspace {
     height: 100%;
     min-height: 0;
     overflow-y: auto;
