@@ -33,7 +33,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? ".");
-  await requireFilePathPermission(request, server, target, "files.view");
+  await requireFilePathPermission(request, runtime, server, target, "files.view");
   return runtime.listFiles(server, target);
 });
 
@@ -59,7 +59,31 @@ function requireNoRunningFileExtraction(serverId: string) {
   if (running) throw new Error("File mutations are unavailable while ZIP extraction is running");
 }
 
+async function requireRelocationPermissions(
+  request: { headers: { cookie?: string } }, server: ManagedServer, runtime: NodeRuntime, source: string, target: string
+) {
+  const sourceIsMod = runtime.isModsPath(server, source), targetIsMod = runtime.isModsPath(server, target);
+  if (!sourceIsMod && !targetIsMod) {
+    await requireFilePathPermission(request, runtime, server, source, runtime.fileRenamePermission(server, source, target));
+    return;
+  }
+  const from = runtime.publicPath(server, source), to = runtime.publicPath(server, target);
+  const isToggle = sourceIsMod && targetIsMod &&
+    ((/\.jar$/i.test(from) && to === `${from}.disabled`) || (/\.jar$/i.test(to) && from === `${to}.disabled`));
+  if (isToggle) {
+    await requireRequestPermission(request, "mods.enableDisable");
+    return;
+  }
+  // Relocating content can install or remove executable code. The toggle
+  // permission covers only adding/removing .disabled on the same JAR.
+  await requireFilePathPermission(request, runtime, server, source,
+    runtime.isServerSettingsFile(server, source) ? "servers.editSettings" : sourceIsMod ? "mods.remove" : "files.edit");
+  await requireFilePathPermission(request, runtime, server, target,
+    runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : targetIsMod ? "mods.upload" : "files.edit");
+}
+
 function archiveOutputPermission(path: string): Permission {
+  path = path.toLowerCase();
   if (path === "/server.properties") return "servers.editSettings";
   if (path === "/mods" || path.startsWith("/mods/") || path === "/plugins" || path.startsWith("/plugins/")) return "mods.upload";
   return "files.upload";
@@ -91,7 +115,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   services.exportCoordinator.assertMutationAllowed(server.id);
   const runtime = runtimeForServer(server);
   const archive = await resolveZipArchive(runtime, server, request.body.path);
-  await requireFilePathPermission(request, server, archive, "files.view");
+  await requireFilePathPermission(request, runtime, server, archive, "files.view");
   const destination = await resolveArchiveDestination(runtime, server, request.body.destinationPath);
   const conflictPolicy = request.body.conflictPolicy;
   if (conflictPolicy !== "replace" && conflictPolicy !== "skip") throw new Error("conflictPolicy must be replace or skip");
@@ -148,7 +172,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, "files.view");
+  await requireFilePathPermission(request, runtime, server, target, "files.view");
   return runtime.previewFile(server, target);
 });
 
@@ -156,7 +180,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, "files.download");
+  await requireFilePathPermission(request, runtime, server, target, "files.download");
   const selection = await downloadSelection(runtime, server, target);
   if (selection.type !== "file") throw new Error("Only files can be downloaded");
   assertDownloadSize(selection.size);
@@ -179,7 +203,7 @@ app.post<{ Params: { id: string }; Body: { paths?: unknown } }>("/api/servers/:i
   for (const rawPath of rawPaths) {
     if (typeof rawPath !== "string") throw new Error("Download paths must be strings");
     const target = await runtime.resolveExistingPath(server, rawPath);
-    await requireFilePathPermission(request, server, target, "files.download");
+    await requireFilePathPermission(request, runtime, server, target, "files.download");
     selections.push(await downloadSelection(runtime, server, target));
   }
   const deduped = dedupeDownloadSelections(selections);
@@ -221,7 +245,7 @@ app.get<{ Params: { id: string; token: string } }>("/api/servers/:id/files/downl
   const runtime = runtimeForServer(server);
   for (const entry of token.entries) {
     const target = await runtime.resolveExistingPath(server, entry.sourcePath);
-    await requireFilePathPermission(request, server, target, "files.download");
+    await requireFilePathPermission(request, runtime, server, target, "files.download");
   }
   const download = await runtime.downloadArchive(server, token.entries, token.filename);
   return reply
@@ -234,7 +258,7 @@ app.get<{ Params: { id: string }; Querystring: { path?: string } }>("/api/server
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, "files.view");
+  await requireFilePathPermission(request, runtime, server, target, "files.view");
   return readFileWithRevision(runtime, server, target);
 });
 
@@ -242,7 +266,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; revision?: string } }>
   const server = await getServer(request.params.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
-  const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  const user = await requireFilePathPermission(request, runtime, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const path = await fileEditLockPath(runtime, server, target);
   return fileEdits.run(server.id, path, async () => {
@@ -285,7 +309,7 @@ app.put<{ Params: { id: string }; Body: { path?: string; content?: string; lease
   requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.body.path ?? "");
-  const user = await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
+  const user = await requireFilePathPermission(request, runtime, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.edit");
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   if (!request.body.leaseId) {
     throwHttp(409, "A valid file edit lease is required", { code: "file_edit_lease_lost" });
@@ -310,7 +334,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const parent = await runtime.resolveExistingPath(server, request.body.path ?? ".");
-  await requireFilePathPermission(request, server, parent, "files.upload");
+  await requireFilePathPermission(request, runtime, server, parent, "files.upload");
   return withFileMutation(server, () => runtime.createFolder(server, parent, request.body.name));
 });
 
@@ -335,7 +359,7 @@ app.post<{ Params: { id: string } }>("/api/servers/:id/files/upload", destructiv
     : runtime.isModsPath(server, target) && (filename.endsWith(".jar") || filename.endsWith(".jar.disabled"))
       ? "mods.upload"
       : "files.upload";
-  await requireFilePathPermission(request, server, parent, uploadPermission);
+  await requireFilePathPermission(request, runtime, server, parent, uploadPermission);
   if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
   const touchesMods = runtime.isModsPath(server, target);
   const upload = checkedFileMutation(server, runtime.isServerSettingsFile(server, target), () => runtime.uploadFile(server, parent, filename, uploadRequest.content));
@@ -352,7 +376,7 @@ app.patch<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/
   }
   const targetName = safeFileManagerName(request.body.name);
   const target = await runtime.resolveWritableResolvedPath(server, join(dirname(source), targetName));
-  await requireFilePathPermission(request, server, source, runtime.fileRenamePermission(server, source, target));
+  await requireRelocationPermissions(request, server, runtime, source, target);
   const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
@@ -369,8 +393,7 @@ app.post<{ Params: { id: string }; Body: { path?: string; destinationPath?: stri
   const destination = await runtime.resolveExistingPath(server, request.body.destinationPath ?? ".");
   const targetInput = destination === "." ? basename(source) : `${destination.replace(/[\\/]+$/, "")}/${basename(source)}`;
   const target = await runtime.resolveWritableResolvedPath(server, targetInput);
-  await requireFilePathPermission(request, server, source, runtime.fileRenamePermission(server, source, source));
-  await requireFilePathPermission(request, server, target, runtime.fileRenamePermission(server, target, target));
+  await requireRelocationPermissions(request, server, runtime, source, target);
   const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
@@ -387,8 +410,8 @@ app.post<{ Params: { id: string }; Body: { path?: string; name?: string } }>("/a
   const targetInput = server.nodeId === localNodeId ? join(dirname(source), targetName) : posix.join(posix.dirname(source), targetName);
   const target = await runtime.resolveWritableResolvedPath(server, targetInput);
   const touchesSettings = runtime.isServerSettingsFile(server, source) || runtime.isServerSettingsFile(server, target);
-  await requireFilePathPermission(request, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
-  await requireFilePathPermission(request, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.upload");
+  await requireFilePathPermission(request, runtime, server, source, runtime.isModsPath(server, source) ? "mods.upload" : "files.upload");
+  await requireFilePathPermission(request, runtime, server, target, runtime.isServerSettingsFile(server, target) ? "servers.editSettings" : "files.upload");
   const touchesMods = runtime.isModsPath(server, source) || runtime.isModsPath(server, target);
   if (touchesSettings) await requireServerStoppedForMutableConfiguration(server);
   const duplicate = checkedFileMutation(server, touchesSettings, () => runtime.duplicateFile(server, source, targetName));
@@ -400,9 +423,12 @@ app.delete<{ Params: { id: string }; Querystring: { path?: string; recursive?: s
   requireNoRunningFileExtraction(server.id);
   const runtime = runtimeForServer(server);
   const target = await runtime.resolveExistingPath(server, request.query.path ?? "");
-  await requireFilePathPermission(request, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
+  await requireFilePathPermission(request, runtime, server, target, runtime.isModsPath(server, target) ? "mods.remove" : "files.delete");
   const touchesMods = runtime.isModsPath(server, target);
-  if (runtime.isServerSettingsFile(server, target)) await requireServerStoppedForMutableConfiguration(server);
+  if (runtime.isServerSettingsFile(server, target)) {
+    await requireRequestPermission(request, "servers.editSettings");
+    await requireServerStoppedForMutableConfiguration(server);
+  }
   const deleteEntry = checkedFileMutation(server, runtime.isServerSettingsFile(server, target), () => runtime.deleteFile(server, target, request.query.recursive));
   return touchesMods ? withTrackedModMutation(server, deleteEntry, await requireRequestPermission(request)) : withFileMutation(server, deleteEntry);
 });

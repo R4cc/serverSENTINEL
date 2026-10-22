@@ -530,10 +530,12 @@ export class ServersRepository {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET schedule_name=excluded.schedule_name,
         status=excluded.status, message=excluded.message, ran_at=excluded.ran_at, details_json=excluded.details_json
+      WHERE scheduled_runs.server_id=excluded.server_id AND scheduled_runs.schedule_id=excluded.schedule_id
     `);
     for (const run of runs) {
       if (!equal(existingById.get(run.id), run)) {
-        upsert.run(run.id, serverId, schedule.id, run.scheduleName, run.status, run.message ?? null, run.ranAt, run.details ? JSON.stringify(run.details) : null);
+        const result = upsert.run(run.id, serverId, schedule.id, run.scheduleName, run.status, run.message ?? null, run.ranAt, run.details ? JSON.stringify(run.details) : null);
+        if (!result.changes) throw new Error("Scheduled run id belongs to another server or schedule");
       }
     }
   }

@@ -119,6 +119,17 @@ function managedServer(id = "server-id", externalPort = 25_565): ManagedServer {
 }
 
 describe("ServersRepository", () => {
+  it("rolls back creation when imported run ids collide with another server's history", async () => {
+    const { servers } = await createRepositories();
+    const victim = managedServer();
+    servers.create(victim);
+    const incoming = managedServer("incoming");
+    incoming.managedPorts = [];
+    incoming.schedules![0].recentRuns![0].message = "forged history";
+    expect(() => servers.create(incoming)).toThrow("belongs to another server or schedule");
+    expect(servers.find("incoming")).toBeUndefined();
+    expect(servers.findScheduledRun(victim.id, "schedule-id", "run-id")?.message).toBe("Sent 2 commands");
+  });
   it("separates configuration, bounded summaries and individual captured run details", async () => {
     const { servers, storage } = await createRepositories();
     const server = managedServer();
@@ -308,6 +319,7 @@ describe("ServersRepository", () => {
     servers.create(first);
 
     const imported = { ...managedServer("second-id"), portConflictUnresolved: true };
+    imported.schedules![0].recentRuns = []; // Actual imports clear retained run history.
     expect(() => servers.create(imported)).not.toThrow();
     expect(servers.listWithScheduleSummaries()).toHaveLength(2);
     expect(servers.listWithScheduleSummaries().find((server) => server.id === first.id)).toEqual(first);

@@ -11,7 +11,7 @@ export class ModHashCache {
 
   constructor(private readonly maxEntries = 5_000) {}
 
-  async sha1(key: string, size: number, modifiedAt: string | number, read: () => Promise<Buffer>) {
+  async sha1(key: string, size: number, modifiedAt: string | number, read: () => Promise<Buffer | AsyncIterable<Uint8Array>>) {
     const cached = this.entries.get(key);
     if (cached && cached.size === size && cached.modifiedAt === modifiedAt) {
       this.entries.delete(key);
@@ -19,7 +19,18 @@ export class ModHashCache {
       return cached.sha1;
     }
 
-    const sha1 = createHash("sha1").update(await read()).digest("hex");
+    const input = await read(), hash = createHash("sha1");
+    if (Buffer.isBuffer(input)) hash.update(input);
+    else {
+      let received = 0;
+      for await (const chunk of input) {
+        received += chunk.byteLength;
+        if (received > size) throw new Error("Mod file grew while hashing");
+        hash.update(chunk);
+      }
+      if (received !== size) throw new Error("Mod file changed while hashing");
+    }
+    const sha1 = hash.digest("hex");
     this.entries.delete(key);
     this.entries.set(key, { size, modifiedAt, sha1 });
     while (this.entries.size > this.maxEntries) {

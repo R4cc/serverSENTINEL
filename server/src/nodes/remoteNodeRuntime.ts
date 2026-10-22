@@ -140,7 +140,14 @@ export class RemoteNodeRuntime implements NodeRuntime {
 
   async createServer(input: unknown): Promise<ManagedServer> {
     const result = await this.command({ id: "pending", nodeId: this.nodeId } as ManagedServer, "server.create", { input }, provisioningCommandTimeoutMs) as ManagedServer;
-    const server = this.bindServerIdentity(result);
+    const bound = this.bindServerIdentity(result);
+    // Schedules and retained history belong to the panel, including on create.
+    const server: ManagedServer = {
+      ...compactNodeServerSpec(bound),
+      createdAt: bound.createdAt || new Date().toISOString(),
+      updatedAt: bound.updatedAt || new Date().toISOString(),
+      runtimeIntent: "stopped"
+    };
     await this.persistServer(server);
     return server;
   }
@@ -421,13 +428,13 @@ export class RemoteNodeRuntime implements NodeRuntime {
   }
 
   isModsPath(server: ManagedServer, absolutePath: string) {
-    const path = publicRemotePath(absolutePath);
+    const path = publicRemotePath(absolutePath).toLowerCase();
     const directory = serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory;
     return path === `/${directory}` || path.startsWith(`/${directory}/`);
   }
 
   isServerSettingsFile(_server: ManagedServer, absolutePath: string) {
-    return basename(absolutePath) === "server.properties";
+    return basename(absolutePath).toLowerCase() === "server.properties";
   }
 
   fileRenamePermission(server: ManagedServer, source: string, target: string): Permission {

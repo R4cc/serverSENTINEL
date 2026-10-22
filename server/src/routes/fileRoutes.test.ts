@@ -7,7 +7,7 @@ import type { NodeRuntime } from "../nodes/types.js";
 import type { ManagedServer, Permission, StoredUser } from "../types.js";
 import { openStorageDatabase, type StorageDatabase } from "../storage/database.js";
 import { FileEditLeasesRepository, fileEditLeaseTimeoutMs } from "../storage/fileEditLeasesRepository.js";
-import { fileContentRevision } from "../files/fileService.js";
+import { fileContentRevision, isModsPath, isServerSettingsFile } from "../files/fileService.js";
 import { serverMutations } from "../servers/mutationCoordinator.js";
 import { registerFileRoutes } from "./fileRoutes.js";
 
@@ -46,6 +46,7 @@ let contents: Map<string, string>;
 let readFile: ReturnType<typeof vi.fn<(server: ManagedServer, path: string) => Promise<{ content: string }>>>;
 let writeFile: ReturnType<typeof vi.fn<(server: ManagedServer, path: string, content: unknown) => Promise<{ ok: boolean }>>>;
 let duplicateFile: ReturnType<typeof vi.fn>;
+let deleteFile: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   storage = openStorageDatabase(":memory:");
@@ -75,15 +76,25 @@ beforeEach(() => {
     return { ok: true };
   });
   duplicateFile = vi.fn(async () => ({ ok: true }));
+  deleteFile = vi.fn(async (_server: ManagedServer, path: string) => {
+    contents.delete(path);
+    return { ok: true };
+  });
   context.runtime = {
     resolveExistingPath: async (_server: ManagedServer, path: string) => path.replace(/^\//, ""),
     resolveWritableResolvedPath: async (_server: ManagedServer, path: string) => path.replace(/^\//, ""),
     publicPath: (_server: ManagedServer, path: string) => `/${path}`,
     isServerSettingsFile: (_server: ManagedServer, path: string) => path === "server.properties",
     isModsPath: () => false,
+    fileRenamePermission: (_server: ManagedServer, source: string, target: string) =>
+      [source, target].some(path => context.runtime!.isServerSettingsFile(_server, path)) ? "servers.editSettings" : "files.edit",
     readFile,
     writeFile,
-    duplicateFile
+    duplicateFile,
+    deleteFile,
+    listFiles: vi.fn(async () => ({ path: "/", entries: [] })),
+    moveFile: vi.fn(async () => ({ ok: true })),
+    renameFile: vi.fn(async () => ({ ok: true }))
   } as unknown as NodeRuntime;
   app = Fastify();
   registerFileRoutes(app);
@@ -273,5 +284,103 @@ describe("file duplication settings protection", () => {
     const response = await app.inject({ method: "POST", url: "/api/servers/server/file/duplicate", payload: { path: "config/config.txt", name: "copy.txt" } });
     expect(response.statusCode, response.body).toBe(200);
     expect(resolveTarget).toHaveBeenCalledWith(context.server, "config/copy.txt");
+  });
+});
+
+describe("file deletion settings protection", () => {
+  it("rejects deleting server.properties without settings permission", async () => {
+    context.user!.permissions = ["files.delete"];
+    contents.set("server.properties", "online-mode=true");
+    const response = await app.inject({ method: "DELETE", url: "/api/servers/server/file?path=server.properties" });
+    expect(response.statusCode, response.body).toBe(403);
+    expect(deleteFile).not.toHaveBeenCalled();
+    expect(contents.get("server.properties")).toBe("online-mode=true");
+  });
+
+  it("retains the deletion permission and stopped-state requirements for settings", async () => {
+    const request = { method: "DELETE" as const, url: "/api/servers/server/file?path=server.properties" };
+    contents.set("server.properties", "online-mode=true");
+    context.user!.permissions = ["servers.editSettings"];
+    expect((await app.inject(request)).statusCode).toBe(403);
+    context.user!.permissions.push("files.delete");
+    context.running = true;
+    expect((await app.inject(request)).statusCode).toBe(409);
+    expect(deleteFile).not.toHaveBeenCalled();
+    context.running = false;
+    expect((await app.inject(request)).statusCode).toBe(200);
+    expect(deleteFile).toHaveBeenCalledWith(context.server, "server.properties", undefined);
+    expect(contents.has("server.properties")).toBe(false);
+  });
+
+  it("keeps ordinary deletion available without settings permission", async () => {
+    context.user!.permissions = ["files.delete"];
+    context.running = true;
+    const response = await app.inject({ method: "DELETE", url: "/api/servers/server/file?path=config.txt" });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(contents.has("config.txt")).toBe(false);
+  });
+});
+
+describe("managed-content permissions through the file API", () => {
+  beforeEach(() => {
+    context.runtime!.isModsPath = (_server, path) => /^(mods|plugins)(\/|$)/i.test(path);
+  });
+
+  it.each(["mods", "plugins"])("checks remote %s paths with the selected runtime", async folder => {
+    context.user!.permissions = ["files.view", "files.edit", "files.download", "files.delete"];
+    const root = "/api/servers/server";
+    for (const request of [
+      { method: "GET" as const, url: `${root}/files?path=${folder}` },
+      { method: "GET" as const, url: `${root}/file?path=${folder}/custom.jar` },
+      { method: "GET" as const, url: `${root}/file/download?path=${folder}/custom.jar` },
+      { method: "DELETE" as const, url: `${root}/file?path=${folder}/custom.jar` }
+    ]) expect((await app.inject(request)).statusCode).toBe(403);
+    expect(readFile).not.toHaveBeenCalled();
+    expect(deleteFile).not.toHaveBeenCalled();
+    context.user!.permissions.push("mods.view");
+    expect((await app.inject({ method: "GET", url: `${root}/files?path=${folder}` })).statusCode).toBe(200);
+  });
+
+  it.each(["mods", "plugins"])("requires upload permission to move new code into %s", async folder => {
+    context.user!.permissions = ["files.edit", "mods.enableDisable"];
+    const request = { method: "POST" as const, url: "/api/servers/server/file/move", payload: { path: "incoming.jar", destinationPath: folder } };
+    expect((await app.inject(request)).statusCode).toBe(403);
+    expect(context.runtime!.moveFile).not.toHaveBeenCalled();
+    context.user!.permissions.push("mods.upload");
+    expect((await app.inject(request)).statusCode).toBe(200);
+    expect(context.runtime!.moveFile).toHaveBeenCalledWith(context.server, "incoming.jar", folder);
+  });
+
+  it("protects renaming an ordinary folder into the executable content directory", async () => {
+    context.user!.permissions = ["files.edit", "mods.enableDisable"];
+    const response = await app.inject({ method: "PATCH", url: "/api/servers/server/file", payload: { path: "incoming", name: "mods" } });
+    expect(response.statusCode).toBe(403);
+    expect(context.runtime!.renameFile).not.toHaveBeenCalled();
+  });
+
+  it("requires removal permission for moves out of managed content", async () => {
+    context.user!.permissions = ["files.edit", "mods.enableDisable"];
+    const request = { method: "POST" as const, url: "/api/servers/server/file/move", payload: { path: "mods/custom.jar", destinationPath: "." } };
+    expect((await app.inject(request)).statusCode).toBe(403);
+    expect(context.runtime!.moveFile).not.toHaveBeenCalled();
+    context.user!.permissions.push("mods.remove");
+    expect((await app.inject(request)).statusCode).toBe(200);
+  });
+
+  it("retains enable/disable rights for suffix toggles but not arbitrary JAR renames", async () => {
+    context.user!.permissions = ["mods.enableDisable"];
+    const request = { method: "PATCH" as const, url: "/api/servers/server/file", payload: { path: "mods/custom.jar", name: "custom.jar.disabled" } };
+    expect((await app.inject(request)).statusCode).toBe(200);
+    expect((await app.inject({ ...request, payload: { ...request.payload, path: "mods/custom.jar.disabled", name: "custom.jar" } })).statusCode).toBe(200);
+    vi.mocked(context.runtime!.renameFile).mockClear();
+    expect((await app.inject({ ...request, payload: { ...request.payload, name: "another.jar" } })).statusCode).toBe(403);
+    expect(context.runtime!.renameFile).not.toHaveBeenCalled();
+  });
+
+  it("classifies reserved local path aliases without case-sensitive bypasses", () => {
+    const server = context.server!;
+    expect(isServerSettingsFile(server, "/server/SERVER.PROPERTIES")).toBe(true);
+    expect(isModsPath(server, "/server/MODS/custom.jar")).toBe(true);
+    expect(isModsPath(server, "/server/mods-other/custom.jar")).toBe(false);
   });
 });

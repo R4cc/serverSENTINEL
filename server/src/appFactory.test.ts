@@ -139,6 +139,7 @@ describe("Fastify application factory", () => {
     const runtime = {
       serverStatus: async () => ({ docker: { running: true } }), serverLogs: async () => ({ text: "" }),
       lifecycle, sendConsoleCommand: vi.fn(), publicPath: (_server: unknown, path: string) => `/${path}`,
+      isModsPath: () => false,
       resolveExistingPath: async (_server: unknown, path: string) => path,
       planArchiveExtraction: async () => ({ blocked: [], outputPaths: [] }), extractArchive
     };

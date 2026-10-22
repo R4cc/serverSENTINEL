@@ -59,6 +59,22 @@ function testApp(options: { user?: StoredUser; found?: OperationRecord; cancelle
 }
 
 describe("operations routes", () => {
+  it.each(["server.start", "server.restart", "schedule.run"] as const)("hides retained %s failure console text from viewers without console access", async type => {
+    const record = operation({ type, status: "failed", errorMessage: "private-console-marker", logSummary: "private diagnostic" });
+    const user = { ...requestingUser, permissions: ["servers.view"] } as StoredUser;
+    const harness = testApp({ found: record, user });
+    harness.operations.list.mockReturnValue([record]);
+    for (const url of ["/api/operations", `/api/operations/${operationId}`]) {
+      const response = await harness.app.inject({ url });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).not.toMatch(/private-console-marker|private diagnostic/);
+    }
+    expect(record.errorMessage).toBe("private-console-marker");
+    user.permissions.push("console.view");
+    const authorized = await harness.app.inject({ url: `/api/operations/${operationId}` });
+    expect(authorized.body).toContain("private-console-marker");
+    expect(authorized.body).not.toContain("private diagnostic");
+  });
   it.each(["list", "detail", "cancel"])("projects restricted schedule results and internal diagnostics on %s responses", async (endpoint) => {
     const record = operation({ type: "schedule.run", logSummary: "private stack", result: { run: { details: { steps: [{ command: "private command", logs: ["private console"] }] } } } });
     const user = { ...requestingUser, permissions: ["servers.view", "servers.editSettings"] } as StoredUser;

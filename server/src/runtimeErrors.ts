@@ -4,7 +4,7 @@ export function summarizeRuntimeExit(action: "start" | "restart", logs: string) 
     ?? trimmedLogs.match(/Request to https?:\/\/([^/\s]+)[^\r\n]* failed/i)?.[1];
 
   if (unknownHost) {
-    return `Minecraft runtime container exited after ${action}: the container could not resolve ${unknownHost}. Check DNS and outbound network access from the node host and from Docker runtime containers. Minecraft runtimes may need outbound HTTPS access to Mojang metadata on first start.`;
+    return `Minecraft runtime container exited after ${action}: DNS resolution failed. Check DNS and outbound network access from the node host and from Docker runtime containers. Minecraft runtimes may need outbound HTTPS access to Mojang metadata on first start.`;
   }
 
   if (/Temporary failure in name resolution|Name or service not known|getaddrinfo/i.test(trimmedLogs)) {
@@ -15,5 +15,5 @@ export function summarizeRuntimeExit(action: "start" | "restart", logs: string) 
     return `Minecraft runtime container exited after ${action}: outbound network access failed inside the runtime container. Check firewall, proxy, and Docker network settings on the node host.`;
   }
 
-  return `Minecraft runtime container exited after ${action}${trimmedLogs ? `: ${trimmedLogs.slice(-800)}` : ""}`;
+  return `Minecraft runtime container exited after ${action}. See the server console for details.`;
 }

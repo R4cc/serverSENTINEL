@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { archiveModSnapshot, modHistoryChanges, modHistoryRepository, pruneModHistoryArchives, readModHistorySnapshot, type ModHistoryActor } from "./modHistory.js";
 import { createWriteStream, existsSync } from "node:fs";
-import { mkdir, open, readdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { mkdir, open, readdir, rename, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { addAbortSignal } from "node:stream";
 import { runtimeForServer, services } from "../appServices.js";
 import { durationSince, errorLogFields, logError, logInfo, logOperationFailure, logWarn } from "../logging.js";
 import { operationInProgress } from "../http/errors.js";
@@ -601,12 +602,33 @@ export async function localListMods(server: ManagedServer, options: ModListOptio
     .sort((a, b) => a.name.localeCompare(b.name));
   let checked = 0;
   options.onProgress?.({ checked, total: modEntries.length });
-  const prepared = await Promise.all(modEntries.map(async (entry) => {
+  let scannedBytes = 0;
+  const scanReadLimit = 4 * 1024 * 1024 * 1024;
+  const prepare = async (entry: typeof modEntries[number]) => {
     const modPath = await validateExistingResolvedInsideServer(server, join(modsDir, entry.name));
     const modStat = await stat(modPath);
-    const sha1 = await localModHashCache.sha1(`${server.id}:${entry.name}`, modStat.size, modStat.mtimeMs, () => readFile(modPath));
+    if (modStat.size > modFileSizeLimit) throw new Error(`Mod file exceeds the ${modFileSizeLimit} byte size limit`);
+    const sha1 = await localModHashCache.sha1(`${server.id}:${entry.name}`, modStat.size, modStat.mtimeMs, async () => {
+      const opened = await openContainedReadStream(modPath);
+      scannedBytes += opened.size;
+      if (scannedBytes > scanReadLimit) {
+        opened.stream.destroy();
+        throw new Error("Mod scan exceeds the 4 GiB read budget");
+      }
+      if (opened.size !== modStat.size || opened.size > modFileSizeLimit) {
+        opened.stream.destroy();
+        throw new Error("Mod file changed before hashing");
+      }
+      return options.signal ? addAbortSignal(options.signal, opened.stream) : opened.stream;
+    });
     return { entry, modPath, modStat, sha1 };
-  }));
+  };
+  const prepared: Awaited<ReturnType<typeof prepare>>[] = [];
+  // Bound open descriptors and stream buffers even for very large mod sets.
+  for (let offset = 0; offset < modEntries.length; offset += 4) {
+    options.signal?.throwIfAborted();
+    prepared.push(...await Promise.all(modEntries.slice(offset, offset + 4).map(prepare)));
+  }
   let identified = new Map<string, ModrinthVersion>();
   let projects = new Map<string, ModrinthProject>();
   if (options.forceRefresh) {

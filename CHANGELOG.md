@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.10.16 - 2026-10-22
+
+- Isolated each Minecraft container to its own server-data directory. Named-volume deployments require Docker Engine 26.0+; existing containers gain isolation when next started or reconfigured through the panel.
+- Closed permission bypasses for remote mods/plugins, file moves, server settings, case-varied paths, captured schedule logs, and failed-operation console output.
+- Prevented remote node replies and colliding imported run IDs from modifying another server's schedule history.
+- Bounded memory use while hashing installed JARs and rejected oversized files during scans.
+
 ## 26.10.15 - 2026-10-22
 
 - Kept repeated panel loads from exhausting the API rate limit and leaving pages blank, while retaining API and sign-in throttling.

@@ -101,13 +101,13 @@ export function toPublicPath(server: ManagedServer, absolutePath: string) {
 }
 
 export function isModsPath(server: ManagedServer, absolutePath: string) {
-  const publicPath = toPublicPath(server, absolutePath);
+  const publicPath = toPublicPath(server, absolutePath).toLowerCase();
   const directory = serverRuntimeDefinition(runtimeTarget(server).runtimeType).contentDirectory;
   return publicPath === `/${directory}` || publicPath.startsWith(`/${directory}/`);
 }
 
 export function isServerSettingsFile(server: ManagedServer, absolutePath: string) {
-  const publicPath = toPublicPath(server, absolutePath);
+  const publicPath = toPublicPath(server, absolutePath).toLowerCase();
   return publicPath === "/server.properties";
 }
 
@@ -117,8 +117,8 @@ export function fileRenamePermission(server: ManagedServer, source: string, targ
   return "files.edit";
 }
 
-export async function requireFilePathPermission(request: { headers: { cookie?: string } }, server: ManagedServer, absolutePath: string, permission: Permission) {
-  if (!isModsPath(server, absolutePath)) {
+export async function requireFilePathPermission(request: { headers: { cookie?: string } }, runtime: Pick<NodeRuntime, "isModsPath">, server: ManagedServer, absolutePath: string, permission: Permission) {
+  if (!runtime.isModsPath(server, absolutePath)) {
     return requireRequestPermission(request, permission);
   }
   if (permission === "files.view" || permission === "files.download") {
@@ -293,7 +293,7 @@ export async function collectArchiveEntries(
   const listing = parseFileListing(await runtime.listFiles(server, selection.target));
   for (const entry of listing.entries) {
     const childTarget = await runtime.resolveExistingPath(server, entry.path);
-    await requireFilePathPermission(request, server, childTarget, "files.download");
+    await requireFilePathPermission(request, runtime, server, childTarget, "files.download");
     const childSelection = server.nodeId === localNodeId
       ? await localDownloadSelection(server, childTarget)
       : { ...entry, target: childTarget };

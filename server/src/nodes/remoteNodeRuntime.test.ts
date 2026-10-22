@@ -345,6 +345,8 @@ describe("RemoteNodeRuntime command timeouts", () => {
 
     expect(calls.map((call) => call.command)).toEqual(["mods.list", "content.list", "content.enableDisable"]);
     expect(runtime.isModsPath(paperServer(), "/plugins/example.jar")).toBe(true);
+    expect(runtime.isModsPath(paperServer(), "PLUGINS/example.jar")).toBe(true);
+    expect(runtime.isServerSettingsFile(paperServer(), "SERVER.PROPERTIES")).toBe(true);
     expect(runtime.isModsPath(paperServer(), "/mods/example.jar")).toBe(false);
   });
 
@@ -608,6 +610,19 @@ describe("RemoteNodeRuntime command timeouts", () => {
       { command: "server.create", timeoutMs: 600_000 },
       { command: "server.update", timeoutMs: 600_000 }
     ]);
+  });
+
+  it("does not accept panel-owned schedule history or runtime bookkeeping on remote creation", async () => {
+    const record = { ...testServer(), schedules: [{ id: "forged-schedule", recentRuns: [{ id: "another-server-run" }] }],
+      restartRequiredSince: "forged", portConflictUnresolved: true, runtimeIntent: "running" };
+    const { runtime } = runtimeWithRecorder(record);
+    const created = await runtime.createServer({ displayName: "Survival" });
+    expect(created.id).toBe(record.id);
+    expect(created.nodeId).toBe("node-1");
+    expect(created.runtimeIntent).toBe("stopped");
+    expect(created).not.toHaveProperty("schedules");
+    expect(created).not.toHaveProperty("restartRequiredSince");
+    expect(created).not.toHaveProperty("portConflictUnresolved");
   });
 
   it("uses longer timeouts for remote transfers and Modrinth-backed commands", async () => {

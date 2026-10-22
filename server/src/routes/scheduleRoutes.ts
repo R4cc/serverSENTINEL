@@ -87,6 +87,7 @@ export function registerScheduleRoutes(app: FastifyInstance, context: ScheduleRo
   // every app refresh.
   app.get<{ Params: { id: string; scheduleId: string; runId: string } }>("/api/servers/:id/schedules/:scheduleId/runs/:runId", async (request, reply) => {
     await context.requireRequestPermission(request, "schedules.view");
+    await context.requireRequestPermission(request, "console.view");
     const server = await context.getServer(request.params.id);
     const scheduleId = validateScheduleId(request.params.scheduleId);
     const runId = validateOperationId(request.params.runId);
