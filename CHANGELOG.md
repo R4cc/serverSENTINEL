@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.10.15 - 2026-10-22
+
+- Kept repeated panel loads from exhausting the API rate limit and leaving pages blank, while retaining API and sign-in throttling.
+- Updated Vite to fix development-server security vulnerabilities.
+
 ## 26.10.14 - 2026-10-15
 
 - Made mod update history searchable and sortable with standard table controls, pagination, and working vertical and horizontal scrolling.

@@ -63,6 +63,11 @@ try {
       const page = await context.newPage();
       const errors = [];
       page.on("pageerror", error => errors.push(error.message));
+      page.on("response", response => {
+        if (response.status() >= 400 && ["document", "script", "stylesheet"].includes(response.request().resourceType())) {
+          errors.push(`HTTP ${response.status()}: ${new URL(response.url()).pathname}`);
+        }
+      });
       // Exercise the real app form against browser-local fixtures; no server is mutated.
       await page.route("**/api/**", async route => {
         const path = new URL(route.request().url()).pathname;
