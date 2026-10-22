@@ -8,6 +8,7 @@ import { hasPermission } from "./utils/permissions";
 import { trimFormValue } from "./utils/validation";
 import { authValidationErrors, type AuthField } from "./utils/authValidation";
 import { isNodeRuntimeUsable } from "./utils/nodes";
+import { nodesWithAvailableUpdates } from "./utils/nodeUpdates";
 import { runtimeActionConfirmation } from "./utils/runtimeConfirmation";
 import { appVersion, emptyApp, isServerWorkspacePage, pageTitle, readStoredSignedIn, shouldLoadPlayerSnapshots, shouldShowInitialOverviewLoading, writeStoredDemoMode, writeStoredSignedIn } from "./app/appConfig";
 import { usePreferencesState } from "./app/appState";
@@ -33,9 +34,8 @@ import { AppSidebar } from "./components/AppSidebar";
 import { AuthPanel, type AuthNotice } from "./components/AuthPanel";
 import { AuthLoadingSkeleton, FeaturePageLoadingSkeleton } from "./components/LoadingSkeletons";
 import { Button, EmptyState } from "./components/UiPrimitives";
-import { ConfirmationModal, useConfirmationController } from "./components/ConfirmationModal";
-import { PlayerHeadsOnboarding } from "./components/PlayerHeadsOnboarding";
-import { OnboardingFlow, OnboardingResumeBanner, onboardingRecommendedStep } from "./components/OnboardingFlow";
+import { useConfirmationController } from "./components/useConfirmationController";
+import { OnboardingResumeBanner, onboardingRecommendedStep } from "./components/OnboardingResumeBanner";
 import { useMobileViewport, useOverviewTimelineVisibility } from "./components/useMobileViewport";
 import { loadServerTimeline, ServerOverviewTab } from "./pages/ServerOverviewTab";
 import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTab";
@@ -53,8 +53,12 @@ import { useIntegrationSettings } from "./features/settings/useIntegrationSettin
 import { useModuleSettings } from "./features/settings/useModuleSettings";
 import { uiCacheLocalBlockedReason, useUiCacheClear } from "./features/settings/useUiCacheClear";
 import { useExportWorkspace } from "./features/exports/useExportWorkspace";
-import { ExportModal } from "./features/exports/ExportModal";
-import { ImportModal } from "./features/exports/ImportModal";
+
+const { Component: ConfirmationModal } = lazyPage(() => import("./components/ConfirmationModal"), (module) => module.ConfirmationModal);
+const { Component: PlayerHeadsOnboarding } = lazyPage(() => import("./components/PlayerHeadsOnboarding"), (module) => module.PlayerHeadsOnboarding);
+const { Component: OnboardingFlow } = lazyPage(() => import("./components/OnboardingFlow"), (module) => module.OnboardingFlow);
+const { Component: ExportModal } = lazyPage(() => import("./features/exports/ExportModal"), (module) => module.ExportModal);
+const { Component: ImportModal } = lazyPage(() => import("./features/exports/ImportModal"), (module) => module.ImportModal);
 
 const importServerEditPage = () => import("./pages/ServerEditPage");
 
@@ -363,7 +367,9 @@ export default function App() {
   } = useServerContext({ appState, activeServerId, status, demoMode, demoSchedules });
   const supportsManagedMods = activeRuntimeDefinition?.managedContent === true;
   const managedContent = managedContentTerminology(activeServer?.runtimeProfile.runtimeType ?? "fabric");
-  const applicationReady = appStateLoaded || demoMode;
+  // Demo fixtures can precede the module catalog. Start the dashboard from one
+  // complete snapshot so gated cards do not appear after its first paint.
+  const applicationReady = appStateLoaded;
   const permissionUser = appState.currentUser ?? authSession?.user ?? null;
   const permissionScope = JSON.stringify([demoMode, permissionUser]);
   const canBasic = activeServerIsDemo || hasPermission(permissionUser, "servers.control");
@@ -570,12 +576,21 @@ export default function App() {
     requestConfirmation,
     refreshApp
   });
+  const nodeUpdateNames = useMemo(() => demoMode ? []
+    : nodesWithAvailableUpdates(contextNodes, panelVersion, panelBuildId).map((node) => node.name),
+  [contextNodes, demoMode, panelVersion, panelBuildId]);
   useNodeUpdateVisitNotification({
     ready: applicationReady && (demoMode || Boolean(authSession?.authenticated)),
     demoMode,
     nodes: contextNodes,
     panelVersion,
-    panelBuildId
+    panelBuildId,
+    onReviewNodes: (nodeId) => {
+      nodesWorkspace.onCloseDetails();
+      openSidebarPage("nodes");
+      const node = contextNodes.find((node) => node.id === nodeId);
+      if (node) void nodesWorkspace.onViewDetails(node);
+    }
   });
   const exportServer = effectiveAppState.servers.find((server) => server.id === exportWorkspace.exportServerId);
   const panelTimeZone = effectiveAppState.timeZone || "UTC";
@@ -2181,6 +2196,7 @@ export default function App() {
           managedContent={managedContent}
           demoMode={demoMode}
           panelVersion={panelVersion}
+          nodeUpdateNames={nodeUpdateNames}
           accountName={authSession?.user?.username}
           onLogout={logout}
         />
@@ -2294,7 +2310,7 @@ export default function App() {
           </Suspense>
         )}
 
-        {activePage === "nodes" && (
+        {applicationReady && activePage === "nodes" && (
           <Suspense fallback={<FeaturePageLoadingSkeleton label="Loading nodes" page="nodes" />}>
             <NodesPage
               {...nodesWorkspace}
@@ -2336,7 +2352,7 @@ export default function App() {
             Its loading surface already includes a server-strip skeleton; mounting the real strip
             underneath that full-height skeleton puts it at the viewport bottom, then makes it jump
             to the top when module access resolves. Keep exactly one strip in the layout. */}
-        {isServerWorkspacePage(activePage) && activeServer && !activePageModuleAccessPending && (
+        {applicationReady && isServerWorkspacePage(activePage) && activeServer && !activePageModuleAccessPending && (
           <Fragment key={`server-workspace-${permissionScope}-${activeServer.id}`}>
             <ActiveServerStrip
               server={activeServer}
@@ -2366,6 +2382,7 @@ export default function App() {
             />
 
             {overviewTabMounted && (
+              <Suspense fallback={activePage === "overview" ? <FeaturePageLoadingSkeleton label="Loading overview" page="overview" /> : null}>
               <ServerOverviewTab
                 active={activePage === "overview"}
                 server={activeServer}
@@ -2385,7 +2402,7 @@ export default function App() {
                 playerSnapshot={playerSnapshots[activeServer.id]}
                 playerHeadsEnabled={playerHeadsEnabled}
                 modUpdatePlan={modsBridge?.updatePlan ?? null}
-                modUpdatePlanLoading={modsBridge?.updatePlanLoading ?? false}
+                modUpdatePlanLoading={modsBridge?.updatePlanLoading ?? true}
                 canViewMods={canViewMods && supportsManagedMods}
                 onOpenMods={() => setActivePage("mods")}
                 onRefreshModUpdates={() => void modsBridge?.refreshUpdates()}
@@ -2401,6 +2418,7 @@ export default function App() {
                 formatTime={formatDisplayTime}
                 formatShortTime={formatDisplayShortTime}
               />
+              </Suspense>
             )}
 
             {consoleTabMounted && (
@@ -2583,6 +2601,7 @@ export default function App() {
         )}
       </section>
       </main>
+      <Suspense fallback={null}>
       {confirmationOptions ? (
         <ConfirmationModal
           options={confirmationOptions}
@@ -2650,6 +2669,7 @@ export default function App() {
           onImported={refreshApp}
         />
       ) : null}
+      </Suspense>
     </>
   );
 }

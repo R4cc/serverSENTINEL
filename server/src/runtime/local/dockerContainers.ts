@@ -3,6 +3,7 @@ import { minecraftContainerCreateSettings, reconcileContainerRestartPolicy } fro
 import { createHash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { totalmem } from "node:os";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { config } from "../../config.js";
 import { dockerHostPortBindings, openContainedFile, parseDockerPorts, validateExistingInsideServer } from "../../core.js";
 import { readServerConfiguration, writeServerConfiguration } from "./configurationFiles.js";
@@ -28,7 +29,9 @@ export type DockerContainerInspect = {
   State?: { Status?: DockerState; Running?: boolean; ExitCode?: number; OOMKilled?: boolean; StartedAt?: string; FinishedAt?: string };
   Name?: string;
   Config?: { Labels?: Record<string, string>; OpenStdin?: boolean; AttachStdin?: boolean; Tty?: boolean };
-  HostConfig?: { RestartPolicy?: { Name?: string } };
+  HostConfig?: { RestartPolicy?: { Name?: string }; Mounts?: Array<{
+    Type?: string; Source?: string; Target?: string; VolumeOptions?: { Subpath?: string }
+  }> };
   Mounts?: Array<{ Type?: string; Name?: string; Source?: string; Destination?: string }>;
   NetworkSettings?: { Networks?: Record<string, DockerNetworkAttachment> };
 };
@@ -108,7 +111,26 @@ function serverDockerWorkingDir(server: ManagedServer) {
 }
 
 function serverDockerBindTarget(server: ManagedServer) {
+  if (serverDockerVolumeSubpath(server)) return serverDockerWorkingDir(server);
   return serverDockerWorkingDir(server).startsWith("/data/servers/") ? "/data/servers" : "/data/server";
+}
+
+function serverDockerVolumeSubpath(server: ManagedServer) {
+  if (!config.serversDockerVolume || serverDockerMountSource(server) !== config.serversDockerVolume) return undefined;
+  const child = relative(resolve(config.serversDir), resolve(server.serverDir));
+  if (!child || child === ".." || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+    throw new Error("Named-volume servers must use a child of the configured server data directory");
+  }
+  return child.split(sep).join("/");
+}
+
+async function requireVolumeSubpathSupport(server: ManagedServer) {
+  if (!serverDockerVolumeSubpath(server)) return;
+  const version = await dockerRequest<{ ApiVersion?: string }>("GET", "/version", 200);
+  const parts = /^(\d+)\.(\d+)$/.exec(version.ApiVersion ?? "");
+  if (!parts || Number(parts[1]) < 1 || (Number(parts[1]) === 1 && Number(parts[2]) < 45)) {
+    throw new Error("Per-server named-volume isolation requires Docker Engine API 1.45 or newer");
+  }
 }
 
 function dockerContainerMountValid(server: ManagedServer, details: DockerContainerInspect) {
@@ -117,7 +139,9 @@ function dockerContainerMountValid(server: ManagedServer, details: DockerContain
   return Boolean(details.Mounts?.some((mount) => {
     if (mount.Destination !== expectedDestination) return false;
     if (expectedSource === config.serversDockerVolume) {
-      return mount.Type === "volume" && mount.Name === expectedSource;
+      return mount.Type === "volume" && mount.Name === expectedSource && Boolean(details.HostConfig?.Mounts?.some(spec =>
+        spec.Type === "volume" && spec.Source === expectedSource && spec.Target === expectedDestination &&
+        spec.VolumeOptions?.Subpath === serverDockerVolumeSubpath(server)));
     }
     return mount.Source === expectedSource || mount.Name === expectedSource;
   }));
@@ -183,6 +207,7 @@ function dockerRuntimeConfigHashInput(server: ManagedServer, options: { includeT
     image: server.dockerImage || defaultDockerImageForMinecraftVersion(targetRuntime.minecraftVersion),
     workingDir: serverDockerWorkingDir(server),
     bindTarget: serverDockerBindTarget(server),
+    ...(serverDockerVolumeSubpath(server) ? { volumeSubpath: serverDockerVolumeSubpath(server) } : {}),
     ports: server.dockerPorts || "25565:25565/tcp",
     serverJar: targetRuntime.serverJar,
     javaArgs: server.javaArgs || "-Xms2G -Xmx4G",
@@ -248,6 +273,9 @@ async function currentContainerNetworkingConfig() {
 }
 
 export async function ensureDockerContainer(server: ManagedServer, preferredNetworkingConfig?: DockerNetworkingConfig) {
+  // Old daemons can ignore unknown mount options. Refuse before changing any
+  // existing container rather than exposing the volume root as a fallback.
+  await requireVolumeSubpathSupport(server);
   // The terminal settings are applied at create time, so they belong in the fingerprint: without
   // them a change to the terminal profile could never invalidate an existing container, which is
   // the one input this hash exists to notice. Every hash a running container may already carry is
@@ -313,7 +341,8 @@ export async function ensureDockerContainer(server: ManagedServer, preferredNetw
             {
               Type: serverDockerMountSource(server) === config.serversDockerVolume ? "volume" : "bind",
               Source: serverDockerMountSource(server),
-              Target: bindTarget
+              Target: bindTarget,
+              ...(serverDockerVolumeSubpath(server) ? { VolumeOptions: { Subpath: serverDockerVolumeSubpath(server), NoCopy: true } } : {})
             }
           ]
         },

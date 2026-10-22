@@ -125,3 +125,9 @@ export function createDemoUpdatePlan(serverId: string, mods: InstalledMod[], gen
     updates
   };
 }
+
+export function modUpdateRefreshResultMessage(updatePlan: ModUpdatePlan, contentPlural: "mods" | "plugins") {
+  const updateCount = updatePlan.counts.safeUpdates + updatePlan.counts.reviewUpdates;
+  const contentSingular = contentPlural === "plugins" ? "plugin" : "mod";
+  return updateCount === 0 ? "No updates found" : `${updateCount} ${contentSingular} update${updateCount === 1 ? "" : "s"} found`;
+}

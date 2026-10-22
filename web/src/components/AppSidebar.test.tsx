@@ -7,7 +7,7 @@ import type { ActivePage } from "../types";
 import { webModules } from "../app/moduleRegistry";
 import { AppSidebar } from "./AppSidebar";
 
-function renderSidebar(activePage: "nodes" | "overview", withServer = true, availablePages?: (page: ActivePage) => boolean) {
+function renderSidebar(activePage: "nodes" | "overview", withServer = true, availablePages?: (page: ActivePage) => boolean, nodeUpdateNames: string[] = []) {
   const activeServer = withServer ? demoServer() : undefined;
   return renderToStaticMarkup(
     <AppSidebar
@@ -29,6 +29,7 @@ function renderSidebar(activePage: "nodes" | "overview", withServer = true, avai
       managedContent={fabricContentTerminology}
       demoMode={false}
       panelVersion="1.8.0"
+      nodeUpdateNames={nodeUpdateNames}
       accountName="Administrator"
       onLogout={vi.fn()}
     />
@@ -36,6 +37,19 @@ function renderSidebar(activePage: "nodes" | "overview", withServer = true, avai
 }
 
 describe("AppSidebar navigation semantics", () => {
+  it("shows a named update indicator and describes it to keyboard and screen-reader users", () => {
+    const html = renderSidebar("overview", true, undefined, ["Alpha", "Beta"]);
+    expect(html).toContain('class="sidebarNodeUpdateDot" title="Update available for nodes: Alpha, Beta"');
+    expect(html).toMatch(/data-nav-page="nodes"[^>]*aria-describedby="[^"]+"/);
+    expect(html).toContain('class="srOnly">Update available for nodes: Alpha, Beta</span>');
+  });
+
+  it("omits the update dot and its description when every node is current", () => {
+    const html = renderSidebar("nodes");
+    expect(html).not.toContain("sidebarNodeUpdateDot");
+    expect(html).not.toContain("aria-describedby");
+  });
+
   it("marks only the active destination as the current page", () => {
     const html = renderSidebar("overview");
 

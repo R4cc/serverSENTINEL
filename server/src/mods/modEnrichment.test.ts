@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,9 @@ import { ModPreferencesRepository } from "../storage/modPreferencesRepository.js
 import type { ManagedServer, ModPreference, ModrinthVersion } from "../types.js";
 import { buildModUpdatePlan, listModsWithPanelMetadata, localListMods } from "./modService.js";
 import { createModUpdatePlan } from "../modrinth/updatePlan.js";
+import { managedContentFileSizeLimit } from "../managedContentLimits.js";
+import * as core from "../core.js";
+import { Readable } from "node:stream";
 
 vi.mock("../appServices.js", () => ({ services: {}, runtimeForServer: vi.fn() }));
 vi.mock("../modrinth/modrinthClient.js", () => ({ modrinthFetch: vi.fn() }));
@@ -72,6 +75,49 @@ function newerPreference(): ModPreference {
 }
 
 describe("local batched mod identification", () => {
+  it("bounds concurrent file streams while hashing a large inventory", async () => {
+    for (let n = 1000; n < 1012; n++) await addJar(n, false);
+    const original = core.openContainedReadStream;
+    let active = 0, maximum = 0;
+    const spy = vi.spyOn(core, "openContainedReadStream").mockImplementation(async path => {
+      const opened = await original(path);
+      active++; maximum = Math.max(maximum, active);
+      return { ...opened, stream: Readable.from((async function* () {
+        try { for await (const chunk of opened.stream) yield chunk; }
+        finally { active--; }
+      })()) };
+    });
+    try {
+      expect((await localListMods(server)).mods).toHaveLength(12);
+      expect(maximum).toBeLessThanOrEqual(4);
+      expect(active).toBe(0);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("cancels hashing reads and closes their file streams", async () => {
+    await addJar(2000, false);
+    const controller = new AbortController();
+    const opened = new Readable({ read() {} });
+    const spy = vi.spyOn(core, "openContainedReadStream").mockImplementation(async path => {
+      const file = await core.openContainedFile(path);
+      const size = (await file.stat()).size;
+      await file.close();
+      queueMicrotask(() => controller.abort());
+      return { stream: opened, size, mtime: new Date() };
+    });
+    try {
+      await expect(localListMods(server, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+      expect(opened.destroyed).toBe(true);
+    } finally { spy.mockRestore(); opened.destroy(); }
+  });
+
+  it("rejects oversized on-disk JARs before hashing or contacting Modrinth", async () => {
+    const handle = await open(join(directory, "mods", "oversized.jar"), "w");
+    try { await handle.truncate(managedContentFileSizeLimit + 1); }
+    finally { await handle.close(); }
+    await expect(localListMods(server, { forceRefresh: true })).rejects.toThrow("size limit");
+    expect(modrinthFetch).not.toHaveBeenCalled();
+  });
   it("refreshes changed inventory from saved metadata without Modrinth requests or losing unchanged version checks", async () => {
     await addJar(0);
     await addJar(1);

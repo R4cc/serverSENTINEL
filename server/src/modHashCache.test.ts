@@ -1,7 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
 import { ModHashCache } from "./modHashCache.js";
+import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
 
 describe("ModHashCache", () => {
+  it("hashes streamed chunks without buffering the whole JAR and reuses the result", async () => {
+    const cache = new ModHashCache();
+    const read = vi.fn(async () => Readable.from([Buffer.from("mod "), Buffer.from("jar")]));
+    const expected = createHash("sha1").update("mod jar").digest("hex");
+    expect(await cache.sha1("streamed.jar", 7, 1, read)).toBe(expected);
+    expect(await cache.sha1("streamed.jar", 7, 1, read)).toBe(expected);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes a growing stream and never caches its incomplete digest", async () => {
+    const cache = new ModHashCache();
+    let closed = false;
+    async function* growing() {
+      try { yield Buffer.from("too large"); }
+      finally { closed = true; }
+    }
+    await expect(cache.sha1("changing.jar", 3, 1, async () => growing())).rejects.toThrow("grew while hashing");
+    expect(closed).toBe(true);
+    const read = vi.fn(async () => Readable.from([Buffer.from("jar")]));
+    await cache.sha1("changing.jar", 3, 1, read);
+    expect(read).toHaveBeenCalledOnce();
+  });
   it("reuses hashes while file metadata is unchanged", async () => {
     const cache = new ModHashCache();
     const read = vi.fn(async () => Buffer.from("mod jar"));

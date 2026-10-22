@@ -173,6 +173,7 @@ async function playerSessionSegments(page) {
 
 async function assertPlayerSessionStateColors(page) {
   const chart = page.locator(".serverTimelinePlayerChart .serverTimelineEChart");
+  await chart.scrollIntoViewIfNeeded();
   const box = await chart.boundingBox();
   assert(box, "Unified player timeline is missing while checking session colors");
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

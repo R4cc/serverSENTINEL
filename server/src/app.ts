@@ -84,7 +84,7 @@ import { OperationService } from "./operations/operationService.js";
 import { ExportArtifactMaintenance } from "./exportArtifactMaintenance.js";
 import { ExportCoordinator } from "./exportCoordinator.js";
 import { errorStatusCode, publicApiError, throwHttp } from "./http/errors.js";
-import { authRateLimit, destructiveRateLimit } from "./http/rateLimits.js";
+import { authRateLimit, destructiveRateLimit, globalRateLimit } from "./http/rateLimits.js";
 import { registerResponseCompression } from "./http/responseCompression.js";
 import { ensureWritableResolvedInsideServer } from "./core.js";
 import { activeLifecycleActions, blockingRuntimeOperations, recordOperation, restartServerGracefully, runtimeResultRunning, setRuntimeLifecycle, startServerWithIntent, stopServerWithIntent } from "./servers/lifecycle.js";
@@ -292,11 +292,7 @@ await app.register(helmet, {
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   xFrameOptions: { action: "deny" }
 });
-await app.register(rateLimit, {
-  global: true,
-  max: 600,
-  timeWindow: "1 minute"
-});
+await app.register(rateLimit, globalRateLimit);
 await app.register(multipart, { limits: { files: 1, fields: 4 } });
 await app.register(websocket, { options: { perMessageDeflate: false, maxPayload: nodeProtocolControlMessageMaxBytes } });
 await registerResponseCompression(app);

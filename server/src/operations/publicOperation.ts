@@ -10,6 +10,11 @@ const resultPermissions: Record<OperationRecord["type"], Permission> = {
 /** Stored results are internal. Project them on every response, including cancellation. */
 export function publicOperation(operation: OperationRecord, user: StoredUser): OperationRecord {
   const { logSummary: _diagnostics, result, ...summary } = operation;
+  // Historical failures may contain console tails from older runtimes/nodes.
+  if (summary.errorMessage && summary.status === "failed" && !hasPermission(user, "console.view") &&
+      ["server.start", "server.stop", "server.restart", "schedule.run"].includes(operation.type)) {
+    summary.errorMessage = "Runtime operation failed. See the server console for details.";
+  }
   if (result === undefined || !hasPermission(user, resultPermissions[operation.type])) return summary;
   // Console output can appear in scheduled steps and runtime results. Host paths remain internal.
   const filter = (value: unknown): unknown => {

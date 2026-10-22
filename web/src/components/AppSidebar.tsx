@@ -1,4 +1,4 @@
-import { useMemo, useRef, type RefObject } from "react";
+import { useId, useMemo, useRef, type RefObject } from "react";
 import { ChevronDown, CircleUserRound, LogOut } from "lucide-react";
 import { demoServerId } from "../demoRuntime";
 import type { ActivePage, ManagedServer } from "../types";
@@ -29,6 +29,7 @@ export function AppSidebar({
   managedContent,
   demoMode,
   panelVersion,
+  nodeUpdateNames = [],
   accountName,
   onLogout
 }: {
@@ -51,9 +52,13 @@ export function AppSidebar({
   managedContent: ManagedContentTerminology;
   demoMode: boolean;
   panelVersion: string;
+  nodeUpdateNames?: readonly string[];
   accountName: string | undefined;
   onLogout: () => void;
 }) {
+  const nodeUpdatesDescriptionId = useId();
+  const nodeUpdatesDescription = nodeUpdateNames.length
+    ? `Update available for ${nodeUpdateNames.length === 1 ? "node" : "nodes"}: ${nodeUpdateNames.join(", ")}` : "";
   // The switcher menu only mounts its items once it is open, but the array below — one JSX label
   // per managed server — was being rebuilt on every render of the shell, which includes every
   // console log flush. Held through a ref so the callback identity cannot invalidate the memo.
@@ -125,10 +130,12 @@ export function AppSidebar({
         </Button>
       </div>
       <nav className="sideNav" id="primary-navigation" aria-label="Infrastructure navigation">
-        <button {...shellNavItem("nodes", "Open nodes")}>
+        <button {...shellNavItem("nodes", "Open nodes")} aria-describedby={nodeUpdatesDescription ? nodeUpdatesDescriptionId : undefined}>
           <SidebarIcon name="nodes" />
           <span className="navLabel">Nodes</span>
+          {nodeUpdatesDescription && <span className="sidebarNodeUpdateDot" title={nodeUpdatesDescription} aria-hidden="true" />}
         </button>
+        {nodeUpdatesDescription && <span id={nodeUpdatesDescriptionId} className="srOnly">{nodeUpdatesDescription}</span>}
         <div className="sidebarDivider" />
         <div className="serverNavigationGroup">
           <div className="serverSwitcher">

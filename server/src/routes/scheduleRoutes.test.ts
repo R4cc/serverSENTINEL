@@ -66,6 +66,7 @@ function testApp(options: {
   startResult?: ScheduledActiveRun | false;
   cancelResult?: ScheduledActiveRun | null | false;
   cancelRunsForScheduleResult?: boolean;
+  allowedPermissions?: Permission[];
 } = {}) {
   const app = Fastify();
   const permissions: Permission[] = [];
@@ -92,6 +93,9 @@ function testApp(options: {
     },
     requireRequestPermission: async (_request, permission) => {
       permissions.push(permission);
+      if (options.allowedPermissions && !options.allowedPermissions.includes(permission)) {
+        throw Object.assign(new Error("Permission denied"), { statusCode: 403 });
+      }
     },
     getServer: vi.fn(async () => server),
     parseSchedule,
@@ -279,7 +283,16 @@ describe("schedule routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ run });
     expect(response.json().run.details.steps[0].logs).toEqual(["[12:00:00] [Server thread/INFO]: Saved the game"]);
-    expect(harness.permissions).toEqual(["schedules.view"]);
+    expect(harness.permissions).toEqual(["schedules.view", "console.view"]);
+  });
+
+  it("does not expose captured console output to schedule-only viewers", async () => {
+    const harness = testApp({ schedules: [schedule({ recentRuns: [completedRun()] })], allowedPermissions: ["schedules.view"] });
+    const response = await harness.app.inject({ method: "GET", url: `/api/servers/${serverId}/schedules/${scheduleId}/runs/${runId}` });
+    expect(response.statusCode).toBe(403);
+    expect(response.body).not.toContain("Saved the game");
+    expect(harness.findScheduledRun).not.toHaveBeenCalled();
+    expect((await harness.app.inject({ method: "GET", url: `/api/servers/${serverId}/schedules` })).statusCode).toBe(200);
   });
 
   it("reports a missing run rather than an empty detail payload", async () => {

@@ -21,3 +21,7 @@ export function nodeUpdateAvailable(node: NodeView, panelVersion: string, panelB
   return nodeVersionState(node, panelVersion) === "older"
     || nodeBuildUpdateAvailable(node, panelVersion, panelBuildId);
 }
+
+export function nodesWithAvailableUpdates(nodes: readonly NodeView[], panelVersion: string, panelBuildId?: string) {
+  return nodes.filter((node) => nodeUpdateAvailable(node, panelVersion, panelBuildId));
+}

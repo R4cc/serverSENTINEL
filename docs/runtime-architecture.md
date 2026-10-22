@@ -31,6 +31,12 @@ Paper requests use the identifying User-Agent required by PaperMC. Automatic res
 
 Minecraft version detection remains common. Runtime version detection is selected by `runtimeType`: Fabric launcher properties and logs are isolated from Paper log patterns, and Paper log tokens are normalized to their build number. Provider metadata remains the fallback when logs are unavailable.
 
+### Server-data isolation
+
+Minecraft containers mount only their own server directory. Named-volume deployments use `VolumeOptions.Subpath`, preserving the directory layout and existing working directory without exposing sibling servers. This requires Docker Engine 26.0+ (API 1.45+). Older or unrecognized APIs are refused before any existing container is changed; there is no whole-volume fallback. Per-server bind mounts continue to work without this requirement.
+
+Existing whole-volume containers are replaced with isolated mounts when next started or reconfigured through the panel. The data volume and server files are retained. Stop servers normally before planned maintenance or reconfiguration.
+
 ### Lifecycle
 
 Artifact download, content-directory creation, metadata writing, Docker/container configuration, start, stop, restart, recovery, console, files, schedules, and query handling consume the canonical profile. Both the panel-local and remote-node paths use the same runtime-neutral terminology and capability checks.

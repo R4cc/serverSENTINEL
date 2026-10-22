@@ -1,0 +1,2 @@
+/* ModIconImage is shared by Overview and the lazy managed-content pages. */
+.modsWorkspaceFallback { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border: 1px solid var(--border-panel); border-radius: var(--radius-sm); color: var(--text-muted); background: var(--surface); font-size: .66rem; font-weight: var(--weight-heading); }

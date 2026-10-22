@@ -22,7 +22,7 @@ A web panel for managing Minecraft servers across Docker hosts: server lifecycle
 
 ## Install
 
-Install Docker Engine and Docker Compose on your server host. Save this as `docker-compose.yml` in an empty directory:
+Install Docker Engine 26.0 or newer (API 1.45+) and Docker Compose on your server host. Named-volume server isolation requires [volume subpath support](https://docs.docker.com/reference/api/engine/version-history/#v145-api-changes). Save this as `docker-compose.yml` in an empty directory:
 
 ```yaml
 services:

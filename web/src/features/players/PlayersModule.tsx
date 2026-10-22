@@ -1,3 +1,4 @@
+import "../../styles/players.css";
 import type { ManagedServer, Notify } from "../../types";
 import { polyfillCountryFlagEmojis } from "country-flag-emoji-polyfill";
 import countryFlagFontUrl from "../../../../node_modules/country-flag-emoji-polyfill/dist/TwemojiCountryFlags.woff2?url";

@@ -20,6 +20,7 @@ const suites = [
   [15, "loading-workflows", "scripts/loading-workflows-smoke.mjs"],
   [30, "micro-motion", "scripts/micro-motion-smoke.mjs"],
   [12, "toast-progress", "scripts/toast-progress-smoke.mjs"],
+  [18, "performance", "scripts/performance-smoke.mjs"],
   [61, "overview-mods", "scripts/overview-mods-polish-smoke.mjs"],
   [19, "ui-consistency", "scripts/ui-consistency-smoke.mjs"],
   [120, "ui-cohesion", "scripts/ui-cohesion-smoke.mjs"]

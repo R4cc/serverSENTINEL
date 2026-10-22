@@ -391,7 +391,7 @@ button.overviewCardRow:focus-visible {
 .serverTimelineSkeletonTitle { width: min(220px, 42%); height: 22px; }
 .serverTimelineSkeletonRange { width: min(280px, 46%); height: 34px; }
 .serverTimelineSkeletonToolbar { width: 100%; height: 50px; }
-.serverTimelineSkeletonChart { width: 100%; height: 340px; }
+.serverTimelineSkeletonChart { width: 100%; height: 775px; }
 
 .serverTimelinePanel {
   --timeline-cpu: #4169ff;
@@ -708,6 +708,12 @@ button.overviewCardRow:focus-visible {
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--timeline-join) 78%, transparent);
   color: var(--text);
   font-size: 12px;
+}
+
+/* Reserve the collapsed roster before its first response and across live joins.
+   The six-lane chart plus header/navigation is the normal collapsed footprint. */
+.serverTimelinePlayers {
+  min-height: 347px;
 }
 
 .serverTimelinePlayerHeading {
@@ -1366,6 +1372,15 @@ button.overviewCardRow:focus-visible {
   grid-auto-rows: minmax(52px, auto);
   align-content: start;
   gap: var(--space-2);
+}
+
+/* A capped preview keeps later cards in place while the update plan arrives. */
+.modUpdatesList {
+  min-height: 232px;
+}
+
+.modUpdatesCard .overviewCardBody {
+  min-height: 268px;
 }
 
 .overviewSupportListItem {
@@ -2080,8 +2095,7 @@ button.overviewCardRow:focus-visible {
     flex-basis: 100%;
   }
 
-  .serverTimelineChart,
-  .serverTimelineSkeletonChart {
+  .serverTimelineChart {
     height: 320px;
     min-height: 320px;
   }
@@ -2259,50 +2273,6 @@ button.overviewCardRow:focus-visible {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-meta);
-}
-
-.uiButton.runtimeControlButton {
-  height: var(--control-height);
-  min-height: var(--control-height);
-  border-radius: var(--radius-sm);
-  padding-inline: var(--control-padding-inline);
-  box-shadow: none;
-}
-
-.uiButton.runtimeControlButton.start {
-  border-color: var(--sentinel-success);
-  background: var(--sentinel-success);
-  color: var(--sentinel-success-contrast);
-}
-
-.uiButton.runtimeControlButton.start:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--sentinel-success) 80%, var(--text));
-  background: color-mix(in srgb, var(--sentinel-success) 84%, var(--text));
-}
-
-.uiButton.runtimeControlButton.stop {
-  border-color: var(--sentinel-danger);
-  background: var(--sentinel-danger);
-  color: var(--sentinel-danger-contrast);
-}
-
-.uiButton.runtimeControlButton.restart {
-  border-color: var(--border-muted);
-  background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
-  color: var(--text);
-}
-
-.uiButton.runtimeControlButton.restart:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-}
-
-.uiButton.runtimeControlButton:disabled {
-  border-color: var(--border-muted);
-  background: var(--surface-muted);
-  color: var(--text-soft);
-  opacity: 0.62;
 }
 
 @media (min-width: 981px) {

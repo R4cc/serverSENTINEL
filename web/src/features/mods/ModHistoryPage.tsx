@@ -1,3 +1,4 @@
+import "../../styles/mods.css";
 import { SortHeaderButton, TablePagination, headerAriaSort } from "../../components/TableControls";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flexRender, useTable, type ColumnDef, type SortingState } from "@tanstack/react-table";

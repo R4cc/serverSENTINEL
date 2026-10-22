@@ -105,6 +105,10 @@ try {
       }
       await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
+      // Leave Settings to stop cache-status polling, then let in-flight requests
+      // finish before reloading. WebKit can report an aborted poll as a page error.
+      await openPage(page, "nodes");
+      await page.waitForLoadState("networkidle");
       await page.unroute("**/api/auth/session", sessionRoute);
       await page.unroute("**/api/users", usersRoute);
       await page.reload();

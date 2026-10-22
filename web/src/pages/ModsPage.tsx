@@ -1,3 +1,4 @@
+import "../styles/mods.css";
 import { useRef } from "react";
 import { ActionMenu } from "../components/ActionMenu";
 import { AppIcon } from "../components/FileTypeIcon";

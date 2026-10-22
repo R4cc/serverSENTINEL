@@ -14,7 +14,7 @@
 // correct but written differently?" If not, it belongs in a smoke script.
 
 // @ts-expect-error Vitest runs this assertion in Node, while the browser build intentionally omits Node types.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const stylesheet = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
@@ -29,12 +29,11 @@ const overviewStyles = readFileSync(new URL("./styles/overview.css", import.meta
 const authStyles = readFileSync(new URL("./styles/auth.css", import.meta.url), "utf8");
 const nodesStyles = readFileSync(new URL("./styles/nodes.css", import.meta.url), "utf8");
 const responsiveStyles = readFileSync(new URL("./styles/responsive.css", import.meta.url), "utf8");
-// Every stylesheet the entry point imports, keyed by name so a failure names the
-// file rather than reporting an anonymous index.
+// Include lazy feature sheets in ownership checks as well as the initial shell.
 const featureStyles: Record<string, string> = Object.fromEntries(
-  [...stylesheet.matchAll(/@import "\.\/styles\/([\w-]+\.css)";/g)].map((match) => [
-    match[1],
-    readFileSync(new URL(`./styles/${match[1]}`, import.meta.url), "utf8") as string
+  readdirSync(new URL("./styles/", import.meta.url)).filter((name: string) => name.endsWith(".css")).map((name: string) => [
+    name,
+    readFileSync(new URL(`./styles/${name}`, import.meta.url), "utf8") as string
   ])
 );
 
@@ -50,7 +49,6 @@ describe("global stylesheet entry point", () => {
       './styles/primitives.css',
       './styles/canonical-layout.css',
       './styles/layout.css',
-      './styles/mods.css',
       './styles/responsive.css',
       './styles/motion.css'
     ];
@@ -62,15 +60,16 @@ describe("global stylesheet entry point", () => {
   });
 
   it.each([
-    "server-properties.css",
-    "files-console.css",
-    "schedules.css",
-    "mods.css",
-    "file-manager.css",
-    "settings.css",
-    "onboarding.css"
-  ])("loads %s before lazy pages render", (fileName) => {
-    expect(stylesheet).toContain(`@import "./styles/${fileName}";`);
+    ["server-properties.css", "pages/ServerEditPage.tsx"],
+    ["schedules.css", "features/schedules/SchedulesModule.tsx"],
+    ["mods.css", "pages/ModsPage.tsx"],
+    ["file-manager.css", "features/files/FilesPage.tsx"],
+    ["players.css", "features/players/PlayersModule.tsx"],
+    ["settings.css", "pages/SettingsPage.tsx"],
+    ["export-import.css", "features/exports/ExportModal.tsx"]
+  ])("loads %s with its feature before it renders", (fileName, entry) => {
+    expect(stylesheet).not.toContain(`@import "./styles/${fileName}";`);
+    expect(readFileSync(new URL(`./${entry}`, import.meta.url), "utf8")).toContain(`styles/${fileName}";`);
   });
 });
 

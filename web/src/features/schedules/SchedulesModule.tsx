@@ -1,3 +1,4 @@
+import "../../styles/schedules.css";
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import type { ManagedServer, Notify, ScheduleNavigationTarget, ScheduledExecution, ServerStatus } from "../../types";

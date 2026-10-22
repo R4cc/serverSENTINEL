@@ -6,19 +6,14 @@ import type { ModUpdatePlan, ModUpdatePlanEntry, PlayerSnapshot, ScheduledExecut
 import {
   ActivePlayersPanel,
   buildUpcomingScheduleSnapshot,
-  eventDate,
-  formatRelativeEventTime,
   formatRelativeScheduleTime,
-  groupRecentEvents,
   ModHealthPanel,
   modUpdateRefreshResultMessage,
   OverviewSummary,
-  RecentEventsPanel,
-  recentEventPresentation,
   SchedulePanel,
-  serverEventCategory,
   storageRemainingIsLow
 } from "./OverviewPage";
+import { eventDate, formatRelativeEventTime, groupRecentEvents, RecentEventsPanel, recentEventPresentation, serverEventCategory } from "./RecentEventsPanel";
 
 const serverEvent = (eventType: ServerEvent["eventType"], timestamp: string, overrides: Partial<ServerEvent> = {}): ServerEvent => ({
   id: `${eventType}-${timestamp}`,
@@ -515,7 +510,7 @@ describe("mod health", () => {
     expect(loadingHtml).not.toContain("modUpdatesCompact");
     expect(loadingHtml).not.toContain("modUpdatesWide");
     expect(loadingHtml).not.toContain("Open Mods");
-    expect((loadingHtml.match(/modUpdatesListItem/g) ?? [])).toHaveLength(1);
+    expect((loadingHtml.match(/modUpdatesListItem/g) ?? [])).toHaveLength(4);
     expect(loadingHtml).toContain("uiSurface");
     const refreshingHtml = render(updatePlan({ safeUpdates: 1 }), true, true);
     expect(refreshingHtml).not.toContain("modUpdatesCardSkeleton");

@@ -46,6 +46,7 @@ function preparedDownload(entryCount: number) {
 /** A node that answers every directory listing with a single child directory, forever. */
 function cyclicRuntime() {
   return {
+    isModsPath: () => false,
     listFiles: async () => ({
       path: "/loop",
       entries: [{ name: "loop", path: "/loop", type: "directory", size: 0, modifiedAt: "2026-01-01T00:00:00.000Z" }]
@@ -57,6 +58,7 @@ function cyclicRuntime() {
 /** A node that answers with `width` empty files, then nothing below them. */
 function wideRuntime(width: number) {
   return {
+    isModsPath: () => false,
     listFiles: async (_server: unknown, target: string) => ({
       path: "/wide",
       entries: target.endsWith("/wide")

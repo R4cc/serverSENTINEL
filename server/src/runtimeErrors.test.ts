@@ -9,8 +9,16 @@ describe("runtime exit error summaries", () => {
       Caused by: java.net.UnknownHostException: launchermeta.mojang.com
     `);
 
-    expect(message).toContain("could not resolve launchermeta.mojang.com");
+    expect(message).toContain("DNS resolution failed");
+    expect(message).not.toContain("launchermeta.mojang.com");
     expect(message).toContain("Check DNS and outbound network access");
     expect(message).not.toContain("Exception in thread");
+  });
+
+  it("does not copy console text into public operation errors", () => {
+    for (const action of ["start", "restart"] as const) {
+      expect(summarizeRuntimeExit(action, "private-console-marker: player address and credentials")).not.toContain("private-console-marker");
+    }
+    expect(summarizeRuntimeExit("start", "UnknownHostException: private-console-marker")).not.toContain("private-console-marker");
   });
 });
