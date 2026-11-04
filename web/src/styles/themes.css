@@ -41,6 +41,10 @@
   --editor-link: #b7c4ff;
   --overlay: rgb(0 0 0 / 0.62);
   --accent-contrast: #09111f;
+  /* The dark accent is a pale lavender: right for text and rings, but as a button fill it read as
+     washed out beside the saturated danger buttons. Primary buttons take a deeper indigo. */
+  --control-primary-fill: #4f58d8;
+  --control-primary-text: #ffffff;
   /* Dark glass is the same material lit from the same direction: the rim stays
      bright, the tint goes dark and the luminance lift becomes a dip so a pane
      over a bright chart does not glow. The outer ring is dark here rather than

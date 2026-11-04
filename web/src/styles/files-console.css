@@ -984,9 +984,21 @@
   background: var(--border-row);
 }
 
+/* Unsaved work is a warning, not a link: amber, with a dot like the mode's. */
 .fileEditorMetaRow .dirty {
-  color: var(--sentinel-accent-strong);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--status-warning-foreground);
   font-weight: var(--weight-title);
+}
+
+.fileEditorMetaRow .dirty::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sentinel-warning);
 }
 
 .fileEditorRestriction {

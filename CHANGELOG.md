@@ -28,6 +28,9 @@
 - Selected files form one highlighted block, several selected items list their names with Download and Delete beside them, and an empty list hides its select-all box.
 - The file editor shows the caret position and file language, says "Viewing" until editing starts and "Read-only" only when a file can't be edited, is fully opaque, and gives keys, values, keywords and comments distinct colours in both themes.
 - Field placeholders, dialog buttons and empty-state cards are easier to read, and the status refresh button matches the other controls in the light theme.
+- Dialogs show invalid fields and their messages the same way, in a readable red, and no longer jump when a message appears; phone dialogs always stack their buttons with the main action last.
+- Dark-theme primary buttons use a deeper indigo with white text, sorted columns are marked by their label and arrow instead of a filled cell, and notifications have a proper close button.
+- The editor marks unsaved changes in amber and draws a lighter line-number divider; Files shows folder icons in their colour in the selection list, says "the server root" instead of a bare "/", puts the folder buttons before the path on phones, and keeps its light-theme panels from competing with the selection.
 - Updated Fastify and its plugins, WebSocket, Lucide icons, the Vite React plugin, and Vitest to their latest releases.
 - Player Insights now loads its latency history about nine times faster on servers with a week of retained stats, and the Server Timeline reads long ranges slightly faster.
 - Trimmed the Docker image by dropping the test suites, docs, source maps and type declarations bundled inside its dependencies.

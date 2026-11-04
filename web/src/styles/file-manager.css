@@ -394,7 +394,7 @@
 }
 
 .fileNameError {
-  color: var(--sentinel-danger);
+  color: var(--status-danger-foreground);
   font-size: var(--type-helper-size);
   line-height: 1.4;
 }
@@ -1000,11 +1000,12 @@
 
 @media (max-width: 720px) {
 
+  /* The folder buttons lead, as they do on wider screens, with the path after them. */
   .workspacePage-files .filesPage .fileNavBar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
-      "breadcrumbs navigation"
+      "navigation breadcrumbs"
       "actions actions";
     gap: var(--space-2);
     padding: var(--space-2);
@@ -1197,7 +1198,7 @@
   height: 28px;
 }
 
-.filesPage .fileDetailsSelection li > span {
+.filesPage .fileDetailsSelection .fileDetailsSelectionName {
   overflow: hidden;
   color: var(--text);
   font-weight: var(--weight-title);
@@ -1276,4 +1277,20 @@
   .workspacePage-files .fileTableHead {
     display: none;
   }
+}
+
+/* Anchored near the top rather than centred: centred, an error line appearing under the name moved
+   the whole dialog up by half its height. */
+@media (min-width: 721px) {
+  .modalBackdrop.fileActionBackdrop {
+    align-items: start;
+    padding-top: min(18vh, 160px);
+  }
+}
+
+/* In the light theme the page's cyan and lavender wash showed through the file panels strongly
+   enough to compete with the selection tint. The panels stay glass, over a near-solid fill. */
+.themeLight .filesPage .filesPanel.uiGlassSurface,
+.themeLight .filesPage .fileDetailsPanel.uiGlassSurface {
+  background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
 }

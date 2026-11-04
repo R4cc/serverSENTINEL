@@ -53,6 +53,8 @@
   --editor-link: #3858e9;
   --overlay: rgb(0 0 0 / 0.48);
   --accent-contrast: var(--swiss-white);
+  --control-primary-fill: var(--accent);
+  --control-primary-text: var(--accent-contrast);
   /* Liquid glass material.
      A pane of glass is described by four things, and each has its own token
      group so a surface never hand-rolls one of them:

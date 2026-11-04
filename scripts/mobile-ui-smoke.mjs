@@ -840,6 +840,8 @@ async function assertFilesToolbarGeometry(page, label) {
       missing: false,
       navBottom: nav.bottom,
       navLeft: nav.left,
+      navRight: nav.right,
+      crumbsLeft: crumbs.left,
       crumbsTop: crumbs.top,
       crumbsBottom: crumbs.bottom,
       crumbsRight: crumbs.right,
@@ -850,7 +852,7 @@ async function assertFilesToolbarGeometry(page, label) {
     };
   });
   assert(!result.missing, `${label}: Files toolbar groups are missing`);
-  assert(result.navLeft >= result.crumbsRight - 1 && Math.max(result.navBottom, result.crumbsBottom) <= result.toolbarTop + 1, `${label}: Files toolbar groups overlap: ${JSON.stringify(result)}`);
+  assert((result.navLeft >= result.crumbsRight - 1 || result.crumbsLeft >= result.navRight - 1) && Math.max(result.navBottom, result.crumbsBottom) <= result.toolbarTop + 1, `${label}: Files toolbar groups overlap: ${JSON.stringify(result)}`);
   assert(result.navWithinViewport && result.crumbsWithinViewport && result.toolbarWithinViewport, `${label}: Files toolbar leaves the viewport: ${JSON.stringify(result)}`);
 }
 

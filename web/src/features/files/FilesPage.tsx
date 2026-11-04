@@ -614,7 +614,7 @@ export function FilesPage({
               {selectedEntries.slice(0, 8).map((entry) => (
                 <li key={entry.path} title={entry.path}>
                   <FileTypeIcon entry={entry} />
-                  <span>{entry.name}</span>
+                  <span className="fileDetailsSelectionName">{entry.name}</span>
                   <small>{entry.type === "file" ? formatBytes(entry.size) : "Folder"}</small>
                 </li>
               ))}
@@ -750,6 +750,11 @@ export function FilesPage({
   );
 }
 
+/** A folder for a sentence: "the server root" rather than a bare "/" before a full stop. */
+function folderName(path: string) {
+  return path === "/" ? "the server root" : <code>{path}</code>;
+}
+
 function itemCount(count: number) {
   return `${count} ${count === 1 ? "item" : "items"}`;
 }
@@ -847,9 +852,9 @@ export function FileActionModal({
           <div>
             <h2 id="file-action-title">{title}</h2>
             <p id="file-action-description">
-              {dialog.kind === "create" ? <>The folder is created in <code>{location}</code>.</>
-                : dialog.kind === "rename" ? <>It stays in <code>{namedEntryFolder}</code>.</>
-                  : dialog.kind === "duplicate" ? <>The copy is created beside it in <code>{namedEntryFolder}</code>.</>
+              {dialog.kind === "create" ? <>The folder is created in {folderName(location)}.</>
+                : dialog.kind === "rename" ? <>It stays in {folderName(namedEntryFolder)}.</>
+                  : dialog.kind === "duplicate" ? <>The copy is created beside it in {folderName(namedEntryFolder)}.</>
                     : "Review the affected items before continuing."}
             </p>
           </div>

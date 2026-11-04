@@ -96,7 +96,7 @@ const serverSentinelEditorTheme = EditorView.theme({
     lineHeight: "20px"
   },
   ".cm-gutters": {
-    borderRight: "var(--border-strong) solid var(--border)",
+    borderRight: "var(--border-subtle) solid var(--border-muted)",
     backgroundColor: "var(--surface-muted)",
     color: "var(--text-soft)",
     lineHeight: "20px"
