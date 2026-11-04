@@ -26,7 +26,8 @@ export function ActionMenu({
   triggerClassName = "",
   menuClassName = "",
   portal = false,
-  align = "end"
+  align = "end",
+  note
 }: {
   label: string;
   items: ActionMenuItem[];
@@ -39,9 +40,12 @@ export function ActionMenu({
   /** Escape clipped table and panel containers while keeping the menu anchored to its trigger. */
   portal?: boolean;
   align?: "start" | "end";
+  /** Shown under the items, typically why some of them are unavailable. */
+  note?: string;
 }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
+  const noteId = `${menuId}-note`;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -50,11 +54,13 @@ export function ActionMenu({
 
   useLayoutEffect(() => {
     if (!open || !portal) return;
+    let anchorBounds: DOMRect | undefined;
     const place = () => {
       const menu = menuRef.current;
       const trigger = triggerRef.current;
       if (!menu || !trigger) return;
       const bounds = trigger.getBoundingClientRect();
+      anchorBounds = bounds;
       const gutter = 8;
       const below = Math.max(0, window.innerHeight - bounds.bottom - gutter * 2);
       const above = Math.max(0, bounds.top - gutter * 2);
@@ -69,7 +75,12 @@ export function ActionMenu({
       });
     };
     const dismissOnScroll = (event: Event) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+      if (menuRef.current?.contains(event.target as Node)) return;
+      const bounds = triggerRef.current?.getBoundingClientRect();
+      // Focusing the trigger can scroll its container before this menu opens,
+      // with the scroll event arriving afterward. Its anchor is already placed
+      // at that position; dismiss only when a later scroll actually moves it.
+      if (!bounds || !anchorBounds || bounds.top !== anchorBounds.top || bounds.left !== anchorBounds.left) setOpen(false);
     };
     place();
     window.addEventListener("resize", place);
@@ -113,7 +124,7 @@ export function ActionMenu({
   }, [open, portal]);
 
   const menu = open && (
-    <div ref={menuRef} id={menuId} className={`actionMenuPopover uiGlassSurface uiGlassSurface--floating actionMenuPopover--${align} ${portal ? "actionMenuPopover--portal" : ""} ${menuClassName}`.trim()} role="menu" aria-label={label}
+    <div ref={menuRef} id={menuId} className={`actionMenuPopover uiGlassSurface uiGlassSurface--floating actionMenuPopover--${align} ${portal ? "actionMenuPopover--portal" : ""} ${menuClassName}`.trim()} role="menu" aria-label={label} aria-describedby={note ? noteId : undefined}
       style={portal ? { position: "fixed", right: "auto", bottom: "auto", ...position } : undefined}>
       <GlassEffect variant="floating" />
       {items.map((item, index) => (
@@ -138,6 +149,7 @@ export function ActionMenu({
           </button>
         </Fragment>
       ))}
+      {note && <div id={noteId} className="actionMenuNote" role="none">{note}</div>}
     </div>
   );
 

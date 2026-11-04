@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG SS_VERSION=26.10.16
+ARG SS_VERSION=26.11.1
 FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
@@ -28,6 +28,17 @@ RUN --mount=type=cache,id=serversentinel-npm,target=/root/.npm \
     node_modules/node-addon-api \
   && test "$(find node_modules/better-sqlite3/prebuilds -type f | wc -l)" -eq 1 \
   && node -e "const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.exec('SELECT 1'); db.close()"
+
+# Published packages also carry their own test suites, docs, source maps and type declarations,
+# which is about half of the production tree and nothing the server loads. A test or docs folder
+# is removed only directly inside a package (beside its package.json), so a runtime module that
+# merely happens to be called `test` deeper in a package's code is left alone. Licenses stay.
+RUN find node_modules -type d \( -name test -o -name tests -o -name __tests__ -o -name docs \
+      -o -name example -o -name examples -o -name bench -o -name benchmark -o -name benchmarks -o -name .github \) \
+      -prune -exec sh -c 'test -f "$1/../package.json" && rm -rf "$1"' sh {} \; \
+  && find node_modules -type f \( -name '*.map' -o -name '*.ts' -o -name '*.mts' -o -name '*.cts' \
+      -o \( -iname '*.md' ! -iname 'licen[cs]e*' \) \) -delete \
+  && node -e "for (const name of Object.keys(require('./server/package.json').dependencies)) if (!name.startsWith('@serversentinel/')) require(name)"
 
 FROM dependency-base AS build
 

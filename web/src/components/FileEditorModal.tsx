@@ -137,7 +137,7 @@ export function FileEditorModal({
               </span>
               <span className="fileEditorMetaDivider" aria-hidden="true" />
               <span className="fileEditorLineCount">{editorText.split("\n").length} lines</span>
-              {dirty && <span className="dirty">Unsaved changes</span>}
+              {dirty && <><span className="fileEditorMetaDivider" aria-hidden="true" /><span className="dirty">Unsaved changes</span></>}
               <div className="fileEditorMetaActions">
                 {editingRestriction && (
                   <span className="fileEditorRestriction" role="status" title={editingRestriction} aria-label={`Editing unavailable: ${editingRestriction}`}>
@@ -194,8 +194,10 @@ export function FileEditorModal({
                 {fileSaving ? "Saving" : "Save"}
               </Button>
             ) : (
-              <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? editDisabledReason || "Edit permission is required." : "Acquire an exclusive edit lease"} reserveLabel="Requesting edit access">
-                {editBusy ? "Requesting edit access" : "Edit file"}
+              <Button onClick={onEnterEdit} disabled={editDisabled || editBusy || fileOpening || fileOpenFailed} title={editDisabled ? editDisabledReason || "Edit permission is required." : "Acquire an exclusive edit lease"} reserveLabel="Requesting…">
+                {/* The button keeps room for its longest label; a long one made "Edit file" much wider
+                    than Close, and wider than the Save that replaces it. */}
+                {editBusy ? "Requesting…" : "Edit file"}
               </Button>
             )}
           </footer>
@@ -211,11 +213,11 @@ export function FileEditorModal({
             </Button>
           </header>
           <div className="modalBody">
-            <p>Discard this editor session and lose the unsaved file changes?</p>
+            <p>{selectedPath ? <>Your edits to <strong>{editorFileName}</strong> have not been saved and will be lost.</> : "Your edits have not been saved and will be lost."}</p>
           </div>
           <footer className="modalFooter discardEditorActions">
-            <Button variant="secondary" onClick={onKeepEditing}>Keep Editing</Button>
-            <Button variant="critical" onClick={onDiscardChanges}>Discard Changes</Button>
+            <Button variant="secondary" onClick={onKeepEditing}>Keep editing</Button>
+            <Button variant="critical" onClick={onDiscardChanges}>Discard changes</Button>
           </footer>
         </DialogSurface>
       )}

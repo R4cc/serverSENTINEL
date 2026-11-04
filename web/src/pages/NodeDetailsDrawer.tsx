@@ -5,7 +5,7 @@ import { AppIcon } from "../components/FileTypeIcon";
 import { Banner, Button, Spinner, StatusBadge } from "../components/UiPrimitives";
 import type { NodeUpdateFailureStage } from "@serversentinel/contracts";
 import type { ContextNode, NodeView, NodeManualRecovery, NodeOperation } from "../types";
-import { formatBytes } from "../utils/format";
+import { formatAdaptiveBytes } from "../utils/format";
 import { nodeDataPathLabel, nodeDockerLabel, nodeJoinTokenExpired, nodeWarnings } from "../utils/nodes";
 
 type PrimaryActionKind = "operation" | "check" | "rotate-token" | "install" | "update" | null;
@@ -326,7 +326,7 @@ export function NodeDetailsDrawer({
           <dl className="nodeDrawerFacts">
             <div><dt>Docker</dt><dd className={valueTone(node.dockerStatus)}>{nodeDockerLabel(node)}</dd></div>
             <div><dt>Data path</dt><dd className={valueTone(node.dataPathStatus)}>{nodeDataPathLabel(node)}</dd></div>
-            <div><dt>Host memory</dt><dd>{node.totalMemory ? formatBytes(node.totalMemory) : "Unknown"}</dd></div>
+            <div><dt>Host memory</dt><dd>{node.totalMemory ? formatAdaptiveBytes(node.totalMemory) : "Unknown"}</dd></div>
             <div><dt>Last seen</dt><dd>{formatNodeDate(node.lastSeenAt ?? node.connectedAt, formatDate)}</dd></div>
           </dl>
         </section>

@@ -298,7 +298,6 @@ export function FilesPage({
       icon: <AppIcon name="download" />,
       onSelect: actions.downloadSelectedItems,
       disabled: !canDownloadSelectedItems,
-      separatorBefore: selectionContextActions.length > 0,
       title: fileReadActionBlockedReason || "Download selected items"
     });
   }
@@ -312,6 +311,14 @@ export function FilesPage({
     ...item,
     separatorBefore: index === 0 && selectionContextActions.length > 0
   }));
+
+  // A menu of greyed-out items otherwise gives no reason; the tooltips that carry it never show on touch.
+  function unavailableNote(items: ActionMenuItem[]) {
+    if (!items.some((item) => item.disabled)) return undefined;
+    if (fileActionBlockedReason) return fileActionBlockedReason;
+    if (activeServerIsDemo && items.some((item) => item.disabled && item.id.startsWith("extract-"))) return "ZIP extraction is not available on the demo server.";
+    return undefined;
+  }
 
   const backgroundContextActions: ActionMenuItem[] = [
     {
@@ -359,7 +366,7 @@ export function FilesPage({
               <Button variant="secondary" iconOnly className="iconOnlyButton fileDesktopNavigation" onClick={() => void actions.navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
                 <AppIcon name="home" />
               </Button>
-              <ActionMenu className="fileMobileNavigation" label="More folder navigation" trigger={<AppIcon name="moreHorizontal" />} items={[
+              <ActionMenu className="fileMobileNavigation" label="More folder navigation" trigger={<AppIcon name="history" />} items={[
                 { id: "forward", label: "Forward", icon: <AppIcon name="chevronRight" />, onSelect: actions.navigateForwardFiles, disabled: isProvisioning || fileForwardStack.length === 0 },
                 { id: "root", label: "Go to server root", icon: <AppIcon name="home" />, onSelect: () => void actions.navigateFiles("/"), disabled: isProvisioning || listing.path === "/" }
               ]} />
@@ -404,7 +411,13 @@ export function FilesPage({
 
           <section className="fileListSurface" aria-label="File list">
           <div className="selectionActionBar" aria-label="File selection actions">
-            <span className="selectionSummary" role="status" aria-live="polite">{operationLabel || selectionSummary}</span>
+            {/* One place reports what the list holds: the selection while there is one, otherwise the
+                folder's item count. A footer used to repeat both, plus the path the breadcrumbs show. */}
+            <span className="selectionSummary" role="status" aria-live="polite">
+              {operationLabel || selectionSummary || (initialFilesLoading
+                ? <SkeletonBlock className="selectionSummarySkeleton" />
+                : fileSearch.trim() ? `${sortedFileEntries.length} of ${itemCount(listing.entries.length)}` : itemCount(sortedFileEntries.length))}
+            </span>
             <div className="selectionActions">
               {selectedEntries.length > 0 && <Button variant="ghost" compact iconOnly aria-label="Clear file selection" title="Clear selection" onClick={actions.clearFileSelection}><AppIcon name="x" /></Button>}
               {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
@@ -431,12 +444,14 @@ export function FilesPage({
                 label="More file actions"
                 className="selectionActionMenu selectionActionMenu--expanded"
                 items={expandedOverflowSelectionActions}
+                note={unavailableNote(expandedOverflowSelectionActions)}
                 trigger={<AppIcon name="moreHorizontal" />}
               />}
               {secondarySelectionActions.length > 0 && <ActionMenu
                 label="More file actions"
                 className="selectionActionMenu selectionActionMenu--compact"
                 items={secondarySelectionActions}
+                note={unavailableNote(secondarySelectionActions)}
                 trigger={<AppIcon name="moreHorizontal" />}
               />}
             </div>
@@ -556,10 +571,6 @@ export function FilesPage({
               );
             })}
           </div>
-          <div className="fileTableFooter">
-            <span role="status">{initialFilesLoading ? <SkeletonBlock className="fileFooterCountSkeleton" /> : fileSearch.trim() ? `${sortedFileEntries.length} of ${listing.entries.length} items` : `${sortedFileEntries.length} items`}</span>
-            <span title={listing.path}>{initialFilesLoading ? <SkeletonBlock className="fileFooterPathSkeleton" /> : selectedEntries.length > 0 ? `${selectedEntries.length} selected (${formatBytes(selectedTotalSize)})` : listing.path}</span>
-          </div>
           </section>
         </Surface>
       </section>
@@ -569,9 +580,9 @@ export function FilesPage({
           <div className="fileDetailsContent">
             <h2>{selectedEntries.length} items selected</h2>
             <dl>
-              <div><dt>Total file size</dt><dd>{formatBytes(selectedTotalSize)}</dd></div>
-              <div><dt>Folders</dt><dd>{selectedEntries.filter((entry) => entry.type === "directory").length}</dd></div>
-              <div><dt>Files</dt><dd>{selectedEntries.filter((entry) => entry.type === "file").length}</dd></div>
+              {selectedEntries.some((entry) => entry.type === "file") && <div><dt>Total file size</dt><dd>{formatBytes(selectedTotalSize)}</dd></div>}
+              {selectedEntries.some((entry) => entry.type === "directory") && <div><dt>Folders</dt><dd>{selectedEntries.filter((entry) => entry.type === "directory").length}</dd></div>}
+              {selectedEntries.some((entry) => entry.type === "file") && <div><dt>Files</dt><dd>{selectedEntries.filter((entry) => entry.type === "file").length}</dd></div>}
             </dl>
           </div>
         )}
@@ -587,13 +598,14 @@ export function FilesPage({
             <dl>
               <div><dt>Location</dt><dd title={selectedEntry.path}>{selectedEntry.path}</dd></div>
               <div><dt>Type</dt><dd>{fileDisplayType(selectedEntry)}</dd></div>
-              <div><dt>Size</dt><dd>{selectedEntry.type === "file" ? formatBytes(selectedEntry.size) : "-"}</dd></div>
+              <div><dt>Size</dt><dd>{selectedEntry.type === "file" ? formatBytes(selectedEntry.size) : "—"}</dd></div>
               <div><dt>Modified</dt><dd>{dateTimeFormatter.format(new Date(selectedEntry.modifiedAt))}</dd></div>
               {selectedEntry.permissions && <div><dt>Permissions</dt><dd>{selectedEntry.permissions}</dd></div>}
               {selectedEntry.owner && <div><dt>Owner</dt><dd>{selectedEntry.owner}</dd></div>}
-              <div><dt>Status</dt><dd>{fileStatusLabel(selectedEntry)}</dd></div>
+              {/* "OK" is every ordinary file; the row is only worth a line when something is off. */}
+              {fileStatusLabel(selectedEntry) !== "OK" && <div><dt>Status</dt><dd>{fileStatusLabel(selectedEntry)}</dd></div>}
             </dl>
-            <section className="filePreviewPanel">
+            {selectedEntry.type === "file" && <section className="filePreviewPanel">
               <h3>Preview</h3>
               {(filePreview.loading || filePreview.path !== selectedEntry.path) && <FilePreviewSkeleton />}
               {filePreview.path === selectedEntry.path && filePreview.error && <InlineState tone="error" title="Preview is unavailable" message={`${filePreview.error} You can still download or edit supported text files from the toolbar.`} />}
@@ -606,11 +618,13 @@ export function FilesPage({
               )}
               {filePreview.path === selectedEntry.path && !filePreview.loading && !filePreview.error && filePreview.data?.preview !== "text" && (
                 <div className="previewUnavailable">
+                  <FileTypeIcon entry={selectedEntry} />
                   <strong>Preview unavailable</strong>
-                  <span>{filePreview.data?.message ?? "This item cannot be previewed here. You can still use the available file actions above."}</span>
+                  <span>{previewUnavailableMessage(filePreview.data?.message)}</span>
+                  {canDownloadSelectedItems && <Button variant="secondary" compact onClick={actions.downloadSelectedItems}><AppIcon name="download" />Download</Button>}
                 </div>
               )}
-            </section>
+            </section>}
           </div>
         )}
       </Surface>}
@@ -620,6 +634,7 @@ export function FilesPage({
           key={fileContextMenu.invocationId}
           label={fileContextMenu.kind === "selection" ? "File actions" : "Folder actions"}
           items={fileContextMenu.kind === "selection" ? selectionContextActions : backgroundContextActions}
+          note={unavailableNote(fileContextMenu.kind === "selection" ? selectionContextActions : backgroundContextActions)}
           x={fileContextMenu.x}
           y={fileContextMenu.y}
           returnFocus={fileContextMenu.returnFocus}
@@ -694,6 +709,15 @@ export function FilesPage({
   );
 }
 
+function itemCount(count: number) {
+  return `${count} ${count === 1 ? "item" : "items"}`;
+}
+
+/** The services answer an unsupported or binary file with the heading's own words, so those get a reason instead. */
+function previewUnavailableMessage(message?: string) {
+  return message && message !== "Preview unavailable" ? message : "Only text files can be previewed here.";
+}
+
 function FileTableSkeletonRow() {
   return (
     <div className="fileTableRow fileTableSkeletonRow" role="row" aria-hidden="true">
@@ -748,12 +772,28 @@ export function FileActionModal({
     onSubmit();
   }
 
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const namedEntryType = dialog.kind === "rename" || dialog.kind === "duplicate" ? dialog.entry.type : null;
+
+  // Runs when the dialog opens, after it has focused the field. Selecting the name up to its
+  // extension is what a desktop file manager does, since a rename most often keeps the extension.
+  // Later keystrokes change only the value, so they never reselect it.
+  useEffect(() => {
+    const input = nameInputRef.current;
+    if (!input || !namedEntryType) return;
+    const extension = namedEntryType === "file" ? input.value.lastIndexOf(".") : -1;
+    input.setSelectionRange(0, extension > 0 ? extension : input.value.length);
+  }, [dialog.kind, namedEntryType]);
+
   const error = dialog.error;
+  const nameHint = dialog.kind !== "delete" && !dialog.value.trim() && !error
+    ? dialog.kind === "create" ? "Enter a name for the new folder." : "Enter a name to continue."
+    : "";
   const folders = dialog.kind === "delete" ? dialog.entries.filter((entry) => entry.type === "directory").length : 0;
   const files = dialog.kind === "delete" ? dialog.entries.length - folders : 0;
 
   return (
-    <DialogSurface backdrop="fileActionBackdrop" dismissible={!busy} className="modalPanel fileActionModal" labelledBy="file-action-title" describedBy="file-action-description" onClose={onCancel}>
+    <DialogSurface backdrop="fileActionBackdrop" dismissible={!busy} className="modalPanel fileActionModal" labelledBy="file-action-title" describedBy="file-action-description" onClose={onCancel} initialFocusRef={dialog.kind === "delete" ? undefined : nameInputRef}>
       <form onSubmit={handleSubmit}>
         <header className="modalHeader">
           <div>
@@ -771,20 +811,25 @@ export function FileActionModal({
           {dialog.kind !== "delete" ? (
             <label className="fileNameField">
               <span>{dialog.kind === "create" ? "Folder name" : "Name"}</span>
-              <input autoFocus value={dialog.value} onChange={(event) => onValueChange(event.target.value)} disabled={busy} aria-invalid={Boolean(error)} aria-describedby={error ? "file-action-error" : undefined} />
+              <input ref={nameInputRef} value={dialog.value} onChange={(event) => onValueChange(event.target.value)} disabled={busy} aria-invalid={Boolean(error)} aria-describedby={error ? "file-action-error" : nameHint ? "file-action-name-hint" : undefined} />
+              {/* An empty name only disables the button, so the hint says why. Its line is kept while it
+                  is blank, so the dialog does not grow and re-centre as the hint comes and goes. */}
+              <small id="file-action-name-hint" className="fileNameHint" aria-live="polite">{nameHint}</small>
             </label>
           ) : (
             <>
               <div className="deleteSummary" aria-label="Items to delete">
-                <span><strong>{files}</strong> {files === 1 ? "file" : "files"}</span>
-                <span><strong>{folders}</strong> {folders === 1 ? "folder" : "folders"}</span>
+                <p className="deleteSummaryCounts">
+                  {files > 0 && <span><strong>{files}</strong> {files === 1 ? "file" : "files"}</span>}
+                  {files > 0 && folders > 0 && " · "}
+                  {folders > 0 && <span><strong>{folders}</strong> {folders === 1 ? "folder" : "folders"}</span>}
+                </p>
+                <ul className="deletePathList">
+                  {dialog.entries.slice(0, 6).map((entry) => <li key={entry.path}>{entry.path}</li>)}
+                  {dialog.entries.length > 6 && <li>…and {dialog.entries.length - 6} more</li>}
+                </ul>
               </div>
-              <ul className="deletePathList">
-                {dialog.entries.slice(0, 6).map((entry) => <li key={entry.path}>{entry.path}</li>)}
-                {dialog.entries.length > 6 && <li>…and {dialog.entries.length - 6} more</li>}
-              </ul>
-              {folders > 0 && <Banner tone="warning" compact title="Folders include their contents" message="Selected folders and everything inside them will be deleted." />}
-              <p className="fileActionDanger">This action cannot be undone.</p>
+              <Banner tone="error" compact title={folders > 0 ? "Selected folders and everything inside them will be deleted. This cannot be undone." : "This cannot be undone."} />
             </>
           )}
           {error && <Banner tone="error" compact id="file-action-error" title="Could not complete this action" message={error} />}

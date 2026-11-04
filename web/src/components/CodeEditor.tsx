@@ -79,9 +79,9 @@ const serverSentinelEditorTheme = EditorView.theme({
   "&[data-file-code-editor-measured='true']": {
     visibility: "visible"
   },
+  // The frame around the editor shows focus (see `.fileCodeEditor` in files-console.css).
   "&.cm-focused": {
-    outline: "2px solid var(--accent)",
-    outlineOffset: "-2px"
+    outline: "none"
   },
   ".cm-scroller": {
     overflow: "auto",
@@ -135,9 +135,6 @@ const serverSentinelEditorTheme = EditorView.theme({
   },
   "&.cm-editor[aria-readonly='true'] .cm-content": {
     caretColor: "transparent"
-  },
-  "&.cm-editor[aria-readonly='true'].cm-focused": {
-    outline: "1px solid var(--border-panel)"
   },
   "&.cm-editor[aria-readonly='true'] .cm-activeLine": {
     backgroundColor: "transparent"

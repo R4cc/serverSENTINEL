@@ -1285,8 +1285,9 @@ export default function App() {
     });
   }, [activeNodeRuntimeBlocked, activePage, activeServer?.id, overviewError]);
 
-  function notify(type: NotificationTone, text: string) {
-    const options = { duration: type === "error" ? 7000 : 5000, closeButton: true, dismissible: true };
+  /** `id` replaces an earlier toast with the same id in place, for steps of one operation. */
+  function notify(type: NotificationTone, text: string, id?: string) {
+    const options = { id, duration: type === "error" ? 7000 : 5000, closeButton: true, dismissible: true };
     if (type === "success") {
       toast.success(text, options);
       return;
@@ -1933,7 +1934,9 @@ export default function App() {
     setRuntimeAction(action);
     const actionLabel = action === "start" ? "Start" : action === "stop" ? "Stop" : "Restart";
     const completedLabel = action === "start" ? "started" : action === "stop" ? "stopped" : "restarted";
-    if (options.announceRequest !== false) notify("info", `${actionLabel} request sent`);
+    // One toast for the whole action: the result replaces "request sent" instead of stacking on it.
+    const runtimeToastId = `runtime-${action}-${activeServer.id}`;
+    if (options.announceRequest !== false) notify("info", `${actionLabel} request sent`, runtimeToastId);
     try {
       if (activeServerIsDemo) {
         const nextRunning = action !== "stop";
@@ -1961,7 +1964,7 @@ export default function App() {
           return next;
         });
         showRuntimeFeedback(action);
-        notify("success", `Demo server ${completedLabel}`);
+        notify("success", `Demo server ${completedLabel}`, runtimeToastId);
         return;
       }
       await api(`/api/servers/${activeServer.id}/${action}`, {
@@ -1973,12 +1976,12 @@ export default function App() {
       setConsoleStreamVersion((version) => version + 1);
       await pollConsoleBacklog(activeServer.id);
       showRuntimeFeedback(action);
-      notify("success", `${activeServer.displayName} ${completedLabel}`);
+      notify("success", `${activeServer.displayName} ${completedLabel}`, runtimeToastId);
     } catch (error) {
       setConsoleStreamVersion((version) => version + 1);
       await pollConsoleBacklog(activeServer.id);
       setNotice((error as Error).message);
-      notify("error", (error as Error).message);
+      notify("error", (error as Error).message, runtimeToastId);
     } finally {
       setRuntimeAction(null);
     }
@@ -2078,7 +2081,7 @@ export default function App() {
   if (sessionPending && !bootsIntoShell) {
     return (
       <>
-        <AppToaster darkMode={darkMode} />
+        <AppToaster darkMode={darkMode} phoneLayout={phoneLayout} />
         <AuthLoadingSkeleton />
       </>
     );
@@ -2087,7 +2090,7 @@ export default function App() {
   if (authSession && !authSession.authenticated && !demoMode) {
     return (
       <>
-        <AppToaster darkMode={darkMode} />
+        <AppToaster darkMode={darkMode} phoneLayout={phoneLayout} />
         <AuthPanel
           setupRequired={authSession.setupRequired}
           demoEnabled={authSession.demoEnabled}
@@ -2175,7 +2178,7 @@ export default function App() {
 
   return (
     <>
-      <AppToaster darkMode={darkMode} />
+      <AppToaster darkMode={darkMode} phoneLayout={phoneLayout} />
       <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${phoneLayout && !sidebarCollapsed ? "mobileNavigationOpen" : ""} ${themeClassName}`.replace(/\s+/g, " ").trim()}>
         <AppSidebar
           sidebarCollapsed={sidebarCollapsed}

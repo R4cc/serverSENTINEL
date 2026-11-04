@@ -21,9 +21,23 @@
   gap: var(--space-2);
 }
 
+/* A written reason, not code: set like every other field rather than in the code font that
+   textareas default to. */
 .confirmationTextField textarea {
   min-height: 96px;
   resize: vertical;
+  font-family: var(--font-sans);
+  font-size: var(--type-body-size);
+}
+
+.confirmationTextField .confirmationFieldError {
+  color: var(--status-danger-foreground);
+  font-weight: var(--weight-meta);
+}
+
+.confirmationRequired {
+  color: var(--text-muted);
+  font-weight: var(--weight-body);
 }
 
 .confirmationTextField small {
@@ -48,9 +62,11 @@
   overflow: hidden;
 }
 
+/* The same detail card as the delete dialog's item list, so the dialogs share one card style beside
+   their one alert style. */
 .confirmContent blockquote {
   margin: 0;
-  border-left: var(--border-heavy) solid var(--accent);
+  border: var(--border-subtle) solid var(--border-row);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
   padding: var(--space-2) var(--space-3);

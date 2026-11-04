@@ -56,7 +56,7 @@ import { GeoDatabase } from "./players/geoDatabase.js";
 import { PlayerGeoCollector } from "./players/playerGeoCollector.js";
 import { readDockerPlayerConnections } from "./players/dockerPlayerConnections.js";
 import { PlayerPingCollector } from "./players/playerPingCollector.js";
-import { buildPlayerInsights } from "./players/playerInsights.js";
+import { buildPlayerInsights, playerLatencyPoints } from "./players/playerInsights.js";
 import { PlayerActivityCache } from "./players/playerActivityCache.js";
 import { resolveServerLocation, ServerLocationStore } from "./players/serverLocations.js";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
@@ -498,7 +498,7 @@ async function playerInsightsSnapshot(options: { serverId?: string; windowMs?: n
     pings: Object.fromEntries(servers.map((server) => [server.id, services.playerPingCollector?.latest(server.id) ?? new Map()])),
     pingMeasurements: services.playerPingCollector?.measurements(servers.map((server) => server.id))
       ?? servers.map((server) => ({ serverId: server.id, status: "unsupported" as const, onlinePlayers: 0, measuredPlayers: 0 })),
-    resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.listRange(server.id, now - historyWindowMs, now)])),
+    resourceSamples: Object.fromEntries(servers.map((server) => [server.id, services.resourceStatsRepository.latestPerSlice(server.id, now - historyWindowMs, now, playerLatencyPoints)])),
     activityHours: playerActivityCache.hours(servers.map((server) => server.id), config.timeZone, playerInsightsHistoryWindow, now),
     geoDatabase: geoDatabase?.state() ?? {
       available: false,

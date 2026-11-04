@@ -7,7 +7,7 @@ import type { ContextNode, RuntimeVersion } from "../types";
 import {
   defaultQueryPort,
   defaultServerPort,
-  formatBytes,
+  formatAdaptiveBytes,
   isValidServerPort,
   maxServerPort,
   minServerPort
@@ -1346,7 +1346,7 @@ export function NodeOverviewCard({ node, fallbackMemory }: { node?: ContextNode;
   const totalMemory = node?.totalMemory || fallbackMemory;
   const status = node ? nodeStatusText(node) : "No node selected";
   const uptime = node ? formatNodeUptime(node) : "Select a node";
-  const memory = totalMemory ? formatBytes(totalMemory) : "Unknown";
+  const memory = totalMemory ? formatAdaptiveBytes(totalMemory) : "Unknown";
   return (
     <section className="createNodeOverview" aria-label="Node overview">
       <strong>Node overview</strong>

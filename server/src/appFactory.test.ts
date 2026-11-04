@@ -1535,7 +1535,7 @@ describe("Fastify application factory", () => {
 
       const scopedGeo = vi.spyOn(services.playerGeoRepository, "listForServer");
       const allGeo = vi.spyOn(services.playerGeoRepository, "list");
-      const latencyHistory = vi.spyOn(services.resourceStatsRepository, "listRange");
+      const latencyHistory = vi.spyOn(services.resourceStatsRepository, "latestPerSlice");
       const activityHistory = vi.spyOn(services.resourceStatsRepository, "activitySamples");
       const scopedInsights = await app.inject({
         method: "GET",
@@ -1554,7 +1554,7 @@ describe("Fastify application factory", () => {
       });
       expect(shortInsights.statusCode, shortInsights.body).toBe(200);
       const generatedAt = Date.parse(shortInsights.json().generatedAt);
-      expect(latencyHistory).toHaveBeenLastCalledWith("11111111-1111-4111-8111-111111111111", generatedAt - 300_000, generatedAt);
+      expect(latencyHistory).toHaveBeenLastCalledWith("11111111-1111-4111-8111-111111111111", generatedAt - 300_000, generatedAt, 96);
       expect(activityHistory).toHaveBeenCalledTimes(1);
       expect(shortInsights.json().activityHours).toEqual(scopedInsights.json().activityHours);
 

@@ -1,6 +1,6 @@
 {
   "name": "@serversentinel/server",
-  "version": "26.10.16",
+  "version": "26.11.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,17 +15,17 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@fastify/compress": "^9.2.2",
+    "@fastify/compress": "^9.3.0",
     "@fastify/helmet": "^13.2.0",
-    "@fastify/multipart": "^10.1.6",
-    "@fastify/rate-limit": "^11.2.1",
-    "@fastify/static": "^10.1.7",
-    "@fastify/websocket": "^11.3.4",
+    "@fastify/multipart": "^10.1.7",
+    "@fastify/rate-limit": "^11.2.2",
+    "@fastify/static": "^10.1.8",
+    "@fastify/websocket": "^11.3.6",
     "@maxmind/geoip2-node": "^7.1.0",
-    "@serversentinel/contracts": "26.10.16",
+    "@serversentinel/contracts": "26.11.1",
     "better-sqlite3": "^13.0.3",
-    "fastify": "^5.12.7",
-    "ws": "^8.22.0",
+    "fastify": "^5.12.8",
+    "ws": "^8.22.1",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1"
   },
@@ -36,6 +36,6 @@
     "@types/yazl": "^3.3.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   }
 }

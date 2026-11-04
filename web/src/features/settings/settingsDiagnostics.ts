@@ -1,5 +1,5 @@
 import type { NodeView } from "../../types";
-import { formatBytes } from "../../utils/format";
+import { formatAdaptiveBytes } from "../../utils/format";
 
 export type SettingsSystemInfo = {
   panelVersion: string;
@@ -51,7 +51,7 @@ export function summarizeSettingsSystemInfo(info: SettingsSystemInfo): SettingsS
         : info.dockerSocketMounted
           ? "Connected"
           : "Not mounted",
-    memory: info.totalMemory > 0 ? formatBytes(info.totalMemory) : "Unknown"
+    memory: info.totalMemory > 0 ? formatAdaptiveBytes(info.totalMemory) : "Unknown"
   };
 }
 

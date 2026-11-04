@@ -141,7 +141,9 @@
   flex: 0 0 auto;
   border-top: var(--border-strong) solid color-mix(in srgb, var(--terminal-text) 36%, transparent);
   padding: var(--space-2) var(--space-3);
-  color: var(--text-soft);
+  /* Drawn on the terminal, which stays dark in the light theme too, so it takes the terminal's text
+     colour rather than the page's: the page's soft grey was meant for a light surface. */
+  color: color-mix(in srgb, var(--terminal-text) 74%, var(--terminal-bg));
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: var(--weight-meta);
@@ -205,6 +207,15 @@
   box-shadow: none;
 }
 
+/* The input draws no ring of its own, so the row shows where typing will go: the rule above it
+   takes the prompt's accent and the row a faint tint of it while the command line has focus. The
+   terminal stays dark in the light theme too, so this is the marker's accent rather than the
+   theme's, which is too dark to read against it there. */
+.consolePrompt:focus-within {
+  border-top-color: color-mix(in srgb, var(--sentinel-accent-muted) 55%, transparent);
+  background: color-mix(in srgb, var(--sentinel-accent-muted) 6%, var(--terminal-bg));
+}
+
 /* Focusing an input set below 16px zooms the page on iOS, so every editable control on a phone is
    raised to that floor. The console prompt takes the floor here rather than through the shared
    rule in `responsive.css`, because that rule reaches the input and not the marker beside it: the
@@ -222,6 +233,15 @@
   .consolePromptMarker {
     display: flex;
     align-items: center;
+  }
+
+  /* As tall as the command line it stands in for, so starting or stopping the server does not
+     resize the terminal above it. */
+  .consolePromptStatus {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding-block: var(--space-1);
   }
 }
 
@@ -446,7 +466,7 @@
 }
 
 .fileTableHead > label {
-  justify-content: start;
+  justify-content: center;
   min-height: 44px;
   border: 0;
   border-radius: 0;
@@ -497,6 +517,12 @@
   cursor: pointer;
 }
 
+/* Select-all is disabled when no rows are showing; make that visible rather than a live-looking box. */
+.fileCheckboxCell input:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 .fileCheckboxCell input {
   width: 16px;
   height: 16px;
@@ -537,17 +563,6 @@
   font-size: 14px;
   font-weight: var(--weight-heading);
   line-height: 1.3;
-}
-
-.fileTableFooter {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  color: var(--text-muted);
-  font-size: 12px;
-  border-top: var(--border-strong) solid var(--border);
 }
 
 .fileDetailsPanel {
@@ -676,11 +691,6 @@
   justify-content: flex-end;
 }
 
-.fileEditorFooter button,
-.discardEditorActions button {
-  min-width: 132px;
-}
-
 .discardEditorBackdrop {
   z-index: 55;
 }
@@ -750,6 +760,8 @@
   min-height: 160px;
   gap: var(--space-1);
   place-items: center;
+  /* Without this the two lines split the box's height between them and drift apart. */
+  align-content: center;
   border: var(--border-subtle) solid var(--border-muted);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -931,13 +943,14 @@
 
 .fileEditorRestrictionReason { margin: 0; padding: var(--space-2) var(--space-4); background: var(--surface-muted); color: var(--text-muted); font-size: var(--type-helper-size); overflow-wrap: anywhere; }
 
+/* Already inside the body's padding, so the row lines up with the editor's edges without its own. */
 .fileEditorMetaRow {
   min-height: 42px;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 0 var(--space-4);
+  padding: 0;
   border-bottom: 1px solid var(--border-row);
   color: var(--text-muted);
   font-size: 12px;
@@ -1011,6 +1024,18 @@
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
+}
+
+/* The ring belongs to the whole frame. Drawn on CodeMirror's own element it sat under the sticky
+   line-number gutter, so the numbers looked as if they were outside the box being edited. */
+.fileCodeEditor:has(.cm-editor.cm-focused) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.fileCodeEditor:has(.cm-editor.cm-focused[aria-readonly="true"]) {
+  border-color: var(--border-panel);
+  box-shadow: none;
 }
 
 .fileCodeEditor-disabled {
@@ -1151,7 +1176,14 @@
 .consoleTabPage .consolePanel { gap: 0; }
 .consoleTabPage .terminal { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--terminal-text) 4%, transparent); }
 
-.fileEditorModal.uiGlassSurface { background: var(--glass-tint-strong); }
+/* The editor is a workspace, and wide enough to sit over the sidebar: the shared translucent tint
+   let the page show through its header and footer, most visibly as a dark band in the light theme.
+   It keeps the glass material every dialog shares, over a tint dense enough to read as solid. */
+.fileEditorModal.uiGlassSurface {
+  background: color-mix(in srgb, var(--surface-raised) 98%, transparent);
+  -webkit-backdrop-filter: var(--glass-filter-modal);
+  backdrop-filter: var(--glass-filter-modal);
+}
 .fileEditorModal .fileEditorHeader,
 .fileEditorModal .fileEditorFooter { background: transparent; }
 .fileEditorModal .fileEditorBody { background: transparent; }
@@ -1352,10 +1384,8 @@
     max-width: min(220px, 58vw);
   }
 
-  .fileEditorMetaActions {
-    width: 100%;
-    margin-left: 0;
-    justify-content: space-between;
+  .fileEditorBody {
+    padding: var(--space-3);
   }
 }
 

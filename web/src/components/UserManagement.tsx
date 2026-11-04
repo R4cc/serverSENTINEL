@@ -272,7 +272,12 @@ function UserPermissionModal({
                 <input id={`${fieldId}-password`} name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} placeholder="At least 8 characters" />
               </FormField>
             )}
-            <FormField label="Role preset" htmlFor={`${fieldId}-preset`}>
+            <FormField
+              label="Role preset"
+              htmlFor={`${fieldId}-preset`}
+              descriptionPlacement="after"
+              description={<span className="presetSummary" aria-live="polite">Current preset: <strong>{rolePresetLabel(inferredPreset)}</strong></span>}
+            >
               <select id={`${fieldId}-preset`} name="presetPicker" value={selectedPreset} onChange={changePreset} disabled={adminPermissionsLocked}>
                 <option value="viewer">Viewer</option>
                 <option value="operator">Operator</option>
@@ -282,9 +287,6 @@ function UserPermissionModal({
                 <option value="custom">Custom</option>
               </select>
             </FormField>
-            <div className="presetSummary" aria-live="polite">
-              Current preset: <strong>{rolePresetLabel(inferredPreset)}</strong>
-            </div>
           </div>
 
           {unknownPermissions.length > 0 && (
@@ -379,7 +381,7 @@ function ResetPasswordModal({
         </div>
         <fieldset disabled={busy} className="userModalBody">
           <div className="userModalFields">
-            <FormField label="User" htmlFor={`${fieldId}-user`}>
+            <FormField className="userModalFieldWide" label="User" htmlFor={`${fieldId}-user`}>
               <input id={`${fieldId}-user`} value={user.username} readOnly />
             </FormField>
             <FormField label="New password" htmlFor={`${fieldId}-password`} required>
