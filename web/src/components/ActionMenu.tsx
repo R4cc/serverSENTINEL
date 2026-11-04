@@ -54,11 +54,13 @@ export function ActionMenu({
 
   useLayoutEffect(() => {
     if (!open || !portal) return;
+    let anchorBounds: DOMRect | undefined;
     const place = () => {
       const menu = menuRef.current;
       const trigger = triggerRef.current;
       if (!menu || !trigger) return;
       const bounds = trigger.getBoundingClientRect();
+      anchorBounds = bounds;
       const gutter = 8;
       const below = Math.max(0, window.innerHeight - bounds.bottom - gutter * 2);
       const above = Math.max(0, bounds.top - gutter * 2);
@@ -73,7 +75,12 @@ export function ActionMenu({
       });
     };
     const dismissOnScroll = (event: Event) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+      if (menuRef.current?.contains(event.target as Node)) return;
+      const bounds = triggerRef.current?.getBoundingClientRect();
+      // Focusing the trigger can scroll its container before this menu opens,
+      // with the scroll event arriving afterward. Its anchor is already placed
+      // at that position; dismiss only when a later scroll actually moves it.
+      if (!bounds || !anchorBounds || bounds.top !== anchorBounds.top || bounds.left !== anchorBounds.left) setOpen(false);
     };
     place();
     window.addEventListener("resize", place);

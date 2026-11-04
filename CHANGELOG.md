@@ -2,6 +2,7 @@
 
 ## 26.11.1 - 2026-11-03
 
+- Kept action menus open when their button's focus scroll finishes, while still closing them when scrolling moves the button.
 - Fixed the page title overlapping its divider and centering itself on tablet widths.
 - Reorganized the Mods toolbar and installed-mod cards on tablets so actions read in desktop order and no control sits alone on an empty row; detail arrows now line up on the right edge whenever the navigation is collapsed.
 - Removed a doubled divider under the Server Timeline header and lined up the Overview card headers.

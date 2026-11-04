@@ -29,7 +29,29 @@ async function action(page, name, command) {
   await trigger.scrollIntoViewIfNeeded();
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await trigger.click();
+  // Trigger focus can scroll the workspace before the menu mounts. Allow that
+  // scroll event to arrive and verify it doesn't dismiss the newly placed menu.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert(await page.getByRole("menu", { name: `Actions for ${name}`, exact: true }).isVisible(), "Action menu closed during trigger focus scrolling");
   await page.getByRole("menuitem", { name: command, exact: true }).click();
+}
+
+async function checkScrollDismissal(page) {
+  const trigger = page.getByRole("button", { name: "Actions for Nightly backup", exact: true });
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  const menu = page.getByRole("menu", { name: "Actions for Nightly backup", exact: true });
+  await menu.waitFor();
+  const scrolled = await trigger.evaluate(element => {
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      if (!/^(auto|scroll)$/.test(getComputedStyle(parent).overflowY) || parent.scrollHeight <= parent.clientHeight) continue;
+      parent.scrollTop += parent.scrollTop > 0 ? -20 : 20;
+      return true;
+    }
+    return false;
+  });
+  if (scrolled) await menu.waitFor({ state: "detached" });
+  else await page.keyboard.press("Escape");
 }
 
 async function waitForCount(page, count) {
@@ -111,6 +133,7 @@ try {
         }
         await waitForCount(page, 4);
         await capture(page, `${width}-${theme}-list`);
+        await checkScrollDismissal(page);
         const search = page.getByRole("searchbox", { name: "Search schedules" });
         await search.fill("HOURLY");
         await waitForCount(page, 1);
