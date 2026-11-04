@@ -210,7 +210,7 @@ try {
   await page.getByRole("rowheader", { name: "server.properties" }).dblclick();
   const editor = page.getByRole("dialog", { name: "server.properties", exact: true });
   await editor.waitFor();
-  await editor.getByText("5 lines", { exact: true }).waitFor();
+  await editor.getByText(/5 lines$/).waitFor();
   await editor.locator(".cm-editor").waitFor();
   await capture(page, "file-editor.png");
   await page.getByRole("button", { name: "Close editor" }).click();

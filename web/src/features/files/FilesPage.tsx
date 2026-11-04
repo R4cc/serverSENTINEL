@@ -1,5 +1,5 @@
 import "../../styles/file-manager.css";
-import { useEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { AppIcon, FileTypeIcon } from "../../components/FileTypeIcon";
 import { FileEditorModal } from "../../components/FileEditorModal";
 import { InlineState } from "../../components/InlineState";
@@ -9,7 +9,7 @@ import { ContextMenu } from "../../components/ContextMenu";
 import { DialogSurface } from "../../components/DialogSurface";
 import { TableSortButton } from "../../components/TableControls";
 import { SearchField } from "../../components/SearchField";
-import { fileDisplayType, fileStatusLabel, isEditableFile } from "../../utils/files";
+import { fileDisplayType, fileStatusLabel, isEditableFile, parentPath } from "../../utils/files";
 import { formatBytes } from "../../utils/format";
 import { hasFileManagerPermission } from "../../utils/permissions";
 import { simpleTableAriaSort } from "../../utils/table";
@@ -99,7 +99,8 @@ export function FilesPage({
     fileSearch,
     allFilesSelected
   } = state;
-  const breadcrumbRef = useRef<HTMLDivElement>(null);
+  const breadcrumbRef = useRef<HTMLElement>(null);
+  const phoneSelectAllRef = useRef<HTMLInputElement>(null);
   const fileTableRef = useRef<HTMLDivElement>(null);
   const rowButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const contextMenuInvocationRef = useRef(0);
@@ -119,6 +120,11 @@ export function FilesPage({
             : "";
   const emptyFolderVisible = filesLoaded && !filesError && sortedFileEntries.length === 0;
   const renderedFileRowCount = (initialFilesLoading ? 8 : sortedFileEntries.length + (emptyFolderVisible ? 1 : 0)) + 1;
+
+  // The phone layout's select-all box, like the column heading's one, shows a partial selection.
+  useEffect(() => {
+    if (phoneSelectAllRef.current) phoneSelectAllRef.current.indeterminate = selectedEntries.length > 0 && !allFilesSelected;
+  });
 
   useEffect(() => {
     breadcrumbRef.current?.querySelector<HTMLElement>(".active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -249,7 +255,11 @@ export function FilesPage({
   }
 
   const secondarySelectionActions: ActionMenuItem[] = [];
-  if (selectedZipEntry) {
+  // Three greyed-out extract items said one thing three times; when extraction is unavailable it is
+  // one item, and the menu's note says why.
+  if (selectedZipEntry && !canExtractSelectedZip) {
+    secondarySelectionActions.push({ id: "extract-unavailable", label: "Extract…", icon: <AppIcon name="extract" />, onSelect: () => undefined, disabled: true, title: "ZIP extraction is unavailable" });
+  } else if (selectedZipEntry) {
     secondarySelectionActions.push(
       { id: "extract-here", label: "Extract here", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipHere, disabled: !canExtractSelectedZip, title: "Extract all contents beside the ZIP, replacing files with the same name" },
       { id: "extract-folder", label: "Extract to folder", icon: <AppIcon name="extract" />, onSelect: actions.extractSelectedZipToFolder, disabled: !canExtractSelectedZip, title: `Extract to ${selectedZipEntry.name.replace(/\.zip$/i, "") || "archive"}/, replacing files with the same name` },
@@ -285,7 +295,7 @@ export function FilesPage({
     selectionContextActions.push({
       id: "open-file",
       label: "Open",
-      icon: <AppIcon name="edit" />,
+      icon: <AppIcon name="view" />,
       onSelect: () => actions.openFile(selectedEntry.path),
       disabled: !canOpenSelectedFile,
       title: fileActionBlockedReason || "Open selected file read-only"
@@ -357,37 +367,36 @@ export function FilesPage({
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
                 <AppIcon name="chevronLeft" />
               </Button>
-              <Button variant="secondary" iconOnly className="iconOnlyButton fileDesktopNavigation" onClick={actions.navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
+              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateForwardFiles} disabled={isProvisioning || fileForwardStack.length === 0} title={fileForwardStack.length === 0 ? "No forward folder" : "Forward"} aria-label="Forward">
                 <AppIcon name="chevronRight" />
               </Button>
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateFilesUp} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go up one folder"} aria-label="Go up one folder">
                 <AppIcon name="arrowUp" />
               </Button>
-              <Button variant="secondary" iconOnly className="iconOnlyButton fileDesktopNavigation" onClick={() => void actions.navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
+              <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={() => void actions.navigateFiles("/")} disabled={isProvisioning || listing.path === "/"} title={listing.path === "/" ? "Already at server root" : "Go to server root"} aria-label="Go to server root">
                 <AppIcon name="home" />
               </Button>
-              <ActionMenu className="fileMobileNavigation" label="More folder navigation" trigger={<AppIcon name="history" />} items={[
-                { id: "forward", label: "Forward", icon: <AppIcon name="chevronRight" />, onSelect: actions.navigateForwardFiles, disabled: isProvisioning || fileForwardStack.length === 0 },
-                { id: "root", label: "Go to server root", icon: <AppIcon name="home" />, onSelect: () => void actions.navigateFiles("/"), disabled: isProvisioning || listing.path === "/" }
-              ]} />
             </div>
-            <div className="fileBreadcrumbs uiToolbarMeta" aria-label="Current folder" ref={breadcrumbRef}>
-              {fileBreadcrumbs.map((crumb) => (
+            <nav className="fileBreadcrumbs uiToolbarMeta" aria-label="Current folder" ref={breadcrumbRef}>
+              {fileBreadcrumbs.map((crumb, index) => (
+                <Fragment key={crumb.path}>
+                {index > 0 && <span className="fileBreadcrumbSeparator" aria-hidden="true"><AppIcon name="chevronRight" /></span>}
                 <button
-                  key={crumb.path}
                   type="button"
                   onClick={() => void actions.navigateFiles(crumb.path)}
                   className={`${crumb.path === listing.path ? "active" : ""} ${fileDropTargetPath === crumb.path ? "fileDropTarget" : ""}`.trim()}
                   aria-current={crumb.path === listing.path ? "location" : undefined}
                   title={draggedFilePath ? `Move to ${crumb.path}` : crumb.path}
+                  aria-label={crumb.path === "/" ? "Server root" : undefined}
                   onDragOver={(event) => handleFileDragOver(event, crumb.path)}
                   onDragLeave={(event) => handleFileDragLeave(event, crumb.path)}
                   onDrop={(event) => handleFileDrop(event, crumb.path)}
                 >
-                  {crumb.label}
+                  {crumb.path === "/" ? "Server root" : crumb.label}
                 </button>
+                </Fragment>
               ))}
-            </div>
+            </nav>
             <div className="fileToolbar uiToolbarSecondary">
               <input ref={refs.fileUploadRef} className="hiddenInput" type="file" onChange={actions.uploadFile} />
               <Button variant="secondary" compact aria-label="Upload file" onClick={() => refs.fileUploadRef.current?.click()} disabled={fileMutationLocked || !canUploadToCurrentPath || Boolean(fileOperationBusy) || Boolean(zipOperationId)} title={fileActionBlockedReason || (!canUploadToCurrentPath ? "Upload files permission is required for this folder." : "Upload a file to this folder")}>
@@ -405,58 +414,75 @@ export function FilesPage({
             </div>
           </div>
 
-          <div className="fileFilterBar" onKeyDown={(event) => { if (event.key === "Escape") actions.changeFileSearch(""); }}>
-            <SearchField label="File filter" placeholder="Filter this folder…" value={fileSearch} onChange={actions.changeFileSearch} />
-          </div>
-
-          <section className="fileListSurface" aria-label="File list">
-          <div className="selectionActionBar" aria-label="File selection actions">
-            {/* One place reports what the list holds: the selection while there is one, otherwise the
-                folder's item count. A footer used to repeat both, plus the path the breadcrumbs show. */}
-            <span className="selectionSummary" role="status" aria-live="polite">
-              {operationLabel || selectionSummary || (initialFilesLoading
-                ? <SkeletonBlock className="selectionSummarySkeleton" />
-                : fileSearch.trim() ? `${sortedFileEntries.length} of ${itemCount(listing.entries.length)}` : itemCount(sortedFileEntries.length))}
-            </span>
-            <div className="selectionActions">
-              {selectedEntries.length > 0 && <Button variant="ghost" compact iconOnly aria-label="Clear file selection" title="Clear selection" onClick={actions.clearFileSelection}><AppIcon name="x" /></Button>}
-              {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
-                <AppIcon name="edit" />
-                <span className="selectionActionLabel">Open</span>
-              </Button>}
-              {selectedEntries.length > 0 && <Button variant="secondary" compact aria-label="Download selected items" onClick={actions.downloadSelectedItems} disabled={!canDownloadSelectedItems} title={fileReadActionBlockedReason || (!selectedEntries.every((entry) => hasFileManagerPermission(permissionUser, entry.path, "download")) && !activeServerIsDemo ? "Download files permission is required for every selected item." : "Download selected items")}>
-                <AppIcon name="download" />
-                <span className="selectionActionLabel">Download</span>
-              </Button>}
-              {selectedEntry?.type === "file" && <Button variant="secondary" compact className="selectionActionPromoted" aria-label="Duplicate selected file" onClick={actions.openDuplicateDialog} disabled={!canDuplicateSelectedFile} title={fileActionBlockedReason || "Duplicate selected file"}>
-                <AppIcon name="copy" />
-                <span className="selectionActionLabel">Duplicate</span>
-              </Button>}
-              {selectedEntry && <Button variant="secondary" compact className="selectionActionPromoted" aria-label="Rename selected item" onClick={actions.openRenameDialog} disabled={!canRenameSelectedItem} title={fileActionBlockedReason || "Rename selected item"}>
-                <AppIcon name="rename" />
-                <span className="selectionActionLabel">Rename</span>
-              </Button>}
-              {selectedEntries.length > 0 && <Button variant="critical" compact className="selectionActionPromoted" aria-label="Delete selected items" onClick={actions.openDeleteDialog} disabled={!canDeleteSelectedItems} title={fileActionBlockedReason || "Delete selected items"}>
-                <AppIcon name="trash" />
-                <span className="selectionActionLabel">Delete</span>
-              </Button>}
-              {expandedOverflowSelectionActions.length > 0 && <ActionMenu
-                label="More file actions"
-                className="selectionActionMenu selectionActionMenu--expanded"
-                items={expandedOverflowSelectionActions}
-                note={unavailableNote(expandedOverflowSelectionActions)}
-                trigger={<AppIcon name="moreHorizontal" />}
-              />}
-              {secondarySelectionActions.length > 0 && <ActionMenu
-                label="More file actions"
-                className="selectionActionMenu selectionActionMenu--compact"
-                items={secondarySelectionActions}
-                note={unavailableNote(secondarySelectionActions)}
-                trigger={<AppIcon name="moreHorizontal" />}
-              />}
+          <div className="fileFilterBar">
+            <div className="fileFilterField" onKeyDown={(event) => { if (event.key === "Escape") actions.changeFileSearch(""); }}>
+              <SearchField label="File filter" placeholder="Filter this folder…" value={fileSearch} onChange={actions.changeFileSearch} />
+            </div>
+            <div className="selectionActionBar" role="group" aria-label="File selection actions">
+              {/* One place reports what the list holds: the selection while there is one, otherwise the
+                  folder's item count. It shares the filter's row, so it costs the list no height of its
+                  own. On a phone, where that row is too narrow, it takes the place of the column
+                  headings instead, bringing the select-all box and the one sortable column with it. */}
+              <label className="filePhoneSelectAll" aria-label={allFilesSelected ? "Clear visible selection" : "Select all visible files"}>
+                <input
+                  ref={phoneSelectAllRef}
+                  type="checkbox"
+                  checked={allFilesSelected}
+                  disabled={sortedFileEntries.length === 0}
+                  onChange={actions.toggleSelectAllFiles}
+                />
+              </label>
+              <span className="selectionSummary" role="status" aria-live="polite">
+                {operationLabel || selectionSummary || (initialFilesLoading
+                  ? <SkeletonBlock className="selectionSummarySkeleton" />
+                  : fileSearch.trim() ? `${sortedFileEntries.length} of ${itemCount(listing.entries.length)}` : itemCount(sortedFileEntries.length))}
+              </span>
+              <div className="selectionActions">
+                {selectedEntries.length === 0 && <span className="filePhoneSort">
+                  <TableSortButton sorted={fileSort.id === "name" ? (fileSort.desc ? "desc" : "asc") : false} onClick={() => actions.toggleFileSort("name")} label="Name">Name</TableSortButton>
+                </span>}
+                {selectedEntries.length > 0 && <Button variant="ghost" compact iconOnly aria-label="Clear file selection" title="Clear selection" onClick={actions.clearFileSelection}><AppIcon name="x" /></Button>}
+                {selectedEntry?.type === "file" && isEditableFile(selectedEntry) && <Button variant="secondary" compact aria-label="Open selected file" onClick={() => actions.openFile(selectedEntry.path)} disabled={!canOpenSelectedFile} title={fileActionBlockedReason || (!hasFileManagerPermission(permissionUser, selectedEntry.path, "view") && !activeServerIsDemo ? "View files permission is required." : "Open selected file read-only")}>
+                  <AppIcon name="view" />
+                  <span className="selectionActionLabel">Open</span>
+                </Button>}
+                {selectedEntries.length > 0 && <Button variant="secondary" compact aria-label="Download selected items" onClick={actions.downloadSelectedItems} disabled={!canDownloadSelectedItems} title={fileReadActionBlockedReason || (!selectedEntries.every((entry) => hasFileManagerPermission(permissionUser, entry.path, "download")) && !activeServerIsDemo ? "Download files permission is required for every selected item." : "Download selected items")}>
+                  <AppIcon name="download" />
+                  <span className="selectionActionLabel">Download</span>
+                </Button>}
+                {selectedEntry?.type === "file" && <Button variant="secondary" compact className="selectionActionPromoted" aria-label="Duplicate selected file" onClick={actions.openDuplicateDialog} disabled={!canDuplicateSelectedFile} title={fileActionBlockedReason || "Duplicate selected file"}>
+                  <AppIcon name="copy" />
+                  <span className="selectionActionLabel">Duplicate</span>
+                </Button>}
+                {selectedEntry && <Button variant="secondary" compact className="selectionActionPromoted" aria-label="Rename selected item" onClick={actions.openRenameDialog} disabled={!canRenameSelectedItem} title={fileActionBlockedReason || "Rename selected item"}>
+                  <AppIcon name="rename" />
+                  <span className="selectionActionLabel">Rename</span>
+                </Button>}
+                {selectedEntries.length > 0 && <Button variant="critical" compact className="selectionActionPromoted" aria-label="Delete selected items" onClick={actions.openDeleteDialog} disabled={!canDeleteSelectedItems} title={fileActionBlockedReason || "Delete selected items"}>
+                  <AppIcon name="trash" />
+                  <span className="selectionActionLabel">Delete</span>
+                </Button>}
+                {expandedOverflowSelectionActions.length > 0 && <ActionMenu
+                  label="More file actions"
+                  className="selectionActionMenu selectionActionMenu--expanded"
+                  items={expandedOverflowSelectionActions}
+                  note={unavailableNote(expandedOverflowSelectionActions)}
+                  portal
+                  trigger={<AppIcon name="moreHorizontal" />}
+                />}
+                {secondarySelectionActions.length > 0 && <ActionMenu
+                  label="More file actions"
+                  className="selectionActionMenu selectionActionMenu--compact"
+                  items={secondarySelectionActions}
+                  note={unavailableNote(secondarySelectionActions)}
+                  portal
+                  trigger={<AppIcon name="moreHorizontal" />}
+                />}
+              </div>
             </div>
           </div>
 
+          <section className="fileListSurface" aria-label="File list">
           {filesError && (
             <InlineState
               tone="error"
@@ -575,15 +601,29 @@ export function FilesPage({
         </Surface>
       </section>
 
-      {selectedEntries.length > 0 && <Surface as="aside" className="fileDetailsPanel" material="glass">
+      {selectedEntries.length > 0 && <Surface as="aside" className={`fileDetailsPanel${selectedEntries.length > 1 ? " fileDetailsPanel--multiple" : ""}`} material="glass">
         {selectedEntries.length > 1 && (
           <div className="fileDetailsContent">
             <h2>{selectedEntries.length} items selected</h2>
             <dl>
-              {selectedEntries.some((entry) => entry.type === "file") && <div><dt>Total file size</dt><dd>{formatBytes(selectedTotalSize)}</dd></div>}
               {selectedEntries.some((entry) => entry.type === "directory") && <div><dt>Folders</dt><dd>{selectedEntries.filter((entry) => entry.type === "directory").length}</dd></div>}
               {selectedEntries.some((entry) => entry.type === "file") && <div><dt>Files</dt><dd>{selectedEntries.filter((entry) => entry.type === "file").length}</dd></div>}
+              {selectedEntries.some((entry) => entry.type === "file") && <div><dt>File size</dt><dd>{formatBytes(selectedTotalSize)}{selectedEntries.some((entry) => entry.type === "directory") ? " plus folders" : ""}</dd></div>}
             </dl>
+            <ul className="fileDetailsSelection" aria-label="Selected items">
+              {selectedEntries.slice(0, 8).map((entry) => (
+                <li key={entry.path} title={entry.path}>
+                  <FileTypeIcon entry={entry} />
+                  <span>{entry.name}</span>
+                  <small>{entry.type === "file" ? formatBytes(entry.size) : "Folder"}</small>
+                </li>
+              ))}
+              {selectedEntries.length > 8 && <li className="fileDetailsSelectionMore">and {selectedEntries.length - 8} more</li>}
+            </ul>
+            <div className="fileDetailsActions">
+              <Button variant="secondary" compact onClick={actions.downloadSelectedItems} disabled={!canDownloadSelectedItems} title={fileReadActionBlockedReason || "Download selected items"}><AppIcon name="download" />Download</Button>
+              <Button variant="critical" compact onClick={actions.openDeleteDialog} disabled={!canDeleteSelectedItems} title={fileActionBlockedReason || "Delete selected items"}><AppIcon name="trash" />Delete</Button>
+            </div>
           </div>
         )}
         {selectedEntry && (
@@ -645,6 +685,7 @@ export function FilesPage({
       {fileActionDialog && (
         <FileActionModal
           dialog={fileActionDialog}
+          location={listing.path}
           busy={Boolean(fileOperationBusy)}
           onValueChange={actions.setFileActionDialogValue}
           onCancel={actions.closeFileActionDialog}
@@ -743,12 +784,15 @@ function FilePreviewSkeleton() {
 
 export function FileActionModal({
   dialog,
+  location = "/",
   busy,
   onValueChange,
   onCancel,
   onSubmit
 }: {
   dialog: FileActionDialog;
+  /** The folder a new folder is created in. */
+  location?: string;
   busy: boolean;
   onValueChange: (value: string) => void;
   onCancel: () => void;
@@ -786,9 +830,13 @@ export function FileActionModal({
   }, [dialog.kind, namedEntryType]);
 
   const error = dialog.error;
-  const nameHint = dialog.kind !== "delete" && !dialog.value.trim() && !error
-    ? dialog.kind === "create" ? "Enter a name for the new folder." : "Enter a name to continue."
-    : "";
+  const namedEntryFolder = dialog.kind === "rename" || dialog.kind === "duplicate" ? parentPath(dialog.entry.path) || "/" : "";
+
+  // A name is checked when the dialog is submitted, as every form dialog here does, and the field
+  // takes focus back so the message and the fix are in the same place.
+  useEffect(() => {
+    if (error && dialog.kind !== "delete") nameInputRef.current?.focus();
+  }, [error, dialog.kind]);
   const folders = dialog.kind === "delete" ? dialog.entries.filter((entry) => entry.type === "directory").length : 0;
   const files = dialog.kind === "delete" ? dialog.entries.length - folders : 0;
 
@@ -799,9 +847,9 @@ export function FileActionModal({
           <div>
             <h2 id="file-action-title">{title}</h2>
             <p id="file-action-description">
-              {dialog.kind === "create" ? "Add a folder to the current location."
-                : dialog.kind === "rename" ? "Choose a new name for this item."
-                  : dialog.kind === "duplicate" ? "Choose a name for the copied file."
+              {dialog.kind === "create" ? <>The folder is created in <code>{location}</code>.</>
+                : dialog.kind === "rename" ? <>It stays in <code>{namedEntryFolder}</code>.</>
+                  : dialog.kind === "duplicate" ? <>The copy is created beside it in <code>{namedEntryFolder}</code>.</>
                     : "Review the affected items before continuing."}
             </p>
           </div>
@@ -811,10 +859,8 @@ export function FileActionModal({
           {dialog.kind !== "delete" ? (
             <label className="fileNameField">
               <span>{dialog.kind === "create" ? "Folder name" : "Name"}</span>
-              <input ref={nameInputRef} value={dialog.value} onChange={(event) => onValueChange(event.target.value)} disabled={busy} aria-invalid={Boolean(error)} aria-describedby={error ? "file-action-error" : nameHint ? "file-action-name-hint" : undefined} />
-              {/* An empty name only disables the button, so the hint says why. Its line is kept while it
-                  is blank, so the dialog does not grow and re-centre as the hint comes and goes. */}
-              <small id="file-action-name-hint" className="fileNameHint" aria-live="polite">{nameHint}</small>
+              <input ref={nameInputRef} value={dialog.value} onChange={(event) => onValueChange(event.target.value)} disabled={busy} aria-invalid={Boolean(error)} aria-describedby={error ? "file-action-error" : undefined} />
+              {error && <small id="file-action-error" className="fileNameError" role="alert">{error}</small>}
             </label>
           ) : (
             <>
@@ -832,11 +878,11 @@ export function FileActionModal({
               <Banner tone="error" compact title={folders > 0 ? "Selected folders and everything inside them will be deleted. This cannot be undone." : "This cannot be undone."} />
             </>
           )}
-          {error && <Banner tone="error" compact id="file-action-error" title="Could not complete this action" message={error} />}
+          {error && dialog.kind === "delete" && <Banner tone="error" compact id="file-action-error" title="Could not complete this action" message={error} />}
         </div>
         <footer className="modalFooter">
           <Button variant="secondary" onClick={onCancel} disabled={busy}>Cancel</Button>
-          <Button variant={dialog.kind === "delete" ? "critical" : "primary"} type="submit" disabled={busy || (dialog.kind !== "delete" && !dialog.value.trim())} reserveLabel={busyLabel}>{busy ? busyLabel : submitLabel}</Button>
+          <Button variant={dialog.kind === "delete" ? "critical" : "primary"} type="submit" disabled={busy} reserveLabel={busyLabel}>{busy ? busyLabel : submitLabel}</Button>
         </footer>
       </form>
     </DialogSurface>

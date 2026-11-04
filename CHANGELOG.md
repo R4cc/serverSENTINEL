@@ -20,8 +20,14 @@
 - Starting, stopping and restarting now shows one notification that updates in place, placed bottom-right on wider screens, and a stopped server reads red everywhere.
 - Dialog buttons share one width and are full touch height on phones; secondary buttons have a visible edge in the light theme, and empty-state actions such as "Clear filter" no longer look disabled.
 - Files reports its item count and selection in one place instead of also repeating them in a footer, shows the details panel on tablets as soon as something is selected, and offers a Download button where a file can't be previewed.
-- Notifications now appear at the bottom of the screen on phones too, clear of the server header and the console's command line.
-- The Stop dialog asks for a missing reason inline instead of through the browser's validation bubble.
+- On phones and tablets, notifications now sit over the top bar instead of covering the newest console lines or the server's name and status.
+- The Stop dialog asks for a missing reason inline instead of through the browser's validation bubble, and the file dialogs now check names the same way, naming the folder they work in.
+- A stopped server with pending mod changes now says "Applies on start" instead of "Restart required".
+- The console's header now offers Copy and Download for its output and shows the line count, and phones start the console at its smallest text size so more of each line fits.
+- Files breadcrumbs read as a path ("Server root › config"), the filter shares its row with the item count and selection, phones show Forward and Home directly and drop the separate column-heading row, and the ZIP menu is no longer cut off on tablets.
+- Selected files form one highlighted block, several selected items list their names with Download and Delete beside them, and an empty list hides its select-all box.
+- The file editor shows the caret position and file language, says "Viewing" until editing starts and "Read-only" only when a file can't be edited, is fully opaque, and gives keys, values, keywords and comments distinct colours in both themes.
+- Field placeholders, dialog buttons and empty-state cards are easier to read, and the status refresh button matches the other controls in the light theme.
 - Updated Fastify and its plugins, WebSocket, Lucide icons, the Vite React plugin, and Vitest to their latest releases.
 - Player Insights now loads its latency history about nine times faster on servers with a week of retained stats, and the Server Timeline reads long ranges slightly faster.
 - Trimmed the Docker image by dropping the test suites, docs, source maps and type declarations bundled inside its dependencies.

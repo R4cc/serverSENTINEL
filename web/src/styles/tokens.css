@@ -41,11 +41,13 @@
   --accent: var(--sentinel-accent);
   --terminal-bg: #101318;
   --terminal-text: #f2f2f2;
-  --editor-comment: #8b5a00;
-  --editor-keyword: #22368f;
-  --editor-property: #214f9b;
-  --editor-string: #2c7a66;
-  --editor-constant: #7a4f16;
+  /* Each role its own hue: keys blue, values green or amber, keywords violet, comments grey. Keys
+     and keywords were two near-identical blues, and comments and constants two near-identical browns. */
+  --editor-comment: #646b78;
+  --editor-keyword: #7a2e9e;
+  --editor-property: #1f4fa3;
+  --editor-string: #1d7350;
+  --editor-constant: #9a4d06;
   --editor-punctuation: #4a4a4a;
   --editor-heading: #111827;
   --editor-link: #3858e9;

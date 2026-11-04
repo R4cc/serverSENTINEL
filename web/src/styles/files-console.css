@@ -197,8 +197,10 @@
   font-size: inherit;
 }
 
+/* Dimmer than typed text, but still readable: at 45% it measured about 3.6:1. */
 .consolePromptInput::placeholder {
-  color: color-mix(in srgb, var(--terminal-text) 45%, transparent);
+  color: color-mix(in srgb, var(--terminal-text) 66%, var(--terminal-bg));
+  opacity: 1;
 }
 
 .consolePromptInput:focus,
@@ -1017,6 +1019,19 @@
   flex: 0 0 auto;
 }
 
+.fileEditorPosition,
+.fileEditorLanguage {
+  white-space: nowrap;
+}
+
+.fileEditorPosition {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .fileEditorPositionTotal { display: none; }
+}
+
 .fileCodeEditor {
   min-height: 0;
   height: 100%;
@@ -1173,14 +1188,28 @@
 
 .consoleSectionIcon svg { width: 17px; height: 17px; }
 
+.consolePanelHeader .consoleLineCount {
+  margin-left: calc(var(--space-1) * -1);
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.consoleOutputActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .consoleTabPage .consolePanel { gap: 0; }
 .consoleTabPage .terminal { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--terminal-text) 4%, transparent); }
 
 /* The editor is a workspace, and wide enough to sit over the sidebar: the shared translucent tint
    let the page show through its header and footer, most visibly as a dark band in the light theme.
-   It keeps the glass material every dialog shares, over a tint dense enough to read as solid. */
+   It keeps the glass material every dialog shares, under a fully opaque fill: even a 98% tint let
+   the page's Stop button and sidebar show through faintly in the light theme. */
 .fileEditorModal.uiGlassSurface {
-  background: color-mix(in srgb, var(--surface-raised) 98%, transparent);
+  background: var(--surface-raised);
   -webkit-backdrop-filter: var(--glass-filter-modal);
   backdrop-filter: var(--glass-filter-modal);
 }

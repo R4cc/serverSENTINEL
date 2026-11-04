@@ -1103,6 +1103,18 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   min-width: 96px;
 }
 
+/* A dialog's answer is its main control: at the compact 32px it sat smaller than the page's own
+   header buttons behind it. Touch layouts keep their 44px below. */
+@media (hover: hover) and (pointer: fine) and (min-width: 721px) {
+  .modalFooter .uiButton:not(.uiButton--icon),
+  .userModalFooter .uiButton:not(.uiButton--icon),
+  .fileEditorFooter .uiButton:not(.uiButton--icon) {
+    min-height: 36px;
+    padding-inline: var(--space-4);
+    font-size: var(--type-button-size);
+  }
+}
+
 @media (hover: none), (pointer: coarse), (max-width: 720px) {
   .modalFooter .uiButton,
   .userModalFooter .uiButton,
@@ -1184,4 +1196,21 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   border-color: var(--sentinel-danger);
   background: var(--surface);
   color: var(--sentinel-danger);
+}
+
+/* Placeholders were left to the browser's grey, which fell to about 3.7:1 on the dark fields. They
+   stay dimmer than typed text while keeping at least 4.5:1 on either theme's field colour. */
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 82%, transparent);
+  opacity: 1;
+}
+
+/* Dialog and empty-state copy is short prose; balance its last line instead of leaving one word
+   such as "lost." alone on it. */
+.modalHeader p,
+.modalBody p,
+.inlineState > div > span,
+.uiBanner p {
+  text-wrap: pretty;
 }

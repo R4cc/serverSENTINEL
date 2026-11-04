@@ -583,7 +583,8 @@ button .buttonIcon {
   font-weight: var(--weight-title);
 }
 
-.inlineState:not(.uiBanner) span {
+/* The copy's own line only: a bare `span` also reached into the action button's label. */
+.inlineState:not(.uiBanner) > div > span {
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.4;
@@ -1802,9 +1803,9 @@ button .buttonIcon {
   height: 40px;
   min-width: 40px;
   min-height: 40px;
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 32%, var(--surface));
-  color: var(--sentinel-accent-strong);
+  /* A plain secondary control, like Restart beside it: the accent tint it had only showed in the
+     light theme, where it read as a selected state. */
+  border-color: var(--control-secondary-edge);
 }
 
 @media (max-width: 640px) {

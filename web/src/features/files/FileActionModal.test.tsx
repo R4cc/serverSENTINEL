@@ -29,4 +29,12 @@ describe("FileActionModal", () => {
     expect(html).toContain("everything inside them will be deleted");
     expect(html).toContain("cannot be undone");
   });
+
+  it("names the folder each action works in", () => {
+    const create = renderToStaticMarkup(<FileActionModal dialog={{ kind: "create", value: "", error: "" }} location="/config" busy={false} onValueChange={noop} onCancel={noop} onSubmit={noop} />);
+    expect(create).toContain("<code>/config</code>");
+    expect(create).not.toContain("disabled=\"\"");
+    const rename = render({ kind: "rename", value: "server.properties", error: "", entry: { ...file, path: "/config/server.properties" } });
+    expect(rename).toContain("<code>/config</code>");
+  });
 });

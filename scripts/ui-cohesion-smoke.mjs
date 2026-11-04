@@ -195,9 +195,8 @@ try {
         if (phone) {
           assert(await page.getByRole("button", { name: "Upload file" }).locator(".fileToolbarLabel").isVisible(), "Upload has no visible label");
           assert(await page.getByRole("button", { name: "New folder", exact: true }).locator(".fileToolbarLabel").isVisible(), "New folder has no visible label");
-          await page.getByRole("button", { name: "More folder navigation" }).click();
-          assert(await page.getByRole("menuitem", { name: "Go to server root" }).isVisible());
-          await page.keyboard.press("Escape");
+          assert(await page.getByRole("button", { name: "Forward", exact: true }).isVisible(), "Forward is not shown on phones");
+          assert(await page.getByRole("button", { name: "Go to server root", exact: true }).isVisible(), "Go to server root is not shown on phones");
         }
         await snapshot(page, `${label}-files`);
         await file.dblclick();

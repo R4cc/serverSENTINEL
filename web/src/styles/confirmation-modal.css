@@ -36,7 +36,7 @@
 }
 
 .confirmationRequired {
-  color: var(--text-muted);
+  color: var(--text-soft);
   font-weight: var(--weight-body);
 }
 
