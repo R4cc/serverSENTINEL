@@ -119,25 +119,33 @@ export function cpuAxisMaximum(samples: ServerTimelineResourcePoint[], viewport:
   return Math.min(100, Math.max(10, Math.ceil(target / step) * step));
 }
 
-function niceAxisStep(target: number) {
+function niceAxisStep(target: number, allowQuarterSteps = true) {
   if (!Number.isFinite(target) || target <= 0) return 1;
   const magnitude = 10 ** Math.floor(Math.log10(target));
   const fraction = target / magnitude;
-  const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 5 ? 5 : 10;
+  const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : allowQuarterSteps && fraction <= 2.5 ? 2.5 : fraction <= 5 ? 5 : 10;
   return niceFraction * magnitude;
 }
 
 export function memoryAxisBounds(samples: ServerTimelineResourcePoint[], viewport: TimelineWindow) {
   const values = visibleMetricValues(samples, "memoryUsageBytes", viewport);
-  if (!values.length) return { min: 0, max: 1 };
+  if (!values.length) return { min: 0, max: 1, interval: 1 };
   const observedMin = Math.min(...values);
   const observedMax = Math.max(...values);
   const center = (observedMin + observedMax) / 2;
   const desiredSpan = Math.max((observedMax - observedMin) * 1.2, observedMax * 0.08, 1);
-  const step = niceAxisStep(desiredSpan / 5);
+  // Labels print in 1024-based units with little precision (one decimal for GB, whole units
+  // below), so the step is chosen in that unit from 1/2/5 multiples no finer than a label can
+  // show. A decimal byte step printed as uneven labels such as 1.9, 2.3, 2.8 GB.
+  const unitIndex = observedMax < 1024 ? 0 : Math.min(3, Math.floor(Math.log(observedMax) / Math.log(1024)));
+  const unit = 1024 ** unitIndex;
+  const labelPrecision = unitIndex === 3 ? unit / 10 : unit;
+  const step = Math.max(niceAxisStep(desiredSpan / 5 / unit, unitIndex === 0) * unit, labelPrecision);
   const min = Math.max(0, Math.floor((center - desiredSpan / 2) / step) * step);
   const max = Math.ceil((center + desiredSpan / 2) / step) * step;
-  return { min, max: Math.max(max, min + step) };
+  // The interval is the same step the bounds snap to. Left to ECharts, the ticks follow its own
+  // interval and the minimum label lands just under the first tick, so the two overlap.
+  return { min, max: Math.max(max, min + step), interval: step };
 }
 
 export type TimelinePalette = {
@@ -397,7 +405,7 @@ export function buildTimelineChartOption({
       offset: rightAxisOffset,
       min: separateMemoryBounds?.min ?? 0,
       max: separateMemoryBounds?.max ?? memoryAxisMaximum(samples),
-      splitNumber: 4,
+      ...(separateMemoryBounds ? { interval: separateMemoryBounds.interval } : { splitNumber: 4 }),
       name: separateBand ? "" : "Memory",
       nameTextStyle: { color: palette.memory, fontSize: 10, padding: [0, 0, 4, 0] },
       axisLine: { show: true, lineStyle: { color: palette.memory, opacity: 0.6 } },

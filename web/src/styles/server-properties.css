@@ -83,7 +83,15 @@
 .propertiesNetworkProtocols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: end; gap: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-row); color: var(--text-muted); font-size: var(--type-meta-size); }
 .propertiesNetworkProtocols > span { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .propertiesProtocol { font-family: var(--font-mono); font-size: var(--type-badge-size); color: var(--sentinel-info); }
-.fieldLabelWithHelp { display: flex; align-items: center; gap: var(--space-1); }
+/* Additional port bindings: host port, colon, container port, remove. These rules lived in the
+   lazily loaded Schedules stylesheet, so the row only lined up after Schedules had been opened. */
+.portBindingsEditor { display: grid; gap: var(--space-2); min-width: 0; }
+.portBindingRows { display: grid; gap: var(--space-2); }
+.portBindingRow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 44px; gap: var(--space-2); align-items: center; }
+.portBindingRow input { width: 100%; min-width: 0; }
+.portBindingColon { color: var(--text-muted); font-size: 18px; font-weight: var(--weight-title); line-height: 1; }
+.portBindingRemoveButton { align-self: stretch; }
+.portBindingAddButton { justify-self: start; }
 
 .serverPropertiesForm fieldset:disabled input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 .serverPropertiesForm fieldset:disabled select,

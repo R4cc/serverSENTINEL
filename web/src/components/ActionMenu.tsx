@@ -26,7 +26,8 @@ export function ActionMenu({
   triggerClassName = "",
   menuClassName = "",
   portal = false,
-  align = "end"
+  align = "end",
+  note
 }: {
   label: string;
   items: ActionMenuItem[];
@@ -39,9 +40,12 @@ export function ActionMenu({
   /** Escape clipped table and panel containers while keeping the menu anchored to its trigger. */
   portal?: boolean;
   align?: "start" | "end";
+  /** Shown under the items, typically why some of them are unavailable. */
+  note?: string;
 }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
+  const noteId = `${menuId}-note`;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -113,7 +117,7 @@ export function ActionMenu({
   }, [open, portal]);
 
   const menu = open && (
-    <div ref={menuRef} id={menuId} className={`actionMenuPopover uiGlassSurface uiGlassSurface--floating actionMenuPopover--${align} ${portal ? "actionMenuPopover--portal" : ""} ${menuClassName}`.trim()} role="menu" aria-label={label}
+    <div ref={menuRef} id={menuId} className={`actionMenuPopover uiGlassSurface uiGlassSurface--floating actionMenuPopover--${align} ${portal ? "actionMenuPopover--portal" : ""} ${menuClassName}`.trim()} role="menu" aria-label={label} aria-describedby={note ? noteId : undefined}
       style={portal ? { position: "fixed", right: "auto", bottom: "auto", ...position } : undefined}>
       <GlassEffect variant="floating" />
       {items.map((item, index) => (
@@ -138,6 +142,7 @@ export function ActionMenu({
           </button>
         </Fragment>
       ))}
+      {note && <div id={noteId} className="actionMenuNote" role="none">{note}</div>}
     </div>
   );
 

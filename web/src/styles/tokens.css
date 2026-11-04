@@ -67,9 +67,13 @@
   /* Menus and tooltips open over whatever happens to be underneath -- a chart, a
      table, the dark sidebar -- and their text has to survive all of it, so they
      take a denser tint than a panel that sits on the page wash. */
-  --glass-tint-menu: rgb(255 255 255 / 0.94);
+  /* Menus sit over dense tables; any more see-through and the rows beneath read through the items. */
+  --glass-tint-menu: rgb(255 255 255 / 0.985);
   --glass-border: rgb(255 255 255 / 0.82);
   --glass-edge: color-mix(in srgb, var(--glass-border) 74%, var(--border-panel));
+  /* A secondary button's outline. The glass edge alone is near-white, which on the light theme's
+     pale surfaces left Cancel, Upload and Clear filter with no visible edge at all. */
+  --control-secondary-edge: var(--glass-edge);
   /* The rim is brightest along the top edge, where the lens catches the light,
      falls off around the sides, and returns as a dim bounce along the bottom.
      A single flat top highlight reads as a border; this reads as thickness. */

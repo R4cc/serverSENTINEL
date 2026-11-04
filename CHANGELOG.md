@@ -1,5 +1,30 @@
 # Changelog
 
+## 26.11.1 - 2026-11-03
+
+- Fixed the page title overlapping its divider and centering itself on tablet widths.
+- Reorganized the Mods toolbar and installed-mod cards on tablets so actions read in desktop order and no control sits alone on an empty row; detail arrows now line up on the right edge whenever the navigation is collapsed.
+- Removed a doubled divider under the Server Timeline header and lined up the Overview card headers.
+- Kept memory chart axis labels evenly spaced and round instead of overlapping at the bottom.
+- Fixed additional port bindings in Properties stacking into a column unless Schedules had been opened first, and lined their label up with the other fields.
+- Polished Settings, Nodes and the user dialogs: aligned the System tab rows, kept the Optional badge and help buttons from enlarging their rows, kept the role preset note under its field, and put the two password fields side by side.
+- Host and panel memory now read in GiB instead of thousands of MiB.
+- Selecting a file no longer pushes the file list down, which on tablets made a double-click open the row below the one clicked.
+- New folder, Rename and Duplicate now put the cursor in the name field, with the name selected up to its extension.
+- Polished Files: the column headings line up with their values, the folder count says "1 item", folders no longer show an empty preview, and files that cannot be previewed say why instead of repeating "Preview unavailable".
+- Lined the file editor's status row up with the editor, kept its copy button on that row on phones, and reworded the discard dialog to name the file.
+- The console's command line now shows when it has focus, and the console keeps its height when the server stops on a phone.
+- File menus now say why greyed-out actions are unavailable, the delete dialog shows one clear warning, and folder-only selections no longer report "0 B".
+- The file editor is solid in the light theme and its focus outline now includes the line numbers; dialogs no longer outline themselves when they open.
+- Starting, stopping and restarting now shows one notification that updates in place, placed bottom-right on wider screens, and a stopped server reads red everywhere.
+- Dialog buttons share one width and are full touch height on phones; secondary buttons have a visible edge in the light theme, and empty-state actions such as "Clear filter" no longer look disabled.
+- Files reports its item count and selection in one place instead of also repeating them in a footer, shows the details panel on tablets as soon as something is selected, and offers a Download button where a file can't be previewed.
+- Notifications now appear at the bottom of the screen on phones too, clear of the server header and the console's command line.
+- The Stop dialog asks for a missing reason inline instead of through the browser's validation bubble.
+- Updated Fastify and its plugins, WebSocket, Lucide icons, the Vite React plugin, and Vitest to their latest releases.
+- Player Insights now loads its latency history about nine times faster on servers with a week of retained stats, and the Server Timeline reads long ranges slightly faster.
+- Trimmed the Docker image by dropping the test suites, docs, source maps and type declarations bundled inside its dependencies.
+
 ## 26.10.16 - 2026-10-22
 
 - Isolated each Minecraft container to its own server-data directory. Named-volume deployments require Docker Engine 26.0+; existing containers gain isolation when next started or reconfigured through the panel.

@@ -7,7 +7,7 @@ function ToastSeverityIcon({ type }: { type: "success" | "info" | "warning" | "e
   return <Icon aria-hidden="true" className="toastSeverityIcon" strokeWidth={2.15} />;
 }
 
-export function AppToaster({ darkMode }: { darkMode: boolean }) {
+export function AppToaster({ darkMode, phoneLayout }: { darkMode: boolean; phoneLayout: boolean }) {
   return (
     <Toaster
       closeButton
@@ -20,11 +20,14 @@ export function AppToaster({ darkMode }: { darkMode: boolean }) {
         warning: <ToastSeverityIcon type="warning" />,
         error: <ToastSeverityIcon type="error" />
       }}
-      // The phone shell puts a 68px sticky top bar under the toast stack, and the
-      // default 16px mobile offset drops toasts straight onto the brand and the
-      // navigation toggle. Clearing the bar keeps both readable at once.
-      mobileOffset={{ top: "76px", right: "12px", left: "12px", bottom: "12px" }}
-      position="top-center"
+      // Toasts report on the server, so they stay off the server header that shows its state: at
+      // the top of a phone they covered its name and status, and at the top of a wider screen its
+      // Start/Stop controls. Both now sit at the bottom, raised clear of the status lines there --
+      // the console's command line or stopped notice on a phone (44px plus its safe area), and the
+      // panels' bottom rows on a wider screen.
+      mobileOffset={{ top: "76px", right: "12px", left: "12px", bottom: "calc(60px + env(safe-area-inset-bottom, 0px))" }}
+      offset={{ bottom: "76px", right: "24px" }}
+      position={phoneLayout ? "bottom-center" : "bottom-right"}
       theme={darkMode ? "dark" : "light"}
       toastOptions={{
         className: "sonnerToast",

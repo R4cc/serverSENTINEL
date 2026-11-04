@@ -194,9 +194,10 @@ export function useFilesWorkspace({
     return nextPath;
   }
 
+  // Empty with nothing selected: the page shows the folder's item count in that place instead.
   const selectionSummary = selectedEntries.length === 0
-    ? "No selection"
-    : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` - ${formatBytes(selectedTotalSize)}` : ""}`;
+    ? ""
+    : `${selectedEntries.length} ${selectedEntries.length === 1 ? "item" : "items"} selected${selectedTotalSize > 0 ? ` · ${formatBytes(selectedTotalSize)}` : ""}`;
   const fileRuntimeLocked = isProvisioning || dockerOperationalLock;
   const fileMutationLocked = fileRuntimeLocked || serverMutationLocked;
   const canOpenSelectedFile = Boolean(selectedEntry && selectedEntry.type === "file" && isEditableFile(selectedEntry) && (activeServerIsDemo || hasFileManagerPermission(permissionUser, selectedEntry.path, "view")) && !fileRuntimeLocked);
@@ -227,7 +228,9 @@ export function useFilesWorkspace({
       : serverMutationLocked
         ? serverMutationBlockedReason
       : serverRequiresStoppedForMutableConfig && selectedTouchesServerSettings
-        ? stoppedServerMutationMessage
+        // Names the file rather than the general rule about mods, plugins and properties: in a file
+        // menu, server.properties is the one thing that is locked.
+        ? "Stop the server to change server.properties."
       : fileOperationBusy
         ? "A file operation is already running."
         : zipOperationId

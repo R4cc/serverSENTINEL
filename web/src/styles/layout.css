@@ -472,8 +472,10 @@ button .buttonIcon {
   justify-items: center;
 }
 
-.sidebarCollapsed .sideIcon,
-.sidebarCollapsed .buttonIcon {
+/* Scoped to the rail: the collapsed state is set on the app shell, so an unscoped
+   reset also cleared deliberate icon offsets inside the workspace. */
+.sidebarCollapsed .sidebar .sideIcon,
+.sidebarCollapsed .sidebar .buttonIcon {
   margin: 0;
 }
 
@@ -1257,14 +1259,9 @@ button .buttonIcon {
   gap: var(--space-3);
 }
 
-.presetSummary {
-  align-self: end;
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 11px 12px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: var(--weight-heading);
+/* The account being reset gets its own row so the two password fields sit side by side. */
+.userModalFields > .userModalFieldWide {
+  grid-column: 1 / -1;
 }
 
 .presetSummary strong {
@@ -1596,9 +1593,11 @@ button .buttonIcon {
   background: var(--sentinel-success);
 }
 
+/* Stopped reads red here as it does in the server switcher, the Nodes list and every other runtime
+   badge; amber is kept for "needs attention". */
 .serverCommandStatusDot.stopped,
 .serverCommandStatusDot.exited {
-  background: var(--sentinel-warning);
+  background: var(--sentinel-danger);
 }
 
 .serverCommandStatusDot.warning {
@@ -1635,9 +1634,9 @@ button .buttonIcon {
 
 .activeServerStrip .runtimeBadge.stopped,
 .activeServerStrip .runtimeBadge.exited {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 34%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface-raised));
-  color: color-mix(in srgb, var(--sentinel-warning) 74%, var(--text));
+  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--border-row));
+  background: color-mix(in srgb, var(--sentinel-danger) 10%, var(--surface-raised));
+  color: var(--status-danger-foreground);
 }
 
 .activeServerStrip .runtimeBadge.warning {
@@ -1767,7 +1766,9 @@ button .buttonIcon {
    stay solid: a prominent, destructive or primary action should not be
    see-through. */
 .activeServerStrip .uiButton.runtimeControlButton.restart {
-  border-color: var(--glass-edge);
+  /* The secondary-control edge, as on every other secondary button: the bare glass edge is
+     near-white and vanished against the light theme's strip. */
+  border-color: var(--control-secondary-edge);
   background: var(--glass-tint-soft);
   color: var(--text);
   box-shadow: var(--shadow-xs);
@@ -1804,16 +1805,6 @@ button .buttonIcon {
   border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
   background: color-mix(in srgb, var(--sentinel-accent-soft) 32%, var(--surface));
   color: var(--sentinel-accent-strong);
-}
-
-@media (min-width: 721px) and (max-width: 980px) {
-  .activeServerStrip .serverStripSeparator {
-    display: none;
-  }
-
-  .activeServerStrip .serverStripMetaRow {
-    column-gap: var(--space-2);
-  }
 }
 
 @media (max-width: 640px) {

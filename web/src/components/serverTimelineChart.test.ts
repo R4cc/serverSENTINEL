@@ -209,9 +209,13 @@ describe("server timeline ECharts option", () => {
       now: 40_000,
       gridOverride: timelineMetricBandGrid,
       seriesKeys: ["memoryUsageBytes"]
-    }) as { yAxis: Array<{ min: number; max: number }>; series: Array<{ id: string; data: Array<[number, number]> }> };
+    }) as { yAxis: Array<{ min: number; max: number; interval?: number }>; series: Array<{ id: string; data: Array<[number, number]> }> };
     expect(option.yAxis[0].min).toBeGreaterThan(0);
     expect(option.yAxis[0].max).toBeGreaterThan(800);
+    // Ticks start at the snapped minimum, so its label cannot crowd the first tick above it.
+    const { min, max, interval = 0 } = option.yAxis[0];
+    expect(interval).toBeGreaterThan(0);
+    expect(Number.isInteger(Math.round((max - min) / interval * 1e9) / 1e9)).toBe(true);
     expect(option.series.find((series) => series.id === "memoryUsageBytes")?.data).toEqual([[10_000, 700], [20_000, 800]]);
   });
 
@@ -227,7 +231,19 @@ describe("server timeline ECharts option", () => {
     ];
     const viewport = { from: 5_000, to: 25_000 };
     expect(cpuAxisMaximum(samples, viewport)).toBe(50);
-    expect(memoryAxisBounds(samples, viewport)).toEqual({ min: 675, max: 825 });
+    expect(memoryAxisBounds(samples, viewport)).toEqual({ min: 675, max: 825, interval: 25 });
+  });
+
+  it("steps the memory axis in the unit its labels print in", () => {
+    const gib = 1024 ** 3;
+    const samples = [
+      { ...sample, sampledAt: 10_000, memoryUsageBytes: 2 * gib },
+      { ...sample, sampledAt: 20_000, memoryUsageBytes: 3 * gib }
+    ];
+    const { min, max, interval } = memoryAxisBounds(samples, { from: 0, to: 30_000 });
+    expect(interval).toBe(0.5 * gib);
+    expect(min / gib).toBe(1.5);
+    expect(max / gib).toBe(3.5);
   });
 
   it("omits seconds from axis labels for one-hour and longer viewports", () => {

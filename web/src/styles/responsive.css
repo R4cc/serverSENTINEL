@@ -226,9 +226,10 @@
   justify-self: center;
 }
 
+/* The header keeps its content height: at tablet widths the workspace is a fixed-height grid, and a
+   zero minimum let an overflowing page squeeze the header row until the title overlapped its rule. */
 .workspaceHeader {
-  min-height: 0;
-  align-items: center;
+  min-height: auto;
 }
 
 .workspaceHeader > div {
@@ -1084,7 +1085,6 @@ button:disabled,
 
 .panel .panel,
 .modalPanel .panel,
-.presetSummary,
 .inlineState:not(.uiBanner),
 .notice,
 .toast,
@@ -1193,7 +1193,6 @@ textarea:hover:not(:disabled),
   }
 
   .workspaceHeader {
-    min-height: 0;
     padding-bottom: var(--space-3);
     margin-bottom: 0;
   }
@@ -1208,7 +1207,6 @@ textarea:hover:not(:disabled),
 @media (max-width: 900px) {
   .workspaceHeader {
     align-items: stretch;
-    min-height: 0;
   }
 
   .workspaceActions {
