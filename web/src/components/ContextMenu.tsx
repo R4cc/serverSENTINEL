@@ -29,11 +29,14 @@ export function ContextMenuSurface({
   top,
   menuRef,
   itemRefs,
-  onSelect
+  onSelect,
+  note
 }: {
   id: string;
   label: string;
   items: ActionMenuItem[];
+  /** Shown under the items, typically why some of them are unavailable. */
+  note?: string;
   left: number;
   top: number;
   menuRef?: Ref<HTMLDivElement>;
@@ -47,6 +50,7 @@ export function ContextMenuSurface({
       className="actionMenuPopover contextMenuPopover"
       role="menu"
       aria-label={label}
+      aria-describedby={note ? `${id}-note` : undefined}
       style={{ left, top }}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -68,6 +72,7 @@ export function ContextMenuSurface({
           </button>
         </Fragment>
       ))}
+      {note && <div id={`${id}-note`} className="actionMenuNote" role="none">{note}</div>}
     </div>
   );
 }
@@ -78,7 +83,8 @@ export function ContextMenu({
   x,
   y,
   returnFocus,
-  onClose
+  onClose,
+  note
 }: {
   label: string;
   items: ActionMenuItem[];
@@ -86,6 +92,7 @@ export function ContextMenu({
   y: number;
   returnFocus?: HTMLElement | null;
   onClose: () => void;
+  note?: string;
 }) {
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -101,7 +108,7 @@ export function ContextMenu({
       { width: bounds.width, height: bounds.height },
       { width: window.innerWidth, height: window.innerHeight }
     ));
-  }, [x, y, items.length]);
+  }, [x, y, items.length, note]);
 
   useEffect(() => {
     itemRefs.current.find((item) => item && !item.disabled)?.focus({ preventScroll: true });
@@ -149,6 +156,7 @@ export function ContextMenu({
       id={menuId}
       label={label}
       items={items}
+      note={note}
       left={position.left}
       top={position.top}
       menuRef={menuRef}

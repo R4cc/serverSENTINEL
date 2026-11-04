@@ -325,12 +325,12 @@ export function AddNodeModal({
             </FormField>
             <section className="nodeConnectionSetup" aria-labelledby="node-connection-title">
               <div className="nodeConnectionIntro">
+                <div className="nodeConnectionTitle"><h3 id="node-connection-title">How the node connects</h3><HelpTooltip label="node connection">The node opens an outbound connection to this panel. Enter a panel address that is reachable from the node computer.</HelpTooltip></div>
                 <div className="nodeConnectionDirection" aria-label="The node computer connects to this panel">
                   <span>Node computer</span>
                   <ArrowRight aria-hidden="true" />
                   <span>This panel</span>
                 </div>
-                <div className="nodeConnectionTitle"><h3 id="node-connection-title">How the node connects</h3><HelpTooltip label="node connection">The node opens an outbound connection to this panel. Enter a panel address that is reachable from the node computer.</HelpTooltip></div>
               </div>
               <FormField
                 label="Panel address for this node"

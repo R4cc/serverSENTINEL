@@ -74,7 +74,10 @@ function AdditionalPortBindingsEditor({
 
   return (
     <div className={`portBindingsEditor ${bindings.length > 1 ? "hasExtraBindings" : ""}`}>
-      <span className="fieldLabel fieldLabelWithHelp">Additional port bindings <HelpTooltip label="additional port bindings">Use the host port on the left and the container port and protocol on the right, for example 24454 : 24454/udp.</HelpTooltip></span>
+      <div className="uiFormFieldLabelRow">
+        <span className="uiFormFieldLabel">Additional port bindings</span>
+        <HelpTooltip label="additional port bindings">Use the host port on the left and the container port and protocol on the right, for example 24454 : 24454/udp.</HelpTooltip>
+      </div>
       <input type="hidden" name="dockerPorts" value={serializedBindings} />
       <div className="portBindingRows">
         {bindings.map((binding) => (

@@ -28,7 +28,7 @@
 
 .uiButton--primary { border-color: color-mix(in srgb, var(--accent) 84%, var(--glass-edge)); background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-xs); }
 .uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 78%, var(--text)); background: color-mix(in srgb, var(--accent) 88%, var(--text)); color: var(--accent-contrast); transform: none; }
-.uiButton--secondary { border-color: var(--glass-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: var(--glass-filter-control); backdrop-filter: var(--glass-filter-control); }
+.uiButton--secondary { border-color: var(--control-secondary-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: var(--glass-filter-control); backdrop-filter: var(--glass-filter-control); }
 .uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
 .uiButton--ghost,
 .textLinkButton { border-color: transparent; background: transparent; color: var(--accent); box-shadow: none; }
@@ -378,8 +378,10 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiEmptyState span { max-width: 58ch; color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.5; }
 
 .inlineState:not(.uiBanner) { min-height: 64px; border-color: var(--border-row); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); background: var(--surface-raised); box-shadow: none; }
-.inlineState:not(.uiBanner) strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-ui); line-height: 1.35; text-transform: none; }
-.inlineState:not(.uiBanner) span { color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
+/* Only the state's own copy: a bare `span` also reached the label inside its action button, so
+   "Clear filter" and "Retry" were set in muted text and looked disabled. */
+.inlineState:not(.uiBanner) > div > strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-ui); line-height: 1.35; text-transform: none; }
+.inlineState:not(.uiBanner) > div > span { color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
 
 .uiSortHeaderButton { width: 100%; min-height: var(--control-height-compact); justify-content: flex-start; gap: var(--space-1); border: 0; border-radius: var(--radius-sm); padding: 0 var(--space-2); background: transparent; color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-align: left; text-transform: uppercase; box-shadow: none; }
 .uiSortHeaderButton:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); transform: none; }
@@ -497,6 +499,21 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   max-height: calc(100vh - 16px);
   overflow-y: auto;
 }
+/* Zero width with a full-width minimum: the note wraps to the menu the items size, instead of
+   stretching the menu to its own sentence. */
+.actionMenuNote {
+  width: 0;
+  min-width: 100%;
+  margin: 0;
+  border-top: 1px solid var(--border-row);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--type-helper-size);
+  line-height: 1.4;
+}
+/* A dialog takes focus itself only so focus starts inside it; it is not a control, so it draws no
+   ring. Its controls keep theirs. */
+[role="dialog"][tabindex="-1"]:focus { outline: none; }
 .actionMenuSeparator {
   height: 1px;
   margin: var(--space-1) var(--space-2);
@@ -1077,6 +1094,23 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   white-space: nowrap;
 }
 
+/* Dialog actions share one size: a common minimum width, so "Cancel" is not a sliver beside a long
+   confirm label in one dialog and a wide slab in the next, and a full touch target wherever the
+   pointer is a finger -- including the phone layout, where they already span the dialog. */
+.modalFooter .uiButton:not(.uiButton--icon),
+.userModalFooter .uiButton:not(.uiButton--icon),
+.fileEditorFooter .uiButton:not(.uiButton--icon) {
+  min-width: 96px;
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 720px) {
+  .modalFooter .uiButton,
+  .userModalFooter .uiButton,
+  .fileEditorFooter .uiButton {
+    min-height: 44px;
+  }
+}
+
 .fileTableRow,
 .modsWorkspaceRow,
 .scheduleTableRow {
@@ -1138,3 +1172,16 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiSearchField:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: 1px; }
 .uiSearchField input:focus-visible { outline: none; }
 .uiSearchField .uiButton svg { width: 16px; height: 16px; }
+
+/* Square destructive icon action, shared by Schedules, Properties and server creation. It lives
+   here rather than in a page stylesheet because those load only with their own page. */
+.iconDangerButton {
+  width: 44px;
+  min-width: 44px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-color: var(--sentinel-danger);
+  background: var(--surface);
+  color: var(--sentinel-danger);
+}

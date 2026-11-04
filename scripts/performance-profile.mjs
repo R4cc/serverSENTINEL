@@ -10,6 +10,7 @@ import { timelineResourcePoints } from "../server/dist/serverTimeline.js";
 import { localResolveExistingPath } from "../server/dist/files/fileService.js";
 import { listServerDirectory } from "../server/dist/runtime/local/fileService.js";
 import { measureWorldSize } from "../server/dist/servers/exportSelection.js";
+import { playerLatencyPoints } from "../server/dist/players/playerInsights.js";
 import { openStorageDatabase } from "../server/dist/storage/database.js";
 import { ResourceStatsRepository } from "../server/dist/storage/resourceStatsRepository.js";
 
@@ -54,6 +55,9 @@ try {
   });
   await measure("timeline: read and project 7 days", () => {
     assert.ok(timelineResourcePoints(repository.listRange("profile", 0, to, true), 0, to, 900).length <= 900);
+  });
+  await measure("player insights: read 7 days of latency samples", () => {
+    assert.ok(repository.latestPerSlice("profile", 0, to, playerLatencyPoints).length <= playerLatencyPoints);
   });
 } finally {
   database.close();

@@ -94,8 +94,8 @@ describe("NodeOverviewCard", () => {
     const html = renderToStaticMarkup(<NodeOverviewCard fallbackMemory={8 * 1024 ** 3} />);
 
     expect(html).toContain("Total memory");
-    expect(html).toContain("8192.0 MiB");
+    expect(html).toContain("8 GiB");
     expect(html).not.toContain("Available memory");
-    expect(html).not.toContain("8192.0 MiB / 8192.0 MiB");
+    expect(html).not.toContain("8 GiB / 8 GiB");
   });
 });

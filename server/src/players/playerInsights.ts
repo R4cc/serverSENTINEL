@@ -157,6 +157,9 @@ export function playerRegionSummaries(entries: readonly PlayerInsightsEntry[]): 
     .sort((left, right) => right.players - left.players || left.continent.localeCompare(right.continent));
 }
 
+/** Points in the measured ping series; the server reads only the newest sample in each. */
+export const playerLatencyPoints = 96;
+
 /** Measured TCP RTT history, downsampled from the existing retained resource samples. */
 export function playerLatencyHistory(input: {
   resourceSamples: Record<string, ResourceStatsSample[]>;
@@ -282,7 +285,7 @@ export function buildPlayerInsights(input: PlayerInsightsInput): PlayerInsightsR
       resourceSamples: input.resourceSamples,
       from,
       to: now,
-      points: input.latencyPoints ?? 96
+      points: input.latencyPoints ?? playerLatencyPoints
     }),
     pingMeasurements: input.pingMeasurements,
     activityHours,

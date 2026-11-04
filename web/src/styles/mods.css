@@ -272,33 +272,34 @@
   }
 }
 
+/* Tablet: the actions keep a full row and the update check sits under them with its timestamp,
+   matching the desktop reading order. Each mod is a two-line card: identity, then every control
+   on one line, so a mod without an update never leaves a control alone on an empty row. */
 @media (max-width: 1100px) {
-  .modsWorkspaceToolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .modsWorkspaceToolbar .uiToolbarPrimary { grid-column: 1; grid-row: 1; }
-  .modsWorkspaceToolbar .uiToolbarSecondary { grid-column: 2; grid-row: 1; }
-  .modsWorkspaceToolbar .uiToolbarMeta { grid-column: 2; grid-row: 2; }
+  .modsWorkspaceToolbar { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--space-2); }
+  .modsWorkspaceToolbar .uiToolbarPrimary { grid-column: 1 / -1; grid-row: 1; }
+  .modsWorkspaceToolbar .uiToolbarMeta { grid-column: 1; grid-row: 2; justify-self: end; }
+  .modsWorkspaceToolbar .uiToolbarSecondary { grid-column: 2; grid-row: 2; }
   .modsWorkspaceTableHead { display: none; }
   .modsWorkspaceRow {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto 44px 44px;
     grid-template-areas:
-      "identity identity"
-      "status enabled"
-      "version enabled"
-      "update switchVersion";
+      "identity identity identity identity"
+      "metadata update enabled switchVersion";
     align-items: center;
-    gap: 8px 12px;
+    gap: var(--space-2) var(--space-3);
     min-height: 0;
-    padding: 12px;
+    padding: var(--space-3);
   }
   .modsWorkspaceIdentity { grid-area: identity; }
-  .modsWorkspaceIdentity > svg { margin-left: auto; }
-  .modsWorkspaceStatus { grid-area: status; min-width: 0; }
-  .modsWorkspaceVersion { grid-area: version; display: block; color: var(--text-muted); font-size: var(--type-meta-size); }
+  .modsWorkspaceMetadata { grid-area: metadata; display: grid; gap: 6px; min-width: 0; }
+  .modsWorkspaceStatus { min-width: 0; }
+  .modsWorkspaceVersion { display: block; color: var(--text-muted); font-size: var(--type-meta-size); }
   .modsWorkspaceVersion::before { content: "Installed "; color: var(--text-soft); font-weight: var(--weight-meta); }
-  .modsWorkspaceUpdate { grid-area: update; min-width: 0; }
+  .modsWorkspaceUpdate { grid-area: update; min-width: 0; justify-self: end; }
   .modsWorkspaceUpdate:empty { display: none; }
-  .modsWorkspaceEnabled { grid-area: enabled; justify-self: end; }
-  .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: end; }
+  .modsWorkspaceEnabled { grid-area: enabled; justify-self: center; }
+  .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: center; }
 }
 @media (max-width: 760px) {
   .modsWorkspacePage { height: auto; }
@@ -337,7 +338,7 @@
   .modsWorkspaceStatus { grid-area: auto; min-width: 0; }
   .modsWorkspaceVersion { grid-area: auto; display: block; min-width: 0; color: var(--text-muted); font-size: var(--type-meta-size); white-space: normal; overflow-wrap: anywhere; }
   .modsWorkspaceVersion::before { content: "Installed "; color: var(--text-soft); font-weight: var(--weight-meta); }
-  .modsWorkspaceUpdate { grid-area: update; min-width: 0; }
+  .modsWorkspaceUpdate { grid-area: update; min-width: 0; justify-self: stretch; }
   .modsWorkspaceUpdate:empty { display: none; }
   .modsUpdateCell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; }
   .modsUpdateVersions { flex: none; }

@@ -342,13 +342,23 @@
   gap: 6px;
 }
 
+/* On touch layouts the help button grows to a 44px target. Holding its wrapper to one line lets the
+   target overflow evenly instead of making a titled row taller than its neighbours. */
+.settingsHubRowTitle .uiHelpTooltip {
+  display: inline-flex;
+  align-items: center;
+  height: 1lh;
+}
+
 .settingsHubRowCopy strong {
   color: var(--text);
   font-size: var(--type-row-title-size);
   font-weight: var(--weight-title);
 }
 
-.settingsHubRowCopy span {
+/* Only the row's description. A descendant selector also restyled the Optional badge and the help
+   tooltip's spans inside the title, which made the badge taller than every other badge. */
+.settingsHubRowCopy > span:not(.settingsHubRowTitle) {
   color: var(--text-muted);
   font-size: var(--type-meta-size);
   line-height: 1.45;
@@ -590,9 +600,21 @@
 }
 
 .settingsHubSystemOverview {
+  --settings-overview-inset: var(--space-5);
   display: grid;
   gap: var(--space-4);
-  padding: var(--space-5);
+  padding: var(--settings-overview-inset);
+}
+
+/* The UI cache row spans the card like rows in the other categories, so its hover wash reaches the
+   card edges and its copy and action line up with the facts above instead of sitting a row's
+   padding further in. */
+.settingsHubSystemOverview > .settingsHubRows {
+  margin-inline: calc(-1 * var(--settings-overview-inset));
+}
+
+.settingsHubSystemOverview > .settingsHubRows > .settingsHubRow {
+  padding-inline: var(--settings-overview-inset);
 }
 
 .settingsHubHealth {
@@ -712,6 +734,11 @@
   border-left: 1px solid var(--border-row);
 }
 
+/* The first column starts on the facts' left edge; only the divided columns need inner padding. */
+.settingsHubTechnical > div:first-child {
+  padding-left: 0;
+}
+
 .settingsHubTechnical strong {
   color: var(--text-muted);
   font-size: 11px;
@@ -759,6 +786,10 @@
   .settingsHubTechnical > div + div {
     border-top: 1px solid var(--border-row);
     border-left: 0;
+  }
+
+  .settingsHubTechnical > div {
+    padding-inline: 0;
   }
 }
 
@@ -851,7 +882,7 @@
   }
 
   .settingsHubSystemOverview {
-    padding: var(--space-4);
+    --settings-overview-inset: var(--space-4);
   }
 
   .settingsHubUsers .usersSettings {
@@ -1017,13 +1048,12 @@
     width: 100%;
   }
 
+  /* Wrap only when the masked value and its badge no longer fit on one line; forcing a column
+     doubled the field's height even where the row had room for both. */
   .secretPreview {
-    align-items: flex-start;
-    flex-direction: column;
-    justify-content: center;
     flex-wrap: wrap;
-    min-height: 0;
-    padding: var(--space-3);
+    row-gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
   }
 
   .secretPreview code {

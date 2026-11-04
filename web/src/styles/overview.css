@@ -73,8 +73,10 @@
   margin: 0;
 }
 
+/* Sized to hold a compact header action, so a card without one keeps its title on the
+   same line as its neighbour that has one. */
 .overviewCard > .uiPanelHeader {
-  min-height: 36px;
+  min-height: calc(var(--control-height-compact) + var(--space-3) + var(--border-subtle));
   padding-bottom: var(--space-3);
   border-bottom: var(--border-subtle) solid var(--border-row);
 }
@@ -2354,10 +2356,9 @@ button.overviewCardRow:focus-visible {
     box-shadow: none;
   }
 
+  /* The toolbar directly below draws its own top border, so a rule here doubled the line. */
   .serverTimelinePanel > .uiPanelHeader {
     min-height: 36px;
-    padding-bottom: var(--space-3);
-    border-bottom: var(--border-subtle) solid var(--border-row);
   }
 
   .playersPanel .overviewCardBody,

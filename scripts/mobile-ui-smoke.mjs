@@ -854,6 +854,24 @@ async function assertFilesToolbarGeometry(page, label) {
   assert(result.navWithinViewport && result.crumbsWithinViewport && result.toolbarWithinViewport, `${label}: Files toolbar leaves the viewport: ${JSON.stringify(result)}`);
 }
 
+/**
+ * Selecting the first item used to grow the selection bar above the list -- by a whole row of
+ * actions between 721px and 900px, and by a few pixels elsewhere -- so the list moved under the
+ * pointer and the second click of a double-click opened a different row.
+ */
+async function assertFileSelectionKeepsRowsInPlace(page, label) {
+  const row = page.locator(".fileTableRow:not(.fileTableSkeletonRow)").first();
+  await row.waitFor();
+  // Clicking a row below the fold scrolls it into view, which is a move this check is not about.
+  await row.scrollIntoViewIfNeeded();
+  const before = await row.boundingBox();
+  await row.locator(".fileNameCell").click();
+  await page.locator('.fileTableRow[aria-selected="true"]').first().waitFor();
+  const after = await row.boundingBox();
+  await page.getByRole("button", { name: "Clear file selection" }).click();
+  assert(before && after && Math.abs(after.y - before.y) <= 0.5, `${label}: selecting a file moved the file list: ${JSON.stringify({ before: before?.y, after: after?.y })}`);
+}
+
 async function assertSettingsCategoryPicker(page, label) {
   const picker = page.getByRole("combobox", {name:"Settings category"});
   assert(await picker.isVisible(), label + ": compact Settings picker is missing");
@@ -1043,6 +1061,10 @@ async function runDesktopMapAndRestorationProfile() {
 
     await assertPageRestoresOnReload(page, "schedules", "schedule", ".schedulePage", `${label} schedules`);
     await assertPageRestoresOnReload(page, "files", "files", ".filesPage", `${label} files`);
+    await assertFileSelectionKeepsRowsInPlace(page, `${label} files`);
+    await page.setViewportSize({ width: 800, height: 1000 });
+    await assertFileSelectionKeepsRowsInPlace(page, "Chromium tablet 800x1000 files");
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await openPage(page, "players");
     await page.getByRole("group", { name: "Players shown on map" }).getByRole("button", { name: "All time", exact: true }).click();
     await assertPlayerMarkerAnchorsAcrossTransforms(page, `${label} players`, {
@@ -1154,6 +1176,7 @@ async function runProfile(engine, profile, label) {
     await openPage(page, "files");
     await assertTargets(page, [".fileNavButtons .uiButton", ".fileToolbar .uiButton", ".fileTableRow"], `${label} files`);
     await assertFilesToolbarGeometry(page, `${label} files`);
+    await assertFileSelectionKeepsRowsInPlace(page, `${label} files`);
 
     await openPage(page, "settings");
     await assertSettingsCategoryPicker(page, `${label} settings`);
