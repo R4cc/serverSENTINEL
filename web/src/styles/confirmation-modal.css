@@ -36,7 +36,7 @@
 }
 
 .confirmationRequired {
-  color: var(--text-muted);
+  color: var(--text-soft);
   font-weight: var(--weight-body);
 }
 
@@ -46,11 +46,6 @@
   line-height: 1.45;
 }
 
-@media (max-width: 520px) {
-  .confirmationModal .modalFooter button {
-    flex: 1 1 0;
-  }
-}
 
 /* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
 
@@ -71,4 +66,12 @@
   background: var(--surface-muted);
   padding: var(--space-2) var(--space-3);
   overflow-wrap: anywhere;
+}
+
+/* Anchored like the file dialogs, so a missing-reason message grows the dialog downwards only. */
+@media (min-width: 721px) {
+  .modalBackdrop.confirmationBackdrop {
+    align-items: start;
+    padding-top: min(18vh, 160px);
+  }
 }

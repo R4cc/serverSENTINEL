@@ -127,3 +127,8 @@ const minecraftAnsiStyles: Record<string, string> = {
 export function minecraftLogToTerminalText(text: string) {
   return minecraftFormattingToAnsi(text).replace(/\r?\n/g, "\r\n");
 }
+
+/** Console lines as a reader would copy or save them: formatting codes removed, one line per row. */
+export function minecraftLogToPlainText(lines: readonly { text: string }[]) {
+  return lines.map((line) => line.text.replace(/[§&]([0-9a-fl-or]|#[0-9a-f]{6})/gi, "")).join("\n");
+}

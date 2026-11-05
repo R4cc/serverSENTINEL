@@ -27,4 +27,11 @@ describe("RestartRequiredBadge", () => {
     expect(html).toContain("Plugins have changed");
     expect(html).not.toContain("Mods have changed");
   });
+
+  it("says the changes apply on start while the server is stopped", () => {
+    const html = renderToStaticMarkup(<RestartRequiredBadge stopped />);
+    expect(html).toContain("Applies on start");
+    expect(html).not.toContain("Restart required");
+    expect(html).toContain("apply when the server next starts");
+  });
 });

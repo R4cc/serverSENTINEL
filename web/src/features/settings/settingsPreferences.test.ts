@@ -34,6 +34,8 @@ describe("settings console preferences", () => {
     expect(consoleFontSizeFromStoredValue("14")).toBe(14);
     expect(consoleFontSizeFromStoredValue("13")).toBe(14);
     expect(consoleFontSizeFromStoredValue("large")).toBe(14);
+    expect(consoleFontSizeFromStoredValue(null, 12)).toBe(12);
+    expect(consoleFontSizeFromStoredValue("17", 12)).toBe(17);
     expect(consoleScrollbackFromStoredValue("999999")).toBe(5_000);
   });
 

@@ -21,9 +21,22 @@ export function consoleHistoryEnabledFromStoredValue(value: string | null) {
   return value !== "false";
 }
 
-export function consoleFontSizeFromStoredValue(value: string | null): ConsoleFontSize {
+export function consoleFontSizeFromStoredValue(value: string | null, fallback: ConsoleFontSize = 14): ConsoleFontSize {
   const parsed = Number(value);
-  return consoleFontSizes.includes(parsed as ConsoleFontSize) ? parsed as ConsoleFontSize : 14;
+  return consoleFontSizes.includes(parsed as ConsoleFontSize) ? parsed as ConsoleFontSize : fallback;
+}
+
+/**
+ * A phone starts on the smallest size: at 14px a 390px screen holds about 38 columns, so the log's
+ * timestamp and thread prefix leave each line a few words before it breaks mid-word. A size chosen
+ * in Settings is kept as chosen.
+ */
+function defaultConsoleFontSize(): ConsoleFontSize {
+  try {
+    return window.matchMedia("(max-width: 480px)").matches ? 12 : 14;
+  } catch {
+    return 14;
+  }
 }
 
 export function consoleScrollbackFromStoredValue(value: string | null): ConsoleScrollback {
@@ -36,7 +49,7 @@ export function readConsoleHistoryEnabled() {
 }
 
 export function readConsoleFontSize() {
-  return consoleFontSizeFromStoredValue(readStoredValue(consoleFontSizeStorageKey));
+  return consoleFontSizeFromStoredValue(readStoredValue(consoleFontSizeStorageKey), defaultConsoleFontSize());
 }
 
 export function readConsoleScrollback() {

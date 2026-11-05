@@ -583,7 +583,8 @@ button .buttonIcon {
   font-weight: var(--weight-title);
 }
 
-.inlineState:not(.uiBanner) span {
+/* The copy's own line only: a bare `span` also reached into the action button's label. */
+.inlineState:not(.uiBanner) > div > span {
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.4;
@@ -709,6 +710,30 @@ button .buttonIcon {
   width: 28px;
   height: 28px;
   filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--overlay) 25%, transparent));
+}
+
+/* A real target on the right, not a 20px glyph tucked into the corner. */
+.sonnerToast [data-close-button] {
+  top: 50% !important;
+  right: 6px !important;
+  left: auto !important;
+  width: 32px !important;
+  height: 32px !important;
+  border: 0 !important;
+  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  transform: translateY(-50%) !important;
+}
+
+.sonnerToast [data-close-button]:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+  color: var(--text) !important;
+}
+
+.sonnerToast [data-close-button] svg {
+  width: 14px;
+  height: 14px;
 }
 
 .sonnerToast [data-content] {
@@ -1802,9 +1827,9 @@ button .buttonIcon {
   height: 40px;
   min-width: 40px;
   min-height: 40px;
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-row));
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 32%, var(--surface));
-  color: var(--sentinel-accent-strong);
+  /* A plain secondary control, like Restart beside it: the accent tint it had only showed in the
+     light theme, where it read as a selected state. */
+  border-color: var(--control-secondary-edge);
 }
 
 @media (max-width: 640px) {

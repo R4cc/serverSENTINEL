@@ -6,10 +6,11 @@ import type { TerminalSelection } from "../components/MinecraftTerminal";
 import { loadTerminalFonts, loadTerminalRenderer } from "../components/terminalResources";
 import { ConsolePrompt } from "../components/ConsolePrompt";
 import { TerminalLoadingSkeleton } from "../components/LoadingSkeletons";
-import { PanelHeader, Surface } from "../components/UiPrimitives";
+import { Button, PanelHeader, Surface } from "../components/UiPrimitives";
+import { AppIcon } from "../components/FileTypeIcon";
 import { SquareTerminal } from "lucide-react";
 import { copyToClipboard } from "../utils/clipboard";
-import { shouldCopyTerminalSelection } from "../utils/minecraftTerminal";
+import { minecraftLogToPlainText, shouldCopyTerminalSelection } from "../utils/minecraftTerminal";
 
 const { Component: MinecraftTerminal, preload: loadTerminalComponent } = lazyPage(
   () => import("../components/MinecraftTerminal"),
@@ -31,6 +32,7 @@ export function loadMinecraftTerminal() {
  */
 export function ServerConsoleTab({
   active,
+  serverName,
   snapshotReady,
   generation,
   entries,
@@ -42,6 +44,7 @@ export function ServerConsoleTab({
   onCommand
 }: {
   active: boolean;
+  serverName: string;
   snapshotReady: boolean;
   generation: number;
   entries: ConsoleLine[];
@@ -54,6 +57,7 @@ export function ServerConsoleTab({
 }) {
   const selectionRef = useRef<TerminalSelection | null>(null);
   const [terminalCodeReady, setTerminalCodeReady] = useState(false);
+  const [copiedOutput, setCopiedOutput] = useState(false);
   const handleSelectionChange = useCallback((selection: TerminalSelection) => {
     selectionRef.current = selection;
   }, []);
@@ -66,6 +70,27 @@ export function ServerConsoleTab({
     void loadMinecraftTerminal().then(ready, ready);
     return () => { disposed = true; };
   }, []);
+
+  useEffect(() => {
+    if (!copiedOutput) return;
+    const timer = window.setTimeout(() => setCopiedOutput(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copiedOutput]);
+
+  function copyOutput() {
+    void copyToClipboard(minecraftLogToPlainText(entries)).then((copied) => setCopiedOutput(copied));
+  }
+
+  function downloadOutput() {
+    const blob = new Blob([`${minecraftLogToPlainText(entries)}\n`], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const slug = serverName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "server";
+    anchor.href = url;
+    anchor.download = `${slug}-console.log`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   /**
    * Answers Ctrl+C for the whole console, in the capture phase so it settles before the command
@@ -98,10 +123,21 @@ export function ServerConsoleTab({
   return (
     <section className="tabPage layoutWide consoleTabPage" hidden={!active}>
       <Surface className="consolePanel" material="glass">
+        {/* The page is already titled Console, so this row carries what can be done with the output. */}
         <PanelHeader
           className="consolePanelHeader"
           compact
-          title={<><span className="consoleSectionIcon" aria-hidden="true"><SquareTerminal /></span>Server output</>}
+          title={<><span className="consoleSectionIcon" aria-hidden="true"><SquareTerminal /></span>Output<span className="consoleLineCount">{entries.length === 1 ? "1 line" : `${entries.length} lines`}</span></>}
+          actions={(
+            <div className="consoleOutputActions">
+              <Button variant="secondary" compact onClick={copyOutput} disabled={entries.length === 0} title="Copy all output" reserveLabel={<><AppIcon name="check" />Copied</>}>
+                <AppIcon name={copiedOutput ? "check" : "copy"} />{copiedOutput ? "Copied" : "Copy"}
+              </Button>
+              <Button variant="secondary" compact onClick={downloadOutput} disabled={entries.length === 0} title="Download output as a .log file">
+                <AppIcon name="download" />Download
+              </Button>
+            </div>
+          )}
         />
         <div className="terminal">
           <div

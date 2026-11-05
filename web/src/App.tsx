@@ -2081,7 +2081,7 @@ export default function App() {
   if (sessionPending && !bootsIntoShell) {
     return (
       <>
-        <AppToaster darkMode={darkMode} phoneLayout={phoneLayout} />
+        <AppToaster darkMode={darkMode} />
         <AuthLoadingSkeleton />
       </>
     );
@@ -2090,7 +2090,7 @@ export default function App() {
   if (authSession && !authSession.authenticated && !demoMode) {
     return (
       <>
-        <AppToaster darkMode={darkMode} phoneLayout={phoneLayout} />
+        <AppToaster darkMode={darkMode} />
         <AuthPanel
           setupRequired={authSession.setupRequired}
           demoEnabled={authSession.demoEnabled}
@@ -2178,7 +2178,7 @@ export default function App() {
 
   return (
     <>
-      <AppToaster darkMode={darkMode} phoneLayout={phoneLayout} />
+      <AppToaster darkMode={darkMode} />
       <main className={`appShell ${sidebarCollapsed ? "sidebarCollapsed" : ""} ${phoneLayout && !sidebarCollapsed ? "mobileNavigationOpen" : ""} ${themeClassName}`.replace(/\s+/g, " ").trim()}>
         <AppSidebar
           sidebarCollapsed={sidebarCollapsed}
@@ -2428,6 +2428,7 @@ export default function App() {
               <ServerConsoleTab
                 key={activeServer.id}
                 active={activePage === "console"}
+                serverName={activeServer.displayName}
                 snapshotReady={consoleSnapshotReadyServerId === activeServer.id}
                 generation={consoleGeneration}
                 entries={logs}
