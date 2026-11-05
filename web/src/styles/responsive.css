@@ -303,9 +303,7 @@ button:disabled,
 .themeDark .inlineState-empty,
 .themeDark .emptyInline,
 .themeDark .eventEmpty {
-  background:
-    repeating-linear-gradient(45deg, color-mix(in srgb, var(--text) 2%, transparent) 0 1px, transparent 1px 10px),
-    var(--surface-muted);
+  background: var(--surface-muted);
 }
 
 .modalHeader,

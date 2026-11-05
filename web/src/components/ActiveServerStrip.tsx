@@ -87,7 +87,7 @@ export function ActiveServerStrip({
               <StatusBadge className={`runtimeBadge ${serverCommandTone}`}>
                 {lastKnownRuntimeLabel}
               </StatusBadge>
-              {server.restartRequiredSince && <RestartRequiredBadge changes={server.restartRequiredChanges} runtimeType={server.runtimeProfile.runtimeType} />}
+              {server.restartRequiredSince && <RestartRequiredBadge changes={server.restartRequiredChanges} runtimeType={server.runtimeProfile.runtimeType} stopped={serverCommandTone === "stopped" || serverCommandTone === "exited"} />}
             </div>
             <div className="serverStripMetaRow">
               {health ? (

@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Copy,
   Download,
+  Eye,
   FileSliders,
   FileUp,
   Folder,
@@ -60,7 +61,7 @@ export function SidebarIcon({ name }: { name: SidebarIconName }) {
   return <Icon className="sideIcon" aria-hidden="true" />;
 }
 
-type AppIconName = "history" | "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "minus" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" | "moreHorizontal" | "moreVertical";
+type AppIconName = "history" | "chevronLeft" | "chevronRight" | "chevronUp" | "chevronDown" | "plus" | "x" | "minus" | "fileUp" | "arrowUp" | "home" | "refresh" | "download" | "folderPlus" | "edit" | "trash" | "copy" | "rename" | "check" | "server" | "search" | "shield" | "hourglass" | "switch" | "extract" | "drag" | "moreHorizontal" | "moreVertical" | "view";
 
 const appIcons: Record<AppIconName, LucideIcon> = {
   history: History,
@@ -90,7 +91,8 @@ const appIcons: Record<AppIconName, LucideIcon> = {
   extract: ArchiveRestore,
   drag: GripHorizontal,
   moreHorizontal: MoreHorizontal,
-  moreVertical: MoreVertical
+  moreVertical: MoreVertical,
+  view: Eye
 };
 
 export function AppIcon({ name }: { name: AppIconName }) {

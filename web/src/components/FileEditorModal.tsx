@@ -1,4 +1,6 @@
-import { Component, lazy, Suspense, useMemo, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { EditorCursor } from "./CodeEditor";
+import { editorLanguageLabel } from "./editorLanguage";
 import { AppIcon } from "./FileTypeIcon";
 import { InlineState } from "./InlineState";
 import { Button } from "./UiPrimitives";
@@ -100,6 +102,11 @@ export function FileEditorModal({
   const editorFileName = useMemo(() => selectedPath.split("/").filter(Boolean).pop() ?? selectedPath, [selectedPath]);
   const editorFolderPath = useMemo(() => (selectedPath ? parentPath(selectedPath) : ""), [selectedPath]);
   const editorLocation = editorFolderPath || "Root directory";
+  const editorLanguage = useMemo(() => editorLanguageLabel(selectedPath), [selectedPath]);
+  const [cursor, setCursor] = useState<EditorCursor>({ line: 1, column: 1 });
+  useEffect(() => setCursor({ line: 1, column: 1 }), [selectedPath]);
+  // "Read-only" is kept for a file that cannot be edited here; one that can is only being viewed.
+  const modeLabel = editing ? "Editing" : editDisabled ? "Read-only" : "Viewing";
   const canCloseEditor = !fileSaving;
   const editingRestriction = !editing ? editMessage || (editDisabled ? editDisabledReason : "") : "";
   const saveDisabledReason = fileSaving
@@ -122,7 +129,7 @@ export function FileEditorModal({
         <DialogSurface mobileFullscreen backdrop="fileEditorBackdrop" dismissible={canCloseEditor} className="modalPanel fileEditorModal" labelledBy="file-editor-title" onClose={onRequestClose}>
           <header className="fileEditorHeader">
             <div>
-              <h2 id="file-editor-title">{dirty ? `${editorFileName} *` : editorFileName}</h2>
+              <h2 id="file-editor-title">{editorFileName}</h2>
               <p className="fileEditorLocation">{editorLocation}</p>
             </div>
             <Button iconOnly variant="secondary" className="iconButton modalCloseButton" onClick={onRequestClose} disabled={!canCloseEditor} aria-label="Close editor" title={canCloseEditor ? "Close editor" : "File save is still in progress"}>
@@ -133,12 +140,16 @@ export function FileEditorModal({
             <div className="fileEditorMetaRow">
               <span className={`fileEditorMode ${editing ? "editing" : "readOnly"}${editingRestriction ? " unavailable" : ""}`} title={editingRestriction || undefined}>
                 <span className="fileEditorModeDot" aria-hidden="true" />
-                {editing ? "Editing" : "Read-only"}
+                {modeLabel}
               </span>
-              <span className="fileEditorMetaDivider" aria-hidden="true" />
-              <span className="fileEditorLineCount">{editorText.split("\n").length} lines</span>
               {dirty && <><span className="fileEditorMetaDivider" aria-hidden="true" /><span className="dirty">Unsaved changes</span></>}
               <div className="fileEditorMetaActions">
+                <span className="fileEditorPosition" aria-label={`Line ${cursor.line}, column ${cursor.column} of ${editorText.split("\n").length} lines`}>
+                  Ln {cursor.line}, Col {cursor.column}
+                  <span className="fileEditorPositionTotal"> · {editorText.split("\n").length} lines</span>
+                </span>
+                <span className="fileEditorMetaDivider" aria-hidden="true" />
+                <span className="fileEditorLanguage">{editorLanguage}</span>
                 {editingRestriction && (
                   <span className="fileEditorRestriction" role="status" title={editingRestriction} aria-label={`Editing unavailable: ${editingRestriction}`}>
                     Editing unavailable
@@ -179,6 +190,7 @@ export function FileEditorModal({
                           saveDisabled={saveDisabled}
                           onChange={onTextChange}
                           onSave={onSave}
+                          onCursorChange={setCursor}
                         />
                       </Suspense>
                     </EditorLoadBoundary>

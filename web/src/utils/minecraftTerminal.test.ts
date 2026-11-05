@@ -3,6 +3,7 @@ import {
   appendCommandHistory,
   consumeTerminalTouchScroll,
   minecraftFormattingToAnsi,
+  minecraftLogToPlainText,
   minecraftLogToTerminalText,
   recallNextCommand,
   recallPreviousCommand,
@@ -85,5 +86,9 @@ describe("Minecraft terminal helpers", () => {
   it("starts each row at column 0 without duplicating an existing carriage return", () => {
     expect(minecraftLogToTerminalText("first\nsecond\n")).toBe("first\r\nsecond\r\n");
     expect(minecraftLogToTerminalText("windows\r\n")).toBe("windows\r\n");
+  });
+
+  it("turns console lines into plain text for copying and saving", () => {
+    expect(minecraftLogToPlainText([{ text: "§aReady§r in 5s" }, { text: "&#ff0000Red" }, { text: "" }])).toBe("Ready in 5s\nRed\n");
   });
 });

@@ -5,6 +5,11 @@ import { type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { search } from "@codemirror/search";
 import { tags } from "@lezer/highlight";
+import { editorLanguageKind, type EditorLanguageKind } from "./editorLanguage";
+
+export { editorLanguageKind };
+
+export type EditorCursor = { line: number; column: number };
 
 type CodeEditorProps = {
   selectedPath: string;
@@ -14,24 +19,16 @@ type CodeEditorProps = {
   saveDisabled: boolean;
   onChange: (value: string) => void;
   onSave: () => void;
+  /** Where the caret is, for the editor's status line. */
+  onCursorChange?: (cursor: EditorCursor) => void;
 };
-
-type EditorLanguageKind =
-  | "json"
-  | "yaml"
-  | "javascript"
-  | "markdown"
-  | "toml"
-  | "properties"
-  | "shell"
-  | "plain";
 
 const serverSentinelHighlightStyle = HighlightStyle.define([
   { tag: tags.comment, color: "var(--editor-comment)" },
   { tag: [tags.keyword, tags.operatorKeyword, tags.modifier], color: "var(--editor-keyword)" },
   { tag: [tags.propertyName, tags.variableName, tags.definition(tags.variableName), tags.attributeName], color: "var(--editor-property)" },
   { tag: [tags.string, tags.special(tags.string)], color: "var(--editor-string)" },
-  { tag: [tags.number, tags.bool, tags.null], color: "var(--editor-constant)" },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: "var(--editor-constant)" },
   { tag: [tags.operator, tags.punctuation, tags.separator], color: "var(--editor-punctuation)" },
   { tag: [tags.heading, tags.strong], color: "var(--editor-heading)", fontWeight: "700" },
   { tag: tags.link, color: "var(--editor-link)", textDecoration: "underline" }
@@ -99,7 +96,7 @@ const serverSentinelEditorTheme = EditorView.theme({
     lineHeight: "20px"
   },
   ".cm-gutters": {
-    borderRight: "var(--border-strong) solid var(--border)",
+    borderRight: "var(--border-subtle) solid var(--border-muted)",
     backgroundColor: "var(--surface-muted)",
     color: "var(--text-soft)",
     lineHeight: "20px"
@@ -107,9 +104,11 @@ const serverSentinelEditorTheme = EditorView.theme({
   ".cm-gutterElement": {
     lineHeight: "20px"
   },
+  // CodeMirror widens the column to fit the longest line number; this is only its floor, so a short
+  // file's gutter is as narrow as its digits.
   ".cm-lineNumbers .cm-gutterElement": {
-    minWidth: "44px",
-    padding: "0 var(--space-2)",
+    minWidth: "20px",
+    padding: "0 var(--space-2) 0 var(--space-3)",
     fontSize: "12px",
     fontWeight: "800"
   },
@@ -186,31 +185,6 @@ export function loadEditorLanguage(kind: EditorLanguageKind) {
   });
 }
 
-function fileParts(path: string) {
-  const fileName = path.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
-  const extension = fileName.includes(".") ? fileName.split(".").pop() ?? "" : "";
-  return { fileName, extension };
-}
-
-export function editorLanguageKind(path: string): EditorLanguageKind {
-  const { fileName, extension } = fileParts(path);
-
-  if (extension === "json" || extension === "json5" || fileName === "pack.mcmeta") return "json";
-  if (extension === "yml" || extension === "yaml") return "yaml";
-  if (["js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts"].includes(extension)) return "javascript";
-  if (extension === "md" || extension === "markdown") return "markdown";
-  if (extension === "toml") return "toml";
-  if (
-    ["properties", "cfg", "conf", "cnf", "env", "ini", "prefs"].includes(extension) ||
-    fileName === ".env" ||
-    fileName.endsWith(".env.local")
-  ) {
-    return "properties";
-  }
-  if (["sh", "bash", "zsh", "fish", "command", "bat", "cmd", "ps1"].includes(extension)) return "shell";
-  return "plain";
-}
-
 /**
  * Holds the grammar for `path`, resolving to the cached one on the first render when it is already
  * in memory. A grammar that arrives after the file has changed again is discarded rather than
@@ -248,9 +222,12 @@ export default function CodeEditor({
   disabled,
   saveDisabled,
   onChange,
-  onSave
+  onSave,
+  onCursorChange
 }: CodeEditorProps) {
   const onChangeRef = useRef(onChange);
+  const onCursorChangeRef = useRef(onCursorChange);
+  onCursorChangeRef.current = onCursorChange;
   const onSaveRef = useRef(onSave);
   const saveDisabledRef = useRef(saveDisabled);
   onChangeRef.current = onChange;
@@ -268,6 +245,12 @@ export default function CodeEditor({
       syntaxHighlighting(serverSentinelHighlightStyle, { fallback: true }),
       language,
       editorSearchExtension,
+      EditorView.updateListener.of((update) => {
+        if (!update.selectionSet && !update.docChanged) return;
+        const head = update.state.selection.main.head;
+        const line = update.state.doc.lineAt(head);
+        onCursorChangeRef.current?.({ line: line.number, column: head - line.from + 1 });
+      }),
       keymap.of([
         {
           key: "Mod-s",
