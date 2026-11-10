@@ -105,20 +105,3 @@
 .authPanel .uiBanner code {
   overflow-wrap: anywhere;
 }
-
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  width: 100%;
-  overflow-x: hidden;
-  white-space: nowrap;
-  transition: padding var(--sidebar-ease), gap var(--sidebar-ease);
-  border-right: var(--border-subtle) solid var(--border-panel);
-  background: var(--sidebar-background);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  box-sizing: border-box;
-}

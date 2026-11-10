@@ -139,9 +139,10 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
-  --sidebar-width: 280px;
-  --sidebar-collapsed-width: 76px;
-  --sidebar-rail-size: 44px;
+  --sidebar-width: 248px;
+  --sidebar-collapsed-width: 56px;
+  /* The square a collapsed rail item, the logo and the rail toggle occupy. */
+  --sidebar-rail-size: 32px;
   /* The collapse is longer than a control transition because it moves the whole
      shell, but it rides the same curve as everything else. */
   --sidebar-ease: 110ms var(--motion-ease-standard);
@@ -220,6 +221,7 @@
     --control-icon-size: 18px;
     --control-icon-button-size: 40px;
     --sidebar-row-height: 44px;
+    --sidebar-rail-size: 44px;
     --table-head-height: 44px;
     --table-row-height: 48px;
   }
