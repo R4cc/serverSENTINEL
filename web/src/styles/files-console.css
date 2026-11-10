@@ -462,14 +462,14 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  min-height: 44px;
+  min-height: var(--table-head-height);
   border-bottom: var(--border-subtle) solid var(--border-muted);
   background: var(--surface-muted);
 }
 
 .fileTableHead > label {
   justify-content: center;
-  min-height: 44px;
+  min-height: var(--table-head-height);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -477,7 +477,7 @@
 }
 
 .fileTableRow {
-  min-height: 48px;
+  min-height: var(--table-row-height);
   border-bottom: var(--border-subtle) solid var(--border-muted);
   background: var(--surface);
 }
@@ -537,7 +537,7 @@
   gap: var(--space-2);
   align-items: center;
   justify-content: start;
-  min-height: 48px;
+  min-height: var(--table-row-height);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -638,8 +638,6 @@
   border-color: var(--border-panel);
   background: var(--surface-raised);
   box-shadow: var(--shadow-elevated);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 .fileEditorHeader,
@@ -1163,13 +1161,10 @@
   flex-wrap: wrap;
 }
 
-.consolePanel.uiGlassSurface,
-.fileEditorModal.uiGlassSurface {
-  border-color: var(--glass-edge);
-  background: var(--glass-tint);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+.consolePanel.uiSurface {
+  border-color: var(--surface-border);
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
 }
 
 .consolePanelHeader {
@@ -1191,10 +1186,10 @@
   width: 32px;
   height: 32px;
   place-items: center;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
-  box-shadow: var(--glass-highlight);
+  background: var(--fill-subtle);
+  box-shadow: none;
   color: var(--sentinel-accent-strong);
 }
 
@@ -1216,26 +1211,20 @@
 .consoleTabPage .consolePanel { gap: 0; }
 .consoleTabPage .terminal { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--terminal-text) 4%, transparent); }
 
-/* The editor is a workspace, and wide enough to sit over the sidebar: the shared translucent tint
-   let the page show through its header and footer, most visibly as a dark band in the light theme.
-   It keeps the glass material every dialog shares, under a fully opaque fill: even a 98% tint let
-   the page's Stop button and sidebar show through faintly in the light theme. */
+/* The editor is a workspace, and wide enough to sit over the sidebar: a translucent tint lets the
+   page show through its header and footer, and even a 98% tint let the page's Stop button and
+   sidebar show through faintly in the light theme. It is the one dialog that is deliberately
+   opaque, so it takes the dialog border and shadow but no backdrop treatment. */
 .fileEditorModal.uiGlassSurface {
   background: var(--surface-raised);
-  -webkit-backdrop-filter: var(--glass-filter-modal);
-  backdrop-filter: var(--glass-filter-modal);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .fileEditorModal .fileEditorHeader,
 .fileEditorModal .fileEditorFooter { background: transparent; }
 .fileEditorModal .fileEditorBody { background: transparent; }
 .fileEditorModal .fileCodeEditor,
 .fileEditorModal .fileEditorStateFill { border-color: var(--border-row); box-shadow: none; }
-
-@media (prefers-reduced-transparency: reduce) {
-  .consolePanel.uiGlassSurface,
-  .fileEditorModal.uiGlassSurface { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
-}
-
 .fileEditorHeader {
   min-width: 0;
   display: flex;
@@ -1276,8 +1265,6 @@
     height: calc(var(--visual-viewport-height, 100dvh) - 16px);
     max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
   }
-
-  .fileEditorModal.uiGlassSurface { -webkit-backdrop-filter: none; backdrop-filter: none; }
 
   .fileEditorBody {
     min-height: 0;
@@ -1360,13 +1347,8 @@
 
 .fileCodeEditor,
 .fileEditorStateFill {
-  border-color: var(--glass-edge);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-}
-
-.themeDark .fileCodeEditor,
-.themeDark .fileEditorStateFill {
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  border-color: var(--surface-border);
+  box-shadow: var(--panel-shadow);
 }
 
 .consolePanel,

@@ -29,10 +29,6 @@ export function AuthPanel({
 }) {
   return (
     <main className="authShell">
-      {/* No `GlassEffect` here on purpose: `auth.css` hides the refractive inset
-          and the shared rim on this panel, because at card size they read as a
-          second nested surface. Mounting the layer anyway only pulled the
-          liquid-glass chunk on the first screen of the app to render nothing. */}
       <section className={`authPanel uiGlassSurface uiGlassSurface--modal ${setupRequired ? "authPanel--setup" : ""}`.trim()}>
         <div className="brandLockup">
           <BrandLogo />

@@ -5,6 +5,7 @@ import { readScheduleDemoFixture } from "../features/schedules/scheduleDemoFixtu
 import type { DisplayTimeZonePreference, InstalledMod, RegionalFormatPreference, ScheduledExecution, ThemePreference } from "../types";
 import { readDisplayTimeZonePreference, readRegionalFormatPreference, readRelativeTimestampsPreference, readThemePreference } from "../utils/format";
 import { readStoredDemoMode, writeStoredDemoMode } from "./appConfig";
+import { contrastStorageKey, readContrast, readTranslucency, translucencyStorageKey } from "../features/settings/appearancePreferences";
 import {
   clearStoredCommandHistory,
   consoleFontSizeStorageKey,
@@ -25,6 +26,8 @@ function writePreference(key: string, value: string) {
 
 export function usePreferencesState() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
+  const [translucency, setTranslucency] = useState(() => readTranslucency());
+  const [contrast, setContrast] = useState(() => readContrast());
   const [demoMode, setDemoMode] = useState(() => readStoredDemoMode());
   const [regionalFormatPreference, setRegionalFormatPreference] = useState<RegionalFormatPreference>(() => readRegionalFormatPreference());
   const [displayTimeZonePreference, setDisplayTimeZonePreference] = useState<DisplayTimeZonePreference>(() => readDisplayTimeZonePreference());
@@ -57,6 +60,14 @@ export function usePreferencesState() {
   useEffect(() => {
     writePreference("serversentinel-theme", themePreference);
   }, [themePreference]);
+
+  useEffect(() => {
+    writePreference(translucencyStorageKey, String(translucency));
+  }, [translucency]);
+
+  useEffect(() => {
+    writePreference(contrastStorageKey, String(contrast));
+  }, [contrast]);
 
   useEffect(() => {
     writePreference("serversentinel-regional-format", regionalFormatPreference);
@@ -94,6 +105,10 @@ export function usePreferencesState() {
   return {
     themePreference,
     setThemePreference,
+    translucency,
+    setTranslucency,
+    contrast,
+    setContrast,
     demoMode,
     setDemoMode,
     regionalFormatPreference,

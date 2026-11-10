@@ -492,7 +492,7 @@ export function SchedulePage({
       )}
 
       <div className="scheduleWorkspaceGrid">
-        <Surface material="glass" density="flush" className="scheduleTableCard">
+        <Surface density="flush" className="scheduleTableCard">
           <PanelHeader
             className="scheduleCardHeader"
             title={<><span className="scheduleSectionIcon" aria-hidden="true"><CalendarClock /></span>Configured schedules</>}

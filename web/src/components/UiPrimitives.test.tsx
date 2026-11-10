@@ -5,17 +5,16 @@ import { Banner, Button, FormField, HelpTooltip, MetricTile, PanelHeader, Surfac
 
 describe("UI primitives", () => {
   it("renders surfaces with semantic element, density, and tone contracts", () => {
-    const html = renderToStaticMarkup(<Surface as="aside" density="compact" tone="subtle" material="glass">Details</Surface>);
+    const html = renderToStaticMarkup(<Surface as="aside" density="compact" tone="subtle">Details</Surface>);
     expect(html).toContain("<aside");
     expect(html).toContain("uiSurface--compact");
     expect(html).toContain("uiSurface--subtle");
-    expect(html).toContain("uiSurface--glass");
-    expect(html).toContain("uiGlassSurface");
   });
 
-  it("supports opaque surfaces and forwards the semantic element ref", () => {
+  it("renders page surfaces flat and forwards the semantic element ref", () => {
     const html = renderToStaticMarkup(<Surface>Data</Surface>);
-    expect(html).toContain("uiSurface--solid");
+    expect(html).toContain('class="uiSurface uiSurface--default uiSurface--default"');
+    // Glass is reserved for layers that float above the page, never a page surface.
     expect(html).not.toContain("uiGlassSurface");
 
     const ref = createRef<HTMLElement>();

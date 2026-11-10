@@ -62,21 +62,8 @@ try {
       await nav.evaluate(element => element.blur());
       const beforeHover = await nav.boundingBox();
       await nav.hover();
-      assert.equal(await nav.evaluate(element => getComputedStyle(element, "::after").animationName), "sentinelNavGlint", `${label}: hover shines`);
-      assert(await nav.evaluate(element => parseFloat(getComputedStyle(element, "::after").animationDuration) > 0.1), `${label}: shine has a visible duration`);
-      // A busy CI runner can resume after the entire short shine has finished.
-      // Inspect its painted phase through the browser's real CSS animation clock.
-      assert(await nav.evaluate(async element => {
-        const animation = element.getAnimations({ subtree: true }).find(animation => animation.animationName === "sentinelNavGlint");
-        if (!animation) return false;
-        await animation.ready;
-        animation.pause();
-        animation.currentTime = Number(animation.effect.getTiming().duration) * 0.32;
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const painted = Number(getComputedStyle(element, "::after").opacity) > 0;
-        animation.play();
-        return painted;
-      }), `${label}: shine paints`);
+      // Hover answers with a neutral fill and a small icon nudge; no decorative sheen sweeps the row.
+      assert.equal(await nav.evaluate(element => getComputedStyle(element, "::after").animationName), "none", `${label}: hover adds no sheen`);
       const afterHover = await nav.boundingBox();
       for (const dimension of ["x", "y", "width", "height"]) assert(Math.abs(afterHover[dimension] - beforeHover[dimension]) < 1, `${label}: hover preserves ${dimension}`);
       assert.notEqual(await nav.locator(".sideIcon").evaluate(element => getComputedStyle(element).transform), "none", `${label}: icon responds to hover`);
@@ -84,13 +71,13 @@ try {
       await nav.focus();
       await page.keyboard.press("Tab");
       await page.keyboard.press("Shift+Tab");
-      assert.equal(await nav.evaluate(element => getComputedStyle(element, "::after").animationName), "sentinelNavGlint", `${label}: focus shines`);
+      assert.equal(await nav.evaluate(element => getComputedStyle(element, "::after").animationName), "none", `${label}: focus adds no sheen`);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${label}: no horizontal overflow`);
     }
     assert.deepEqual(errors, []);
     await context.close();
   }
-  console.log("Micro-motion smoke passed: reduced motion and live preference changes, light/dark, desktop/phone, looping loaders, hover/focus shine, and stable layout.");
+  console.log("Micro-motion smoke passed: reduced motion and live preference changes, light/dark, desktop/phone, looping loaders, quiet hover/focus without a sheen, and stable layout.");
 } finally {
   await browser?.close();
   await harness.stop();

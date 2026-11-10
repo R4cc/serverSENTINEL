@@ -25,9 +25,9 @@
 }
 
 .playerSummaryGrid .uiMetricTile {
-  background: var(--glass-tint-soft);
-  border-color: var(--glass-edge);
-  box-shadow: var(--glass-highlight);
+  background: var(--fill-subtle);
+  border-color: var(--surface-border);
+  box-shadow: none;
 }
 
 .playerSummarySkeleton {
@@ -74,10 +74,10 @@
   flex: 0 0 32px;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
-  box-shadow: var(--glass-highlight);
+  background: var(--fill-subtle);
+  box-shadow: none;
   color: var(--sentinel-accent-strong);
 }
 
@@ -86,13 +86,11 @@
   height: 17px;
 }
 
-.playerRosterCard.uiGlassSurface,
-.playerGeographyCard.uiGlassSurface {
-  background: var(--glass-tint);
-  border-color: var(--glass-edge);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+.playerRosterCard.uiSurface,
+.playerGeographyCard.uiSurface {
+  background: var(--panel-surface);
+  border-color: var(--surface-border);
+  box-shadow: var(--panel-shadow);
 }
 
 .playerRegionCard,
@@ -108,7 +106,7 @@
 }
 
 .playerRosterTable tbody tr:hover {
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .playerCardNote {
@@ -288,12 +286,12 @@ button.playerMapMarker:hover:not(:disabled) {
   left: var(--space-3);
   display: grid;
   overflow: hidden;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-menu);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  -webkit-backdrop-filter: var(--glass-filter-floating);
-  backdrop-filter: var(--glass-filter-floating);
+  background: var(--glass-surface-menu);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 
 .playerMapControlButton {
@@ -796,8 +794,8 @@ button.playerMapServer--stopped:hover:not(:disabled) {
 }
 
 .playerLocationForm > .uiButton {
-  height: 44px;
-  min-height: 44px;
+  height: var(--control-input-height);
+  min-height: var(--control-input-height);
 }
 
 .playerLocationDisclosure {
@@ -811,7 +809,7 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   justify-content: space-between;
   border-color: var(--border-row);
   padding: var(--space-2) var(--space-3);
-  background: color-mix(in srgb, var(--surface-raised) 84%, var(--glass-tint-soft));
+  background: color-mix(in srgb, var(--surface-raised) 84%, var(--fill-subtle));
   color: var(--text);
   text-align: left;
 }
@@ -949,7 +947,6 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   font-size: var(--type-badge-size);
   font-weight: var(--weight-meta);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
 }
 
 .playerIdentity {
@@ -1067,13 +1064,13 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   z-index: 60;
   width: max-content;
   max-width: min(320px, calc(100vw - 48px));
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
-  background: var(--glass-tint-menu);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  -webkit-backdrop-filter: var(--glass-filter-floating);
-  backdrop-filter: var(--glass-filter-floating);
+  background: var(--glass-surface-menu);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   color: var(--text);
   font-size: 12px;
   font-weight: var(--weight-strong);
@@ -1271,11 +1268,11 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   left: 50%;
   bottom: min(calc(var(--player-activity-height) + 7px), calc(100% - 28px));
   z-index: 1;
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-sm);
   padding: 3px 6px;
-  background: var(--glass-tint-menu);
-  box-shadow: var(--glass-highlight), var(--shadow-xs);
+  background: var(--glass-surface-menu);
+  box-shadow: var(--shadow-xs);
   display: grid;
   gap: 1px;
   color: var(--text);
@@ -1506,7 +1503,6 @@ button.playerMapServer--stopped:hover:not(:disabled) {
     font-size: var(--type-badge-size);
     font-weight: var(--weight-meta);
     letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
   }
 }
 
@@ -1546,15 +1542,5 @@ button.playerMapServer--stopped:hover:not(:disabled) {
 
   .playerActivityBars {
     height: 96px;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .playerSummaryGrid .uiMetricTile { background: var(--surface-raised); }
-  .playerRosterCard.uiGlassSurface,
-  .playerGeographyCard.uiGlassSurface {
-    background: var(--surface-raised);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 }

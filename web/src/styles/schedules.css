@@ -42,10 +42,10 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
-  box-shadow: var(--glass-highlight);
+  background: var(--fill-subtle);
+  box-shadow: none;
   color: var(--sentinel-accent-strong);
 }
 .scheduleSectionIcon svg,
@@ -73,8 +73,8 @@
   align-content: start;
 }
 
-.scheduleTableCard.uiGlassSurface { background: var(--glass-tint); border-color: var(--glass-edge); box-shadow: var(--glass-highlight), var(--glass-shadow-panel); -webkit-backdrop-filter: var(--glass-filter-panel); backdrop-filter: var(--glass-filter-panel); }
-.scheduleWorkspaceGrid > .scheduledRunsCard { background: transparent; box-shadow: none; border-radius: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.scheduleTableCard.uiSurface { background: var(--panel-surface); border-color: var(--surface-border); box-shadow: var(--panel-shadow); }
+.scheduleWorkspaceGrid > .scheduledRunsCard { background: transparent; box-shadow: none; border-radius: 0; }
 
 .scheduleWorkspaceGrid > .scheduleTableCard,
 .scheduleWorkspaceGrid > .scheduledRunsCard {
@@ -118,7 +118,7 @@
   flex: 0 0 auto;
   padding: var(--space-2) var(--space-5);
   border-bottom: var(--border-subtle) solid var(--border-row);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .scheduleTableBody {
@@ -153,7 +153,7 @@
 .scheduleTableRow:hover,
 .scheduleTableRow:focus-within {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 /* Both are focused programmatically when the Overview links into a schedule or a
@@ -172,7 +172,7 @@
 
 .scheduleTableRow.disabled .scheduleNameValue strong { color: var(--text-muted); }
 .scheduleNameCell { display: flex; align-items: center; gap: var(--space-3); }
-.scheduleRowIcon { display: grid; flex: 0 0 32px; width: 32px; height: 32px; place-items: center; color: var(--text-soft); background: var(--glass-tint-soft); border: 1px solid var(--border-row); border-radius: var(--radius-sm); }
+.scheduleRowIcon { display: grid; flex: 0 0 32px; width: 32px; height: 32px; place-items: center; color: var(--text-soft); background: var(--fill-subtle); border: 1px solid var(--border-row); border-radius: var(--radius-sm); }
 .scheduleRowIcon svg { width: 16px; height: 16px; }
 .scheduleRowIcon.active { color: var(--sentinel-info); border-color: color-mix(in srgb, var(--sentinel-info) 35%, var(--border-row)); }
 .scheduleNameValue { flex: 1; }
@@ -346,7 +346,7 @@
 .scheduledRunItem:hover,
 .scheduledRunItem:focus-within {
   border-color: color-mix(in srgb, var(--accent) 24%, var(--border-row));
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .scheduledRunItem.active,
@@ -360,7 +360,7 @@
   display: grid;
   place-items: center;
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
   color: var(--text-soft);
 }
 
@@ -1036,10 +1036,10 @@
      runs straight out of the card and across its neighbours. */
   grid-template-columns: minmax(0, 1fr);
   gap: 2px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
-  box-shadow: var(--glass-highlight);
+  background: var(--fill-subtle);
+  box-shadow: none;
   text-align: left;
   /* Buttons inherit nowrap here, and this one holds a sentence. */
   white-space: normal;
@@ -1255,7 +1255,7 @@
 }
 
 .scheduleOptionsSection .scheduleOptionToggle {
-  min-height: 44px;
+  min-height: var(--control-input-height);
   padding: var(--space-2) 0;
   background: transparent;
   border: 0;
@@ -1333,12 +1333,12 @@
 .scheduleOptionToggle:hover,
 .scheduleOptionToggle:focus-within {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--border-row));
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .scheduleOptionToggle:has(input:checked) {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border-row));
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .scheduleEditFieldset:disabled .scheduleOptionToggle {
@@ -1386,7 +1386,7 @@
 }
 
 .scheduleEnabledOption {
-  min-height: 44px;
+  min-height: var(--control-input-height);
 }
 
 /* Responsive schedules --------------------------------------------------- */
@@ -1520,7 +1520,6 @@
     font-size: var(--type-badge-size);
     font-weight: var(--weight-meta);
     letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
   }
 
   .scheduleCell[data-label="Schedule"] .scheduleCellValue {
@@ -1715,11 +1714,6 @@
     min-height: 44px;
   }
 }
-
-@media (prefers-reduced-transparency: reduce) {
-  .scheduleTableCard.uiGlassSurface { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
-}
-
 /* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
 
 @media (max-width: 1100px) {

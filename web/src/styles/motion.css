@@ -1,9 +1,8 @@
 /* Lightweight motion language. Loaded last so interaction polish stays intentional. */
 
-/* Glass materials ------------------------------------------------------- */
-/* A pane of glass is an object, so it arrives and leaves like one: it grows
-   into place from just under its final size while its blur resolves, rather
-   than being switched on. Anchoring the transform to the edge the surface hangs
+/* Floating layers -------------------------------------------------------- */
+/* A menu or dialog is an object, so it arrives and leaves like one: it grows
+   into place from just under its final size rather than being switched on. Anchoring the transform to the edge the surface hangs
    off keeps the growth reading as the pane unfolding from its trigger instead
    of inflating from thin air. */
 /* `backwards`, never `both`: a fill-mode that leaves `transform: scale(1)`
@@ -34,7 +33,7 @@
   animation-name: sentinelScrimSettle;
 }
 
-/* Tint and rim carry the hover and press response for glass, because the shell
+/* Tint and border carry the hover and press response, because the shell
    deliberately holds still -- nothing here translates or lifts. */
 .uiSurface,
 .panel,
@@ -46,10 +45,6 @@
     background var(--motion-duration-base) var(--motion-ease-standard),
     border-color var(--motion-duration-base) var(--motion-ease-standard),
     box-shadow var(--motion-duration-base) var(--motion-ease-standard);
-}
-
-.uiGlassSurface::after {
-  transition: opacity var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .restartRequirementTooltip {
@@ -163,29 +158,11 @@
 
 .sideNav button .sideIcon {
   transform-origin: center;
-  transition: transform var(--motion-duration-base) var(--motion-ease-spring), filter var(--motion-duration-base) ease;
+  transition: transform var(--motion-duration-base) var(--motion-ease-spring);
 }
 
 .sideNav button:hover:not(:disabled) .sideIcon {
   transform: translateX(2px) scale(1.04);
-}
-
-.sideNav button.active .sideIcon {
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 55%, transparent));
-}
-
-.sideNav button.active::after,
-.sideNav button:hover:not(:disabled)::after,
-.sideNav button:focus-visible:not(:disabled)::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: inherit;
-  background: linear-gradient(105deg, transparent 20%, rgb(255 255 255 / 0.22) 43%, transparent 66%);
-  opacity: 0;
-  transform: translateX(-65%);
-  animation: sentinelNavGlint var(--motion-duration-slow) var(--motion-ease-standard) both;
-  pointer-events: none;
 }
 
 /* Decorative server cube ----------------------------------------------- */
@@ -233,12 +210,6 @@
   0% { transform: scale(1); }
   38% { transform: translateY(-2px) scale(1.1); }
   100% { transform: scale(1); }
-}
-
-@keyframes sentinelNavGlint {
-  0% { opacity: 0; transform: translateX(-65%); }
-  32% { opacity: 0.7; }
-  100% { opacity: 0; transform: translateX(65%); }
 }
 
 @keyframes sentinelSuccessToast {

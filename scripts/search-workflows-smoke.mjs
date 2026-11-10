@@ -45,7 +45,8 @@ try {
     assert.equal(await rosterSearch.inputValue(), '');
     assert((await page.locator('.playerRosterTable .playerIdentityCopy strong').count()) > 1);
     const headingSize = await page.locator('.workspaceHeader h2').evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
-    assert(headingSize >= 24 && headingSize <= 30, `Heading size ${headingSize} at ${width}`);
+    // The page title is one fixed size: larger than a section title, never display-sized.
+    assert(headingSize >= 20 && headingSize <= 24, `Heading size ${headingSize} at ${width}`);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     assert.equal(overflow, false, `Document overflow at ${width}`);
     await context.close();

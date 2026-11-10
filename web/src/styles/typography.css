@@ -1,17 +1,5 @@
 /* Canonical typography scale */
 
-
-
-
-
-
-
-
-
-
-
-
-
 body {
   font-size: var(--type-body-size);
   font-weight: var(--weight-body);
@@ -59,8 +47,7 @@ strong {
 
 button,
 .runtimeControlButton,
-.fileNameCell,
-.accountLogoutButton {
+.fileNameCell {
   font-size: var(--type-button-size);
   font-weight: var(--weight-button);
   letter-spacing: var(--tracking-ui);
@@ -88,56 +75,12 @@ textarea:not(.xterm-helper-textarea),
   letter-spacing: 0;
 }
 
-.brandBlock h1,
 .authPanel h1 {
   font-size: var(--type-brand-size);
   font-weight: var(--weight-title);
   letter-spacing: 0;
   line-height: 1.15;
   text-transform: none;
-}
-
-.brandBlock p {
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: 0;
-  line-height: 1.35;
-  text-transform: none;
-}
-
-.sideNav button {
-  min-height: 44px;
-}
-
-.navLabel,
-.settingsNavLabel,
-.accountName {
-  color: inherit;
-  font-size: 13px;
-  font-weight: var(--weight-meta);
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.settingsVersionText {
-  color: var(--text-muted);
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-meta);
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.sideNav button.active .navLabel {
-  font-weight: var(--weight-strong);
-}
-
-.sideNav small {
-  color: currentColor;
-  font-size: var(--type-meta-size);
-  font-weight: var(--weight-body);
-  line-height: 1.35;
 }
 
 .workspaceHeader {
@@ -212,7 +155,6 @@ textarea:not(.xterm-helper-textarea),
   color: var(--text-muted);
   font-weight: var(--weight-body);
 }
-
 
 .emptyInline,
 .emptyInline span,
@@ -337,7 +279,6 @@ textarea:not(.xterm-helper-textarea),
   font-size: 12px;
   letter-spacing: normal;
 }
-
 
 .selectionSummary {
   color: var(--text-muted);

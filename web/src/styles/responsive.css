@@ -24,15 +24,12 @@
   .sidebar {
     width: 100% !important;
     transition: none !important;
-    padding: var(--space-4) !important;
     border-right: 0;
-    border-bottom: var(--border-heavy) solid var(--border);
   }
 
   .brandBlock,
   .sidebarCollapsed .brandBlock {
     height: auto !important;
-    padding-bottom: var(--space-4) !important;
   }
 
   .brandLockup,
@@ -50,43 +47,12 @@
     visibility: visible !important;
   }
 
-  .sidebarCollapsed .brandBlock h1,
-.sidebarCollapsed .brandBlock p,
-.sidebarCollapsed .navLabel,
-.sidebarCollapsed .accountName,
-.sidebarCollapsed .accountLogoutButton,
-.sidebarCollapsed .settingsVersionText {
+  /* On the compact shell a collapsed rail is the closed top bar: its pages are
+     hidden, but the brand stays whole. */
+  .sidebarCollapsed .brandBlock h1 {
     opacity: 1 !important;
     max-width: none !important;
     visibility: visible !important;
-  }
-
-  .sidebarCollapsed .brandBlock {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-
-  .sidebarCollapsed .sideNav button {
-    padding: 10px 12px;
-    gap: var(--space-3) !important;
-  }
-
-  .sidebarCollapsed .accountChip {
-    grid-template-columns: 34px minmax(0, 1fr) 34px;
-    justify-content: flex-start;
-    gap: var(--space-2) !important;
-    padding: var(--space-1);
-  }
-
-  .sidebarCollapsed .accountLogoutButton {
-    display: flex;
-    opacity: 1 !important;
-    max-width: 34px !important;
-    min-width: 34px !important;
-    visibility: visible !important;
-    padding: 0 !important;
-    border-width: var(--border-strong) !important;
-    margin: 0 !important;
   }
 
   .workspaceHeader {
@@ -134,7 +100,6 @@
   .sidebar {
     padding: var(--space-3);
   }
-
 
   .workspaceActions {
     align-items: stretch;
@@ -261,7 +226,7 @@
 
 button,
 .runtimeControlButton {
-  min-height: 42px;
+  min-height: var(--control-height-default);
 }
 
 .iconButton,
@@ -272,26 +237,8 @@ button,
   flex: 0 0 auto;
 }
 
-button:disabled,
-.sideNav button:disabled {
+button:disabled {
   filter: grayscale(0.2);
-}
-
-.sideNav button:disabled {
-  color: var(--text-soft);
-}
-
-.sideNav button:not(.active):hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--sentinel-accent-soft);
-  color: var(--text);
-  transform: none;
-}
-
-.accountName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .inlineState {
@@ -335,13 +282,13 @@ button:disabled,
 
 .panel,
 .modalPanel {
-  background: var(--glass-tint);
-  border: var(--border-subtle) solid var(--glass-edge);
+  background: var(--panel-surface);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  box-shadow: var(--panel-shadow);
 }
 
-.modalPanel { background: var(--glass-tint-strong); border-radius: var(--radius-lg); }
+.modalPanel { background: var(--glass-surface); border-radius: var(--radius-lg); }
 
 .modalHeader {
   min-width: 0;
@@ -360,7 +307,6 @@ button:disabled,
 .appForm {
   min-width: 0;
 }
-
 
 .appForm label input,
 .appForm label select,
@@ -451,85 +397,6 @@ button:disabled,
   border-color: var(--sentinel-danger);
   color: var(--swiss-white);
 }
-
-/* Surface and interaction hierarchy */
-/* The rail is the app's largest pane of glass. It is tinted from the navy
-   sidebar colour rather than from the shared white tint, but the material is
-   the same one `primitives.css` defines -- the rim, blur and shadow all come
-   from `uiGlassSurface--chrome`, and only the tint is restated here. */
-.sidebar {
-  border-right: var(--border-subtle) solid color-mix(in srgb, var(--sidebar-foreground) 16%, var(--sidebar-background));
-  background: color-mix(in srgb, var(--sidebar-background) 78%, transparent);
-  color: var(--sidebar-foreground);
-}
-
-.themeDark .sidebar {
-  background: color-mix(in srgb, var(--sidebar-background) 80%, transparent);
-}
-
-.sidebar::after {
-  /* The rail meets the workspace on one edge only, so it lights that edge
-     instead of tracing a ring that its own overflow would clip. Note this
-     replaces the gradient but not the geometry: the ring in `primitives.css` is
-     made by `padding: 1px` plus `mask-composite: exclude`, so the band still
-     runs the full perimeter and this only decides how brightly it paints. */
-  background: linear-gradient(180deg, var(--glass-rim-top) 0%, transparent 42%);
-}
-
-/* Above the compact breakpoint the rail is the app's one navy pane
-   (`--sidebar-background` stays at its token value; only the compact shell
-   below re-points it at `--surface`). The shared rim is tuned for white glass
-   -- `--glass-rim-top` is 92% white in the light theme -- so on navy that
-   perimeter band stops reading as a specular edge and reads as a hard white
-   border. Both the ring and the inset highlight are therefore restated from the
-   rail's own foreground at rim strength: the pane keeps its lit top edge and
-   its bloom, and loses the outline. The compact shell keeps the shared values,
-   where they sit on a light surface and behave as designed. */
-@media (min-width: 1101px) {
-  .sidebar::after {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--sidebar-foreground) 14%, transparent) 0%, transparent 42%);
-  }
-
-  .sidebar {
-    /* The last layer covers the viewport exposed above the sticky rail during
-       elastic overscroll. */
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 16%, transparent),
-      inset 0 8px 16px -14px color-mix(in srgb, var(--sidebar-foreground) 24%, transparent),
-      var(--glass-shadow-chrome),
-      0 -100vh 0 var(--sidebar-background);
-  }
-}
-
-.sidebar .brandBlock,
-.sidebar .accountChip {
-  color: var(--sidebar-foreground);
-}
-
-.sidebar .brandBlock h1 {
-  color: var(--sidebar-foreground);
-}
-
-.sidebar .sideNav button {
-  color: var(--sidebar-foreground-muted);
-}
-
-.sidebar .sideNav button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
-  color: var(--sidebar-foreground);
-}
-
-.sidebar .accountChip {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sidebar-foreground) 5%, transparent);
-}
-
-.sidebar .sidebarDivider {
-  background-color: color-mix(in srgb, var(--sidebar-foreground) 14%, transparent);
-}
-
-/* Sidebar-specific states need to remain legible against its navy surface. */
 
 /* Phone layouts use a single visual viewport and a single active scroll owner. */
 @media (max-width: 720px) {
@@ -764,321 +631,25 @@ button:disabled,
   }
 }
 
-/* The active server is the parent heading for its workspace navigation. */
-.serverNavigationGroup,
-.serverSwitcher,
-.serverSwitcherAction {
-  width: 100%;
-  min-width: 0;
-}
-
-.serverNavigationGroup {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.serverSwitcherAction {
-  display: block;
-}
-
-.sidebar .serverSwitcherTrigger {
-  width: 100%;
-  min-width: 0;
-  height: auto;
-  min-height: 68px;
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) 18px;
-  gap: 10px;
-  align-items: center;
-  justify-content: stretch;
-  padding: 10px var(--space-3);
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 20%, transparent);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sidebar-foreground) 7%, transparent);
-  color: var(--sidebar-foreground);
-  text-align: left;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
-}
-
-.sidebar .serverSwitcherTrigger:hover:not(:disabled),
-.sidebar .serverSwitcherTrigger[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--sidebar-foreground));
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--sidebar-foreground);
-  transform: none;
-}
-
-/* Disabled here means "no server exists yet", which is a state the visitor is
-   meant to read, not squint at. The shared 38% dim leaves "Select a server"
-   barely legible on the navy rail, so the trigger keeps its contrast and
-   signals unavailability with a dashed rim instead. */
-.sidebar .serverSwitcherTrigger:disabled {
-  opacity: 1;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
-  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
-  color: var(--sidebar-foreground-muted);
-}
-
-.serverSwitcherStatus,
-.serverSwitcherOptionDot {
-  display: block;
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--text-soft);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-soft) 13%, transparent);
-}
-
-.serverSwitcherStatus.running,
-.serverSwitcherOptionDot.running {
-  background: var(--sentinel-success);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-success) 14%, transparent);
-}
-
-.serverSwitcherStatus.starting,
-.serverSwitcherOptionDot.starting,
-.serverSwitcherStatus.warning,
-.serverSwitcherOptionDot.warning {
-  background: var(--sentinel-warning);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-warning) 14%, transparent);
-}
-
-.serverSwitcherStatus.stopped,
-.serverSwitcherStatus.exited,
-.serverSwitcherOptionDot.stopped,
-.serverSwitcherOptionDot.exited {
-  background: var(--sentinel-danger);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-danger) 13%, transparent);
-}
-
-.serverSwitcherCopy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.serverSwitcherCopy small {
-  color: color-mix(in srgb, var(--sidebar-foreground) 74%, transparent);
-  font-size: 9px;
-  font-weight: var(--weight-title);
-  letter-spacing: 0.09em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.serverSwitcherCopy strong {
-  overflow: hidden;
-  color: var(--sidebar-foreground);
-  font-size: 14px;
-  font-weight: var(--weight-heading);
-  letter-spacing: 0;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.serverSwitcherCopy > span {
-  overflow: hidden;
-  color: var(--sidebar-foreground-muted);
-  font-size: 11px;
-  font-weight: var(--weight-body);
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.serverSwitcherChevron {
-  width: 18px !important;
-  height: 18px !important;
-  fill: none !important;
-  transition: transform var(--motion-duration-base) var(--motion-ease-standard);
-}
-
-.serverSwitcherTrigger[aria-expanded="true"] .serverSwitcherChevron {
-  transform: rotate(180deg);
-}
-
-.sidebar .serverSwitcherMenu {
-  left: 0;
-  right: auto;
-  width: 100%;
-  min-width: 100%;
-  max-height: min(520px, calc(100dvh - 260px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  padding: 5px;
-  border-color: var(--glass-edge);
-  border-radius: var(--radius-md);
-  background: var(--glass-tint-menu);
-  color: var(--text);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-}
-
-.sidebar .serverSwitcherMenu .actionMenuItem {
-  min-height: 54px;
-  display: flex;
-  width: 100%;
-  padding: 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.sidebar .serverSwitcherMenu .actionMenuItem:hover:not(:disabled),
-.sidebar .serverSwitcherMenu .actionMenuItem:focus-visible {
-  background: var(--sentinel-accent-soft);
-  color: var(--text);
-}
-
-.sidebar .serverSwitcherMenu .actionMenuItem--active {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--text);
-}
-
-.serverSwitcherOption {
-  width: 100%;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.serverSwitcherOptionCopy {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.serverSwitcherOptionCopy strong,
-.serverSwitcherOptionCopy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.serverSwitcherOptionCopy strong {
-  color: inherit;
-  font-size: 12px;
-  font-weight: var(--weight-heading);
-}
-
-.serverSwitcherOptionCopy small {
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: var(--weight-body);
-}
-
-.serverSwitcherCurrent {
-  padding: 3px 6px;
-  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--sentinel-accent-strong);
-  font-size: 9px;
-  font-weight: var(--weight-title);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.serverSubNav {
-  display: grid;
-  gap: 3px;
-  margin-left: 10px;
-  padding-left: 8px;
-  border-left: 1px solid color-mix(in srgb, var(--sidebar-foreground) 15%, transparent);
-}
-
-.serverSubNav .sideIcon {
-  opacity: 0.86;
-}
-
-.sidebarCollapsed .serverSwitcher {
-  display: none;
-}
-
-.sidebarCollapsed .serverNavigationGroup {
-  gap: 0;
-}
-
-.sidebarCollapsed .serverSubNav {
-  margin-left: 0;
-  padding-left: 0;
-  border-left: 0;
-}
-
-.brandBlock,
 .workspaceHeader,
 .modalHeader {
   border-color: var(--border-row);
 }
 
+/* The page title stands on its own; the panels below it carry the structure. */
 .workspaceHeader {
-  border-bottom-width: var(--border-heavy);
-  border-color: var(--border-panel);
+  border-bottom: 0;
 }
 
 .brandLogo,
-.serverStripIcon,
-.accountIcon {
+.serverStripIcon {
   border-color: var(--border-muted);
-}
-
-.sideNav {
-  gap: 3px;
-}
-
-.sideNav button {
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: var(--radius-sm);
-}
-
-.sideNav button:hover:not(:disabled) {
-  border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 64%, transparent);
-  color: var(--text);
-  transform: none;
-}
-
-.sideNav button.active {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-row));
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-}
-
-.sideNav button.active {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.sideNav button.active:hover {
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 78%, var(--surface-raised));
-  color: var(--sentinel-accent-strong);
-}
-
-.accountChip {
-  border-color: var(--border-row);
-  background: color-mix(in srgb, var(--surface-raised) 72%, var(--surface-muted));
-}
-
-.sidebarDivider {
-  background-color: var(--border-row);
 }
 
 .panel,
 .modalPanel {
-  border-color: var(--glass-edge);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-}
-
-.themeDark .panel,
-.themeDark .modalPanel {
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  border-color: var(--surface-border);
+  box-shadow: var(--panel-shadow);
 }
 
 .panel .panel,
@@ -1097,8 +668,7 @@ select,
 textarea,
 .iconButton,
 .iconOnlyButton,
-.modalCloseButton,
-.accountLogoutButton {
+.modalCloseButton {
   border-color: var(--border-muted);
 }
 
@@ -1112,16 +682,14 @@ textarea:hover:not(:disabled),
 
 .iconButton,
 .iconOnlyButton,
-.modalCloseButton,
-.accountLogoutButton {
+.modalCloseButton {
   background: color-mix(in srgb, var(--surface-raised) 86%, var(--surface-muted));
   color: var(--text);
 }
 
 .iconButton:hover:not(:disabled),
 .iconOnlyButton:hover:not(:disabled),
-.modalCloseButton:hover:not(:disabled),
-.accountLogoutButton:hover:not(:disabled) {
+.modalCloseButton:hover:not(:disabled) {
   background: var(--sentinel-accent-soft);
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border-muted));
   color: var(--sentinel-accent-strong);
@@ -1170,12 +738,6 @@ textarea:hover:not(:disabled),
   background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface-raised));
 }
 
-.sideNav button:disabled {
-  border-color: transparent;
-  background: transparent;
-  opacity: 0.46;
-}
-
 .installTabs {
   border-color: var(--border-muted);
 }
@@ -1194,7 +756,6 @@ textarea:hover:not(:disabled),
     padding-bottom: var(--space-3);
     margin-bottom: 0;
   }
-
 
   .activeServerStrip {
     padding: var(--space-3);
@@ -1254,8 +815,13 @@ textarea:hover:not(:disabled),
     height: auto;
     padding: var(--space-3) !important;
     overflow: visible;
-    background: var(--glass-tint-strong);
-    box-shadow: var(--glass-highlight), var(--glass-shadow-chrome);
+    /* On compact screens the rail is a bar that the page scrolls beneath, so it
+       is one of the few surfaces that is glass. */
+    border-bottom: var(--border-subtle) solid var(--glass-border);
+    background: var(--glass-surface);
+    box-shadow: none;
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
   }
 
   .brandBlock,
@@ -1263,6 +829,7 @@ textarea:hover:not(:disabled),
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) var(--sidebar-rail-size) !important;
     align-items: center;
+    justify-items: stretch;
     width: 100%;
     padding: 0 !important;
     border: 0;
@@ -1280,7 +847,7 @@ textarea:hover:not(:disabled),
   .sidebarCollapsed .sideNavBottom {
     display: grid;
     width: 100%;
-    gap: var(--space-1);
+    gap: 2px;
     overflow: visible;
   }
 
@@ -1289,7 +856,7 @@ textarea:hover:not(:disabled),
     width: 100%;
     min-width: 0;
     justify-content: flex-start;
-    gap: var(--space-3) !important;
+    gap: 10px !important;
     padding-inline: var(--space-3);
   }
 
@@ -1323,33 +890,6 @@ textarea:hover:not(:disabled),
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
   }
-}
-
-/* Keep sidebar selections and account controls independent of page-theme surfaces. */
-.sidebar .sideNav button.active {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 58%, var(--accent));
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
-}
-
-.sidebar .sideNav button.active:hover {
-  background: color-mix(in srgb, var(--accent) 88%, var(--text));
-  color: var(--accent-contrast);
-}
-
-.sidebar .accountIcon {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
-  border-radius: var(--radius-sm);
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
-}
-
-.sidebar .sideNav button.active .settingsVersionText {
-  border-color: color-mix(in srgb, var(--accent-contrast) 22%, transparent);
-  background: color-mix(in srgb, var(--accent-contrast) 12%, transparent);
-  color: var(--accent-contrast);
 }
 
 /* These cascade last because the compact tablet shell is declared after the feature breakpoints. */
@@ -1525,8 +1065,6 @@ textarea:hover:not(:disabled),
     white-space: nowrap;
   }
 
-  .brandBlock p,
-  .sideNav small,
   .settingsVersionText {
     display: none;
   }
@@ -1552,19 +1090,4 @@ textarea:hover:not(:disabled),
   .sidebarCollapsed .brandLockup > div {
     display: none !important;
   }
-}
-
-/* Navigation press feedback. The rail cancels the shell's lift on hover, which
-   also removed the only press response these buttons had, so the tint deepens
-   on the way down instead. */
-.sideNav button:active:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface-raised));
-}
-
-.sidebar .sideNav button:active:not(:disabled) {
-  background: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
-}
-
-.sidebar .sideNav button.active:active {
-  background: color-mix(in srgb, var(--accent) 78%, var(--text));
 }

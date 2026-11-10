@@ -1,24 +1,28 @@
+/* The light theme is the token default in `tokens.css`; this sheet holds the
+   dark overrides. Both keep the same roles: a quiet canvas, panels one step
+   above it, hairline borders, and glass only on layers that float. */
 :root.themeDark,
 .appShell.themeDark {
   color-scheme: dark;
-  --surface: #1b1d22;
-  --surface-raised: #22252b;
-  --surface-muted: #2a2e36;
-  --app-background: #0c0f17;
-  --surface-read-only: #202329;
-  --sidebar-background: #050b17;
-  --sidebar-foreground: #f4f7ff;
-  --sidebar-foreground-muted: #aeb9cc;
-  --text: #e6e8ee;
-  --text-muted: #b8becb;
-  --text-soft: #9da6b5;
-  --border: #596170;
-  --border-muted: color-mix(in srgb, var(--border) 34%, var(--surface) 66%);
-  --border-panel: color-mix(in srgb, var(--border) 32%, var(--surface) 68%);
-  --border-row: color-mix(in srgb, var(--border) 20%, var(--surface) 80%);
+  --app-background: #09090b;
+  --surface: #0f0f11;
+  --surface-raised: #121214;
+  --surface-muted: #1c1c20;
+  --surface-read-only: #151518;
+  --surface-overlay: #17171a;
+  --sidebar-background: #0e0e10;
+  --sidebar-foreground: #ededf0;
+  --sidebar-foreground-muted-base: #a1a1aa;
+  --text: #ededf0;
+  --text-muted-base: #a8a8b1;
+  --text-soft-base: #8b8b95;
+  --border: #3f3f46;
+  --border-muted-base: #2e2e33;
+  --border-panel-base: #232327;
+  --border-row-base: #1c1c20;
   --sentinel-accent: #a5b4ff;
   --sentinel-accent-strong: #c8d2ff;
-  --sentinel-accent-soft: #272d44;
+  --sentinel-accent-soft: #1d2038;
   --sentinel-accent-muted: #6f7fca;
   --sentinel-success: #8dd6c3;
   --sentinel-info: #8fb4ff;
@@ -28,8 +32,8 @@
   --status-success-foreground: #8dd6c3;
   --status-warning-foreground: #f6c177;
   --status-danger-foreground: #ff8a8a;
-  --status-neutral-foreground: #b8becb;
-  --terminal-bg: #1d2027;
+  --status-neutral-foreground: #a8a8b1;
+  --terminal-bg: #0c0c0e;
   --terminal-text: #dfe3eb;
   --editor-comment: #8f97a6;
   --editor-keyword: #cfa8ff;
@@ -39,39 +43,28 @@
   --editor-punctuation: #c5cad6;
   --editor-heading: #f0f3f9;
   --editor-link: #b7c4ff;
-  --overlay: rgb(0 0 0 / 0.62);
+  --overlay: rgb(9 9 11 / 0.64);
   --accent-contrast: #09111f;
   /* The dark accent is a pale lavender: right for text and rings, but as a button fill it read as
      washed out beside the saturated danger buttons. Primary buttons take a deeper indigo. */
   --control-primary-fill: #4f58d8;
   --control-primary-text: #ffffff;
-  /* Dark glass is the same material lit from the same direction: the rim stays
-     bright, the tint goes dark and the luminance lift becomes a dip so a pane
-     over a bright chart does not glow. The outer ring is dark here rather than
-     cool, because the surrounding wash is darker than the pane. */
-  --glass-tint: rgb(26 30 40 / 0.6);
-  --glass-tint-strong: rgb(29 33 44 / 0.74);
-  --glass-tint-soft: rgb(35 39 51 / 0.46);
-  --glass-tint-menu: rgb(30 34 45 / 0.985);
-  --glass-border: rgb(255 255 255 / 0.14);
-  --control-secondary-edge: var(--glass-edge);
-  --glass-rim-top: rgb(255 255 255 / 0.2);
-  --glass-rim-side: rgb(255 255 255 / 0.08);
-  --glass-rim-base: rgb(255 255 255 / 0.06);
-  --glass-rim-bloom: rgb(255 255 255 / 0.14);
-  --glass-shadow:
-    0 0 0 0.5px rgb(0 0 0 / 0.5),
-    0 18px 46px -14px rgb(0 0 0 / 0.5),
-    0 3px 12px -4px rgb(0 0 0 / 0.34);
-  --glass-shadow-floating:
-    0 0 0 0.5px rgb(0 0 0 / 0.6),
-    0 28px 68px -18px rgb(0 0 0 / 0.62),
-    0 6px 18px -6px rgb(0 0 0 / 0.42);
-  --glass-brightness: 0.86;
-  --glass-saturation: 165%;
-  --solid-control-surface: rgb(25 28 37 / 0.9);
-  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.32);
+  --solid-control-surface: #18181b;
+  --fill-subtle: rgb(255 255 255 / 0.035);
+  --fill-hover: rgb(255 255 255 / 0.06);
+  --fill-selected: rgb(255 255 255 / 0.09);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-elevated: 0 18px 52px rgb(0 0 0 / 0.36);
+  /* A dark panel is already separated from the darker canvas by its own tone. */
+  --panel-shadow: 0 0 0 0 transparent;
+  /* Dark glass diffuses a little further and lifts saturation a little less: a
+     bright chart behind a dark pane would otherwise glow through it. The single
+     inset line is the only highlight, and it is there to define the top edge. */
+  --glass-blur: 16px;
+  --glass-saturation: 1.08;
+  --glass-border: rgb(255 255 255 / 0.08);
+  --glass-shadow-floating: inset 0 1px rgb(255 255 255 / 0.04), 0 16px 40px -12px rgb(0 0 0 / 0.7);
+  --glass-shadow-modal: inset 0 1px rgb(255 255 255 / 0.04), 0 24px 72px -20px rgb(0 0 0 / 0.9);
 }
 
 :root.themeDark {
@@ -81,64 +74,4 @@
 :root:not(.themeDark),
 .appShell.themeLight {
   color-scheme: light;
-  --control-secondary-edge: color-mix(in srgb, var(--border) 26%, var(--surface));
-  --sentinel-accent: #3d46d9;
-  --sentinel-accent-strong: #2933a3;
-  --sentinel-accent-soft: #dce3ff;
-  --sentinel-accent-muted: #97a6f6;
-  --sentinel-success: #087f70;
-  --sentinel-info: #1268c4;
-  --sentinel-warning: #a76508;
-  --sentinel-danger: #cf2848;
-  --status-success-foreground: #086858;
-  --status-warning-foreground: #855008;
-  --status-danger-foreground: #ae203f;
-  --status-neutral-foreground: #455575;
-  --surface: #f3f6ff;
-  --surface-raised: #f8faff;
-  --surface-muted: #dfe8fa;
-  --surface-read-only: #eaf0fc;
-  --app-background: #e7edf7;
-  --text: #142443;
-  --text-muted: #405273;
-  --text-soft: #526482;
-  --border: #355584;
-  --border-muted: color-mix(in srgb, var(--border) 27%, var(--surface));
-  --border-panel: color-mix(in srgb, var(--border) 22%, var(--surface));
-  --border-row: color-mix(in srgb, var(--border) 12%, var(--surface));
-  /* Cool optical glass keeps the ambient color visible without tinting menus
-     or input fields enough to compete with their content. */
-  --glass-tint: rgb(242 248 255 / 0.56);
-  --glass-tint-strong: rgb(240 246 255 / 0.72);
-  --glass-tint-soft: rgb(225 237 255 / 0.46);
-  --glass-tint-menu: rgb(246 249 255 / 0.985);
-  --glass-border: rgb(255 255 255 / 0.72);
-  --glass-rim-top: rgb(255 255 255 / 0.8);
-  --glass-rim-side: rgb(255 255 255 / 0.32);
-  --glass-rim-base: rgb(133 164 234 / 0.24);
-  --glass-shadow:
-    0 0 0 0.5px rgb(48 73 143 / 0.08),
-    0 16px 40px -14px rgb(52 73 153 / 0.16),
-    0 3px 10px -4px rgb(32 86 151 / 0.09);
-  --glass-shadow-floating:
-    0 0 0 0.5px rgb(48 73 143 / 0.14),
-    0 26px 60px -18px rgb(52 73 153 / 0.32),
-    0 6px 16px -6px rgb(32 86 151 / 0.18);
-  --glass-brightness: 1.02;
-  --solid-control-surface: rgb(249 252 255 / 0.9);
-}
-
-/* Broad pools of color refract through the existing glass surfaces. Keep the
-   wash fixed so scrolling does not create seams between short and long pages. */
-:root:not(.themeDark) body {
-  background-image:
-    radial-gradient(ellipse at 12% 8%, rgb(92 143 255 / 0.32), transparent 52%),
-    radial-gradient(ellipse at 96% 18%, rgb(86 213 225 / 0.29), transparent 48%),
-    radial-gradient(ellipse at 66% 96%, rgb(170 138 247 / 0.26), transparent 56%);
-}
-
-:root.themeDark body {
-  background-image:
-    radial-gradient(ellipse at 24% 8%, rgb(52 82 151 / 0.18), transparent 52%),
-    radial-gradient(ellipse at 92% 28%, rgb(100 75 153 / 0.12), transparent 54%);
 }

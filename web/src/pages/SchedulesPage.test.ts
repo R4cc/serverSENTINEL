@@ -162,7 +162,7 @@ describe("schedule workspace rendering", () => {
   it("keeps list controls and recent activity available on a locked workspace", () => {
     const html = renderSchedulePage([schedule([{ type: "command", command: "save-all", delaySeconds: 0 }])], { disabled: true });
 
-    expect(html).toContain('uiGlassSurface');
+    expect(html).toMatch(/class="uiSurface [^"]*scheduleTableCard/);
     expect(html).toContain('Search schedules</label>');
     expect(html).toContain('aria-label="Filter schedules"');
     expect(html).toContain('aria-label="Recent schedule activity"');

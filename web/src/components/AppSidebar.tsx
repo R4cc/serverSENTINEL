@@ -1,5 +1,5 @@
 import { useId, useMemo, useRef, type RefObject } from "react";
-import { ChevronDown, CircleUserRound, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogOut } from "lucide-react";
 import { demoServerId } from "../demoRuntime";
 import type { ActivePage, ManagedServer } from "../types";
 import { minecraftVersionInfo, versionValue } from "../utils/format";
@@ -8,7 +8,6 @@ import { ActionMenu } from "./ActionMenu";
 import { BrandLogo } from "./BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./FileTypeIcon";
 import { Button } from "./UiPrimitives";
-import { GlassEffect } from "./GlassEffect";
 
 export function AppSidebar({
   sidebarCollapsed,
@@ -109,23 +108,26 @@ export function AppSidebar({
     title: disabled ? disabledReason : label
   });
 
+  const displayedAccountName = demoMode ? "Demo" : accountName ?? "Account";
+  // The avatar is the account's initial: it identifies the account at a glance in the
+  // collapsed rail, where the name itself is hidden.
+  const accountInitial = displayedAccountName.trim().charAt(0).toUpperCase() || "?";
+
   const shellNavItem = (page: ActivePage, label: string) => navItem(page, isProvisioning, provisioningNavigationReason, label);
   const serverNavItem = (page: ActivePage, label: string) => navItem(page, isProvisioning || !activeServer, serverPageDisabledReason, label);
 
   return (
-    <aside className="sidebar uiGlassSurface uiGlassSurface--chrome" id="application-sidebar">
-      <GlassEffect variant="chrome" cornerRadius={0} />
+    <aside className="sidebar" id="application-sidebar">
       <div className="brandBlock">
         <div className="brandLockup">
           <BrandLogo />
           <div>
             <h1 className="sidebarBrandWordmark" aria-label="serverSENTINEL">
-              <span aria-hidden="true">server</span>
-              <span aria-hidden="true">SENTINEL</span>
+              <span aria-hidden="true">server</span><span aria-hidden="true">SENTINEL</span>
             </h1>
           </div>
         </div>
-        <Button ref={sidebarToggleRef} variant="secondary" iconOnly className="iconButton" onClick={onToggleCollapsed} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed} aria-controls="primary-navigation account-navigation" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
+        <Button ref={sidebarToggleRef} variant="ghost" iconOnly className="iconButton sidebarToggleButton" onClick={onToggleCollapsed} aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"} aria-expanded={!sidebarCollapsed} aria-controls="primary-navigation account-navigation" disabled={isProvisioning} title={isProvisioning ? provisioningNavigationReason : sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
           <SidebarToggleIcon collapsed={sidebarCollapsed} />
         </Button>
       </div>
@@ -136,8 +138,8 @@ export function AppSidebar({
           {nodeUpdatesDescription && <span className="sidebarNodeUpdateDot" title={nodeUpdatesDescription} aria-hidden="true" />}
         </button>
         {nodeUpdatesDescription && <span id={nodeUpdatesDescriptionId} className="srOnly">{nodeUpdatesDescription}</span>}
-        <div className="sidebarDivider" />
         <div className="serverNavigationGroup">
+          <span className="sidebarSectionLabel" aria-hidden="true">Server</span>
           <div className="serverSwitcher">
             <ActionMenu
               label={activeServer ? `Switch server. Current server: ${activeServer.displayName}` : "Select server"}
@@ -152,11 +154,10 @@ export function AppSidebar({
                 <>
                   <span className={`serverSwitcherStatus ${activeServer ? serverCommandTone : "unknown"}`} aria-hidden="true" />
                   <span className="serverSwitcherCopy">
-                    <small>Managed server</small>
                     <strong>{activeServer?.displayName ?? "Select a server"}</strong>
                     <span>{activeServer?.runtimeIssues?.length ? "Unresolved port conflict" : activeServer?.nodeName || (activeServer ? "Server workspace" : "Choose a workspace")}</span>
                   </span>
-                  <ChevronDown className="serverSwitcherChevron" strokeWidth={2.25} aria-hidden="true" />
+                  <ChevronsUpDown className="serverSwitcherChevron" strokeWidth={2} aria-hidden="true" />
                 </>
               )}
             />
@@ -208,10 +209,8 @@ export function AppSidebar({
           </span>
         </button>
         <div className="accountChip">
-          <span className="accountIcon" aria-hidden="true">
-            <CircleUserRound />
-          </span>
-          <span className="accountName" title={demoMode ? "Demo" : accountName}>{demoMode ? "Demo" : accountName ?? "Account"}</span>
+          <span className="accountIcon" aria-hidden="true">{accountInitial}</span>
+          <span className="accountName" title={displayedAccountName}>{displayedAccountName}</span>
           <Button variant="ghost" iconOnly className="accountLogoutButton" onClick={onLogout} disabled={isProvisioning} aria-label={demoMode ? "Exit demo" : "Log out"} title={isProvisioning ? provisioningNavigationReason : demoMode ? "Exit demo" : "Log out"}>
             <LogOut aria-hidden="true" />
           </Button>

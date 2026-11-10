@@ -2,7 +2,6 @@ import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { Button } from "./UiPrimitives";
 import { focusNextMenuItem } from "./menuFocus";
-import { GlassEffect } from "./GlassEffect";
 
 export type ActionMenuItem = {
   id: string;
@@ -126,7 +125,6 @@ export function ActionMenu({
   const menu = open && (
     <div ref={menuRef} id={menuId} className={`actionMenuPopover uiGlassSurface uiGlassSurface--floating actionMenuPopover--${align} ${portal ? "actionMenuPopover--portal" : ""} ${menuClassName}`.trim()} role="menu" aria-label={label} aria-describedby={note ? noteId : undefined}
       style={portal ? { position: "fixed", right: "auto", bottom: "auto", ...position } : undefined}>
-      <GlassEffect variant="floating" />
       {items.map((item, index) => (
         <Fragment key={item.id}>
           {item.separatorBefore && index > 0 && <div className="actionMenuSeparator" role="separator" />}
