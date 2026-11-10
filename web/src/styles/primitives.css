@@ -61,6 +61,19 @@
 
 a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
+/* A filled button that is unavailable drops its fill. Dimmed indigo or red read as
+   a lighter variant of a live button -- "Add node" looked enabled but broken -- so
+   a disabled primary or critical action becomes a plain neutral chip instead. */
+.uiButton--primary:disabled,
+.uiButton--primary[aria-disabled="true"],
+.uiButton--critical:disabled,
+.uiButton--critical[aria-disabled="true"] {
+  border-color: var(--border-muted);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  opacity: 1;
+}
+
 /* Busy is not disabled: the control keeps its label, its size and its focus,
    and only says that a request is in flight. */
 .uiButton[aria-busy="true"]:not(:disabled) { cursor: progress; }
@@ -140,13 +153,13 @@ input.uiRange { height: var(--ui-range-thumb-size); }
   height: 4px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--border-muted) var(--ui-range-progress));
+  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--control-off-edge) var(--ui-range-progress));
 }
 .uiRange::-moz-range-track {
   height: 4px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--border-muted) var(--ui-range-progress));
+  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--control-off-edge) var(--ui-range-progress));
 }
 .uiRange::-webkit-slider-thumb {
   width: var(--ui-range-thumb-size);

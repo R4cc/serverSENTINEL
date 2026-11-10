@@ -144,7 +144,7 @@
   width: 38px;
   height: 20px;
   background-color: var(--surface-muted);
-  border: var(--border-strong) solid var(--border);
+  border: var(--border-strong) solid var(--control-off-edge);
   border-radius: 999px;
   transition: all 200ms ease;
 }
@@ -156,14 +156,14 @@
   width: 12px;
   left: 3px;
   bottom: 3px;
-  background-color: var(--text-muted);
+  background-color: var(--control-off-edge);
   border-radius: 50%;
   transition: all 200ms ease;
 }
 
 .switch input:checked + .slider {
-  background-color: var(--accent);
-  border-color: var(--accent);
+  background-color: var(--control-on-fill);
+  border-color: var(--control-on-fill);
 }
 
 .switch input:checked + .slider::before {
@@ -176,8 +176,11 @@
   outline-offset: 2px;
 }
 
+/* A locked switch still shows its state: it keeps its colours and loses only
+   the pointer, so a row of enabled-but-locked mods does not read as switched off. */
+.switch:has(input:disabled) { cursor: not-allowed; }
 .switch input:disabled + .slider {
-  opacity: 0.5;
+  opacity: 0.72;
   cursor: not-allowed;
 }
 

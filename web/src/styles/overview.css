@@ -825,6 +825,39 @@ button.overviewCardRow:focus-visible {
   pointer-events: none;
 }
 
+/* The latest reading and the window average, in the gutter the band keeps so its
+   time axis lines up with the player lanes above. */
+.serverTimelineMetricBandSummary {
+  position: absolute;
+  z-index: 2;
+  top: 36px;
+  left: 18px;
+  display: grid;
+  gap: 2px;
+  /* Clear of the y-axis labels drawn at the gutter's right edge. */
+  max-width: calc(var(--timeline-label-gutter, 180px) - 76px);
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.serverTimelineMetricBandValue {
+  color: var(--text);
+  font-size: var(--type-metric-value-size, 20px);
+  font-weight: var(--weight-title);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.serverTimelineMetricBandSummary small {
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.serverTimelineMetricBand.is-compact .serverTimelineMetricBandSummary { top: 32px; }
+.serverTimelineMetricBand.is-compact .serverTimelineMetricBandValue { font-size: var(--type-row-title-size); }
+
 .serverTimelineMetricBandLabel.tone-cpu { color: var(--timeline-cpu); }
 .serverTimelineMetricBandLabel.tone-memory { color: var(--timeline-memory); }
 .serverTimelineMetricBandLabel.tone-network { color: var(--timeline-network-in); }

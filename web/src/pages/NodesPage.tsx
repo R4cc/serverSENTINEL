@@ -672,10 +672,11 @@ export function NodesPage({
                           <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
                             <span className="nodeServerRowIcon" aria-hidden="true"><Box /></span>
                             <span className="nodeServerRowName" title={server.displayName}>{server.displayName}</span>
-                            <span className={`nodeServerRowState ${state.toLowerCase()}`}>
+                            <span className={`nodeServerRowState ${state.toLowerCase()}`} title={`${state.charAt(0)}${state.slice(1).toLowerCase()}`}>
                               <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
-                              {/* The state is an uppercase token in data; it reads as a sentence-case word. */}
-                              {state.charAt(0)}{state.slice(1).toLowerCase()}
+                              {/* The state is an uppercase token in data; it reads as a sentence-case word. Running is
+                                  the normal case, so it is left to the green dot and only an exception is spelled out. */}
+                              <span className={state === "RUNNING" ? "srOnly" : undefined}>{state.charAt(0)}{state.slice(1).toLowerCase()}</span>
                             </span>
                             <span className={`nodeServerRowPlayers${snapshot?.state === "stale" ? " unknown" : ""}`} title={playerLabel === "-" ? "Player count unavailable" : `${playerLabel} players online${snapshot?.state === "stale" ? " (last verified snapshot)" : ""}`}>
                               {playerLabel !== "-" && <span className="nodePlayerIcon" aria-hidden="true"><Users /></span>}

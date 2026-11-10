@@ -496,7 +496,7 @@ export function SchedulePage({
           <PanelHeader
             className="scheduleCardHeader"
             title={<><span className="scheduleSectionIcon" aria-hidden="true"><CalendarClock /></span>Configured schedules</>}
-            actions={<StatusBadge>{schedules.length} {schedules.length === 1 ? "schedule" : "schedules"}</StatusBadge>}
+            actions={<span className="scheduleRunCount">{schedules.length} {schedules.length === 1 ? "schedule" : "schedules"}</span>}
           />
           <div className="scheduleListControls">
             <SearchField label="Search schedules" value={search} onChange={setSearch} />
@@ -725,8 +725,8 @@ export function SchedulePage({
                   <div className="scheduledRunTime">
                     <span>
                       {run.kind === "active"
-                        ? relativeTimestamps ? relativeTime(run.startedAt, relativeNow) : `Started ${formatScheduleTime(run.startedAt, formatDate)}`
-                        : relativeTimestamps ? relativeTime(run.ranAt, relativeNow) : formatScheduleTime(run.ranAt, formatDate)}
+                        ? relativeTimestamps ? `Started ${lastRunRelativeTime(run.startedAt, relativeNow).toLocaleLowerCase()}` : `Started ${formatScheduleTime(run.startedAt, formatDate)}`
+                        : relativeTimestamps ? lastRunRelativeTime(run.ranAt, relativeNow) : formatScheduleTime(run.ranAt, formatDate)}
                     </span>
                     {relativeTimestamps && <small>{run.kind === "active" ? `Started ${formatScheduleTime(run.startedAt, formatDate)}` : formatScheduleTime(run.ranAt, formatDate)}</small>}
                   </div>
@@ -1419,22 +1419,6 @@ export function nextRunRelativeTime(value: string, now = Date.now()) {
     minutes > 0 || (days === 0 && hours === 0) ? `${minutes}m` : ""
   ].filter(Boolean);
   return `in ${parts.join(" ")}`;
-}
-
-function relativeTime(value: string, now = Date.now()) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  const diffMs = date.getTime() - now;
-  const absMs = Math.abs(diffMs);
-  const minutes = Math.max(1, Math.round(absMs / 60_000));
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  const label = days > 0
-    ? `${days}d`
-    : hours > 0
-    ? `${Math.round(minutes / 60)}h`
-    : `${minutes}m`;
-  return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }
 
 function remainingDelayLabel(value: string) {

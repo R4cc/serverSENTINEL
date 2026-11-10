@@ -433,7 +433,7 @@ function rowChromeRenderItem(
     if (lane.kind === "group") {
       // A section rule rather than a filled band: the tinted full-width blocks read
       // as alerts and made the roster look busier than the metric bands beside it.
-      const groupFont = `600 9px ${palette.fontFamily}`;
+      const groupFont = `600 10px ${palette.fontFamily}`;
       const groupLabel = `${lane.label.toUpperCase()} · ${lane.count}`;
       const labelX = 22;
       const ruleStart = labelX + format.getTextRect(groupLabel, groupFont).width + 10;
@@ -600,13 +600,20 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
     const exactStart = item.startBoundary === "join" && rawStartX >= plotLeft && rawStartX <= plotRight;
     const exactEnd = (item.endBoundary === "leave" || item.endBoundary === "server-end") && rawEndX >= plotLeft && rawEndX <= plotRight;
     const open = item.endBoundary === "online" && rawEndX >= plotLeft && rawEndX <= plotRight;
-    const startLabel = exactStart ? item.fullStartLabel : null;
-    const endLabel = open || exactEnd ? item.fullEndLabel : null;
     const durationFont = `600 11px ${palette.fontFamily}`;
     const endpointFont = `11px ${palette.fontFamily}`;
     // Give neighboring sessions separate label space at long time ranges. Their
     // exact times remain in the chart description when a label cannot fit.
     const neighbors = adjacent.get(item);
+    // A session that starts where the previous one in its lane ended would print the same
+    // time twice, back to back ("04:54 PM04:54 PM"); the previous end label already says it.
+    const previousEndX = neighbors?.previous ? api.coord([neighbors.previous.visibleEnd, item.laneKey])[0] : undefined;
+    const continuesPrevious = previousEndX !== undefined
+      && startX - previousEndX < format.getTextRect(item.fullStartLabel ?? "", endpointFont).width + 16;
+    const startLabel = exactStart && !continuesPrevious ? item.fullStartLabel : null;
+    // An open session is not labelled "Now" on every row: the shared dashed guide marks the
+    // present, and the ring on the bar's end says the session is still running.
+    const endLabel = exactEnd && !open ? item.fullEndLabel : null;
     const labelLeft = neighbors?.previous
       ? Math.max(plotLeft, (api.coord([neighbors.previous.visibleEnd, item.laneKey])[0] + startX) / 2 + 4)
       : plotLeft;
@@ -830,16 +837,18 @@ export function buildPlayerTimelineChartOption({
         endValue: laneWindow.endKey,
         filterMode: "weakFilter",
         zoomLock: true,
-        right: 4,
+        right: 8,
         top: playerTimelineAxisHeight + 4,
         bottom: 4,
-        width: 12,
+        // A thin, quiet track: at 12px in the muted text colour the thumb read as a stray
+        // grey block at the edge of the chart rather than as a scroll position.
+        width: 5,
         showDataShadow: false,
         showDetail: false,
         brushSelect: false,
         borderColor: "transparent",
-        backgroundColor: palette.surface,
-        fillerColor: palette.textMuted,
+        backgroundColor: "transparent",
+        fillerColor: palette.border,
         handleSize: 0,
         moveHandleSize: 0
       }

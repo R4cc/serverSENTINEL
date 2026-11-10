@@ -66,7 +66,7 @@ export function AuthPanel({
           <fieldset>
             <legend className="srOnly">{setupRequired ? "Create the first administrator account" : "Sign in to serverSENTINEL"}</legend>
             {setupRequired && (
-              <FormField className="authSetupTokenField" htmlFor="auth-setup-token" label="Setup token" error={fieldErrors.setupToken} required>
+              <FormField className="authSetupTokenField" htmlFor="auth-setup-token" label="Setup token" error={fieldErrors.setupToken}>
                 <input
                   id="auth-setup-token"
                   name="setupToken"
@@ -82,7 +82,7 @@ export function AuthPanel({
                 />
               </FormField>
             )}
-            <FormField className="authUsernameField" htmlFor="auth-username" label="Username" error={fieldErrors.username} required>
+            <FormField className="authUsernameField" htmlFor="auth-username" label="Username" error={fieldErrors.username}>
               <input
                 id="auth-username"
                 name="username"
@@ -99,7 +99,7 @@ export function AuthPanel({
                 onInput={() => onFieldChange?.("username")}
               />
             </FormField>
-              <FormField className="authPasswordField" htmlFor="auth-password" label="Password" error={fieldErrors.password} required>
+              <FormField className="authPasswordField" htmlFor="auth-password" label="Password" error={fieldErrors.password}>
               <input
                 id="auth-password"
                 name="password"
@@ -114,7 +114,7 @@ export function AuthPanel({
               />
             </FormField>
             {setupRequired && (
-              <FormField className="authConfirmPasswordField" htmlFor="auth-confirm-password" label="Confirm password" error={fieldErrors.confirmPassword} required>
+              <FormField className="authConfirmPasswordField" htmlFor="auth-confirm-password" label="Confirm password" error={fieldErrors.confirmPassword}>
                 <input
                   id="auth-confirm-password"
                   name="confirmPassword"

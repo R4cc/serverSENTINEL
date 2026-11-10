@@ -76,6 +76,10 @@
   --solid-control-surface: #ffffff;
   /* A secondary button's outline. */
   --control-secondary-edge: var(--border-muted);
+  /* Switches and sliders. "On" takes the saturated primary fill in both themes (the dark accent is
+     a pale lavender that read as disabled), and an "off" track keeps a 3:1 edge against its panel. */
+  --control-on-fill: var(--control-primary-fill);
+  --control-off-edge: #8e8e96;
   /* Neutral state fills. They are translucent foreground rather than a fixed
      grey so the same step reads correctly on the canvas, a panel or the
      sidebar: `subtle` is a resting inset, `hover` a pointer hover, `selected`
@@ -155,7 +159,8 @@
   --type-body-size: 14px;
   --type-helper-size: 13px;
   --type-meta-size: 12px;
-  --type-badge-size: 11px;
+  /* The floor for pills and status text: 11px grey-on-dark fell below a comfortable read. */
+  --type-badge-size: 12px;
   --type-button-size: 13px;
   --type-form-label-size: 13px;
   --type-code-size: 13px;
@@ -349,6 +354,13 @@ textarea {
 input:not([type="checkbox"]):not([type="radio"]),
 select {
   height: var(--control-input-height);
+}
+
+/* Native checkboxes and radios take the same saturated fill as switches; the
+   browser default in the dark scheme is a grey that read as disabled. */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--control-on-fill);
 }
 
 select {

@@ -1,5 +1,20 @@
 # Changelog
 
+## 26.11.4 - 2026-11-10
+
+- Stop is now an outlined button with a red label that fills only on hover, so it no longer outshouts each page's own main action; the confirmation dialog still asks before stopping.
+- Switches, sliders and checkboxes use the saturated accent when on in both themes, and off tracks have a visible edge. Unavailable filled buttons such as Add node turn plain grey instead of a washed-out colour, and dark panels sit a step further off the background.
+- Settings keeps a reading width so labels stay next to their controls, and its toggle lines up with the dropdowns. Nodes fills wide screens with up to three columns of node cards, and a running server is shown by its green dot alone.
+- Overview CPU and memory charts summarise dense data into an average line with a faint min–max band and show the current value and window average beside each chart. The player timeline no longer repeats "Now" on every row or prints the same time twice where sessions meet, and its scroll indicator is a thin track.
+- The Free Space tile says how much is left and when it warns.
+- Players shows country flags on every system, badges location accuracy only when it is approximate, shows "Now" as last seen for connected players, and colours ping from green through plain to amber and red.
+- Schedules shows recent runs as a card with one row per run, uses the same "5 hours ago" wording as the table, wraps long descriptions instead of cutting them off, and gives the name column the spare width.
+- Mods keeps a mod's version and Update button apart from its switch, labels the actions column, and puts the details arrow next to the mod name.
+- Files gives the name column about half the table so dates and sizes stay near the file names, with lighter row icons.
+- Properties places the start-on-boot switch beside its label and labels the heap scale in even steps at their true positions.
+- The console dims timestamps and colours warning and error lines.
+- Small labels and badges are slightly larger and better spaced, and the sign-in form drops its redundant "Required" tags.
+
 ## 26.11.3 - 2026-11-10
 
 - Redesigned the interface around a quieter, denser look: neutral flat surfaces with hairline borders, a sidebar that follows the light or dark theme, a neutral highlight for the current page, sentence-case labels, and smaller desktop controls. Touch screens keep finger-sized controls.

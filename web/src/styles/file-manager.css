@@ -206,7 +206,9 @@
 .filesPage .fileTableHead,
 .filesPage .fileTableRow {
   display: grid;
-  grid-template-columns: 42px minmax(280px, 1fr) minmax(150px, 220px) minmax(115px, 160px) minmax(86px, 120px);
+  /* Name takes about half of a wide table rather than everything the metadata
+     columns leave over, so a file's date, type and size stay near its name. */
+  grid-template-columns: 42px minmax(280px, 2.4fr) minmax(150px, 1fr) minmax(115px, .8fr) minmax(86px, .6fr);
   min-width: 680px;
   padding-inline: var(--space-2);
 }
@@ -882,6 +884,15 @@
 
 .fileTypeIcon {
   border-color: var(--border-muted);
+}
+
+/* In a listing the glyph's colour already says folder or config file; a boxed,
+   tinted tile on every row was the heaviest thing in the table. */
+.filesPage .fileTableRow .fileTypeIcon {
+  width: 28px;
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
 }
 
 .filesPanel,

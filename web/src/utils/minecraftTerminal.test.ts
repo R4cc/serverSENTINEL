@@ -4,6 +4,7 @@ import {
   consumeTerminalTouchScroll,
   minecraftFormattingToAnsi,
   minecraftLogToPlainText,
+  minecraftLogLevelsToAnsi,
   minecraftLogToTerminalText,
   recallNextCommand,
   recallPreviousCommand,
@@ -90,5 +91,20 @@ describe("Minecraft terminal helpers", () => {
 
   it("turns console lines into plain text for copying and saving", () => {
     expect(minecraftLogToPlainText([{ text: "§aReady§r in 5s" }, { text: "&#ff0000Red" }, { text: "" }])).toBe("Ready in 5s\nRed\n");
+  });
+});
+
+describe("minecraftLogLevelsToAnsi", () => {
+  it("dims the timestamp and colours warning and error lines, restoring the foreground", () => {
+    expect(minecraftLogLevelsToAnsi("[12:00:01] [Server thread/INFO]: Done"))
+      .toBe("\x1b[2m[12:00:01]\x1b[22m [Server thread/INFO]: Done");
+    expect(minecraftLogLevelsToAnsi("[12:00:02] [Server thread/WARN]: Can't keep up!"))
+      .toBe("\x1b[2m[12:00:02]\x1b[22m\x1b[33m [Server thread/WARN]: Can't keep up!\x1b[39m");
+    expect(minecraftLogLevelsToAnsi("[12:00:03] [Server thread/ERROR]: Crash"))
+      .toBe("\x1b[2m[12:00:03]\x1b[22m\x1b[31m [Server thread/ERROR]: Crash\x1b[39m");
+  });
+
+  it("leaves lines without a leading timestamp untouched", () => {
+    expect(minecraftLogLevelsToAnsi("[demo] Starting minecraft server\nplain")).toBe("[demo] Starting minecraft server\nplain");
   });
 });

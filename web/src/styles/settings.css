@@ -1,5 +1,8 @@
 .settingsHub {
   width: 100%;
+  /* Settings is a list of label/control pairs. Stretched across a wide screen the
+     two halves of a row drifted 1300px apart, so the hub keeps a reading width. */
+  max-width: 1040px;
   display: grid;
   align-content: start;
   gap: var(--space-4);
@@ -250,7 +253,7 @@
   height: 26px;
   display: flex;
   align-items: center;
-  border: 1px solid var(--border-row);
+  border: 1px solid var(--control-off-edge);
   border-radius: 999px;
   background: var(--surface-muted);
   padding: 3px;
@@ -419,10 +422,13 @@
 }
 
 .settingsHubToggle {
+  /* The same 310px column as the selects and sliders, starting at its left edge,
+     so a toggle lines up with the controls in the rows around it. */
+  width: min(100%, 310px);
   min-height: var(--control-input-height);
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--space-3);
   cursor: pointer;
 }
@@ -458,18 +464,19 @@
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--surface-raised);
+  background: var(--control-off-edge);
   box-shadow: var(--shadow-xs);
-  transition: transform 150ms ease;
+  transition: transform 150ms ease, background 150ms ease;
 }
 
 .settingsHubToggle input:checked + .settingsHubToggleTrack {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--control-on-fill);
+  background: var(--control-on-fill);
 }
 
 .settingsHubToggle input:checked + .settingsHubToggleTrack > span {
   transform: translateX(20px);
+  background: var(--swiss-white);
 }
 
 .settingsHubToggle input:focus-visible + .settingsHubToggleTrack {

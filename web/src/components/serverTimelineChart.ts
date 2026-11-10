@@ -148,6 +148,81 @@ export function memoryAxisBounds(samples: ServerTimelineResourcePoint[], viewpor
   return { min, max: Math.max(max, min + step), interval: step };
 }
 
+/** How many buckets a visible window is summarised into before CPU and memory are drawn. */
+export const timelineMetricBucketTarget = 80;
+
+export type TimelineMetricBucket = { at: number; average: number; min: number; max: number };
+
+/**
+ * Summarises a dense metric into fixed-width time buckets: the mean for the line, and the
+ * extremes for an envelope behind it. Every raw sample drawn at once made the three-hour CPU
+ * view a solid sawtooth with no readable trend. A bucket with no running, available sample is
+ * returned as a gap so stopped periods still break the line. Below the target the samples are
+ * already sparse enough to draw directly, and `undefined` says so.
+ */
+export function bucketTimelineMetric(
+  samples: ServerTimelineResourcePoint[],
+  key: "cpuUtilizationPercent" | "memoryUsageBytes",
+  viewport: TimelineWindow,
+  query: TimelineWindow,
+  target = timelineMetricBucketTarget
+): Array<TimelineMetricBucket | { at: number; gap: true }> | undefined {
+  const span = Math.max(1, viewport.to - viewport.from);
+  const visible = samples.filter((sample) => sample.sampledAt >= viewport.from && sample.sampledAt <= viewport.to).length;
+  if (visible <= target * 1.5) return undefined;
+  const width = span / target;
+  const buckets = new Map<number, { sum: number; count: number; min: number; max: number }>();
+  for (const sample of samples) {
+    if (sample.sampledAt < query.from || sample.sampledAt > query.to) continue;
+    const index = Math.floor((sample.sampledAt - query.from) / width);
+    const value = sample[key];
+    const bucket = buckets.get(index);
+    if (!sample.available || !sample.running || typeof value !== "number" || !Number.isFinite(value)) {
+      if (!bucket) buckets.set(index, { sum: 0, count: 0, min: Infinity, max: -Infinity });
+      continue;
+    }
+    if (bucket) {
+      bucket.sum += value;
+      bucket.count += 1;
+      bucket.min = Math.min(bucket.min, value);
+      bucket.max = Math.max(bucket.max, value);
+    } else {
+      buckets.set(index, { sum: value, count: 1, min: value, max: value });
+    }
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([index, bucket]) => {
+      const at = query.from + (index + 0.5) * width;
+      return bucket.count
+        ? { at, average: bucket.sum / bucket.count, min: bucket.min, max: bucket.max }
+        : { at, gap: true as const };
+    });
+}
+
+/**
+ * The latest reading and the mean across the visible window for one metric, shown beside the
+ * band's name so the chart's left gutter states the number a reader came to look up.
+ */
+export function timelineMetricSummary(samples: ServerTimelineResourcePoint[], key: SeriesKey, viewport: TimelineWindow) {
+  let latest: number | undefined;
+  let latestAt = Number.NEGATIVE_INFINITY;
+  let sum = 0;
+  let count = 0;
+  for (const sample of samples) {
+    const value = sample[key];
+    if (sample.sampledAt < viewport.from || sample.sampledAt > viewport.to) continue;
+    if (!sample.available || !sample.running || typeof value !== "number" || !Number.isFinite(value)) continue;
+    sum += value;
+    count += 1;
+    if (sample.sampledAt >= latestAt) {
+      latestAt = sample.sampledAt;
+      latest = value;
+    }
+  }
+  return { latest, average: count ? sum / count : undefined };
+}
+
 export type TimelinePalette = {
   cpu: string;
   memory: string;
@@ -254,7 +329,7 @@ function formatBytes(value: number) {
   return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-function formatMetric(key: SeriesKey, value: number) {
+export function formatTimelineMetric(key: SeriesKey, value: number) {
   if (key === "cpuUtilizationPercent") return `${value.toFixed(1)}%`;
   if (key === "memoryUsageBytes") return formatBytes(value);
   if (key === "playersOnline") return `${Math.round(value)} online`;
@@ -286,7 +361,7 @@ export function timelineTooltipHtml(
     const value = Number(pair[1]);
     if (!Number.isFinite(value)) return [];
     const detail = entry.detail ? ` <small>${escapeTimelineHtml(entry.detail)}</small>` : "";
-    return [`<span><i class="timelineTooltipSwatch series-${escapeTimelineHtml(key)}"></i>${escapeTimelineHtml(entry.seriesName)}: ${escapeTimelineHtml(formatMetric(key, value))}${detail}</span>`];
+    return [`<span><i class="timelineTooltipSwatch series-${escapeTimelineHtml(key)}"></i>${escapeTimelineHtml(entry.seriesName)}: ${escapeTimelineHtml(formatTimelineMetric(key, value))}${detail}</span>`];
   });
   const nearby = clusters
     .filter((cluster) => Math.abs(cluster.occurredAt - timestamp) <= span / 80)
@@ -465,10 +540,12 @@ export function buildTimelineChartOption({
     label: { show: boolean; formatter?: string; color?: string; position?: string };
   }> = [];
   if (now >= viewport.from && now <= viewport.to) {
+    // The dashed rule marks the present on its own. Its label was drawn along the line, so
+    // it read sideways on every band; the axis already ends at the current time.
     markerLines.push({
       xAxis: now,
       lineStyle: { color: palette.accent, type: "dashed", width: 1.5, opacity: 0.8 },
-      label: { show: true, formatter: "Now", color: palette.textMuted, position: "insideEndTop" }
+      label: { show: false }
     });
   }
 
@@ -491,12 +568,19 @@ export function buildTimelineChartOption({
     yAxis,
     dataZoom: [buildTimelineTimeDataZoomOption({ viewport })],
     series: [
-      ...metricSeries.filter((series) => enabled[series.key] && visible.has(series.key)).map((series) => ({
+      ...metricSeries.filter((series) => enabled[series.key] && visible.has(series.key)).flatMap((series) => {
+        const buckets = series.key === "cpuUtilizationPercent" || series.key === "memoryUsageBytes"
+          ? bucketTimelineMetric(samples, series.key, viewport, query)
+          : undefined;
+        const band = buckets ? metricEnvelopeSeries(series.key, series.yAxisId, series.color, buckets) : [];
+        return [...band, {
         id: series.key,
         name: series.name,
         type: "line" as const,
         yAxisId: series.yAxisId,
-        data: samples.map((sample) => [sample.sampledAt, sample[series.key] ?? "-"]),
+        data: buckets
+          ? buckets.map((bucket) => "gap" in bucket ? [bucket.at, "-"] : [bucket.at, bucket.average])
+          : samples.map((sample) => [sample.sampledAt, sample[series.key] ?? "-"]),
         symbol: "none",
         showSymbol: false,
         smooth: series.step ? false : series.key.startsWith("network") ? 0.36 : 0.24,
@@ -508,7 +592,8 @@ export function buildTimelineChartOption({
         itemStyle: { color: series.color },
         emphasis: { disabled: true },
         animation: false
-      })),
+      }];
+      }),
       {
         id: "timeline-annotations",
         name: "Timeline annotations",
@@ -528,4 +613,47 @@ export function buildTimelineChartOption({
       }
     ]
   };
+}
+
+/**
+ * The min–max envelope behind a bucketed metric: an invisible floor series and the range
+ * stacked on it as a faint area, so short spikes stay visible without hiding the trend line.
+ */
+function metricEnvelopeSeries(
+  key: SeriesKey,
+  yAxisId: string,
+  color: string,
+  buckets: Array<TimelineMetricBucket | { at: number; gap: true }>
+) {
+  const stack = `${key}-envelope`;
+  const common = {
+    type: "line" as const,
+    yAxisId,
+    stack,
+    symbol: "none",
+    showSymbol: false,
+    smooth: false,
+    connectNulls: false,
+    silent: true,
+    tooltip: { show: false },
+    emphasis: { disabled: true },
+    animation: false
+  };
+  return [
+    {
+      ...common,
+      id: `${key}-envelope-floor`,
+      name: `${key} envelope floor`,
+      data: buckets.map((bucket) => "gap" in bucket ? [bucket.at, "-"] : [bucket.at, bucket.min]),
+      lineStyle: { opacity: 0 }
+    },
+    {
+      ...common,
+      id: `${key}-envelope`,
+      name: `${key} envelope`,
+      data: buckets.map((bucket) => "gap" in bucket ? [bucket.at, "-"] : [bucket.at, bucket.max - bucket.min]),
+      lineStyle: { opacity: 0 },
+      areaStyle: { color, opacity: 0.14 }
+    }
+  ];
 }

@@ -8,7 +8,9 @@
 .nodesToolbar .uiSearchField { width: min(100%, 380px); }
 .nodesToolbar .uiToolbarMeta { display: none; }
 .nodesBoard { min-width: 0; }
-.nodeList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: var(--space-5); }
+/* Cards fill the width the page has: one column on a laptop, two on a desktop, three at 1920px,
+   instead of stopping at a fixed cap that left a dead band on wide screens. */
+.nodeList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr)); align-items: start; gap: var(--space-5); }
 .nodeListItem { min-width: 0; display: flex; flex-direction: column; }
 .nodeListRow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-5); min-width: 0; }
 .nodeListIdentity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
@@ -46,9 +48,6 @@
 .nodeCardFooter { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-row); background: var(--fill-subtle); }
 .nodeListActions { display: flex; align-items: center; gap: var(--space-2); }
 .nodeUpgradeButton.uiButton { color: var(--sentinel-accent-strong); }
-@media (max-width: 1250px) {
-  .nodeList { grid-template-columns: minmax(0, 1fr); }
-}
 @media (max-width: 720px) {
   .nodesFleetSummary { gap: var(--space-2); }
   .nodesFleetSummary .uiMetricTile { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); }

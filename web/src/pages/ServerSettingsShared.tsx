@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { MemoryBounds } from "./serverSettingsHelpers";
+import { memoryScaleTicks, type MemoryBounds } from "./serverSettingsHelpers";
 
 export function MemoryRangeControl({
   bounds,
@@ -17,9 +17,7 @@ export function MemoryRangeControl({
   const span = Math.max(1, bounds.max - bounds.min);
   const minPercent = ((minimumHeapGb - bounds.min) / span) * 100;
   const maxPercent = ((maximumHeapGb - bounds.min) / span) * 100;
-  const quarter = Math.round(bounds.min + span * 0.25);
-  const midpoint = Math.round(bounds.min + span * 0.5);
-  const threeQuarter = Math.round(bounds.min + span * 0.75);
+  const ticks = memoryScaleTicks(bounds.min, bounds.max);
   const sliderStyle = {
     "--xms-percent": `${minPercent}%`,
     "--xmx-percent": `${maxPercent}%`
@@ -53,11 +51,9 @@ export function MemoryRangeControl({
         />
       </div>
       <div className="memoryTicks" aria-hidden="true">
-        <span>{bounds.min} GB</span>
-        <span>{quarter} GB</span>
-        <span>{midpoint} GB</span>
-        <span>{threeQuarter} GB</span>
-        <span>{bounds.max} GB</span>
+        {ticks.map((tick) => (
+          <span key={tick.value} style={{ "--tick-percent": `${tick.percent}%` } as CSSProperties}>{tick.value} GB</span>
+        ))}
       </div>
     </div>
   );
