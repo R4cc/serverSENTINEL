@@ -59,8 +59,11 @@
    box and one radius wherever a mod is shown. */
 .modsWorkspaceIdentity img, .modsDetailsTitle img, .modsReviewHero img, .modsResultCard > img { width: 39px; height: 39px; flex: 0 0 auto; border-radius: var(--radius-sm); object-fit: cover; }
 .modsWorkspaceIdentity img { border: 1px solid var(--border-panel); }
+/* The name block takes the free width, so the details chevron sits at the identity column's
+   right edge and lines up across rows instead of following each name's length. */
 .modsWorkspaceIdentity > span { display: grid; min-width: 0; gap: 3px; text-align: left; }
-/* The details chevron follows the name it opens instead of floating at the far edge of a wide column. */
+/* Only the name and description grow; the fallback icon tile keeps its fixed size. */
+.modsWorkspaceIdentity > span:not(.modsWorkspaceFallback) { flex: 1 1 auto; }
 .modsWorkspaceIdentity > svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--text-soft); opacity: .7; transition: opacity var(--control-transition), transform var(--control-transition); }
 .modsWorkspaceIdentity:hover > svg, .modsWorkspaceIdentity:focus-visible > svg { opacity: 1; transform: translateX(2px); }
 .modsWorkspaceIdentity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -75,7 +78,7 @@
 .modsWorkspaceVersion { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceUpdate { min-width: 0; }
 .modsUpdateCell { display: flex; align-items: center; gap: var(--space-2); min-width: 0; flex-wrap: nowrap; }
-.modsUpdateVersions { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; gap: 6px; line-height: 1.15; }
+.modsUpdateVersions { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; gap: 6px; line-height: 1.15; }
 .modsUpdateArrow { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .modsUpdateArrow svg { width: 12px; height: 12px; stroke-width: 2.5; }
 .modsUpdateVersions strong { overflow: hidden; color: var(--text); font-size: .82rem; font-variant-numeric: tabular-nums; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
@@ -535,16 +538,17 @@
   color: var(--status-success-foreground);
 }
 
-.modsStatusChip.update {
-  border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent);
-  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
-  color: var(--status-warning-foreground);
-}
-
+.modsStatusChip.update,
 .modsStatusChip.review {
   border-color: color-mix(in srgb, var(--accent) 32%, transparent);
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
+}
+
+.modsStatusChip.restart {
+  border-color: color-mix(in srgb, var(--sentinel-warning) 36%, transparent);
+  background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface));
+  color: var(--status-warning-foreground);
 }
 
 .modsStatusChip.not-recommended {
@@ -557,6 +561,24 @@
   border-color: var(--border-muted);
   background: var(--surface-muted);
   color: var(--status-neutral-foreground);
+}
+
+/* Healthy is the normal state, so it reads as a quiet line of text with a dot rather than
+   a pill that competes with the rows that need attention. */
+.modsHealthQuiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.modsHealthQuietDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--status-success-foreground);
 }
 
 .modsWorkspaceEmpty.uiEmptyState {

@@ -4,16 +4,16 @@
 
 - Stop is now an outlined button with a red label that fills only on hover, so it no longer outshouts each page's own main action; the confirmation dialog still asks before stopping.
 - Switches, sliders and checkboxes use the saturated accent when on in both themes, and off tracks have a visible edge. Unavailable filled buttons such as Add node turn plain grey instead of a washed-out colour, and dark panels sit a step further off the background.
-- Settings keeps a reading width so labels stay next to their controls, and its toggle lines up with the dropdowns. Nodes fills wide screens with up to three columns of node cards, and a running server is shown by its green dot alone.
-- Overview CPU and memory charts summarise dense data into an average line with a faint min–max band and show the current value and window average beside each chart. The player timeline no longer repeats "Now" on every row or prints the same time twice where sessions meet, and its scroll indicator is a thin track.
+- Settings places each control right beside its label, and sliders fill with the accent and have a visible thumb in both themes. Nodes fills wide screens with up to three columns of node cards; a running server and an online node are shown without a status pill, and an update a visitor cannot apply is a note instead of a greyed-out button.
+- Overview CPU and memory charts summarise dense data into an average line with a faint min–max band and show the current value and window average beside each chart. The player timeline no longer prints clock times under every session, past sessions are grey instead of alarm red, automation runs no longer share memory's purple, stacked event icons no longer collide, and its scroll indicator is a thin track.
 - The Free Space tile says how much is left and when it warns.
-- Players shows country flags on every system, badges location accuracy only when it is approximate, shows "Now" as last seen for connected players, and colours ping from green through plain to amber and red.
-- Schedules shows recent runs as a card with one row per run, uses the same "5 hours ago" wording as the table, wraps long descriptions instead of cutting them off, and gives the name column the spare width.
-- Mods keeps a mod's version and Update button apart from its switch, labels the actions column, and puts the details arrow next to the mod name.
+- Players shows country flags on every system, badges location accuracy only when it is approximate, shows a connected player's status once, as "Now" in Last seen, and colours ping from green through plain to amber and red.
+- Schedules shows recent runs as a card beside the schedule table on wide screens, one row per run, uses the same "5 hours ago" wording as the table, wraps long descriptions instead of cutting them off, and gives the name column the spare width.
+- Mods keeps a mod's new version beside its Update button, labels the actions column, lines up the details arrows, shows Healthy as quiet text, and colours an available update indigo so amber means a pending restart.
 - Files gives the name column about half the table so dates and sizes stay near the file names, with lighter row icons.
 - Properties places the start-on-boot switch beside its label and labels the heap scale in even steps at their true positions.
 - The console dims timestamps and colours warning and error lines.
-- Small labels and badges are slightly larger and better spaced, and the sign-in form drops its redundant "Required" tags.
+- Summary numbers are larger, secondary text is brighter in the dark theme, small labels and badges are slightly larger and better spaced, and the sign-in form drops its redundant "Required" tags.
 
 ## 26.11.3 - 2026-11-10
 

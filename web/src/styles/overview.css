@@ -400,9 +400,11 @@ button.overviewCardRow:focus-visible {
   --timeline-network-out: #159ca6;
   --timeline-players: #667085;
   --timeline-join: #2fa84f;
-  --timeline-leave: #df3d72;
+  /* Neutral grey: a player who left is not an error, so this must not read as critical. */
+  --timeline-leave: #8a909c;
   --timeline-server: #f28b16;
-  --timeline-schedule: #7a42e8;
+  /* Magenta, so automation runs never share Memory's violet. */
+  --timeline-schedule: #d6409f;
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -858,10 +860,21 @@ button.overviewCardRow:focus-visible {
 .serverTimelineMetricBand.is-compact .serverTimelineMetricBandSummary { top: 32px; }
 .serverTimelineMetricBand.is-compact .serverTimelineMetricBandValue { font-size: var(--type-row-title-size); }
 
-.serverTimelineMetricBandLabel.tone-cpu { color: var(--timeline-cpu); }
-.serverTimelineMetricBandLabel.tone-memory { color: var(--timeline-memory); }
-.serverTimelineMetricBandLabel.tone-network { color: var(--timeline-network-in); }
-.serverTimelineMetricBandLabel.tone-players { color: var(--timeline-players); }
+/* The swatch carries the series colour so the name stays in text colour and reads at small size. */
+.serverTimelineMetricBandLabel::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: var(--band-swatch, currentColor);
+  vertical-align: 1px;
+}
+.serverTimelineMetricBandLabel.tone-cpu { --band-swatch: var(--timeline-cpu); }
+.serverTimelineMetricBandLabel.tone-memory { --band-swatch: var(--timeline-memory); }
+.serverTimelineMetricBandLabel.tone-network { --band-swatch: var(--timeline-network-in); }
+.serverTimelineMetricBandLabel.tone-players { --band-swatch: var(--timeline-players); }
 
 .serverTimelineHoverTooltip {
   position: absolute;
@@ -1067,11 +1080,13 @@ button.overviewCardRow:focus-visible {
   pointer-events: auto;
 }
 
+/* The gap clears the icon rings and hover halo so the count never sits under an icon. */
 .timelineAnnotationCluster.is-multiple {
   min-width: max-content;
+  gap: 8px;
   border: var(--border-subtle) solid var(--border-muted);
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
-  padding: 1px 8px 1px 2px;
+  padding: 1px 8px 1px 4px;
   box-shadow: var(--shadow-xs);
 }
 
@@ -1100,7 +1115,8 @@ button.overviewCardRow:focus-visible {
   box-shadow: 0 0 0 2px var(--surface-raised);
 }
 
-.timelineAnnotationClusterIcon + .timelineAnnotationClusterIcon { margin-left: -9px; }
+/* Overlap is capped at 6px so each icon stays readable; the ring separates neighbours. */
+.timelineAnnotationClusterIcon + .timelineAnnotationClusterIcon { margin-left: -6px; }
 .timelineAnnotationClusterIcon.tone-server { --cluster-icon-color: var(--timeline-server); }
 .timelineAnnotationClusterIcon.tone-automation { --cluster-icon-color: var(--timeline-schedule); }
 
@@ -1166,7 +1182,7 @@ button.overviewCardRow:focus-visible {
 }
 
 .timelineAnnotationCluster.align-end { flex-direction: row-reverse; transform: translateX(calc(-100% + 14px)); }
-.timelineAnnotationCluster.align-end.is-multiple { padding: 1px 2px 1px 8px; }
+.timelineAnnotationCluster.align-end.is-multiple { padding: 1px 4px 1px 8px; }
 
 /* Timeline markers are icon controls, not primary buttons. Neutralize the
    global blue button hover/lift and keep feedback local to the event icon. */
@@ -1184,9 +1200,10 @@ button.overviewCardRow:focus-visible {
   transform: translateX(calc(-100% + 14px));
 }
 
+/* Keep the surface ring on hover; the tinted halo sits outside it. */
 .timelineAnnotationCluster:hover:not(:disabled) .timelineAnnotationClusterIcon {
   background: color-mix(in srgb, var(--cluster-icon-color) 9%, var(--surface-raised));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cluster-icon-color) 13%, transparent);
+  box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 4px color-mix(in srgb, var(--cluster-icon-color) 13%, transparent);
 }
 
 .timelineAnnotationCluster.is-multiple:hover:not(:disabled) {

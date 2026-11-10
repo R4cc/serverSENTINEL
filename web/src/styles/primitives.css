@@ -130,8 +130,9 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 
 /* Range slider. The filled part of the track follows `--ui-range-progress`,
    which the caller sets to the value as a percentage: a native range input
-   cannot style its own filled portion in every engine. The track is neutral and
-   the fill is the foreground, so the control reads at rest without accent. */
+   cannot style its own filled portion in every engine. The fill uses the
+   saturated control colour and the thumb has a visible edge, because a
+   near-black fill and a white thumb both vanish on a light card. */
 .uiRange {
   --ui-range-progress: 0%;
   --ui-range-thumb-size: 16px;
@@ -153,32 +154,32 @@ input.uiRange { height: var(--ui-range-thumb-size); }
   height: 4px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--control-off-edge) var(--ui-range-progress));
+  background: linear-gradient(to right, var(--control-on-fill) var(--ui-range-progress), var(--control-off-edge) var(--ui-range-progress));
 }
 .uiRange::-moz-range-track {
   height: 4px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--control-off-edge) var(--ui-range-progress));
+  background: linear-gradient(to right, var(--control-on-fill) var(--ui-range-progress), var(--control-off-edge) var(--ui-range-progress));
 }
 .uiRange::-webkit-slider-thumb {
   width: var(--ui-range-thumb-size);
   height: var(--ui-range-thumb-size);
   margin-top: calc((4px - var(--ui-range-thumb-size)) / 2);
-  border: var(--border-subtle) solid var(--border);
+  border: var(--border-strong) solid var(--control-off-edge);
   border-radius: 999px;
   background: var(--swiss-white);
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
   -webkit-appearance: none;
   appearance: none;
 }
 .uiRange::-moz-range-thumb {
   width: var(--ui-range-thumb-size);
   height: var(--ui-range-thumb-size);
-  border: var(--border-subtle) solid var(--border);
+  border: var(--border-strong) solid var(--control-off-edge);
   border-radius: 999px;
   background: var(--swiss-white);
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
 }
 @media (pointer: coarse) {
   .uiRange { --ui-range-thumb-size: 24px; }

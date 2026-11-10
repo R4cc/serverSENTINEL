@@ -248,9 +248,9 @@ export const defaultTimelinePalette: TimelinePalette = {
   networkOut: "#159ca6",
   players: "#667085",
   join: "#2fa84f",
-  leave: "#df3d72",
+  leave: "#8a909c",
   server: "#f28b16",
-  automation: "#7a42e8",
+  automation: "#d6409f",
   accent: "#4169ff",
   text: "#1f2530",
   textMuted: "#697386",
@@ -653,7 +653,7 @@ function metricEnvelopeSeries(
       name: `${key} envelope`,
       data: buckets.map((bucket) => "gap" in bucket ? [bucket.at, "-"] : [bucket.at, bucket.max - bucket.min]),
       lineStyle: { opacity: 0 },
-      areaStyle: { color, opacity: 0.14 }
+      areaStyle: { color, opacity: 0.1 }
     }
   ];
 }

@@ -260,7 +260,6 @@ function PlayerRoster({
                     )}
                     <span className="playerIdentityCopy">
                       <strong>{entry.player}</strong>
-                      {entry.online && <small className="playerOnlineFlag">Online</small>}
                     </span>
                   </span>
                 </th>

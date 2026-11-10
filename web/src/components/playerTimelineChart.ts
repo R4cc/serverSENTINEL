@@ -597,23 +597,12 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
     const color = item.online ? palette.join : palette.leave;
     const startClipped = item.startBoundary === "history-boundary" || rawStartX < plotLeft;
     const endClipped = item.endBoundary === "history-boundary" || rawEndX > plotRight;
-    const exactStart = item.startBoundary === "join" && rawStartX >= plotLeft && rawStartX <= plotRight;
-    const exactEnd = (item.endBoundary === "leave" || item.endBoundary === "server-end") && rawEndX >= plotLeft && rawEndX <= plotRight;
     const open = item.endBoundary === "online" && rawEndX >= plotLeft && rawEndX <= plotRight;
     const durationFont = `600 11px ${palette.fontFamily}`;
-    const endpointFont = `11px ${palette.fontFamily}`;
-    // Give neighboring sessions separate label space at long time ranges. Their
-    // exact times remain in the chart description when a label cannot fit.
+    // Start and end times are not drawn under the bar (they crowd neighbouring lanes); read them from the axis or the accessible label.
+    // Give neighboring sessions separate label space at long time ranges, so the
+    // duration label stays clear of them.
     const neighbors = adjacent.get(item);
-    // A session that starts where the previous one in its lane ended would print the same
-    // time twice, back to back ("04:54 PM04:54 PM"); the previous end label already says it.
-    const previousEndX = neighbors?.previous ? api.coord([neighbors.previous.visibleEnd, item.laneKey])[0] : undefined;
-    const continuesPrevious = previousEndX !== undefined
-      && startX - previousEndX < format.getTextRect(item.fullStartLabel ?? "", endpointFont).width + 16;
-    const startLabel = exactStart && !continuesPrevious ? item.fullStartLabel : null;
-    // An open session is not labelled "Now" on every row: the shared dashed guide marks the
-    // present, and the ring on the bar's end says the session is still running.
-    const endLabel = exactEnd && !open ? item.fullEndLabel : null;
     const labelLeft = neighbors?.previous
       ? Math.max(plotLeft, (api.coord([neighbors.previous.visibleEnd, item.laneKey])[0] + startX) / 2 + 4)
       : plotLeft;
@@ -626,10 +615,10 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
       plotLeft: labelLeft,
       plotRight: labelRight,
       durationWidth: format.getTextRect(item.durationLabel, durationFont).width + 10,
-      startWidth: startLabel ? format.getTextRect(startLabel, endpointFont).width : 0,
-      endWidth: endLabel ? format.getTextRect(endLabel, endpointFont).width : 0,
-      hasStart: Boolean(startLabel),
-      hasEnd: Boolean(endLabel)
+      startWidth: 0,
+      endWidth: 0,
+      hasStart: false,
+      hasEnd: false
     });
     const children: CustomElementOption[] = [
       {
@@ -714,36 +703,6 @@ function sessionRenderItem(items: PlayerTimelineChartItem[], palette: TimelinePa
       },
       silent: true
     });
-    if (labels.showStart && startLabel) {
-      children.push({
-        type: "text",
-        style: {
-          x: labels.startX,
-          y: y + 6,
-          text: startLabel,
-          align: labels.startAlign,
-          verticalAlign: "top",
-          fill: palette.textMuted,
-          font: endpointFont
-        },
-        silent: true
-      });
-    }
-    if (labels.showEnd && endLabel) {
-      children.push({
-        type: "text",
-        style: {
-          x: labels.endX,
-          y: y + 6,
-          text: endLabel,
-          align: labels.endAlign,
-          verticalAlign: "top",
-          fill: open ? color : palette.textMuted,
-          font: `${open ? "600 " : ""}${endpointFont}`
-        },
-        silent: true
-      });
-    }
 
     return {
       type: "group",

@@ -162,6 +162,13 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).toContain('data-label="Last seen"');
   });
 
+  it("says a connected player is online once, in the Last seen cell", () => {
+    const html = render({ insights: partial });
+    // The name column used to repeat "Online" under every connected player.
+    expect(html).not.toContain("playerOnlineFlag");
+    expect(html.match(/class="playerSeenNow"/g)).toHaveLength(2);
+  });
+
   it("offers the address field only to an account that may change it", () => {
     expect(render({ insights: partial })).toContain("player-insights-server-address");
     const readOnly = render({ insights: partial, canManage: false });

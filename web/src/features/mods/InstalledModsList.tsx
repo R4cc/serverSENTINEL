@@ -124,7 +124,12 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
                 <AppIcon name="chevronRight" />
               </button>
               <div className="modsWorkspaceMetadata">
-                <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
+                <div className="modsWorkspaceStatus">
+                  {health.tone === "ready"
+                    ? <span className="modsHealthQuiet"><span className="modsHealthQuietDot" aria-hidden="true" />{health.label}</span>
+                    : <ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>}
+                  {requiresRestart && <ModStatusBadge tone="restart">Requires restart</ModStatusBadge>}
+                </div>
                 <div className="modsWorkspaceVersion" title={installedVersion}>{installedVersion}</div>
               </div>
               <div className="modsWorkspaceUpdate">

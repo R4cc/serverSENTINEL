@@ -73,6 +73,12 @@
   align-content: start;
 }
 
+/* Side by side only where the 1600px-wide card would otherwise strand each run's
+   name far from its time. Below this the single column rules further down apply. */
+@media (min-width: 1500px) {
+  .scheduleWorkspaceGrid { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); }
+}
+
 .scheduleTableCard.uiSurface { background: var(--panel-surface); border-color: var(--surface-border); box-shadow: var(--panel-shadow); }
 /* Recent runs is a panel like the table above it, not loose rows on the canvas. */
 .scheduleWorkspaceGrid > .scheduledRunsCard { border: var(--border-subtle) solid var(--surface-border); border-radius: var(--radius-md); background: var(--panel-surface); box-shadow: var(--panel-shadow); }
@@ -111,8 +117,9 @@
 .scheduleTableRow {
   display: grid;
   /* The name column takes the slack, so on a wide screen the description has room
-     and the time columns stay together instead of drifting apart. */
-  grid-template-columns: minmax(240px, 3fr) minmax(160px, 1.1fr) minmax(130px, 1fr) minmax(130px, 1fr) 76px 44px;
+     and the time columns stay together instead of drifting apart. The minimums
+     must fit the half-width card that starts at 1500px. */
+  grid-template-columns: minmax(180px, 3fr) minmax(140px, 1.1fr) minmax(110px, 1fr) minmax(110px, 1fr) 76px 44px;
   gap: var(--space-3);
   align-items: center;
 }
@@ -350,7 +357,7 @@
   display: grid;
   /* One run per line, read left to right like a table row: what ran and how it
      ended, when, and the way into its details at the row's own right edge. */
-  grid-template-columns: 32px minmax(0, 1fr) minmax(180px, auto) 32px;
+  grid-template-columns: 32px minmax(0, 1fr) auto 32px;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);

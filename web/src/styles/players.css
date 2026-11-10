@@ -975,11 +975,6 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.playerOnlineFlag {
-  color: var(--sentinel-success);
-  font-size: var(--type-meta-size);
-}
-
 .playerHead {
   display: inline-flex;
   width: 24px;

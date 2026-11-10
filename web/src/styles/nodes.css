@@ -48,6 +48,7 @@
 .nodeCardFooter { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-row); background: var(--fill-subtle); }
 .nodeListActions { display: flex; align-items: center; gap: var(--space-2); }
 .nodeUpgradeButton.uiButton { color: var(--sentinel-accent-strong); }
+.nodeUpdateNote { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-title); }
 @media (max-width: 720px) {
   .nodesFleetSummary { gap: var(--space-2); }
   .nodesFleetSummary .uiMetricTile { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); }

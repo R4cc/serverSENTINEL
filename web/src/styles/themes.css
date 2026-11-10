@@ -15,7 +15,8 @@
   --sidebar-foreground-muted-base: #a1a1aa;
   --text: #ededf0;
   --text-muted-base: #a8a8b1;
-  --text-soft-base: #8b8b95;
+  /* Soft text carries meta lines (thresholds, version, hints); it sits at a readable step under muted. */
+  --text-soft-base: #9a9aa4;
   --border: #3f3f46;
   --border-muted-base: #2e2e33;
   --border-panel-base: #2a2a30;

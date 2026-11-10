@@ -1,8 +1,5 @@
 .settingsHub {
   width: 100%;
-  /* Settings is a list of label/control pairs. Stretched across a wide screen the
-     two halves of a row drifted 1300px apart, so the hub keeps a reading width. */
-  max-width: 1040px;
   display: grid;
   align-content: start;
   gap: var(--space-4);
@@ -313,7 +310,8 @@
 .settingsHubRow {
   min-height: 76px;
   display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(260px, 1.15fr);
+  /* The label column is capped so each control starts near its label on a wide screen. */
+  grid-template-columns: minmax(220px, 340px) minmax(260px, 1fr);
   align-items: center;
   gap: var(--space-5);
   padding: var(--space-3) var(--space-5);
@@ -369,7 +367,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .settingsHubControl > select {
@@ -414,7 +412,7 @@
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.4;
-  text-align: right;
+  text-align: left;
 }
 
 .settingsHubControl > .uiButton {

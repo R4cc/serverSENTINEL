@@ -154,7 +154,8 @@
   --type-page-title-size: 22px;
   --type-section-title-size: 15px;
   --type-card-title-size: 14px;
-  --type-metric-value-size: 18px;
+  /* A summary tile exists to show its number; at body-ish sizes the tiles looked empty. */
+  --type-metric-value-size: 22px;
   --type-row-title-size: 14px;
   --type-body-size: 14px;
   --type-helper-size: 13px;
