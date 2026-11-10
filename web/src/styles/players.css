@@ -1241,6 +1241,9 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   flex-direction: column;
   flex: 1 1 auto;
   gap: var(--space-2);
+  /* The hover labels hang above the bars and, near the right edge, wider than their bar. Clip
+     them sideways so an unseen label never widens the page; vertically they still float free. */
+  overflow-x: clip;
 }
 
 .playerActivityBars {
