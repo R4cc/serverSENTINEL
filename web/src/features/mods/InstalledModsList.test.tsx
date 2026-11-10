@@ -50,19 +50,22 @@ describe("InstalledModsList", () => {
     expect(html).toContain('title="0.154.0+26.2"');
   });
 
-  it("renders the installed version once and the target inside an integrated update action", () => {
+  it("renders the installed version once and the target beside a separate primary update action", () => {
     const html = renderInstalledMods([mod()]);
-    const updateAction = html.match(/<button[^>]*modsUpdateAction[^>]*>[\s\S]*?<\/button>/)?.[0];
+    const updateCell = html.match(/<div class="modsUpdateCell update">[\s\S]*?<\/button>/)?.[0];
+    const updateAction = updateCell?.match(/<button[^>]*modsUpdateAction[^>]*>[\s\S]*?<\/button>/)?.[0];
 
     expect(html.match(/>0\.154\.0\+26\.2</g)).toHaveLength(1);
-    expect(html).toContain("→");
-    expect(html).toContain("0.155.0+26.2");
+    expect(updateCell).toContain("modsUpdateVersions");
+    expect(updateCell).toContain(">0.155.0+26.2<");
+    expect(updateAction).toBeDefined();
+    expect(updateAction).toContain("uiButton--primary");
+    expect(updateAction).not.toContain("0.155.0+26.2<");
     expect(updateAction).not.toContain("aria-label");
     expect(updateAction).toContain("Fabric API");
-    expect(html).toContain("modsUpdateAction");
-    expect(html).toContain("modsUpdateActionLabel");
-    expect(html).toContain(">Update<");
-    expect(updateAction).not.toContain("<svg");
+    expect(updateAction).toContain("modsUpdateActionLabel");
+    expect(updateAction).toContain(">Update<");
+    expect(html).not.toContain("→");
     expect(html).not.toContain("update to");
   });
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.11.2 - 2026-11-10
+
+- Redesigned the installed-mods update action: the new version now sits beside a solid Update button instead of inside a split, input-like control, and review-required updates use the same layout.
+
 ## 26.11.1 - 2026-11-03
 
 - Kept action menus open when their button's focus scroll finishes, while still closing them when scrolling moves the button.

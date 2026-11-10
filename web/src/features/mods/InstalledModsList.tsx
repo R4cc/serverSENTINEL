@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } f
 import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, Surface } from "../../components/UiPrimitives";
-import { Puzzle } from "lucide-react";
+import { ArrowUp, Download, Puzzle } from "lucide-react";
 import { modIconSource } from "../../utils/appHelpers";
 import { getInstalledModHealth, modVersion } from "./modHealth";
 import { applyUpdatePlanEntry, updatePlanEntryLookup } from "./modUpdatePlan";
@@ -134,14 +134,13 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
                   </Button>
                 )}
                 {plannedUpdate?.status === "safe_update" && (
-                  <Button variant="secondary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
-                    <span className="modsUpdateTransition">
-                      <span className="modsUpdateArrow">→</span>
-                      <strong title={targetVersion || "Update available"}>{targetVersion || "Available"}</strong>
-                    </span>
-                    <span className="modsUpdateActionLabel">Update</span>
-                    <span className="srOnly"> {mod.displayName}</span>
-                  </Button>
+                  <ModUpdateCell targetVersion={targetVersion} actionTone="update">
+                    <Button variant="primary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
+                      <Download aria-hidden="true" />
+                      <span className="modsUpdateActionLabel">Update</span>
+                      <span className="srOnly"> {mod.displayName}</span>
+                    </Button>
+                  </ModUpdateCell>
                 )}
                 {plannedUpdate?.status === "needs_review" && (
                   <ModUpdateCell targetVersion={targetVersion} actionTone="review">
@@ -196,8 +195,8 @@ function ModUpdateCell({
   return (
     <div className={`modsUpdateCell ${actionTone}`}>
       <div className="modsUpdateVersions">
-        <span className="modsUpdateArrow" aria-hidden="true">→</span>
-        <strong title={targetVersion || "Update available"}>{targetVersion || "Update available"}</strong>
+        <span className="modsUpdateArrow" aria-hidden="true"><ArrowUp /></span>
+        <strong title={targetVersion || "Update available"}>{targetVersion || "Available"}</strong>
       </div>
       {children}
     </div>

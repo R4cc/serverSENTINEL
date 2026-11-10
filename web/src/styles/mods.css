@@ -69,18 +69,15 @@
 }
 .modsWorkspaceVersion { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceUpdate { min-width: 0; }
-.modsUpdateCell { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }
-.modsUpdateVersions { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; gap: 7px; line-height: 1.15; }
-.modsUpdateArrow { flex: 0 0 auto; color: var(--text-soft); font-size: .9rem; }
-.modsUpdateVersions strong { overflow: hidden; color: var(--status-warning-foreground); font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
-.modsUpdateCell.review .modsUpdateVersions strong { color: var(--sentinel-accent-strong); }
+.modsUpdateCell { display: flex; align-items: center; gap: var(--space-2); min-width: 0; flex-wrap: nowrap; }
+.modsUpdateVersions { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; gap: 6px; line-height: 1.15; }
+.modsUpdateArrow { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.modsUpdateArrow svg { width: 12px; height: 12px; stroke-width: 2.5; }
+.modsUpdateVersions strong { overflow: hidden; color: var(--text); font-size: .82rem; font-variant-numeric: tabular-nums; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceUpdate button { padding: 5px 10px; border: 1px solid color-mix(in srgb, currentColor 34%, var(--border)); background: color-mix(in srgb, currentColor 7%, transparent); box-shadow: none; font-size: .76rem; }
 .modsWorkspaceUpdate button:hover:not(:disabled) { transform: none; background: color-mix(in srgb, currentColor 11%, transparent); }
-.modsWorkspaceUpdate .modsUpdateAction { justify-content: space-between; overflow: hidden; }
-.modsUpdateTransition { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.modsUpdateTransition .modsUpdateArrow { color: var(--accent); }
-.modsUpdateTransition strong { overflow: hidden; font-size: .78rem; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
-.modsUpdateActionLabel { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 26px; padding: 0 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-weight: var(--weight-button); }
+.modsUpdateActionLabel { font-weight: var(--weight-button); }
+.modsUpdateCell .uiButton { flex: 0 0 auto; border-radius: 999px; }
 .modsWorkspaceSwitch { justify-content: center; }
 .modsWorkspaceSwitchVersionButton { display: grid; place-items: center; width: 34px; height: 34px; min-height: 34px; padding: 0; border: 0; color: var(--text-muted); background: transparent; box-shadow: none; }
 .modsWorkspaceSwitchVersionButton:hover:not(:disabled) { transform: none; color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
@@ -342,9 +339,8 @@
   .modsWorkspaceUpdate:empty { display: none; }
   .modsUpdateCell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; }
   .modsUpdateVersions { flex: none; }
-  .modsUpdateVersions strong,
-  .modsUpdateTransition strong { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; text-align: left; }
-  .modsWorkspaceUpdate .modsUpdateAction { padding-block: var(--space-2); }
+  .modsUpdateVersions strong { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; text-align: left; }
+  .modsWorkspaceUpdate .modsUpdateAction { padding-inline: var(--space-4); }
   .modsWorkspaceUpdate .modsReviewAction { min-height: 44px; }
   .modsWorkspaceEnabled { grid-area: enabled; display: flex; justify-content: center; align-items: center; width: 44px; height: 44px; }
   .modsWorkspaceSwitchVersionButton { grid-area: switchVersion; justify-self: center; align-self: center; width: 44px; height: 44px; }
@@ -498,20 +494,29 @@
   background: color-mix(in srgb, currentColor 7%, transparent);
 }
 
+/* The update action is the one thing in the row that changes the server, so it is a
+   solid primary pill; the target version sits beside it as plain information. */
 .modsWorkspaceUpdate .modsUpdateAction {
-  width: 100%;
-  min-width: 0;
-  min-height: 34px;
-  padding: 0 4px 0 9px;
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
-  color: var(--sentinel-accent-strong);
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 72%, var(--surface));
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px 0 10px;
+  border-color: color-mix(in srgb, var(--control-primary-fill) 84%, var(--glass-edge));
+  color: var(--control-primary-text);
+  background: var(--control-primary-fill);
+  box-shadow: var(--shadow-xs);
 }
 
 .modsWorkspaceUpdate .modsUpdateAction:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 56%, var(--border));
-  color: var(--sentinel-accent-strong);
-  background: color-mix(in srgb, var(--sentinel-accent-soft) 92%, var(--surface));
+  border-color: color-mix(in srgb, var(--control-primary-fill) 78%, var(--text));
+  color: var(--control-primary-text);
+  background: color-mix(in srgb, var(--control-primary-fill) 88%, var(--text));
+}
+
+.modsWorkspaceUpdate .modsUpdateAction svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .modsReviewAction {
