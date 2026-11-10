@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.11.5 - 2026-11-10
+
+- The Update and Review update buttons on installed mods now line up in a column instead of shifting with the length of each mod's new version.
+
 ## 26.11.4 - 2026-11-10
 
 - Stop is now an outlined button with a red label that fills only on hover, so it no longer outshouts each page's own main action; the confirmation dialog still asks before stopping.
