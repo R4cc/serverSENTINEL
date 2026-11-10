@@ -77,8 +77,10 @@
 }
 .modsWorkspaceVersion { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .modsWorkspaceUpdate { min-width: 0; }
-.modsUpdateCell { display: flex; align-items: center; gap: var(--space-2); min-width: 0; flex-wrap: nowrap; }
-.modsUpdateVersions { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; gap: 6px; line-height: 1.15; }
+/* The version sits in a fixed-width track so every row's button starts at the same x,
+   close to its version rather than pushed to the column's far edge. */
+.modsUpdateCell { display: grid; grid-template-columns: minmax(0, 6.5rem) auto; justify-content: start; align-items: center; gap: var(--space-2); min-width: 0; }
+.modsUpdateVersions { display: flex; align-items: center; min-width: 0; gap: 6px; line-height: 1.15; }
 .modsUpdateArrow { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .modsUpdateArrow svg { width: 12px; height: 12px; stroke-width: 2.5; }
 .modsUpdateVersions strong { overflow: hidden; color: var(--text); font-size: .82rem; font-variant-numeric: tabular-nums; font-weight: var(--weight-heading); text-overflow: ellipsis; white-space: nowrap; }
@@ -346,7 +348,6 @@
   .modsWorkspaceUpdate { grid-area: update; min-width: 0; justify-self: stretch; }
   .modsWorkspaceUpdate:empty { display: none; }
   .modsUpdateCell { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; width: 100%; }
-  .modsUpdateVersions { flex: none; }
   .modsUpdateVersions strong { white-space: normal; overflow-wrap: anywhere; line-height: 1.4; text-align: left; }
   .modsWorkspaceUpdate .modsUpdateAction { padding-inline: var(--space-4); }
   .modsWorkspaceUpdate .modsReviewAction { min-height: 44px; }
