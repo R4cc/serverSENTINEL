@@ -170,7 +170,7 @@ try {
     // deterministic rendering. Keep that test-only behavior isolated here
     // instead of weakening the production Content Security Policy.
     bypassCSP: true,
-    viewport: { width: 1440, height: 1000 },
+    viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
     locale: "en-US",
     timezoneId: "UTC",

@@ -48,8 +48,9 @@
 .propertiesStartupToggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  /* The switch sits beside its label; at full width it ended up 1500px away. */
+  justify-content: flex-start;
+  gap: var(--space-4);
   min-height: 48px;
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-row);

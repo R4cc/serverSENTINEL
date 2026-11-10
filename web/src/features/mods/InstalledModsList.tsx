@@ -102,7 +102,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
       >
         {draggingFiles && <div className="modsWorkspaceDropOverlay" role="status"><AppIcon name="fileUp" /><strong>Drop JAR files to upload</strong></div>}
         <div className="modsWorkspaceTableHead uiTableHeader" aria-hidden="true">
-          <span>{terminology.singularTitle}</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span />
+          <span>{terminology.singularTitle}</span><span>Status</span><span>Installed version</span><span>Update</span><span>Enabled</span><span>Actions</span>
         </div>
         {initialLoading && <LoadingLabel>Loading installed {terminology.plural}</LoadingLabel>}
         {initialLoading ? (
@@ -124,7 +124,12 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
                 <AppIcon name="chevronRight" />
               </button>
               <div className="modsWorkspaceMetadata">
-                <div className="modsWorkspaceStatus"><ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>{requiresRestart && <ModStatusBadge tone="update">Requires restart</ModStatusBadge>}</div>
+                <div className="modsWorkspaceStatus">
+                  {health.tone === "ready"
+                    ? <span className="modsHealthQuiet"><span className="modsHealthQuietDot" aria-hidden="true" />{health.label}</span>
+                    : <ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>}
+                  {requiresRestart && <ModStatusBadge tone="restart">Requires restart</ModStatusBadge>}
+                </div>
                 <div className="modsWorkspaceVersion" title={installedVersion}>{installedVersion}</div>
               </div>
               <div className="modsWorkspaceUpdate">

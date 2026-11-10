@@ -67,7 +67,16 @@
 
 .authPanel .brandLockup {
   padding-bottom: var(--space-4);
-  border-bottom: var(--border-strong) solid var(--border);
+  border-bottom: var(--border-strong) solid var(--border-row);
+}
+
+/* The same mark as the sidebar: at 40px with a frame, the white tile was the
+   brightest thing on the dark sign-in screen. */
+.authPanel .brandLogo {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
 }
 
 .authPanel .appForm fieldset {

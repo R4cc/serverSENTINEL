@@ -24,10 +24,12 @@
   font-size: var(--type-metric-value-size);
 }
 
+/* The same panel tile as Overview and Nodes; a grey inset fill here was the only
+   summary strip in the app that looked different. */
 .playerSummaryGrid .uiMetricTile {
-  background: var(--fill-subtle);
+  background: var(--panel-surface);
   border-color: var(--surface-border);
-  box-shadow: none;
+  box-shadow: var(--panel-shadow);
 }
 
 .playerSummarySkeleton {
@@ -929,10 +931,13 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-.playerLatency--success { color: var(--sentinel-success); }
-.playerLatency--info { color: var(--sentinel-info); }
-.playerLatency--warning { color: var(--sentinel-warning); }
-.playerLatency--danger { color: var(--sentinel-danger); }
+/* One direction only: good is green, ordinary is plain text, then amber, then red.
+   A blue middle step read as a different kind of value rather than a worse one. */
+.playerLatency--success { color: var(--status-success-foreground); }
+.playerLatency--info { color: var(--text); }
+.playerLatency--warning { color: var(--status-warning-foreground); }
+.playerLatency--danger { color: var(--status-danger-foreground); }
+.playerSeenNow { color: var(--status-success-foreground); font-weight: var(--weight-title); }
 .playerLatency--neutral { color: var(--text-muted); }
 
 .playerHistoricalPing {
@@ -970,11 +975,6 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-.playerOnlineFlag {
-  color: var(--sentinel-success);
-  font-size: var(--type-meta-size);
-}
-
 .playerHead {
   display: inline-flex;
   width: 24px;
@@ -1006,6 +1006,19 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   align-items: center;
   min-width: 0;
   gap: var(--space-1);
+}
+
+/* Country flags come from the bundled Twemoji flag font, declared unconditionally.
+   The emoji polyfill only installed it when the browser could already draw a
+   colour smiley but not a flag, so a machine with no colour-emoji font at all
+   (most Linux desktops, headless Chromium) showed every flag as two empty boxes.
+   The unicode-range keeps the font to the regional-indicator and tag code points,
+   so it never replaces any other glyph and is only downloaded once a flag renders. */
+@font-face {
+  font-family: "Twemoji Country Flags";
+  font-display: swap;
+  src: url("../../../node_modules/country-flag-emoji-polyfill/dist/TwemojiCountryFlags.woff2") format("woff2");
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
 }
 
 .playerCountryFlag {
@@ -1228,6 +1241,9 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   flex-direction: column;
   flex: 1 1 auto;
   gap: var(--space-2);
+  /* The hover labels hang above the bars and, near the right edge, wider than their bar. Clip
+     them sideways so an unseen label never widens the page; vertically they still float free. */
+  overflow-x: clip;
 }
 
 .playerActivityBars {

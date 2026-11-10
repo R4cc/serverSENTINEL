@@ -5,8 +5,8 @@
 .appShell.themeDark {
   color-scheme: dark;
   --app-background: #09090b;
-  --surface: #0f0f11;
-  --surface-raised: #121214;
+  --surface: #111114;
+  --surface-raised: #151518;
   --surface-muted: #1c1c20;
   --surface-read-only: #151518;
   --surface-overlay: #17171a;
@@ -15,10 +15,11 @@
   --sidebar-foreground-muted-base: #a1a1aa;
   --text: #ededf0;
   --text-muted-base: #a8a8b1;
-  --text-soft-base: #8b8b95;
+  /* Soft text carries meta lines (thresholds, version, hints); it sits at a readable step under muted. */
+  --text-soft-base: #9a9aa4;
   --border: #3f3f46;
   --border-muted-base: #2e2e33;
-  --border-panel-base: #232327;
+  --border-panel-base: #2a2a30;
   --border-row-base: #1c1c20;
   --sentinel-accent: #a5b4ff;
   --sentinel-accent-strong: #c8d2ff;
@@ -49,6 +50,7 @@
      washed out beside the saturated danger buttons. Primary buttons take a deeper indigo. */
   --control-primary-fill: #4f58d8;
   --control-primary-text: #ffffff;
+  --control-off-edge: #6b6b75;
   --solid-control-surface: #18181b;
   --fill-subtle: rgb(255 255 255 / 0.035);
   --fill-hover: rgb(255 255 255 / 0.06);
