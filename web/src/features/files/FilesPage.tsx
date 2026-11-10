@@ -361,7 +361,7 @@ export function FilesPage({
   return (
     <section className={`tabPage filesPage layoutWide${selectedEntries.length ? " filesPage--withInspector" : ""}`}>
       <section className="filesExplorer">
-        <Surface className="filesPanel" material="glass">
+        <Surface className="filesPanel">
           <div className="fileNavBar">
             <div className="fileNavButtons uiToolbarPrimary">
               <Button variant="secondary" iconOnly className="iconOnlyButton" onClick={actions.navigateBackFiles} disabled={isProvisioning || fileBackStack.length === 0} title={fileBackStack.length === 0 ? "No previous folder" : "Back"} aria-label="Back">
@@ -601,7 +601,7 @@ export function FilesPage({
         </Surface>
       </section>
 
-      {selectedEntries.length > 0 && <Surface as="aside" className={`fileDetailsPanel${selectedEntries.length > 1 ? " fileDetailsPanel--multiple" : ""}`} material="glass">
+      {selectedEntries.length > 0 && <Surface as="aside" className={`fileDetailsPanel${selectedEntries.length > 1 ? " fileDetailsPanel--multiple" : ""}`}>
         {selectedEntries.length > 1 && (
           <div className="fileDetailsContent">
             <h2>{selectedEntries.length} items selected</h2>

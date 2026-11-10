@@ -626,7 +626,7 @@ export function NodesPage({
               node.isInternal ? "" : node.agentVersion ? `Agent ${node.agentVersion}` : "Agent version unknown"
             ].filter(Boolean);
             return (
-              <Surface as="article" material="glass" density="flush" key={node.id} className="nodeListItem" role="listitem">
+              <Surface as="article" density="flush" key={node.id} className="nodeListItem" role="listitem">
                 <header className="nodeListRow">
                   <div className="nodeListIdentity">
                     <span className={`nodeListMark ${statusTone(node.status)}`} aria-hidden="true">{node.isInternal ? <Server /> : <Network />}</span>
@@ -674,7 +674,8 @@ export function NodesPage({
                             <span className="nodeServerRowName" title={server.displayName}>{server.displayName}</span>
                             <span className={`nodeServerRowState ${state.toLowerCase()}`}>
                               <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
-                              {state}
+                              {/* The state is an uppercase token in data; it reads as a sentence-case word. */}
+                              {state.charAt(0)}{state.slice(1).toLowerCase()}
                             </span>
                             <span className={`nodeServerRowPlayers${snapshot?.state === "stale" ? " unknown" : ""}`} title={playerLabel === "-" ? "Player count unavailable" : `${playerLabel} players online${snapshot?.state === "stale" ? " (last verified snapshot)" : ""}`}>
                               {playerLabel !== "-" && <span className="nodePlayerIcon" aria-hidden="true"><Users /></span>}

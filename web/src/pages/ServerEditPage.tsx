@@ -298,7 +298,7 @@ export function ServerEditForm({
         {disabled && disabledReason && !saving && <Banner tone="warning" compact title={disabledReason} />}
         <fieldset disabled={disabled}>
           <input type="hidden" name="runtimeType" value={server.runtimeProfile.runtimeType} />
-          <Surface density="flush" material="glass" className="propertiesSettingsSurface" aria-label="Server configuration">
+          <Surface density="flush" className="propertiesSettingsSurface" aria-label="Server configuration">
             <section className="propertiesSection propertiesSectionGeneral">
               <PanelHeader
                 title={<><span className="propertiesSectionIcon" aria-hidden="true"><Settings2 /></span>General</>}

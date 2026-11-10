@@ -28,13 +28,23 @@ async function snapshot(page, name) {
   if (screenshots) await page.screenshot({ path: `${screenshots}/${name}.png`, fullPage: !/dialog|editor/.test(name) });
 }
 
+// Layers that float above the page (dialogs, drawers) are glass.
 async function checkGlassPanel(panel) {
   assert(await panel.evaluate(element => {
     const style = getComputedStyle(element);
     const backdrop = style.backdropFilter || style.webkitBackdropFilter;
     const opaqueFullscreen = innerWidth <= 720 && element.classList.contains("uiDialog--mobileFullscreen");
-    return element.classList.contains("uiGlassSurface") && (opaqueFullscreen || backdrop && backdrop !== "none");
-  }), "Workspace lost its shared glass material");
+    return opaqueFullscreen || backdrop && backdrop !== "none";
+  }), "Floating layer lost its shared glass material");
+}
+
+// Surfaces in the page body are flat: the shared panel primitive, with no backdrop treatment.
+async function checkPagePanel(panel) {
+  assert(await panel.evaluate(element => {
+    const style = getComputedStyle(element);
+    const backdrop = style.backdropFilter || style.webkitBackdropFilter;
+    return element.classList.contains("uiSurface") && (!backdrop || backdrop === "none");
+  }), "Workspace panel is not the shared flat surface");
 }
 
 async function checkStableHover(row) {
@@ -116,7 +126,7 @@ try {
 
         await navigate(page, "mods");
         await page.locator(".modsWorkspaceRow").first().waitFor();
-        await checkGlassPanel(page.locator(".modsWorkspaceInstalled"));
+        await checkPagePanel(page.locator(".modsWorkspaceInstalled"));
         await checkStableHover(page.locator(".modsWorkspaceRow").first());
         if (phone) {
           const toggle = page.getByRole("button", { name: "Server controls", exact: true });
@@ -159,7 +169,7 @@ try {
 
         await navigate(page, "console");
         await page.locator(".minecraftTerminal:not(.initializing) .xterm-screen").waitFor();
-        await checkGlassPanel(page.locator(".consolePanel"));
+        await checkPagePanel(page.locator(".consolePanel"));
         assert.equal(await page.locator(".consolePanelHeader").isVisible(), !phone, "Console chrome does not respect the available viewport");
         assert(await page.locator(".consolePanel > .terminal").evaluate(element => {
           const box = element.getBoundingClientRect();
@@ -177,7 +187,7 @@ try {
 
         await navigate(page, "files");
         await page.getByRole("table", { name: "Server files", exact: true }).waitFor();
-        await checkGlassPanel(page.locator(".filesPanel"));
+        await checkPagePanel(page.locator(".filesPanel"));
         await checkSpacing(page, `${label} files`);
         await checkStableHover(page.locator(".fileTableRow").first());
         assert.equal(await page.locator(".fileDetailsPanel").count(), 0, "Empty inspector still consumes space");
@@ -189,7 +199,7 @@ try {
         await file.click();
         if (width >= 981) {
           assert(await page.locator(".fileDetailsPanel").isVisible(), "Selected file has no inspector");
-          await checkGlassPanel(page.locator(".fileDetailsPanel"));
+          await checkPagePanel(page.locator(".fileDetailsPanel"));
           await page.locator(".filePreviewPanel pre").waitFor();
         }
         if (phone) {
@@ -202,7 +212,9 @@ try {
         await file.dblclick();
         const editor = page.getByRole("dialog", { name: "server.properties", exact: true });
         await editor.locator(".cm-editor").waitFor();
-        await checkGlassPanel(editor);
+        // The file editor shares the dialog shell but is deliberately opaque: it is a workspace
+        // wide enough to cover the sidebar, and translucency lets the page show through it.
+        assert(await editor.evaluate(element => element.classList.contains("uiGlassSurface--modal")), "File editor lost the shared dialog shell");
         await checkDialog(page, editor, phone);
         assert(await editor.locator(".fileEditorRestrictionReason").isVisible(), "Editing restriction is not visible");
         assert.match(await editor.locator(".fileEditorRestrictionReason").innerText(), /Stop the server/);
@@ -212,7 +224,7 @@ try {
 
         await navigate(page, "settings");
         await page.locator('.settingsHub[aria-busy="false"]').waitFor();
-        await checkGlassPanel(page.locator(".settingsHubContent"));
+        await checkPagePanel(page.locator(".settingsHubContent"));
         await checkStableHover(page.locator(".settingsHubRow").first());
         if (phone) {
           const picker = page.getByRole("combobox", { name: "Settings category" });
@@ -250,7 +262,7 @@ try {
           if (phone) await page.getByRole("combobox", { name: "Settings category" }).selectOption(category);
           else await page.locator(`#settings-tab-${category}`).click();
           await page.locator(`#settings-panel-${category}`).waitFor();
-          await checkGlassPanel(page.locator(".settingsHubContent"));
+          await checkPagePanel(page.locator(".settingsHubContent"));
           if (category === "modules") {
             assert.equal(await page.locator(".settingsModuleCardSwitch").count(), 3);
             await checkStableHover(page.locator(".settingsModuleCard").first());
@@ -267,7 +279,7 @@ try {
 
         await navigate(page, "players");
         await page.locator(".playerRosterCard").waitFor();
-        await checkGlassPanel(page.locator(".playerRosterCard"));
+        await checkPagePanel(page.locator(".playerRosterCard"));
         await checkStableHover(page.locator(".playerRosterTable tbody tr").first());
         if (phone) {
           assert.equal(await page.locator(".playerMap").count(), 0, "Collapsed geography still mounts a map");
@@ -278,12 +290,12 @@ try {
           const geography = page.getByRole("button", { name: "Player geography", exact: true });
           await geography.click();
           await page.locator(".playerMapCanvas").waitFor();
-          await checkGlassPanel(page.locator(".playerGeographyCard"));
+          await checkPagePanel(page.locator(".playerGeographyCard"));
           await page.getByRole("button", { name: "Zoom in", exact: true }).click();
           await geography.click();
           assert.equal(await page.locator(".playerMap").count(), 0);
         } else {
-          await checkGlassPanel(page.locator(".playerGeographyCard"));
+          await checkPagePanel(page.locator(".playerGeographyCard"));
           assert(await page.locator(".playerRosterCard").evaluate(element => {
             const roster = element.getBoundingClientRect();
             const summary = document.querySelector(".playerSummaryGrid").getBoundingClientRect();

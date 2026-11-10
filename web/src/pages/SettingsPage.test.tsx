@@ -6,6 +6,8 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
   return {
     loading: false,
     themePreference: "system",
+    translucency: 50,
+    contrast: 0,
     relativeTimestamps: true,
     regionalFormatPreference: "user",
     displayTimeZonePreference: "panel",
@@ -13,6 +15,8 @@ function props(overrides: Partial<SettingsPageProps> = {}): SettingsPageProps {
     browserTimeZone: "Europe/Vienna",
     displayTimeZone: "Europe/Vienna",
     onThemeChange: vi.fn(),
+    onTranslucencyChange: vi.fn(),
+    onContrastChange: vi.fn(),
     onRelativeTimestampsChange: vi.fn(),
     onRegionalFormatChange: vi.fn(),
     onDisplayTimeZoneChange: vi.fn(),
@@ -87,7 +91,8 @@ describe("SettingsPage", () => {
     const html = renderToStaticMarkup(<SettingsPage {...props()} />);
     expect(html).toContain('role="tablist"');
     expect(html).toContain('aria-orientation="horizontal"');
-    expect(html).toMatch(/class="[^"]*uiGlassSurface[^"]*settingsHubContent/);
+    expect(html).toMatch(/class="uiSurface [^"]*settingsHubContent/);
+    expect(html).not.toContain("uiGlassSurface");
     expect(html).toContain('id="settings-tab-appearance"');
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain("Relative timestamps");

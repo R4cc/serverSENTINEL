@@ -8,7 +8,6 @@ import { ActionMenu } from "./ActionMenu";
 import { BrandLogo } from "./BrandLogo";
 import { SidebarIcon, SidebarToggleIcon } from "./FileTypeIcon";
 import { Button } from "./UiPrimitives";
-import { GlassEffect } from "./GlassEffect";
 
 export function AppSidebar({
   sidebarCollapsed,
@@ -113,8 +112,7 @@ export function AppSidebar({
   const serverNavItem = (page: ActivePage, label: string) => navItem(page, isProvisioning || !activeServer, serverPageDisabledReason, label);
 
   return (
-    <aside className="sidebar uiGlassSurface uiGlassSurface--chrome" id="application-sidebar">
-      <GlassEffect variant="chrome" cornerRadius={0} />
+    <aside className="sidebar" id="application-sidebar">
       <div className="brandBlock">
         <div className="brandLockup">
           <BrandLogo />

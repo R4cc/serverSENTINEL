@@ -6,38 +6,56 @@
   --font-sans: "Switzer", Inter, "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --swiss-white: #ffffff;
-  --swiss-black: #000000;
-  --swiss-muted: #f2f2f2;
-  --sentinel-accent: #3858e9;
-  --sentinel-accent-strong: #22368f;
-  --sentinel-accent-soft: #edf1ff;
-  --sentinel-accent-muted: #b9c6ff;
-  --sentinel-success: #2c7a66;
-  --sentinel-info: #2563c9;
-  --sentinel-warning: #b7791f;
-  --sentinel-danger: #dc2626;
+  --sentinel-accent: #3d46d9;
+  --sentinel-accent-strong: #2933a3;
+  --sentinel-accent-soft: #eef0fe;
+  --sentinel-accent-muted: #a9b2f4;
+  --sentinel-success: #087f70;
+  --sentinel-info: #1268c4;
+  --sentinel-warning: #a76508;
+  --sentinel-danger: #cf2848;
   --sentinel-success-contrast: var(--swiss-white);
   --sentinel-danger-contrast: var(--swiss-white);
-  --status-success-foreground: #276b59;
-  --status-warning-foreground: #8a570f;
-  --status-danger-foreground: #bd1f1f;
-  --status-neutral-foreground: #4a4a4a;
-  --surface: var(--swiss-white);
-  --surface-raised: var(--swiss-white);
-  --surface-muted: var(--swiss-muted);
-  --app-background: #dde5f5;
-  --surface-read-only: #f7f7f7;
-  --sidebar-background: #09162c;
-  --sidebar-foreground: #f4f7ff;
-  --sidebar-foreground-muted: #c3ccdc;
-  --text: var(--swiss-black);
-  --text-muted: #4a4a4a;
-  --text-soft: #626262;
-  --border: #20242c;
-  --border-muted: color-mix(in srgb, var(--border) 18%, var(--surface) 82%);
+  --status-success-foreground: #086858;
+  --status-warning-foreground: #855008;
+  --status-danger-foreground: #ae203f;
+  --status-neutral-foreground: #52525b;
+  /* Surfaces are neutral and opaque. The page canvas is the quietest tone, a
+     panel sits one step above it, and nothing in the page body is translucent:
+     depth comes from these steps and a hairline border, not from blur. */
+  --app-background: #fbfbfc;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #f4f4f5;
+  --surface-read-only: #f8f8f9;
+  /* What a floating layer (menu, dialog, toast) is tinted with before the glass
+     opacity is applied. */
+  --surface-overlay: #ffffff;
+  --sidebar-background: #f6f6f7;
+  --sidebar-foreground: #18181b;
+  --sidebar-foreground-muted-base: #63636b;
+  --text: #18181b;
+  --text-muted-base: #52525b;
+  --text-soft-base: #696972;
+  /* `row` separates rows inside a panel, `panel` outlines a panel, `muted`
+     outlines a control, and the bare token is the strongest rule. */
+  --border: #c8c8ce;
+  --border-muted-base: #dcdce0;
   --border-subtle: 1px;
-  --border-panel: color-mix(in srgb, var(--border) 28%, var(--surface) 72%);
-  --border-row: color-mix(in srgb, var(--border) 12%, var(--surface) 88%);
+  --border-panel-base: #e6e6e9;
+  --border-row-base: #f0f0f2;
+  /* Contrast. A theme sets the `-base` colours above; what the app consumes is
+     each one moved toward the primary text colour by the Contrast setting, which
+     writes these two properties on the root element. At the default of 0% the
+     derived colour is the base colour. */
+  --contrast-boost: 0%;
+  --contrast-border-boost: 0%;
+  --text-muted: color-mix(in srgb, var(--text-muted-base), var(--text) var(--contrast-boost));
+  --text-soft: color-mix(in srgb, var(--text-soft-base), var(--text) var(--contrast-boost));
+  --sidebar-foreground-muted: color-mix(in srgb, var(--sidebar-foreground-muted-base), var(--sidebar-foreground) var(--contrast-boost));
+  --border-muted: color-mix(in srgb, var(--border-muted-base), var(--text) var(--contrast-border-boost));
+  --border-panel: color-mix(in srgb, var(--border-panel-base), var(--text) var(--contrast-border-boost));
+  --border-row: color-mix(in srgb, var(--border-row-base), var(--text) var(--contrast-border-boost));
   --accent: var(--sentinel-accent);
   --terminal-bg: #101318;
   --terminal-text: #f2f2f2;
@@ -51,81 +69,52 @@
   --editor-punctuation: #4a4a4a;
   --editor-heading: #111827;
   --editor-link: #3858e9;
-  --overlay: rgb(0 0 0 / 0.48);
+  --overlay: rgb(250 250 251 / 0.6);
   --accent-contrast: var(--swiss-white);
   --control-primary-fill: var(--accent);
   --control-primary-text: var(--accent-contrast);
-  /* Liquid glass material.
-     A pane of glass is described by four things, and each has its own token
-     group so a surface never hand-rolls one of them:
-       tint       — the frosting laid over whatever shows through
-       rim        — the specular highlight the lens throws along its edges
-       shadow     — the contact shadow and the ambient drop below it
-       filter     — the backdrop treatment (blur, saturation, luminance lift)
-     Tint stays low enough that the ambient wash behind the shell is still
-     legible through the pane; the rim, not the opacity, is what makes it read
-     as a solid object. */
-  --glass-tint: rgb(255 255 255 / 0.54);
-  --glass-tint-strong: rgb(255 255 255 / 0.68);
-  --glass-tint-soft: rgb(255 255 255 / 0.4);
-  /* Menus and tooltips open over whatever happens to be underneath -- a chart, a
-     table, the dark sidebar -- and their text has to survive all of it, so they
-     take a denser tint than a panel that sits on the page wash. */
-  /* Menus sit over dense tables; any more see-through and the rows beneath read through the items. */
-  --glass-tint-menu: rgb(255 255 255 / 0.985);
-  --glass-border: rgb(255 255 255 / 0.82);
-  --glass-edge: color-mix(in srgb, var(--glass-border) 74%, var(--border-panel));
-  /* A secondary button's outline. The glass edge alone is near-white, which on the light theme's
-     pale surfaces left Cancel, Upload and Clear filter with no visible edge at all. */
-  --control-secondary-edge: var(--glass-edge);
-  /* The rim is brightest along the top edge, where the lens catches the light,
-     falls off around the sides, and returns as a dim bounce along the bottom.
-     A single flat top highlight reads as a border; this reads as thickness. */
-  --glass-rim-top: rgb(255 255 255 / 0.92);
-  --glass-rim-side: rgb(255 255 255 / 0.46);
-  --glass-rim-base: rgb(255 255 255 / 0.3);
-  --glass-rim-bloom: rgb(255 255 255 / 0.42);
-  --glass-highlight:
-    inset 0 1px 0 var(--glass-rim-top),
-    inset 1px 0 0 var(--glass-rim-side),
-    inset -1px 0 0 var(--glass-rim-side),
-    inset 0 -1px 0 var(--glass-rim-base),
-    inset 0 8px 16px -14px var(--glass-rim-bloom);
-  /* The hairline contact ring is what separates a pane from the wash behind it
-     once the tint is low enough to see through; the wide ambient shadow alone
-     leaves the edge undefined. */
-  --glass-shadow:
-    0 0 0 0.5px rgb(34 55 92 / 0.07),
-    0 16px 40px -14px rgb(34 55 92 / 0.18),
-    0 3px 10px -4px rgb(34 55 92 / 0.09);
-  --glass-shadow-floating:
-    0 0 0 0.5px rgb(34 55 92 / 0.09),
-    0 26px 60px -18px rgb(34 55 92 / 0.3),
-    0 6px 16px -6px rgb(34 55 92 / 0.14);
-  --glass-shadow-panel: var(--glass-shadow);
-  --glass-shadow-chrome: var(--glass-shadow);
-  --glass-shadow-modal: var(--glass-shadow-floating);
-  --glass-blur: 24px;
-  --glass-blur-panel: var(--glass-blur);
-  --glass-blur-chrome: 28px;
-  --glass-blur-floating: 20px;
-  --glass-blur-modal: 32px;
-  --glass-saturation: 180%;
-  /* Blur and saturation alone leave translucent panes muddier than the surface
-     behind them. The luminance lift is what keeps a light pane reading as
-     frosted glass rather than as a dimmed hole in the page. */
-  --glass-brightness: 1.06;
-  --glass-filter-panel: blur(var(--glass-blur-panel)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
-  --glass-filter-chrome: blur(var(--glass-blur-chrome)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
-  --glass-filter-floating: blur(var(--glass-blur-floating)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
-  --glass-filter-modal: blur(var(--glass-blur-modal)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
-  --glass-filter-control: blur(14px) saturate(150%) brightness(var(--glass-brightness));
-  --glass-filter-scrim: blur(10px) saturate(120%);
-  --solid-control-surface: rgb(255 255 255 / 0.84);
+  --solid-control-surface: #ffffff;
+  /* A secondary button's outline. */
+  --control-secondary-edge: var(--border-muted);
+  /* Neutral state fills. They are translucent foreground rather than a fixed
+     grey so the same step reads correctly on the canvas, a panel or the
+     sidebar: `subtle` is a resting inset, `hover` a pointer hover, `selected`
+     the current row or tab. Accent colour is kept for primary actions and focus. */
+  --fill-subtle: rgb(24 24 27 / 0.035);
+  --fill-hover: rgb(24 24 27 / 0.06);
+  --fill-selected: rgb(24 24 27 / 0.085);
   /* Elevation scale. `xs` lifts a control off its own track, `elevated` carries a
      drawer or modal. */
-  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.08);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-elevated: 0 18px 46px rgb(0 0 0 / 0.12);
+  /* Panels are flat. In the light theme a one-pixel contact shadow keeps a white
+     panel from dissolving into the near-white canvas; the dark theme needs none. */
+  --panel-surface: var(--surface-raised);
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  --surface-border: var(--border-panel);
+  /* Glass.
+     Only layers that float above the page are glass: menus, popovers, dialogs,
+     drawers, toasts and sticky bars. It is deliberately quiet -- a mostly opaque
+     tint of the overlay surface over a modest blur, with no rim light and no
+     refraction -- so what is underneath registers as depth and never competes
+     with the text on top.
+       opacity     — how much of the overlay surface is laid over the backdrop
+       blur        — how far the backdrop is diffused
+       saturation  — a slight lift so the diffused backdrop does not grey out
+     `--glass-opacity` and `--glass-blur-scale` are the two values the
+     Translucency setting writes on the root element; the rest derives from them. */
+  --glass-opacity: 80%;
+  --glass-blur: 12px;
+  --glass-blur-scale: 1;
+  --glass-saturation: 1.14;
+  --glass-surface: color-mix(in srgb, var(--surface-overlay) var(--glass-opacity), transparent);
+  /* Menus open over dense tables, so they take a slightly denser tint than a dialog. */
+  --glass-surface-menu: color-mix(in srgb, var(--surface-overlay) 18%, var(--glass-surface));
+  --glass-border: color-mix(in srgb, var(--text) 10%, transparent);
+  --glass-shadow-floating: 0 12px 32px -12px rgb(0 0 0 / 0.22), 0 2px 6px -2px rgb(0 0 0 / 0.08);
+  --glass-shadow-modal: 0 24px 64px -24px rgb(0 0 0 / 0.45);
+  --glass-filter: blur(calc(var(--glass-blur) * var(--glass-blur-scale))) saturate(var(--glass-saturation));
+  --glass-filter-scrim: blur(4px);
   /* One focus treatment for the whole app. Anything that can take keyboard focus
      draws this ring and nothing else, so the shape of "focused" never depends on
      which stylesheet happened to reach an element first. */
@@ -139,11 +128,11 @@
   --border-strong: 1px;
   --border-heavy: 2px;
   /* `xs` is for placeholders and hairline fills that stand in for text rather
-     than for a surface; `sm` and up are the control and panel radii. */
-  --radius-xs: 5px;
-  --radius-sm: 7px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+     than for a surface; `sm` is the control radius, `md` a panel, `lg` a dialog. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -157,15 +146,15 @@
      shell, but it rides the same curve as everything else. */
   --sidebar-ease: 110ms var(--motion-ease-standard);
   --type-brand-size: 15px;
-  --type-page-title-size: clamp(24px, 2vw, 30px);
-  --type-section-title-size: 17px;
-  --type-card-title-size: 15px;
+  --type-page-title-size: 22px;
+  --type-section-title-size: 15px;
+  --type-card-title-size: 14px;
   --type-metric-value-size: 18px;
   --type-row-title-size: 14px;
   --type-body-size: 14px;
   --type-helper-size: 13px;
   --type-meta-size: 12px;
-  --type-badge-size: 10px;
+  --type-badge-size: 11px;
   --type-button-size: 13px;
   --type-form-label-size: 13px;
   --type-code-size: 13px;
@@ -180,16 +169,23 @@
   --weight-button: 500;
   --tracking-tight: 0;
   --tracking-ui: 0;
-  --tracking-label: 0.01em;
-  --tracking-badge: 0.035em;
-  --control-height-compact: 32px;
-  --control-height-default: 40px;
-  --control-padding-inline: 14px;
-  --control-icon-size: 18px;
-  --control-icon-button-size: 40px;
+  --tracking-label: 0;
+  --tracking-badge: 0;
+  /* Control geometry. A pointer with hover gets the dense desktop sizes; the
+     block after this rule restores finger-sized controls for touch and narrow
+     screens, so density never costs a tap target. */
+  --control-height-compact: 28px;
+  --control-height-default: 32px;
+  --control-input-height: 32px;
+  --control-padding-inline: 12px;
+  --control-icon-size: 16px;
+  --control-icon-button-size: 32px;
+  --sidebar-row-height: 32px;
+  --table-head-height: 36px;
+  --table-row-height: 40px;
   /* Motion scale. Three durations and two curves; nothing in the app should
      invent a fourth. `fast` is a state flip the eye should not have to follow,
-     `base` is the default for hover, tint and rim changes, `slow` is reserved
+     `base` is the default for hover, tint and border changes, `slow` is reserved
      for something arriving or leaving. */
   --motion-duration-fast: 60ms;
   --motion-duration-base: 90ms;
@@ -197,12 +193,36 @@
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-status-cycle: 2800ms;
-  /* Controls transition on the same duration and curve as the glass surfaces
+  /* Controls transition on the same duration and curve as the surfaces
      around them, so a button and the pane it sits on settle together. */
   --control-transition: var(--motion-duration-base) var(--motion-ease-standard);
   font-family: var(--font-sans);
   background: var(--surface);
   color: var(--text);
+}
+
+/* Someone who asked the system for less transparency gets opaque floating
+   layers. This outranks the in-app Translucency setting, which writes the same
+   two properties inline on the root element. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-opacity: 100% !important;
+    --glass-blur-scale: 0 !important;
+  }
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  :root {
+    --control-height-compact: 32px;
+    --control-height-default: 40px;
+    --control-input-height: 44px;
+    --control-padding-inline: 14px;
+    --control-icon-size: 18px;
+    --control-icon-button-size: 40px;
+    --sidebar-row-height: 44px;
+    --table-head-height: 44px;
+    --table-row-height: 48px;
+  }
 }
 
 * {
@@ -272,7 +292,6 @@ button:hover:not(:disabled) {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--swiss-white);
-  transform: translateY(-1px);
 }
 
 button:active:not(:disabled) {
@@ -317,25 +336,26 @@ textarea {
   border: var(--border-strong) solid var(--border-muted);
   background: var(--solid-control-surface);
   color: var(--text);
-  padding: 10px 12px;
+  padding: 6px 10px;
+  font-size: var(--type-body-size);
   text-transform: none;
   letter-spacing: normal;
-  box-shadow: var(--shadow-xs);
+  box-shadow: none;
   transition: background var(--control-transition), border-color var(--control-transition), box-shadow var(--control-transition), color var(--control-transition);
 }
 
 input:not([type="checkbox"]):not([type="radio"]),
 select {
-  height: 44px;
+  height: var(--control-input-height);
 }
 
 select {
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 14px;
-  padding-right: 36px !important;
+  background-position: right 10px center;
+  background-size: 12px;
+  padding-right: 32px !important;
 }
 
 .themeDark select {
@@ -344,8 +364,8 @@ select {
 
 select:disabled {
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-position: right 12px center;
-  background-size: 14px;
+  background-position: right 10px center;
+  background-size: 12px;
   background-repeat: no-repeat;
 }
 
@@ -357,7 +377,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
-  box-shadow: var(--shadow-xs), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 input[aria-invalid="true"] {

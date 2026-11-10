@@ -22,7 +22,7 @@
   gap: var(--space-3);
   padding: var(--space-5);
   border-bottom: var(--border-subtle) solid var(--border-row);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .onboardingBrandMark,
@@ -32,7 +32,7 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 35%, var(--glass-edge));
+  border: var(--border-subtle) solid color-mix(in srgb, var(--accent) 35%, var(--surface-border));
   border-radius: var(--radius-md);
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
@@ -62,7 +62,6 @@
   color: var(--sentinel-accent-strong);
   font-size: var(--type-meta-size);
   font-weight: var(--weight-strong);
-  text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 

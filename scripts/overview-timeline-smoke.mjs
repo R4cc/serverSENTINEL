@@ -554,26 +554,10 @@ async function assertStorageSummary(page, expectedVisibleTiles) {
   assert(geometry.scrollWidth <= geometry.clientWidth, `The World Size card causes summary overflow: ${JSON.stringify(geometry)}`);
 }
 
-async function createOverviewPage(context, viewport, search = "", { forceLiquidGlass = false } = {}) {
+async function createOverviewPage(context, viewport, search = "") {
   const page = await context.newPage();
   await page.setViewportSize(viewport);
   await page.clock.setFixedTime(fixedNow);
-  if (forceLiquidGlass) {
-    await page.addInitScript(() => {
-      const nativeMatchMedia = window.matchMedia.bind(window);
-      window.matchMedia = (query) => {
-        const result = nativeMatchMedia(query);
-        if (query !== "(prefers-reduced-motion: reduce)" && query !== "(prefers-reduced-transparency: reduce)") return result;
-        return new Proxy(result, {
-          get(target, property) {
-            if (property === "matches") return false;
-            const value = Reflect.get(target, property, target);
-            return typeof value === "function" ? value.bind(target) : value;
-          }
-        });
-      };
-    });
-  }
   await page.addInitScript(() => {
     localStorage.setItem("serversentinel-active-page", "overview");
     localStorage.setItem("serversentinel-demo-mode", "true");
@@ -660,15 +644,17 @@ async function assertServerStripActionsInline(context, viewport) {
       const buttonTops = [...strip.querySelectorAll(".serverStripRight button")]
         .map((button) => button.getBoundingClientRect().top);
       return {
-        leftTop: left?.top ?? 0,
-        rightTop: right?.top ?? 0,
+        // Centres, not tops: the actions are shorter than the server details and sit centred
+        // beside them, so only a wrap onto a second row moves one centre away from the other.
+        leftCenter: left ? left.top + left.height / 2 : 0,
+        rightCenter: right ? right.top + right.height / 2 : 0,
         buttonTops,
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: document.documentElement.clientWidth
       };
     });
 
-    assertNear(geometry.rightTop, geometry.leftTop, 2, `Server-strip actions wrap below the server details at ${viewport.width}px`);
+    assertNear(geometry.rightCenter, geometry.leftCenter, 2, `Server-strip actions wrap below the server details at ${viewport.width}px`);
     assert(geometry.buttonTops.length > 0, `Server-strip actions are missing at ${viewport.width}px`);
     assert(geometry.buttonTops.every((top) => Math.abs(top - geometry.buttonTops[0]) <= 1), `Server-strip buttons wrap internally at ${viewport.width}px: ${JSON.stringify(geometry)}`);
     assert(geometry.documentWidth <= geometry.viewportWidth, `Server strip causes horizontal overflow at ${viewport.width}px: ${JSON.stringify(geometry)}`);
@@ -678,40 +664,42 @@ async function assertServerStripActionsInline(context, viewport) {
   }
 }
 
-async function assertLiquidGlassAndEditorScrollbar(context) {
-  const { page, browserErrors } = await createOverviewPage(context, { width: 1920, height: 1080 }, "", { forceLiquidGlass: true });
+async function assertSurfaceMaterialAndEditorScrollbar(context) {
+  const { page, browserErrors } = await createOverviewPage(context, { width: 1920, height: 1080 });
   try {
-    await page.locator(".activeServerStrip > .uiLiquidGlassEffect").waitFor({ state: "attached", timeout: 10_000 });
-    await page.waitForFunction(() => document.querySelectorAll(".activeServerStrip > .uiLiquidGlassEffect > span").length >= 2);
-    const geometry = await page.evaluate(() => {
-      const read = (selector) => {
-        const surface = document.querySelector(selector);
-        const effect = surface?.querySelector(":scope > .uiLiquidGlassEffect");
-        const overlays = [...(effect?.children ?? [])]
-          .filter((child) => ["screen", "overlay"].includes(getComputedStyle(child).mixBlendMode));
-        return {
-          surfaceRadius: surface ? getComputedStyle(surface).borderRadius : "",
-          overlays: overlays.map((overlay) => ({
-            display: getComputedStyle(overlay).display,
-            mixBlendMode: getComputedStyle(overlay).mixBlendMode,
-            radius: getComputedStyle(overlay).borderRadius
-          }))
-        };
+    await page.locator(".activeServerStrip").waitFor();
+    // Page surfaces are flat and opaque; only layers that float are glass.
+    const readMaterial = (selector) => page.locator(selector).first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      const alpha = (color) => {
+        const match = color.match(/^rgba?\(([^)]+)\)$/);
+        const srgb = color.match(/^color\(srgb [^/)]+(?:\/ ([\d.]+))?\)$/);
+        if (srgb) return srgb[1] === undefined ? 1 : Number(srgb[1]);
+        if (!match) return Number.NaN;
+        const parts = match[1].split(/[,/]/).map((part) => part.trim());
+        return parts.length === 4 ? Number(parts[3]) : 1;
       };
-      return { sidebar: read(".sidebar"), strip: read(".activeServerStrip") };
+      return {
+        backdropFilter: style.backdropFilter || style.webkitBackdropFilter || "none",
+        backgroundAlpha: alpha(style.backgroundColor),
+        radius: style.borderRadius
+      };
     });
-
-    assert.equal(geometry.strip.surfaceRadius, "10px", `Server-strip radius changed: ${JSON.stringify(geometry)}`);
-    assert.equal(geometry.strip.overlays.filter((overlay) => overlay.display !== "none").length, 1, `Server strip renders more than one liquid-glass rim: ${JSON.stringify(geometry)}`);
-    assert(geometry.strip.overlays.every((overlay) => overlay.radius === geometry.strip.surfaceRadius), `Server-strip liquid-glass rims do not follow the surface: ${JSON.stringify(geometry)}`);
-    assert.equal(geometry.sidebar.surfaceRadius, "0px", `Desktop sidebar radius changed: ${JSON.stringify(geometry)}`);
-    assert.equal(geometry.sidebar.overlays.filter((overlay) => overlay.display !== "none").length, 1, `Sidebar renders more than one liquid-glass rim: ${JSON.stringify(geometry)}`);
-    assert(geometry.sidebar.overlays.every((overlay) => overlay.radius === geometry.sidebar.surfaceRadius), `Sidebar liquid-glass rims do not follow the surface: ${JSON.stringify(geometry)}`);
+    for (const selector of [".sidebar", ".activeServerStrip", ".serverTimelinePanel"]) {
+      const material = await readMaterial(selector);
+      assert.equal(material.backdropFilter, "none", `${selector} is a page surface but still filters its backdrop: ${JSON.stringify(material)}`);
+      assert.equal(material.backgroundAlpha, 1, `${selector} is a page surface but is translucent: ${JSON.stringify(material)}`);
+    }
+    assert.equal((await readMaterial(".sidebar")).radius, "0px", "Desktop sidebar radius changed");
 
     await page.getByRole("button", { name: "Files", exact: true }).click();
     await page.getByRole("rowheader", { name: "config", exact: true }).dblclick();
     await page.getByRole("rowheader", { name: "serversentinel-demo.toml", exact: true }).dblclick();
     await page.getByRole("dialog").waitFor();
+    // The file editor is the one dialog that stays opaque: it is a workspace wide enough to sit
+    // over the sidebar, and any translucency lets the page show through its header and footer.
+    const dialogMaterial = await readMaterial('[role="dialog"]');
+    assert.equal(dialogMaterial.backgroundAlpha, 1, `The file editor dialog lets the page show through: ${JSON.stringify(dialogMaterial)}`);
     await page.getByRole("button", { name: "Edit file", exact: true }).click();
     // Acquiring the edit lease is asynchronous; wait for the editable view before typing.
     const content = page.locator('.fileCodeEditor:not(.fileCodeEditor-disabled) .cm-content[contenteditable="true"]');
@@ -750,7 +738,7 @@ async function assertLiquidGlassAndEditorScrollbar(context) {
     assert.equal(scrollbar.webkitWidth, "10px", `Chromium scrollbar width is not applied: ${JSON.stringify(scrollbar)}`);
     assert(!["", "rgba(0, 0, 0, 0)", "transparent"].includes(scrollbar.webkitTrackBackground), `Chromium scrollbar track is transparent: ${JSON.stringify(scrollbar)}`);
     assert(!["", "rgba(0, 0, 0, 0)", "transparent"].includes(scrollbar.webkitThumbBackground), `Chromium scrollbar thumb is transparent: ${JSON.stringify(scrollbar)}`);
-    assert.deepEqual(browserErrors, [], `Liquid-glass/editor browser errors: ${browserErrors.join("\n")}`);
+    assert.deepEqual(browserErrors, [], `Surface material/editor browser errors: ${browserErrors.join("\n")}`);
   } finally {
     await page.close();
   }
@@ -1004,11 +992,11 @@ try {
     });
     try {
       await signInThroughApi(materialContext, baseUrl);
-      await assertLiquidGlassAndEditorScrollbar(materialContext);
+      await assertSurfaceMaterialAndEditorScrollbar(materialContext);
     } finally {
       await materialContext.close();
     }
-    console.log("Overview material smoke passed: one visible Chromium liquid-glass rim and an always-visible styled file-editor scrollbar.");
+    console.log("Overview material smoke passed: flat opaque page surfaces, an opaque file-editor dialog and an always-visible styled file-editor scrollbar.");
   } else {
   const context = await browser.newContext({
     locale: "en-US",
@@ -1077,12 +1065,12 @@ try {
   });
   try {
     await signInThroughApi(materialContext, baseUrl);
-    await assertLiquidGlassAndEditorScrollbar(materialContext);
+    await assertSurfaceMaterialAndEditorScrollbar(materialContext);
   } finally {
     await materialContext.close();
   }
 
-  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline and server-strip geometry; aligned liquid-glass contours; visible file-editor scrolling; active schedule ranges and card previews; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
+  console.log("Overview timeline smoke passed: dense live and all-offline roster transitions; per-session online/offline colors; all ranges; pan, drag, zoom, exhaustive row scrolling; responsive timeline and server-strip geometry; flat page surfaces; an opaque file editor with visible scrolling; active schedule ranges and card previews; schedule popover contrast; mobile layout; and equal-height support-card geometry through 4K.");
   }
   }
 } finally {

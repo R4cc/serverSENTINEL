@@ -19,7 +19,6 @@ type StatusTone = "neutral" | "accent" | "success" | "warning" | "danger";
 type SurfaceElement = "section" | "article" | "aside" | "div";
 type SurfaceDensity = "default" | "compact" | "flush";
 type SurfaceTone = "default" | "subtle";
-type SurfaceMaterial = "glass" | "solid";
 type BannerTone = "info" | "success" | "warning" | "error";
 type MetricTone = "neutral" | "info" | "accent" | "success" | "warning" | "danger";
 type MetricVariant = "default" | "summary";
@@ -290,12 +289,10 @@ export const Surface = forwardRef<HTMLElement, HTMLAttributes<HTMLElement> & {
   as?: SurfaceElement;
   density?: SurfaceDensity;
   tone?: SurfaceTone;
-  material?: SurfaceMaterial;
 }>(function Surface({
   as = "section",
   density = "default",
   tone = "default",
-  material = "solid",
   className,
   children,
   ...props
@@ -310,8 +307,6 @@ export const Surface = forwardRef<HTMLElement, HTMLAttributes<HTMLElement> & {
         "uiSurface",
         `uiSurface--${density}`,
         `uiSurface--${tone}`,
-        `uiSurface--${material}`,
-        material === "glass" && "uiGlassSurface",
         className
       )
     },

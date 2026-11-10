@@ -100,16 +100,16 @@
   padding: 0;
   display: inline-grid;
   place-items: center;
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
   color: var(--text);
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   box-shadow: var(--shadow-xs);
 }
 
 .iconButton:hover:not(:disabled) {
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-edge));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--surface-border));
   transform: translateY(-1px);
 }
 
@@ -190,16 +190,17 @@ button .buttonIcon {
 
 .sideNav button {
   width: 100%;
-  min-height: 48px;
+  min-height: var(--sidebar-row-height);
   display: flex;
-  gap: var(--space-3);
+  gap: 10px;
   align-items: center;
   text-align: left;
   background: transparent;
   color: var(--text);
   border: var(--border-subtle) solid transparent;
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-size: var(--type-body-size);
 }
 
 .sideNav button {
@@ -225,8 +226,8 @@ button .buttonIcon {
 .sideNav button.active {
   background: var(--accent);
   color: var(--accent-contrast);
-  border-color: color-mix(in srgb, var(--accent) 82%, var(--glass-edge));
-  box-shadow: var(--glass-highlight), var(--shadow-xs);
+  border-color: color-mix(in srgb, var(--accent) 82%, var(--surface-border));
+  box-shadow: var(--shadow-xs);
 }
 
 .sideNav button.active:hover {
@@ -259,7 +260,7 @@ button .buttonIcon {
 
 .sidebarDivider {
   height: 1px;
-  background-color: var(--glass-edge);
+  background-color: var(--surface-border);
   margin: var(--space-2) 0;
   width: 100%;
 }
@@ -286,10 +287,10 @@ button .buttonIcon {
 .panel,
 .toast,
 .notice {
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-md);
-  background: var(--glass-tint);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
 }
 
 .serverStripLeft {
@@ -363,7 +364,7 @@ button .buttonIcon {
 }
 
 .runtimeControlButton {
-  min-height: 44px;
+  min-height: var(--control-input-height);
   display: inline-flex;
   justify-content: center;
   align-items: center;
@@ -639,8 +640,8 @@ button .buttonIcon {
 
 .sonnerToast {
   --toast-severity: var(--sentinel-info);
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-tint-menu));
-  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 34%, var(--glass-edge));
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-surface-menu));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 34%, var(--surface-border));
   width: min(468px, calc(100vw - 32px)) !important;
   min-height: 58px !important;
   padding: 14px 40px 14px 66px !important;
@@ -649,9 +650,9 @@ button .buttonIcon {
   border-radius: var(--radius-md) !important;
   background: var(--toast-severity-bg) !important;
   color: var(--text) !important;
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
-  -webkit-backdrop-filter: var(--glass-filter-floating) !important;
-  backdrop-filter: var(--glass-filter-floating) !important;
+  box-shadow: var(--glass-shadow-floating) !important;
+  -webkit-backdrop-filter: var(--glass-filter) !important;
+  backdrop-filter: var(--glass-filter) !important;
   font-family: var(--font-sans) !important;
   font-weight: var(--weight-body) !important;
 }
@@ -674,9 +675,8 @@ button .buttonIcon {
 }
 
 .themeDark .sonnerToast {
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 11%, var(--glass-tint-menu));
-  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 42%, var(--glass-edge));
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 11%, var(--glass-surface-menu));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 42%, var(--surface-border));
 }
 
 .sonnerToast [data-icon] {
@@ -924,7 +924,7 @@ button .buttonIcon {
 }
 
 .secretPreview {
-  min-height: 44px;
+  min-height: var(--control-input-height);
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -953,7 +953,7 @@ button .buttonIcon {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: center;
-  min-height: 46px;
+  min-height: 40px;
   min-width: 0;
   width: 100%;
   transition: gap 90ms cubic-bezier(0.4, 0, 0.2, 1), padding 90ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -1197,13 +1197,13 @@ button .buttonIcon {
   width: min(520px, 100%);
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-lg);
-  background: var(--glass-tint-strong);
+  background: var(--glass-surface);
   padding: var(--space-5);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
-  -webkit-backdrop-filter: var(--glass-filter-modal);
-  backdrop-filter: var(--glass-filter-modal);
+  box-shadow: var(--glass-shadow-modal);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 
 .modalCloseButton {
@@ -1467,19 +1467,11 @@ button .buttonIcon {
   min-width: 0;
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  /* The strip carries the glass classes and the refractive layer from
-     `ActiveServerStrip`, so it takes the chrome material from `primitives.css`
-     rather than repainting itself opaque here -- which is what previously left
-     the refraction layer rendering underneath a solid fill. */
-  border: 1px solid var(--glass-edge);
+  /* The strip sits in the page flow, so it is a flat panel like its neighbours. */
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--glass-shadow-chrome);
-}
-
-/* A compact strip needs one crisp boundary. The shared inset highlight and
-   directional rim sit just inside its real border and read as a second card. */
-.activeServerStrip::after {
-  display: none;
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
 }
 
 .activeServerStrip .serverStripPrimary {
@@ -1489,10 +1481,6 @@ button .buttonIcon {
   flex-wrap: wrap;
   gap: var(--space-3);
   min-width: 0;
-}
-
-.themeDark .activeServerStrip {
-  border-color: var(--glass-edge);
 }
 
 .activeServerStrip .serverStripLeft {
@@ -1507,11 +1495,11 @@ button .buttonIcon {
   width: 34px;
   height: 34px;
   min-width: 34px;
-  border-color: var(--glass-edge);
+  border-color: var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
   color: var(--accent);
-  box-shadow: var(--glass-highlight);
+  box-shadow: none;
 }
 
 .activeServerStrip .server-icon-cube {
@@ -1562,13 +1550,13 @@ button .buttonIcon {
   gap: 6px;
   width: max-content;
   max-width: min(360px, calc(100vw - 32px));
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  background: var(--glass-tint-menu);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  -webkit-backdrop-filter: var(--glass-filter-floating);
-  backdrop-filter: var(--glass-filter-floating);
+  background: var(--glass-surface-menu);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   color: var(--text);
   font-size: 12px;
   line-height: 1.45;
@@ -1642,8 +1630,8 @@ button .buttonIcon {
 .activeServerStrip .runtimeBadge {
   flex: 0 0 auto;
   padding: 5px 10px;
-  border-color: var(--glass-edge);
-  background: var(--glass-tint-soft);
+  border-color: var(--surface-border);
+  background: var(--fill-subtle);
   color: var(--text-muted);
   font-size: 11px;
   font-weight: var(--weight-meta);
@@ -1754,7 +1742,7 @@ button .buttonIcon {
 
 .activeServerStrip .serverRuntimeAlert.compact {
   width: auto;
-  min-height: 40px;
+  min-height: var(--control-height-default);
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -1767,8 +1755,8 @@ button .buttonIcon {
 }
 
 .activeServerStrip .uiButton.runtimeControlButton {
-  min-height: 40px;
-  height: 40px;
+  min-height: var(--control-height-default);
+  height: var(--control-height-default);
   padding-inline: var(--space-4);
   border-radius: var(--radius-sm);
   font-size: var(--type-button-size);
@@ -1786,28 +1774,22 @@ button .buttonIcon {
   min-width: 112px;
 }
 
-/* Neutral controls on the strip are glass chips rather than opaque buttons, so
-   the bar reads as one material with its controls cut from it. Start and Stop
-   stay solid: a prominent, destructive or primary action should not be
-   see-through. */
+/* Restart is the strip's neutral action, so it looks like every other secondary
+   button; Start and Stop keep their solid status colours. */
 .activeServerStrip .uiButton.runtimeControlButton.restart {
-  /* The secondary-control edge, as on every other secondary button: the bare glass edge is
-     near-white and vanished against the light theme's strip. */
   border-color: var(--control-secondary-edge);
-  background: var(--glass-tint-soft);
+  background: var(--solid-control-surface);
   color: var(--text);
   box-shadow: var(--shadow-xs);
-  -webkit-backdrop-filter: var(--glass-filter-control);
-  backdrop-filter: var(--glass-filter-control);
 }
 
 /* The strip restates the base colours of Restart, which also outranks the
    `uiButton--secondary` hover state. The values match the primitive it shadows
    so the strip responds like every other control. */
 .activeServerStrip .uiButton.runtimeControlButton.restart:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
+  border-color: var(--control-secondary-edge);
+  background: color-mix(in srgb, var(--solid-control-surface), var(--text) 6%);
+  color: var(--text);
 }
 
 .activeServerStrip .uiButton.runtimeControlButton.start:hover:not(:disabled) {
@@ -1824,9 +1806,9 @@ button .buttonIcon {
 
 .activeServerStrip .refreshStatusButton {
   width: 40px;
-  height: 40px;
+  height: var(--control-height-default);
   min-width: 40px;
-  min-height: 40px;
+  min-height: var(--control-height-default);
   /* A plain secondary control, like Restart beside it: the accent tint it had only showed in the
      light theme, where it read as a selected state. */
   border-color: var(--control-secondary-edge);
@@ -1934,7 +1916,7 @@ button .buttonIcon {
   padding: 0;
 }
 
-.usersSettings { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.usersSettings { background: var(--surface-raised); box-shadow: none; }
 
 .userModalHeader {
   min-width: 0;

@@ -76,7 +76,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
   }
 
   return (
-    <Surface className="modsWorkspaceInstalled" material="glass" density="flush" aria-labelledby="installed-mods-title">
+    <Surface className="modsWorkspaceInstalled" density="flush" aria-labelledby="installed-mods-title">
       <PanelHeader
         className="modsWorkspaceListHeader"
         headingId="installed-mods-title"

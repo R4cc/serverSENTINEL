@@ -419,7 +419,7 @@ export function PlayersPage({
     ? insights?.players.filter((entry) => entry.online) ?? []
     : insights?.players ?? [];
   const roster = (
-    <Surface className="playerCard playerRosterCard" material="glass">
+    <Surface className="playerCard playerRosterCard">
       <PanelHeader
         title={<PlayerSectionTitle icon={Users}>Players</PlayerSectionTitle>}
         help={<HelpTooltip label="player data">Locations are approximate. Ping is measured from the player's active TCP connection and is unavailable for offline or unmatched players.</HelpTooltip>}
@@ -509,7 +509,7 @@ export function PlayersPage({
       <div id={geographyId} hidden={compactLayout && !geographyExpanded} className="playerGeographyDisclosure">
         {(!compactLayout || geographyExpanded) && (
           <div className="playerGeographyRow">
-            <Surface className="playerCard playerGeographyCard" material="glass">
+            <Surface className="playerCard playerGeographyCard">
               <PanelHeader
                 title={<PlayerSectionTitle icon={Globe}>Player geography</PlayerSectionTitle>}
                 description={serverLocation?.location

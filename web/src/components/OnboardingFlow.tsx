@@ -22,7 +22,7 @@ function NodeChoice({
 }) {
   const usable = isNodeRuntimeUsable(node);
   return (
-    <Surface as="article" material="solid" className={`onboardingChoiceCard ${selected ? "selected" : ""}`.trim()}>
+    <Surface as="article" className={`onboardingChoiceCard ${selected ? "selected" : ""}`.trim()}>
       <div className="onboardingChoiceHeader">
         <span className="onboardingChoiceIcon" aria-hidden="true"><AppIcon name="server" /></span>
         <div>
@@ -178,7 +178,7 @@ export function OnboardingFlow({
 
             <div className="onboardingChoiceGrid">
               {localNode ? <NodeChoice node={localNode} selected={selectedNodeId === localNode.id} onSelect={() => chooseNode(localNode.id)} /> : (
-                <Surface as="article" material="solid" className="onboardingChoiceCard unavailable">
+                <Surface as="article" className="onboardingChoiceCard unavailable">
                   <div className="onboardingChoiceHeader">
                     <span className="onboardingChoiceIcon" aria-hidden="true"><AppIcon name="server" /></span>
                     <div><strong>This machine</strong><span>Run Minecraft beside the panel.</span></div>
@@ -190,7 +190,7 @@ export function OnboardingFlow({
               )}
 
               {firstRemoteNode ? <NodeChoice node={firstRemoteNode} selected={selectedNodeId === firstRemoteNode.id} onSelect={() => chooseNode(firstRemoteNode.id)} /> : (
-                <Surface as="article" material="solid" className="onboardingChoiceCard">
+                <Surface as="article" className="onboardingChoiceCard">
                   <div className="onboardingChoiceHeader">
                     <span className="onboardingChoiceIcon" aria-hidden="true"><AppIcon name="plus" /></span>
                     <div><strong>Another machine</strong><span>Connect a Docker host with the guided node installer.</span></div>
@@ -212,12 +212,12 @@ export function OnboardingFlow({
               <p>{selectedNode ? "Recommended settings are filled automatically." : "Choose a ready host before continuing."}</p>
             </div>
             <div className="onboardingActionGrid">
-              <Surface as="article" material="solid" className="onboardingActionCard">
+              <Surface as="article" className="onboardingActionCard">
                 <span className="onboardingActionIcon" aria-hidden="true"><AppIcon name="server" /></span>
                 <div><strong>Create a new server</strong></div>
                 <Button onClick={() => selectedNode && onCreateServer(selectedNode.id)} disabled={!selectedNode || !canCreateServers}>Create server</Button>
               </Surface>
-              <Surface as="article" material="solid" className="onboardingActionCard">
+              <Surface as="article" className="onboardingActionCard">
                 <span className="onboardingActionIcon" aria-hidden="true"><AppIcon name="extract" /></span>
                 <div><strong>Restore an export</strong></div>
                 <Button variant="secondary" onClick={() => selectedNode && onImportServer(selectedNode.id)} disabled={!selectedNode || !canCreateServers}>Import export</Button>
@@ -235,7 +235,7 @@ export function OnboardingFlow({
               <p>The server was created in a stopped state so you stay in control of its first launch.</p>
             </div>
             {firstServer ? (
-              <Surface as="article" material="solid" className="onboardingServerReadyCard">
+              <Surface as="article" className="onboardingServerReadyCard">
                 <div className="onboardingServerReadyCopy">
                   <span className="onboardingServerReadyIcon" aria-hidden="true"><AppIcon name="server" /></span>
                   <div><span>First managed server</span><strong>{firstServer.displayName}</strong></div>
@@ -258,7 +258,7 @@ export function OnboardingFlow({
             </div>
 
             <div className="onboardingFinishGrid">
-              <Surface as="article" material="solid" className="onboardingFinishCard">
+              <Surface as="article" className="onboardingFinishCard">
                 <div><strong>Player heads</strong><StatusBadge tone={playerHeadsChoice ? "success" : "neutral"}>{playerHeadsChoice ? "Enabled" : "Private by default"}</StatusBadge></div>
                 <p>When enabled, player usernames are sent from the panel host to MCHeads to retrieve avatar images.</p>
                 <div className="onboardingSegmentedChoice" role="group" aria-label="Player heads preference">
@@ -266,15 +266,15 @@ export function OnboardingFlow({
                   <Button variant={playerHeadsChoice ? "primary" : "secondary"} compact onClick={() => setPlayerHeadsChoice(true)} disabled={!canManageIntegrations || playerHeadsBusy}>Enable</Button>
                 </div>
               </Surface>
-              <Surface as="article" material="solid" className="onboardingFinishCard">
+              <Surface as="article" className="onboardingFinishCard">
                 <div><strong>Modrinth</strong><StatusBadge tone={modrinthConfigured ? "success" : "neutral"}>{modrinthConfigured ? "Configured" : "Optional"}</StatusBadge></div>
                 <Button variant="secondary" compact onClick={onOpenSettings}>Open integrations</Button>
               </Surface>
-              <Surface as="article" material="solid" className="onboardingFinishCard">
+              <Surface as="article" className="onboardingFinishCard">
                 <div><strong>Scheduling time zone</strong><HelpTooltip label="scheduling time zone">Schedules use the panel time zone. Display formatting can be customized independently.</HelpTooltip><StatusBadge tone="accent">{panelTimeZone}</StatusBadge></div>
                 <Button variant="secondary" compact onClick={onOpenSettings}>Open appearance</Button>
               </Surface>
-              <Surface as="article" material="solid" className="onboardingFinishCard">
+              <Surface as="article" className="onboardingFinishCard">
                 <div><strong>Nodes</strong><StatusBadge tone="neutral">Optional</StatusBadge></div>
                 <Button variant="secondary" compact onClick={onAddNode} disabled={!canManageNodes}>Add node</Button>
               </Surface>

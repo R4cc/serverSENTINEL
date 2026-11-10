@@ -261,7 +261,7 @@
 
 button,
 .runtimeControlButton {
-  min-height: 42px;
+  min-height: var(--control-height-default);
 }
 
 .iconButton,
@@ -335,13 +335,13 @@ button:disabled,
 
 .panel,
 .modalPanel {
-  background: var(--glass-tint);
-  border: var(--border-subtle) solid var(--glass-edge);
+  background: var(--panel-surface);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  box-shadow: var(--panel-shadow);
 }
 
-.modalPanel { background: var(--glass-tint-strong); border-radius: var(--radius-lg); }
+.modalPanel { background: var(--glass-surface); border-radius: var(--radius-lg); }
 
 .modalHeader {
   min-width: 0;
@@ -453,51 +453,19 @@ button:disabled,
 }
 
 /* Surface and interaction hierarchy */
-/* The rail is the app's largest pane of glass. It is tinted from the navy
-   sidebar colour rather than from the shared white tint, but the material is
-   the same one `primitives.css` defines -- the rim, blur and shadow all come
-   from `uiGlassSurface--chrome`, and only the tint is restated here. */
+/* The rail is a flat pane one tone off the canvas, set apart by a hairline.
+   Its text, hover and selection all derive from the rail's own foreground, so
+   it follows the theme without restating a colour per state. */
 .sidebar {
-  border-right: var(--border-subtle) solid color-mix(in srgb, var(--sidebar-foreground) 16%, var(--sidebar-background));
-  background: color-mix(in srgb, var(--sidebar-background) 78%, transparent);
+  border-right: var(--border-subtle) solid var(--border-panel);
+  background: var(--sidebar-background);
   color: var(--sidebar-foreground);
 }
 
-.themeDark .sidebar {
-  background: color-mix(in srgb, var(--sidebar-background) 80%, transparent);
-}
-
-.sidebar::after {
-  /* The rail meets the workspace on one edge only, so it lights that edge
-     instead of tracing a ring that its own overflow would clip. Note this
-     replaces the gradient but not the geometry: the ring in `primitives.css` is
-     made by `padding: 1px` plus `mask-composite: exclude`, so the band still
-     runs the full perimeter and this only decides how brightly it paints. */
-  background: linear-gradient(180deg, var(--glass-rim-top) 0%, transparent 42%);
-}
-
-/* Above the compact breakpoint the rail is the app's one navy pane
-   (`--sidebar-background` stays at its token value; only the compact shell
-   below re-points it at `--surface`). The shared rim is tuned for white glass
-   -- `--glass-rim-top` is 92% white in the light theme -- so on navy that
-   perimeter band stops reading as a specular edge and reads as a hard white
-   border. Both the ring and the inset highlight are therefore restated from the
-   rail's own foreground at rim strength: the pane keeps its lit top edge and
-   its bloom, and loses the outline. The compact shell keeps the shared values,
-   where they sit on a light surface and behave as designed. */
 @media (min-width: 1101px) {
-  .sidebar::after {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--sidebar-foreground) 14%, transparent) 0%, transparent 42%);
-  }
-
   .sidebar {
-    /* The last layer covers the viewport exposed above the sticky rail during
-       elastic overscroll. */
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 16%, transparent),
-      inset 0 8px 16px -14px color-mix(in srgb, var(--sidebar-foreground) 24%, transparent),
-      var(--glass-shadow-chrome),
-      0 -100vh 0 var(--sidebar-background);
+    /* Covers the viewport exposed above the sticky rail during elastic overscroll. */
+    box-shadow: 0 -100vh 0 var(--sidebar-background);
   }
 }
 
@@ -515,21 +483,20 @@ button:disabled,
 }
 
 .sidebar .sideNav button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+  border-color: transparent;
+  background: var(--fill-hover);
   color: var(--sidebar-foreground);
 }
 
 .sidebar .accountChip {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
+  border-color: transparent;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sidebar-foreground) 5%, transparent);
+  background: transparent;
 }
 
 .sidebar .sidebarDivider {
-  background-color: color-mix(in srgb, var(--sidebar-foreground) 14%, transparent);
+  background-color: var(--border-panel);
 }
-
-/* Sidebar-specific states need to remain legible against its navy surface. */
 
 /* Phone layouts use a single visual viewport and a single active scroll owner. */
 @media (max-width: 720px) {
@@ -785,34 +752,34 @@ button:disabled,
   width: 100%;
   min-width: 0;
   height: auto;
-  min-height: 68px;
+  min-height: 56px;
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr) 18px;
   gap: 10px;
   align-items: center;
   justify-content: stretch;
-  padding: 10px var(--space-3);
+  padding: 8px 10px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 20%, transparent);
+  border: 1px solid var(--border-panel);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--sidebar-foreground) 7%, transparent);
+  background: var(--fill-subtle);
   color: var(--sidebar-foreground);
   text-align: left;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
+  box-shadow: none;
 }
 
 .sidebar .serverSwitcherTrigger:hover:not(:disabled),
 .sidebar .serverSwitcherTrigger[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--sidebar-foreground));
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: var(--border-muted);
+  background: var(--fill-hover);
   color: var(--sidebar-foreground);
   transform: none;
 }
 
 /* Disabled here means "no server exists yet", which is a state the visitor is
-   meant to read, not squint at. The shared 38% dim leaves "Select a server"
-   barely legible on the navy rail, so the trigger keeps its contrast and
-   signals unavailability with a dashed rim instead. */
+   meant to read, not squint at. The shared dim leaves "Select a server" barely
+   legible in the rail, so the trigger keeps its contrast and signals
+   unavailability with a dashed border instead. */
 .sidebar .serverSwitcherTrigger:disabled {
   opacity: 1;
   border-style: dashed;
@@ -824,17 +791,15 @@ button:disabled,
 .serverSwitcherStatus,
 .serverSwitcherOptionDot {
   display: block;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   background: var(--text-soft);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-soft) 13%, transparent);
 }
 
 .serverSwitcherStatus.running,
 .serverSwitcherOptionDot.running {
   background: var(--sentinel-success);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-success) 14%, transparent);
 }
 
 .serverSwitcherStatus.starting,
@@ -842,7 +807,6 @@ button:disabled,
 .serverSwitcherStatus.warning,
 .serverSwitcherOptionDot.warning {
   background: var(--sentinel-warning);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-warning) 14%, transparent);
 }
 
 .serverSwitcherStatus.stopped,
@@ -850,7 +814,6 @@ button:disabled,
 .serverSwitcherOptionDot.stopped,
 .serverSwitcherOptionDot.exited {
   background: var(--sentinel-danger);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sentinel-danger) 13%, transparent);
 }
 
 .serverSwitcherCopy {
@@ -860,12 +823,10 @@ button:disabled,
 }
 
 .serverSwitcherCopy small {
-  color: color-mix(in srgb, var(--sidebar-foreground) 74%, transparent);
-  font-size: 9px;
-  font-weight: var(--weight-title);
-  letter-spacing: 0.09em;
+  color: var(--sidebar-foreground-muted);
+  font-size: 11px;
+  font-weight: var(--weight-meta);
   line-height: 1.2;
-  text-transform: uppercase;
 }
 
 .serverSwitcherCopy strong {
@@ -909,33 +870,35 @@ button:disabled,
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: 5px;
-  border-color: var(--glass-edge);
+  padding: 4px;
+  border-color: var(--glass-border);
   border-radius: var(--radius-md);
-  background: var(--glass-tint-menu);
+  background: var(--glass-surface-menu);
   color: var(--text);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 
 .sidebar .serverSwitcherMenu .actionMenuItem {
-  min-height: 54px;
+  min-height: 46px;
   display: flex;
   width: 100%;
-  padding: 8px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
 }
 
 .sidebar .serverSwitcherMenu .actionMenuItem:hover:not(:disabled),
 .sidebar .serverSwitcherMenu .actionMenuItem:focus-visible {
-  background: var(--sentinel-accent-soft);
+  background: var(--fill-hover);
   color: var(--text);
 }
 
 .sidebar .serverSwitcherMenu .actionMenuItem--active {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: var(--fill-selected);
   color: var(--text);
 }
 
@@ -974,15 +937,13 @@ button:disabled,
 }
 
 .serverSwitcherCurrent {
-  padding: 3px 6px;
-  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  padding: 2px 6px;
+  border: 1px solid var(--border-muted);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--sentinel-accent-strong);
-  font-size: 9px;
-  font-weight: var(--weight-title);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--weight-meta);
 }
 
 .serverSubNav {
@@ -990,7 +951,7 @@ button:disabled,
   gap: 3px;
   margin-left: 10px;
   padding-left: 8px;
-  border-left: 1px solid color-mix(in srgb, var(--sidebar-foreground) 15%, transparent);
+  border-left: 1px solid var(--border-panel);
 }
 
 .serverSubNav .sideIcon {
@@ -1017,9 +978,9 @@ button:disabled,
   border-color: var(--border-row);
 }
 
+/* The page title stands on its own; the panels below it carry the structure. */
 .workspaceHeader {
-  border-bottom-width: var(--border-heavy);
-  border-color: var(--border-panel);
+  border-bottom: 0;
 }
 
 .brandLogo,
@@ -1072,13 +1033,8 @@ button:disabled,
 
 .panel,
 .modalPanel {
-  border-color: var(--glass-edge);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-}
-
-.themeDark .panel,
-.themeDark .modalPanel {
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  border-color: var(--surface-border);
+  box-shadow: var(--panel-shadow);
 }
 
 .panel .panel,
@@ -1254,8 +1210,13 @@ textarea:hover:not(:disabled),
     height: auto;
     padding: var(--space-3) !important;
     overflow: visible;
-    background: var(--glass-tint-strong);
-    box-shadow: var(--glass-highlight), var(--glass-shadow-chrome);
+    /* On compact screens the rail is a bar that the page scrolls beneath, so it
+       is one of the few surfaces that is glass. */
+    border-bottom: var(--border-subtle) solid var(--glass-border);
+    background: var(--glass-surface);
+    box-shadow: none;
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
   }
 
   .brandBlock,
@@ -1325,31 +1286,32 @@ textarea:hover:not(:disabled),
   }
 }
 
-/* Keep sidebar selections and account controls independent of page-theme surfaces. */
+/* The current page is a neutral fill and a stronger weight, not a coloured
+   pill: accent colour is reserved for primary actions and focus. */
 .sidebar .sideNav button.active {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 58%, var(--accent));
+  border-color: transparent;
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 24%, transparent);
+  background: var(--fill-selected);
+  color: var(--sidebar-foreground);
+  box-shadow: none;
 }
 
 .sidebar .sideNav button.active:hover {
-  background: color-mix(in srgb, var(--accent) 88%, var(--text));
-  color: var(--accent-contrast);
+  background: var(--fill-selected);
+  color: var(--sidebar-foreground);
 }
 
 .sidebar .accountIcon {
-  border-color: color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
+  border-color: var(--border-panel);
   border-radius: var(--radius-sm);
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
+  background: var(--fill-subtle);
+  color: var(--sidebar-foreground-muted);
 }
 
 .sidebar .sideNav button.active .settingsVersionText {
-  border-color: color-mix(in srgb, var(--accent-contrast) 22%, transparent);
-  background: color-mix(in srgb, var(--accent-contrast) 12%, transparent);
-  color: var(--accent-contrast);
+  border-color: var(--border-muted);
+  background: transparent;
+  color: var(--sidebar-foreground-muted);
 }
 
 /* These cascade last because the compact tablet shell is declared after the feature breakpoints. */
@@ -1562,9 +1524,9 @@ textarea:hover:not(:disabled),
 }
 
 .sidebar .sideNav button:active:not(:disabled) {
-  background: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
+  background: var(--fill-selected);
 }
 
 .sidebar .sideNav button.active:active {
-  background: color-mix(in srgb, var(--accent) 78%, var(--text));
+  background: var(--fill-selected);
 }

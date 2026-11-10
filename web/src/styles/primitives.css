@@ -26,23 +26,24 @@
   transition: background var(--control-transition), color var(--control-transition), border-color var(--control-transition), box-shadow var(--control-transition), transform var(--control-transition);
 }
 
-.uiButton--primary { border-color: color-mix(in srgb, var(--control-primary-fill) 84%, var(--glass-edge)); background: var(--control-primary-fill); color: var(--control-primary-text); box-shadow: var(--shadow-xs); }
-.uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--control-primary-fill) 78%, var(--text)); background: color-mix(in srgb, var(--control-primary-fill) 88%, var(--text)); color: var(--control-primary-text); transform: none; }
-.uiButton--secondary { border-color: var(--control-secondary-edge); background: var(--glass-tint-soft); color: var(--text); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: var(--glass-filter-control); backdrop-filter: var(--glass-filter-control); }
-.uiButton--secondary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted)); background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); transform: none; }
-.uiButton--ghost,
+.uiButton--primary { border-color: var(--control-primary-fill); background: var(--control-primary-fill); color: var(--control-primary-text); box-shadow: var(--shadow-xs), inset 0 1px 0 rgb(255 255 255 / 0.16); }
+.uiButton--primary:hover:not(:disabled) { border-color: color-mix(in srgb, var(--control-primary-fill) 90%, var(--text)); background: color-mix(in srgb, var(--control-primary-fill) 90%, var(--text)); color: var(--control-primary-text); }
+.uiButton--secondary { border-color: var(--control-secondary-edge); background: var(--solid-control-surface); color: var(--text); box-shadow: var(--shadow-xs); }
+.uiButton--secondary:hover:not(:disabled) { border-color: var(--control-secondary-edge); background: color-mix(in srgb, var(--solid-control-surface), var(--text) 6%); color: var(--text); }
+.uiButton--ghost { border-color: transparent; background: transparent; color: var(--text); box-shadow: none; }
+.uiButton--ghost:hover:not(:disabled) { border-color: transparent; background: var(--fill-hover); color: var(--text); }
 .textLinkButton { border-color: transparent; background: transparent; color: var(--accent); box-shadow: none; }
-.uiButton--ghost:hover:not(:disabled),
-.textLinkButton:hover:not(:disabled) { border-color: transparent; background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--sentinel-accent-strong); transform: none; }
-.uiButton--critical { border-color: var(--sentinel-danger); background: var(--sentinel-danger); color: var(--swiss-white); }
-.uiButton--critical:hover:not(:disabled) { border-color: color-mix(in srgb, var(--sentinel-danger) 78%, var(--text)); background: color-mix(in srgb, var(--sentinel-danger) 84%, var(--text)); color: var(--swiss-white); transform: none; }
+.textLinkButton:hover:not(:disabled) { border-color: transparent; background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--sentinel-accent-strong); }
+.uiButton--critical { border-color: var(--sentinel-danger); background: var(--sentinel-danger); color: var(--swiss-white); box-shadow: var(--shadow-xs), inset 0 1px 0 rgb(255 255 255 / 0.16); }
+.uiButton--critical:hover:not(:disabled) { border-color: color-mix(in srgb, var(--sentinel-danger) 88%, var(--text)); background: color-mix(in srgb, var(--sentinel-danger) 88%, var(--text)); color: var(--swiss-white); }
 .uiButton--compact { min-height: var(--control-height-compact); padding-inline: var(--space-3); font-size: var(--type-meta-size); }
 .uiButton--icon,
 .iconButton,
 .iconOnlyButton { width: var(--control-icon-button-size); min-width: var(--control-icon-button-size); height: var(--control-icon-button-size); min-height: var(--control-icon-button-size); padding: 0; gap: 0; flex-shrink: 0; }
+/* A press pulls the control in slightly; nothing moves on hover. */
 .uiButton:active:not(:disabled),
 .iconButton:active:not(:disabled),
-.iconOnlyButton:active:not(:disabled) { transform: none; }
+.iconOnlyButton:active:not(:disabled) { transform: scale(0.97); }
 /* One disabled treatment across every control shape. `aria-disabled` is listed
    alongside `:disabled` because a `.uiButton` rendered as an anchor -- the
    download link in the export flow is the live case -- cannot carry the
@@ -97,55 +98,78 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiSurface--default { padding: var(--space-4); }
 .uiSurface--compact { padding: var(--space-3); }
 .uiSurface--flush { padding: 0; overflow: hidden; }
-.uiSurface--subtle { border-color: var(--glass-edge); background: var(--glass-tint-soft); }
-.uiSurface--solid { border-color: var(--border-panel); background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.uiSurface--subtle { border-color: var(--surface-border); background: var(--fill-subtle); }
 
-/* Shared glass is progressive enhancement: CSS owns the polished frosted fallback,
-   while the optional refractive layer is decorative and never receives input. */
+/* Glass belongs to layers that float above the page, and the modifier names
+   the tier: `floating` is a menu or popover, `modal` a dialog or drawer. A
+   surface in the page body is a plain `.uiSurface` and is never translucent. */
 .uiGlassSurface {
   position: relative;
   isolation: isolate;
-  border-color: var(--glass-edge);
-  background: var(--glass-tint);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+  border-color: var(--glass-border);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
-.uiGlassSurface--chrome { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-chrome); -webkit-backdrop-filter: var(--glass-filter-chrome); backdrop-filter: var(--glass-filter-chrome); }
-.uiGlassSurface--floating { background: var(--glass-tint-menu); box-shadow: var(--glass-highlight), var(--glass-shadow-floating); -webkit-backdrop-filter: var(--glass-filter-floating); backdrop-filter: var(--glass-filter-floating); }
-.uiGlassSurface--modal { background: var(--glass-tint-strong); box-shadow: var(--glass-highlight), var(--glass-shadow-modal); -webkit-backdrop-filter: var(--glass-filter-modal); backdrop-filter: var(--glass-filter-modal); }
-.uiGlassSurface > :not(.uiLiquidGlassEffect) { position: relative; z-index: 1; }
+.uiGlassSurface--floating { background: var(--glass-surface-menu); }
+.uiGlassSurface--modal { box-shadow: var(--glass-shadow-modal); }
 
-/* Directional specular edge. The inset rim in `--glass-highlight` lights all
-   four sides evenly, which is right for a small control but reads flat across a
-   large pane -- real glass catches the light on the corner facing it and loses
-   it on the opposite one. This traces a 1px gradient ring around the same
-   border box to reintroduce that falloff, and only on surfaces that already
-   establish a stacking context, so no layout can shift under it. */
-.uiGlassSurface::after {
-  content: "";
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(148deg, var(--glass-rim-top) 0%, transparent 34%, transparent 64%, var(--glass-rim-base) 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0.85;
-  pointer-events: none;
+/* Range slider. The filled part of the track follows `--ui-range-progress`,
+   which the caller sets to the value as a percentage: a native range input
+   cannot style its own filled portion in every engine. The track is neutral and
+   the fill is the foreground, so the control reads at rest without accent. */
+.uiRange {
+  --ui-range-progress: 0%;
+  --ui-range-thumb-size: 16px;
+  width: 100%;
+  height: var(--ui-range-thumb-size);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
 }
-
-.uiLiquidGlassEffect { position: absolute; z-index: 0; inset: 0; display: block; overflow: hidden; border-radius: inherit; pointer-events: none; opacity: 0.4; }
-.uiLiquidGlassEffect > div { width: 100%; height: 100%; border-radius: inherit; }
-.uiLiquidGlassFill { width: 100%; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--glass-tint-soft) 42%, transparent); }
-/* `liquid-glass-react` appends both a screen rim and a stronger overlay rim.
-   The surface already owns its physical border, so the overlay becomes a
-   second concentric outline in Chromium. Keep the displacement, tint and
-   softer specular rim, and suppress only that redundant final overlay. */
-.uiLiquidGlassEffect > span:last-child { display: none; }
+input.uiRange { height: var(--ui-range-thumb-size); }
+.uiRange:focus { border: 0; box-shadow: none; }
+.uiRange::-webkit-slider-runnable-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--border-muted) var(--ui-range-progress));
+}
+.uiRange::-moz-range-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--text) var(--ui-range-progress), var(--border-muted) var(--ui-range-progress));
+}
+.uiRange::-webkit-slider-thumb {
+  width: var(--ui-range-thumb-size);
+  height: var(--ui-range-thumb-size);
+  margin-top: calc((4px - var(--ui-range-thumb-size)) / 2);
+  border: var(--border-subtle) solid var(--border);
+  border-radius: 999px;
+  background: var(--swiss-white);
+  box-shadow: var(--shadow-xs);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.uiRange::-moz-range-thumb {
+  width: var(--ui-range-thumb-size);
+  height: var(--ui-range-thumb-size);
+  border: var(--border-subtle) solid var(--border);
+  border-radius: 999px;
+  background: var(--swiss-white);
+  box-shadow: var(--shadow-xs);
+}
+@media (pointer: coarse) {
+  .uiRange { --ui-range-thumb-size: 24px; }
+}
 
 .uiPanelHeader { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; }
 .uiPanelHeader--compact { gap: var(--space-2); }
@@ -205,13 +229,13 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   max-height: calc(var(--visual-viewport-height, 100dvh) - 16px);
   overflow: auto;
   visibility: hidden;
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
-  background: var(--glass-tint-menu);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  -webkit-backdrop-filter: var(--glass-filter-floating);
-  backdrop-filter: var(--glass-filter-floating);
+  background: var(--glass-surface-menu);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   color: var(--text);
   font-size: var(--type-helper-size);
   font-weight: var(--weight-body);
@@ -241,7 +265,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiFormField { min-width: 0; display: grid; align-content: start; gap: var(--space-2); }
 .uiFormFieldLabelRow { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .uiFormFieldLabel { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; color: var(--text); font-size: var(--type-form-label-size); font-weight: var(--weight-strong); }
-.uiFormFieldRequired { color: var(--text-soft); font-size: var(--type-badge-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-badge); text-transform: uppercase; }
+.uiFormFieldRequired { color: var(--text-soft); font-size: var(--type-badge-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-badge); }
 .uiFormFieldDescription,
 .uiFormFieldError { color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.45; }
 .uiFormFieldError { color: var(--status-danger-foreground); font-weight: var(--weight-meta); }
@@ -258,15 +282,13 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   grid-template-columns: var(--ui-banner-icon-size) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
-  border: var(--border-subtle) solid color-mix(in srgb, var(--ui-banner-tone) 42%, var(--glass-edge));
+  border: var(--border-subtle) solid color-mix(in srgb, var(--ui-banner-tone) 42%, var(--surface-border));
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--ui-banner-tone) 14%, transparent), color-mix(in srgb, var(--ui-banner-tone) 5%, transparent)),
-    var(--glass-tint-soft);
-  box-shadow: var(--glass-highlight), var(--shadow-xs);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+    var(--fill-subtle);
+  box-shadow: var(--shadow-xs);
 }
 .uiBanner:has(> .uiBannerAction) { grid-template-columns: var(--ui-banner-icon-size) minmax(0, 1fr) auto; }
 .uiBannerIcon { width: var(--ui-banner-icon-size); height: var(--ui-banner-icon-size); display: grid; place-items: center; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ui-banner-tone) 17%, transparent); color: var(--ui-banner-tone); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--ui-banner-tone) 34%, transparent); }
@@ -281,7 +303,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiBanner.uiBanner--success { --ui-banner-tone: var(--sentinel-success); }
 .uiBanner.uiBanner--warning { --ui-banner-tone: var(--sentinel-warning); }
 .uiBanner.uiBanner--error { --ui-banner-tone: var(--sentinel-danger); }
-.uiBanner.inlineState { box-shadow: var(--glass-highlight), var(--shadow-xs); }
+.uiBanner.inlineState { box-shadow: var(--shadow-xs); }
 .uiBanner--compact { --ui-banner-icon-size: 30px; gap: var(--space-2); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); }
 .uiBanner--compact .uiBannerIcon svg { width: 16px; height: 16px; }
 .uiBanner--compact .uiBannerMessage,
@@ -296,7 +318,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   .uiBanner--compact { padding: var(--space-2) var(--space-3); }
 }
 
-.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: color-mix(in srgb, var(--surface-raised) 82%, var(--glass-tint-soft)); box-shadow: var(--shadow-xs); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.uiMetricTile { min-width: 0; min-height: 72px; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: var(--space-3); border: var(--border-subtle) solid var(--border-panel); border-radius: var(--radius-md); padding: var(--space-3); background: var(--panel-surface); box-shadow: var(--panel-shadow); }
 .uiMetricTileMarker { width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 12%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--text-muted) 6%, transparent); }
 .uiMetricTile--info .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-info) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-info) 7%, transparent); }
 .uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 15%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--accent) 7%, transparent); }
@@ -304,7 +326,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiMetricTile--warning .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-warning) 17%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-warning) 7%, transparent); }
 .uiMetricTile--danger .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-danger) 16%, transparent); box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--sentinel-danger) 7%, transparent); }
 .uiMetricTileCopy { min-width: 0; display: grid; gap: 3px; }
-.uiMetricTileLabel { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.uiMetricTileLabel { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); }
 .uiMetricTileCopy strong { min-width: 0; color: var(--text); font-size: var(--type-card-title-size); font-weight: var(--weight-strong); line-height: 1.2; overflow-wrap: anywhere; }
 .uiMetricTileDetail { overflow: hidden; color: var(--text-muted); font-size: var(--type-meta-size); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -321,28 +343,27 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiMetricTile--warning .uiMetricTileIcon { color: var(--sentinel-warning); }
 .uiMetricTile--danger .uiMetricTileIcon { color: var(--sentinel-danger); }
 
-/* `iconPlacement="leading"` is the other option: the marker becomes a rounded well holding a full
-   size icon, which is what makes the tile read as a card rather than as a labelled number. The well
-   takes its size from one custom property so a caller can tighten it for a dense row without
-   restating the layout, and the glyph scales with it. It stays monochrome unless the tone carries
-   real state — a colour per metric would say something the metric does not. */
-.uiMetricTile--leadingIcon { --metric-tile-marker-size: 40px; grid-template-columns: var(--metric-tile-marker-size) minmax(0, 1fr); }
+/* `iconPlacement="leading"` is the other option: the marker holds a plain icon beside the copy,
+   with no well behind it. It takes its size from one custom property so a caller can tighten it
+   for a dense row without restating the layout. It stays monochrome unless the tone carries real
+   state — a colour per metric would say something the metric does not. */
+.uiMetricTile--leadingIcon { --metric-tile-marker-size: 18px; grid-template-columns: var(--metric-tile-marker-size) minmax(0, 1fr); }
 .uiMetricTile--leadingIcon .uiMetricTileMarker {
   width: var(--metric-tile-marker-size);
   height: var(--metric-tile-marker-size);
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
-  color: var(--text-muted);
-  box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--text-muted) 20%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-soft);
+  box-shadow: none;
 }
-.uiMetricTile--leadingIcon .uiMetricTileMarker svg { width: calc(var(--metric-tile-marker-size) * 0.5); height: calc(var(--metric-tile-marker-size) * 0.5); }
-.uiMetricTile--leadingIcon.uiMetricTile--info .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-info) 14%, transparent); color: var(--sentinel-info); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-info) 32%, transparent); }
-.uiMetricTile--leadingIcon.uiMetricTile--accent .uiMetricTileMarker { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--accent) 32%, transparent); }
-.uiMetricTile--leadingIcon.uiMetricTile--success .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-success) 14%, transparent); color: var(--status-success-foreground); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-success) 32%, transparent); }
-.uiMetricTile--leadingIcon.uiMetricTile--warning .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-warning) 15%, transparent); color: var(--status-warning-foreground); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-warning) 34%, transparent); }
-.uiMetricTile--leadingIcon.uiMetricTile--danger .uiMetricTileMarker { background: color-mix(in srgb, var(--sentinel-danger) 14%, transparent); color: var(--status-danger-foreground); box-shadow: inset 0 0 0 var(--border-subtle) color-mix(in srgb, var(--sentinel-danger) 32%, transparent); }
+.uiMetricTile--leadingIcon .uiMetricTileMarker svg { width: 100%; height: 100%; }
+.uiMetricTile--leadingIcon.uiMetricTile--info .uiMetricTileMarker { color: var(--sentinel-info); }
+.uiMetricTile--leadingIcon.uiMetricTile--accent .uiMetricTileMarker { color: var(--accent); }
+.uiMetricTile--leadingIcon.uiMetricTile--success .uiMetricTileMarker { color: var(--status-success-foreground); }
+.uiMetricTile--leadingIcon.uiMetricTile--warning .uiMetricTileMarker { color: var(--status-warning-foreground); }
+.uiMetricTile--leadingIcon.uiMetricTile--danger .uiMetricTileMarker { color: var(--status-danger-foreground); }
 
 /* Summary variant: the wide, low count tile that heads a workspace. Owned here
    rather than per page so the Mods and Nodes summaries stay the same component
@@ -366,7 +387,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .runtimeBadge,
 .settingsStatus,
 .roleBadge,
-.modsStatusChip { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1); width: fit-content; min-height: 24px; border: var(--border-subtle) solid color-mix(in srgb, currentColor 34%, transparent); border-radius: 999px; padding: 4px 8px; background: var(--surface-muted); color: var(--text-muted); font-size: var(--type-badge-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-badge); line-height: 1.1; text-transform: uppercase; white-space: nowrap; }
+.modsStatusChip { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1); width: fit-content; min-height: 24px; border: var(--border-subtle) solid color-mix(in srgb, currentColor 34%, transparent); border-radius: 999px; padding: 4px 8px; background: var(--surface-muted); color: var(--text-muted); font-size: var(--type-badge-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-badge); line-height: 1.1; white-space: nowrap; }
 .uiStatusBadge--accent { background: var(--sentinel-accent-soft); color: var(--sentinel-accent-strong); }
 .uiStatusBadge--success { background: color-mix(in srgb, var(--sentinel-success) 10%, var(--surface)); color: var(--status-success-foreground); }
 .uiStatusBadge--warning { background: color-mix(in srgb, var(--sentinel-warning) 10%, var(--surface)); color: var(--status-warning-foreground); }
@@ -383,7 +404,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .inlineState:not(.uiBanner) > div > strong { color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-strong); letter-spacing: var(--tracking-ui); line-height: 1.35; text-transform: none; }
 .inlineState:not(.uiBanner) > div > span { color: var(--text-muted); font-size: var(--type-helper-size); font-weight: var(--weight-body); line-height: 1.45; }
 
-.uiSortHeaderButton { width: 100%; min-height: var(--control-height-compact); justify-content: flex-start; gap: var(--space-1); border: 0; border-radius: var(--radius-sm); padding: 0 var(--space-2); background: transparent; color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-align: left; text-transform: uppercase; box-shadow: none; }
+.uiSortHeaderButton { width: 100%; min-height: var(--control-height-compact); justify-content: flex-start; gap: var(--space-1); border: 0; border-radius: var(--radius-sm); padding: 0 var(--space-2); background: transparent; color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-align: left; box-shadow: none; }
 .uiSortHeaderButton:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); transform: none; }
 .uiSortHeaderButton:disabled { cursor: default; opacity: 1; }
 
@@ -427,7 +448,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .uiTableViewport { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-inline: contain; contain: inline-size; }
 .uiDataTable th,
 .uiDataTable td { min-width: 0; padding: var(--space-2); border-bottom: var(--border-subtle) solid var(--border-row); vertical-align: middle; text-align: left; }
-.uiTableHeader { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.uiTableHeader { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-label); }
 .uiTableHeader [aria-sort="ascending"] .uiSortHeaderButton,
 .uiTableHeader [aria-sort="descending"] .uiSortHeaderButton { background: transparent; color: var(--text); font-weight: var(--weight-title); }
 /* The sorted column is told by its label and an accent arrow, not a filled cell that read as hover. */
@@ -479,12 +500,12 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   display: grid;
   min-width: 190px;
   overflow: hidden;
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-md);
-  background: var(--glass-tint-menu);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  -webkit-backdrop-filter: var(--glass-filter-floating);
-  backdrop-filter: var(--glass-filter-floating);
+  background: var(--glass-surface-menu);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 .actionMenuPopover--end { right: 0; }
 .actionMenuPopover--start { left: 0; }
@@ -524,7 +545,7 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 }
 .actionMenuItem {
   display: flex;
-  min-height: 40px;
+  min-height: var(--control-height-default);
   width: 100%;
   align-items: center;
   justify-content: flex-start;
@@ -593,32 +614,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   --spinner-track: color-mix(in srgb, currentColor 28%, transparent);
   --spinner-indicator: currentColor;
 }
-
-@media (prefers-reduced-transparency: reduce) {
-  .uiSurface,
-  .panel,
-  .uiGlassSurface,
-  .uiMetricTile,
-  .actionMenuPopover,
-  .scheduleTableCard,
-  .modsWorkspaceInstalled,
-  .modsResultCard,
-  .modsReviewHero,
-  .modsAdvancedOptions,
-  .modsReviewLine,
-  .modsDependencySummary,
-  .modsCompatibilityCard,
-  .nodeInstallBox,
-  .summaryTile {
-    background: var(--surface-raised);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-
-  .uiLiquidGlassEffect,
-  .uiGlassSurface::after { display: none; }
-}
-
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -985,12 +980,10 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
 .modsCompatibilityCard,
 .nodeInstallBox,
 .summaryTile {
-  border-color: var(--glass-edge);
+  border-color: var(--surface-border);
   border-radius: var(--radius-md);
-  background: var(--glass-tint);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
 }
 
 .panel .panel,
@@ -1000,12 +993,10 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   border-color: var(--border-row);
   background: var(--surface);
   box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
-/* Dense, data-heavy regions stay opaque so text, grids, charts, and code keep
-   their existing contrast instead of stacking translucent materials. */
+/* Dense, data-heavy regions sit flush on the raised surface without the panel
+   contact shadow, so grids, charts and code read as one plane. */
 .consolePanel,
 .fileEditorModal,
 .serverTimelinePanel,
@@ -1018,8 +1009,6 @@ a.uiButton[aria-disabled="true"] { pointer-events: none; }
   border-color: var(--border-panel);
   background: var(--surface-raised);
   box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 .uiPanelHeader,

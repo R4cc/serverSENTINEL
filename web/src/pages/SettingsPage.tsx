@@ -1,5 +1,5 @@
 import "../styles/settings.css";
-import { FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, KeyboardEvent, ReactNode, useMemo, useState } from "react";
 import { Blocks, CalendarDays, Copy, Palette, PlugZap, Puzzle, RefreshCw, Settings as SettingsIcon, SquareTerminal, Users, type LucideIcon } from "lucide-react";
 import { MODULE_DESCRIPTORS, isModuleEnabled } from "@serversentinel/contracts";
 import type { DisplayTimeZonePreference, ModuleAccessState, ModuleId, PlayerHeadsState, PublicUser, RegionalFormatPreference, ThemePreference } from "../types";
@@ -7,6 +7,7 @@ import type { ConsoleFontSize, ConsoleScrollback } from "../features/settings/se
 import { consoleFontSizes, consoleScrollbackSizes } from "../features/settings/settingsPreferences";
 import { buildSystemDiagnostics, summarizeSettingsSystemInfo, type SettingsSystemInfo } from "../features/settings/settingsDiagnostics";
 import { themeOptions } from "../features/settings/themePreferences";
+import { appearanceSliderStep, defaultContrast, defaultTranslucency } from "../features/settings/appearancePreferences";
 import { IntegrationControlField, MaxmindCredentialsForm, ModrinthKeyForm } from "../components/SettingsPanels";
 import { UserManagement } from "../components/UserManagement";
 import { InlineState } from "../components/InlineState";
@@ -37,6 +38,8 @@ export type SettingsPageProps = {
   initialCategory?: SettingsCategory;
   loading: boolean;
   themePreference: ThemePreference;
+  translucency: number;
+  contrast: number;
   relativeTimestamps: boolean;
   regionalFormatPreference: RegionalFormatPreference;
   displayTimeZonePreference: DisplayTimeZonePreference;
@@ -44,6 +47,8 @@ export type SettingsPageProps = {
   browserTimeZone: string;
   displayTimeZone: string;
   onThemeChange(value: ThemePreference): void;
+  onTranslucencyChange(value: number): void;
+  onContrastChange(value: number): void;
   onRelativeTimestampsChange(value: boolean): void;
   onRegionalFormatChange(value: RegionalFormatPreference): void;
   onDisplayTimeZoneChange(value: DisplayTimeZonePreference): void;
@@ -150,6 +155,30 @@ function Toggle({ checked, onChange, label, stateLabel, disabled = false, title 
   );
 }
 
+/**
+ * A 0-100% slider with its value beside it. The reset button only appears once
+ * the value has moved, so an untouched row stays as quiet as its neighbours.
+ */
+function PercentSlider({ label, value, defaultValue, onChange }: { label: string; value: number; defaultValue: number; onChange(value: number): void }) {
+  return (
+    <div className="settingsHubSlider">
+      {value !== defaultValue && <Button variant="ghost" compact onClick={() => onChange(defaultValue)} aria-label={`Reset ${label.toLowerCase()}`}>Reset</Button>}
+      <input
+        type="range"
+        className="uiRange"
+        aria-label={label}
+        min={0}
+        max={100}
+        step={appearanceSliderStep}
+        value={value}
+        style={{ "--ui-range-progress": `${value}%` } as CSSProperties}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <output className="settingsHubSliderValue" aria-hidden="true">{value}%</output>
+    </div>
+  );
+}
+
 function CategoryHeader({ category, actions }: { category: SettingsCategory; actions?: ReactNode }) {
   const details = categoryDetails[category];
   return (
@@ -221,6 +250,12 @@ export function SettingsPage(props: SettingsPageProps) {
             <select aria-label="Theme" value={props.themePreference} onChange={(event) => props.onThemeChange(event.target.value as ThemePreference)}>
               {themeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
+          </PreferenceRow>
+          <PreferenceRow title="Translucency" description="How see-through menus, dialogs and other floating layers are. At 0% they are solid." descriptionTooltip>
+            <PercentSlider label="Translucency" value={props.translucency} defaultValue={defaultTranslucency} onChange={props.onTranslucencyChange} />
+          </PreferenceRow>
+          <PreferenceRow title="Contrast" description="Strengthens secondary text and borders." descriptionTooltip>
+            <PercentSlider label="Contrast" value={props.contrast} defaultValue={defaultContrast} onChange={props.onContrastChange} />
           </PreferenceRow>
           <PreferenceRow title="Relative timestamps">
             <Toggle checked={props.relativeTimestamps} onChange={props.onRelativeTimestampsChange} label="Use relative timestamps" stateLabel={props.relativeTimestamps ? "Relative" : "Full date and time"} />
@@ -449,7 +484,7 @@ export function SettingsPage(props: SettingsPageProps) {
             return <button key={category} id={`settings-tab-${category}`} type="button" role="tab" aria-selected={selected} aria-controls={`settings-panel-${category}`} tabIndex={selected ? 0 : -1} className={selected ? "active" : ""} onClick={() => setActiveCategory(category)} onKeyDown={(event) => handleCategoryKeyDown(event, index)}><span className="settingsHubCategoryIcon"><SettingsGlyph name={category} /></span><strong>{details.label}</strong></button>;
           })}
         </nav>
-        <Surface material="glass" density="flush" className="settingsHubContent" id={`settings-panel-${selectedCategory}`} role="tabpanel" aria-labelledby={`settings-tab-${selectedCategory}`} tabIndex={0}>
+        <Surface density="flush" className="settingsHubContent" id={`settings-panel-${selectedCategory}`} role="tabpanel" aria-labelledby={`settings-tab-${selectedCategory}`} tabIndex={0}>
           {categoryContent[selectedCategory]}
         </Surface>
       </div>

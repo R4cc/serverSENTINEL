@@ -7,8 +7,8 @@
   --side-rail-max-width: 400px;
   --page-gutter: var(--space-5);
   --panel-gap: var(--space-4);
-  --toolbar-min-height: 44px;
-  --control-height: 40px;
+  --toolbar-min-height: 40px;
+  --control-height: var(--control-height-default);
   --modal-small-width: 480px;
   --modal-medium-width: 760px;
   --sidebar-width: 248px;
@@ -46,13 +46,8 @@
 
 .sideNav button,
 .accountChip {
-  min-height: 40px;
-  border-radius: 8px;
-}
-
-.sideNav button {
-  padding: 8px 10px;
-  gap: var(--space-2);
+  min-height: var(--sidebar-row-height);
+  border-radius: var(--radius-sm);
 }
 
 .accountChip {
