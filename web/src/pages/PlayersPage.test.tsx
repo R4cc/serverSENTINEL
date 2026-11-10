@@ -53,10 +53,10 @@ function mapMarkup(html: string) {
 }
 
 describe("the Players workspace before it knows anything", () => {
-  it("keeps the desktop roster ahead of geography and analytics using shared glass surfaces", () => {
+  it("keeps the desktop roster ahead of geography and analytics using shared surfaces", () => {
     const html = render();
-    expect(html).toMatch(/class="[^"]*uiGlassSurface[^"]*playerRosterCard/);
-    expect(html).toMatch(/class="[^"]*uiGlassSurface[^"]*playerGeographyCard/);
+    expect(html).toMatch(/class="uiSurface [^"]*playerRosterCard/);
+    expect(html).toMatch(/class="uiSurface [^"]*playerGeographyCard/);
     expect(html.indexOf("playerRosterCard")).toBeLessThan(html.indexOf("playerGeographyCard"));
     expect(html.indexOf("playerRosterCard")).toBeLessThan(html.indexOf("playerAnalysisRow"));
   });

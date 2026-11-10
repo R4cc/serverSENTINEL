@@ -1,4 +1,3 @@
-.brandBlock,
 .workspaceHeader,
 .activeServerStrip {
   display: flex;
@@ -7,58 +6,10 @@
   align-items: center;
 }
 
-.brandBlock {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--sidebar-rail-size);
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-2);
-  padding-bottom: var(--space-4);
-  border-bottom: var(--border-strong) solid var(--border);
-  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), grid-template-columns var(--sidebar-ease);
-}
-
-.brandLockup {
-  min-width: 0;
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  transition: width var(--sidebar-ease), gap var(--sidebar-ease), transform var(--sidebar-ease);
-}
-
-.brandLockup > div {
-  opacity: 1;
-  max-width: 180px;
-  visibility: visible;
-  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
 .brandLogoPicture {
   display: block;
   flex: 0 0 auto;
   line-height: 0;
-}
-
-.sidebarBrandWordmark {
-  display: grid;
-  gap: 1px;
-  line-height: 0.9;
-}
-
-.sidebarBrandWordmark span {
-  display: block;
-}
-
-.sidebarBrandWordmark span:first-child {
-  font-size: 11px;
-  font-weight: var(--weight-heading);
-}
-
-.sidebarBrandWordmark span:last-child {
-  font-size: 14px;
-  letter-spacing: 0.035em;
 }
 
 .brandLogo {
@@ -78,38 +29,30 @@
 /* Deliberately not `.activeServerStrip span`: the strip's spans are badges,
    status dots and button labels, each of which owns its own type. A blanket
    rule here only forced every one of them to be undone again further down. */
-.brandBlock p,
 .muted {
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.45;
 }
 
-.brandBlock p {
-  margin-top: 2px;
-  letter-spacing: var(--tracking-label);
-  font-size: 10px;
-  font-weight: var(--weight-heading);
-}
-
 .iconButton {
-  width: var(--sidebar-rail-size);
-  min-width: var(--sidebar-rail-size);
-  height: var(--sidebar-rail-size);
-  min-height: var(--sidebar-rail-size);
+  width: var(--control-icon-button-size);
+  min-width: var(--control-icon-button-size);
+  height: var(--control-icon-button-size);
+  min-height: var(--control-icon-button-size);
   padding: 0;
   display: inline-grid;
   place-items: center;
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
   color: var(--text);
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   box-shadow: var(--shadow-xs);
 }
 
 .iconButton:hover:not(:disabled) {
   background: var(--sentinel-accent-soft);
   color: var(--sentinel-accent-strong);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-edge));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--surface-border));
   transform: translateY(-1px);
 }
 
@@ -153,87 +96,6 @@ button .buttonIcon {
   }
 }
 
-.sideNav {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.sideNavBottom {
-  margin-top: auto;
-}
-
-.sidebarNodeUpdateDot {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  color: var(--sentinel-warning);
-  background: currentColor;
-  transform: translateY(-50%);
-}
-
-.sidebarNodeUpdateDot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 1px solid currentColor;
-  border-radius: inherit;
-}
-
-.sidebarCollapsed .sidebarNodeUpdateDot {
-  top: 6px;
-  right: 5px;
-  transform: none;
-}
-
-.sideNav button {
-  width: 100%;
-  min-height: 48px;
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  text-align: left;
-  background: transparent;
-  color: var(--text);
-  border: var(--border-subtle) solid transparent;
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
-}
-
-.sideNav button {
-  justify-content: flex-start;
-  overflow: hidden;
-  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), background-color 100ms, border-color 100ms, color 100ms;
-}
-
-.navLabel {
-  opacity: 1;
-  max-width: 180px;
-  visibility: visible;
-  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.4;
-  padding-block: 1px;
-  white-space: nowrap;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.sideNav button.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border-color: color-mix(in srgb, var(--accent) 82%, var(--glass-edge));
-  box-shadow: var(--glass-highlight), var(--shadow-xs);
-}
-
-.sideNav button.active:hover {
-  background: color-mix(in srgb, var(--accent) 88%, var(--text));
-  color: var(--accent-contrast);
-}
-
 .sideIcon {
   display: block;
   flex: 0 0 auto;
@@ -250,18 +112,588 @@ button .buttonIcon {
   vector-effect: non-scaling-stroke;
 }
 
-.sideNav small {
-  font-size: 12px;
+/* Sidebar --------------------------------------------------------------------
+   The rail is a flat pane one tone off the canvas, set apart by a hairline. It
+   is a list, not a stack of cards: rows carry no border, the current page is a
+   neutral fill, and groups are separated by a short label rather than a rule.
+   Text, hover and selection all derive from the rail's own foreground tokens,
+   which the compact shell in `responsive.css` re-points at the page surface. */
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: var(--space-3);
+  overflow-x: hidden;
+  border-right: var(--border-subtle) solid var(--border-panel);
+  background: var(--sidebar-background);
+  color: var(--sidebar-foreground);
+  white-space: nowrap;
+  transition: padding var(--sidebar-ease), gap var(--sidebar-ease);
+}
+
+@media (min-width: 1101px) {
+  .sidebar {
+    /* Covers the viewport exposed above the sticky rail during elastic overscroll. */
+    box-shadow: 0 -100vh 0 var(--sidebar-background);
+  }
+}
+
+/* Header: a small mark, the wordmark on one line and a quiet toggle. */
+.brandBlock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-rail-size);
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--sidebar-rail-size);
+  padding-left: var(--space-1);
+  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), grid-template-columns var(--sidebar-ease);
+}
+
+.brandLockup {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brandBlock .brandLockup {
+  transition: gap var(--sidebar-ease);
+}
+
+.brandBlock .brandLockup > div {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
+}
+
+.brandBlock .brandLogo {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+}
+
+.sidebarBrandWordmark {
+  overflow: hidden;
+  margin: 0;
+  color: var(--sidebar-foreground);
+  font-size: 14px;
+  font-weight: var(--weight-heading);
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+}
+
+.sidebarBrandWordmark span:first-child {
+  color: var(--sidebar-foreground-muted);
+  font-weight: var(--weight-body);
+}
+
+.brandBlock .iconButton {
+  width: var(--sidebar-rail-size);
+  min-width: var(--sidebar-rail-size);
+  height: var(--sidebar-rail-size);
+  min-height: var(--sidebar-rail-size);
+  border-color: transparent;
+  background: transparent;
+  color: var(--sidebar-foreground-muted);
+  box-shadow: none;
+}
+
+.brandBlock .iconButton:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--fill-hover);
+  color: var(--sidebar-foreground);
+  transform: none;
+}
+
+/* Navigation rows. */
+.sideNav {
+  display: grid;
+  gap: 1px;
+}
+
+.sideNavBottom {
+  margin-top: auto;
+}
+
+.sideNav button {
+  position: relative;
+  width: 100%;
+  min-height: var(--sidebar-row-height);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  overflow: hidden;
+  padding: 0 var(--space-2);
+  border: var(--border-subtle) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--sidebar-foreground-muted);
+  font-size: 13px;
+  font-weight: var(--weight-meta);
+  text-align: left;
+  transition: padding var(--sidebar-ease), gap var(--sidebar-ease), background-color var(--control-transition), color var(--control-transition);
+}
+
+.sideNav button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--fill-hover);
+  color: var(--sidebar-foreground);
+  transform: none;
+}
+
+.sideNav button:active:not(:disabled),
+.sideNav button.active {
+  border-color: transparent;
+  background: var(--fill-selected);
+  color: var(--sidebar-foreground);
+  box-shadow: none;
+}
+
+.sideNav button.active .navLabel {
+  font-weight: var(--weight-strong);
+}
+
+.sideNav button:disabled {
+  border-color: transparent;
+  background: transparent;
+  opacity: var(--disabled-opacity);
+}
+
+.sideNav button .sideIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.navLabel {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
+}
+
+.sidebarNodeUpdateDot {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  color: var(--sentinel-warning);
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
+.sidebarNodeUpdateDot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+}
+
+/* Server group: a label, the server switcher and that server's pages. */
+.serverNavigationGroup {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sidebarSectionLabel {
+  display: block;
+  padding: var(--space-3) var(--space-2) var(--space-1);
+  color: color-mix(in srgb, var(--sidebar-foreground-muted) 80%, transparent);
+  font-size: 11px;
+  font-weight: var(--weight-meta);
+  line-height: 1.3;
+}
+
+.serverSwitcher,
+.serverSwitcherAction {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.serverSubNav {
+  display: grid;
+  gap: 1px;
+}
+
+.sidebar .serverSwitcherTrigger {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 16px;
+  align-items: center;
+  justify-content: stretch;
+  gap: 10px;
+  overflow: hidden;
+  margin-bottom: var(--space-1);
+  padding: 6px var(--space-2) 6px 12px;
+  border: var(--border-subtle) solid var(--border-panel);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--sidebar-foreground);
+  text-align: left;
+  box-shadow: none;
+}
+
+.sidebar .serverSwitcherTrigger:hover:not(:disabled),
+.sidebar .serverSwitcherTrigger[aria-expanded="true"] {
+  border-color: var(--border-panel);
+  background: var(--fill-hover);
+  color: var(--sidebar-foreground);
+  transform: none;
+}
+
+/* Disabled here means "no server exists yet", which is a state the visitor is
+   meant to read, not squint at: the trigger keeps its contrast and signals
+   unavailability with a dashed border instead of the shared dim. */
+.sidebar .serverSwitcherTrigger:disabled {
+  opacity: 1;
+  border-style: dashed;
+  border-color: var(--border-muted);
+  background: transparent;
+  color: var(--sidebar-foreground-muted);
+}
+
+.serverSwitcherCopy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.serverSwitcherCopy strong,
+.serverSwitcherCopy > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sidebarDivider {
-  height: 1px;
-  background-color: var(--glass-edge);
-  margin: var(--space-2) 0;
+.serverSwitcherCopy strong {
+  color: var(--sidebar-foreground);
+  font-size: 13px;
+  font-weight: var(--weight-heading);
+  line-height: 1.3;
+}
+
+.serverSwitcherCopy > span {
+  color: var(--sidebar-foreground-muted);
+  font-size: 11px;
+  font-weight: var(--weight-body);
+  line-height: 1.3;
+}
+
+.serverSwitcherChevron {
+  width: 16px !important;
+  height: 16px !important;
+  color: var(--sidebar-foreground-muted);
+  fill: none !important;
+}
+
+.serverSwitcherStatus,
+.serverSwitcherOptionDot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--text-soft);
+}
+
+.serverSwitcherStatus.running,
+.serverSwitcherOptionDot.running { background: var(--sentinel-success); }
+
+.serverSwitcherStatus.starting,
+.serverSwitcherOptionDot.starting,
+.serverSwitcherStatus.warning,
+.serverSwitcherOptionDot.warning { background: var(--sentinel-warning); }
+
+.serverSwitcherStatus.stopped,
+.serverSwitcherStatus.exited,
+.serverSwitcherOptionDot.stopped,
+.serverSwitcherOptionDot.exited { background: var(--sentinel-danger); }
+
+/* The server list is a floating menu, so it is glass like every other menu. */
+.sidebar .serverSwitcherMenu {
+  left: 0;
+  right: auto;
   width: 100%;
+  min-width: 100%;
+  max-height: min(520px, calc(100dvh - 260px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 4px;
+  border-color: var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass-surface-menu);
+  color: var(--text);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+
+.sidebar .serverSwitcherMenu .actionMenuItem {
+  min-height: 44px;
+  display: flex;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.sidebar .serverSwitcherMenu .actionMenuItem:hover:not(:disabled),
+.sidebar .serverSwitcherMenu .actionMenuItem:focus-visible {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.sidebar .serverSwitcherMenu .actionMenuItem--active {
+  background: var(--fill-selected);
+  color: var(--text);
+}
+
+.serverSwitcherOption {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.serverSwitcherOptionCopy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.serverSwitcherOptionCopy strong,
+.serverSwitcherOptionCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serverSwitcherOptionCopy strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: var(--weight-heading);
+}
+
+.serverSwitcherOptionCopy small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: var(--weight-body);
+}
+
+.serverSwitcherCurrent {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: var(--weight-meta);
+}
+
+/* Footer: settings with the panel version, and the signed-in account. */
+.settingsNavLabel {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settingsVersionText {
+  margin-left: auto;
+  color: var(--sidebar-foreground-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-body);
+  opacity: 0.8;
+}
+
+.accountChip {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--sidebar-row-height);
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) var(--control-icon-button-size);
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 0 4px;
+  border-radius: var(--radius-sm);
+  color: var(--sidebar-foreground);
+  transition: gap var(--sidebar-ease), padding var(--sidebar-ease);
+}
+
+.accountIcon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--fill-selected);
+  color: var(--sidebar-foreground);
+  font-size: 11px;
+  font-weight: var(--weight-heading);
+  line-height: 1;
+}
+
+.accountName {
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  color: var(--sidebar-foreground);
+  font-size: 13px;
+  font-weight: var(--weight-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
+}
+
+/* The account chip sits inside the footer `.sideNav`, so its button opts out of
+   the row layout every other button there takes. */
+.accountChip .accountLogoutButton {
+  width: var(--control-icon-button-size);
+  min-width: var(--control-icon-button-size);
+  height: var(--control-icon-button-size);
+  min-height: var(--control-icon-button-size);
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--sidebar-foreground-muted);
+  box-shadow: none;
+}
+
+.accountChip .accountLogoutButton:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--fill-hover);
+  color: var(--sidebar-foreground);
+}
+
+.accountChip .accountLogoutButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Collapsed desktop rail: icons only, centred in a narrow column. The server
+   switcher and its label have no icon form, so the group is set off from Nodes
+   by a hairline instead. */
+.sidebarCollapsed {
+  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+}
+
+.sidebarCollapsed .sidebar {
+  padding: var(--space-3);
+}
+
+.sidebarCollapsed .brandBlock {
+  grid-template-columns: var(--sidebar-rail-size);
+  justify-items: center;
+  padding-left: 0;
+}
+
+.sidebarCollapsed .brandBlock .brandLockup {
+  gap: 0;
+}
+
+.sidebarCollapsed .brandBlock .brandLockup > div,
+.sidebarCollapsed .navLabel {
+  max-width: 0;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.sidebarCollapsed .sideNav {
+  justify-items: center;
+}
+
+.sidebarCollapsed .sideNav button {
+  width: var(--sidebar-rail-size);
+  min-width: var(--sidebar-rail-size);
+  height: var(--sidebar-rail-size);
+  min-height: var(--sidebar-rail-size);
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+/* Scoped to the rail: the collapsed state is set on the app shell, so an unscoped
+   reset also cleared deliberate icon offsets inside the workspace. */
+.sidebarCollapsed .sidebar .sideIcon,
+.sidebarCollapsed .sidebar .buttonIcon {
+  margin: 0;
+}
+
+.sidebarCollapsed .serverSwitcher,
+.sidebarCollapsed .sidebarSectionLabel {
+  display: none;
+}
+
+.sidebarCollapsed .serverNavigationGroup {
+  justify-items: center;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: var(--border-subtle) solid var(--border-panel);
+}
+
+.sidebarCollapsed .sidebarNodeUpdateDot {
+  top: 5px;
+  right: 5px;
+  transform: none;
+}
+
+.sidebarCollapsed .accountChip {
+  width: var(--sidebar-rail-size);
+  height: var(--sidebar-rail-size);
+  grid-template-columns: 24px;
+  justify-content: center;
+  justify-self: center;
+  padding: 0;
+  overflow: hidden;
+}
+
+.sidebarCollapsed .accountName,
+.sidebarCollapsed .accountLogoutButton {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .brandBlock,
+  .brandBlock .brandLockup,
+  .brandBlock .brandLockup > div,
+  .sideNav button,
+  .navLabel,
+  .accountChip,
+  .accountName {
+    transition: none;
+  }
 }
 
 .workspaceHeader {
@@ -269,7 +701,6 @@ button .buttonIcon {
   padding-bottom: var(--space-3);
   margin-bottom: 0;
 }
-
 
 .workspaceActions {
   display: flex;
@@ -286,10 +717,10 @@ button .buttonIcon {
 .panel,
 .toast,
 .notice {
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-md);
-  background: var(--glass-tint);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
 }
 
 .serverStripLeft {
@@ -363,7 +794,7 @@ button .buttonIcon {
 }
 
 .runtimeControlButton {
-  min-height: 44px;
+  min-height: var(--control-input-height);
   display: inline-flex;
   justify-content: center;
   align-items: center;
@@ -421,84 +852,6 @@ button .buttonIcon {
   background: var(--surface);
   color: var(--text-soft);
   border-color: var(--border-muted);
-}
-
-.sidebarCollapsed {
-  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
-}
-
-.sidebarCollapsed .sidebar {
-  padding: var(--space-3);
-  gap: var(--space-3);
-}
-
-.sidebarCollapsed .brandBlock {
-  grid-template-columns: var(--sidebar-rail-size);
-  justify-content: center;
-  justify-items: center;
-  gap: var(--space-2);
-  padding-bottom: var(--space-3);
-}
-
-.sidebarCollapsed .brandLockup {
-  width: var(--sidebar-rail-size);
-  gap: 0;
-}
-
-.sidebarCollapsed .brandLockup > div {
-  opacity: 0;
-  max-width: 0;
-  visibility: hidden;
-}
-
-.sidebarCollapsed .brandLogo {
-  width: var(--sidebar-rail-size);
-  height: var(--sidebar-rail-size);
-}
-
-.sidebarCollapsed .sideNav button {
-  width: var(--sidebar-rail-size);
-  min-width: var(--sidebar-rail-size);
-  height: var(--sidebar-rail-size);
-  min-height: var(--sidebar-rail-size);
-  padding: 0;
-  gap: 0;
-  justify-content: center;
-  justify-self: center;
-  border-radius: var(--radius-sm);
-}
-
-.sidebarCollapsed .sideNav {
-  justify-items: center;
-}
-
-/* Scoped to the rail: the collapsed state is set on the app shell, so an unscoped
-   reset also cleared deliberate icon offsets inside the workspace. */
-.sidebarCollapsed .sidebar .sideIcon,
-.sidebarCollapsed .sidebar .buttonIcon {
-  margin: 0;
-}
-
-.sidebarCollapsed .navLabel {
-  opacity: 0;
-  max-width: 0;
-  visibility: hidden;
-}
-
-.sidebarCollapsed .accountChip {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: var(--sidebar-rail-size);
-  height: var(--sidebar-rail-size);
-  padding: 0;
-  justify-self: center;
-  overflow: hidden;
-}
-
-.sidebarCollapsed .accountName,
-.sidebarCollapsed .accountLogoutButton {
-  display: none !important;
 }
 
 .runtimeBadge {
@@ -639,8 +992,8 @@ button .buttonIcon {
 
 .sonnerToast {
   --toast-severity: var(--sentinel-info);
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-tint-menu));
-  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 34%, var(--glass-edge));
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 7%, var(--glass-surface-menu));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 34%, var(--surface-border));
   width: min(468px, calc(100vw - 32px)) !important;
   min-height: 58px !important;
   padding: 14px 40px 14px 66px !important;
@@ -649,9 +1002,9 @@ button .buttonIcon {
   border-radius: var(--radius-md) !important;
   background: var(--toast-severity-bg) !important;
   color: var(--text) !important;
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
-  -webkit-backdrop-filter: var(--glass-filter-floating) !important;
-  backdrop-filter: var(--glass-filter-floating) !important;
+  box-shadow: var(--glass-shadow-floating) !important;
+  -webkit-backdrop-filter: var(--glass-filter) !important;
+  backdrop-filter: var(--glass-filter) !important;
   font-family: var(--font-sans) !important;
   font-weight: var(--weight-body) !important;
 }
@@ -674,9 +1027,8 @@ button .buttonIcon {
 }
 
 .themeDark .sonnerToast {
-  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 11%, var(--glass-tint-menu));
-  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 42%, var(--glass-edge));
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating) !important;
+  --toast-severity-bg: color-mix(in srgb, var(--toast-severity) 11%, var(--glass-surface-menu));
+  --toast-severity-border: color-mix(in srgb, var(--toast-severity) 42%, var(--surface-border));
 }
 
 .sonnerToast [data-icon] {
@@ -911,7 +1263,6 @@ button .buttonIcon {
   align-items: end;
 }
 
-
 .keyFormActions {
   display: flex;
   gap: var(--space-2);
@@ -924,7 +1275,7 @@ button .buttonIcon {
 }
 
 .secretPreview {
-  min-height: 44px;
+  min-height: var(--control-input-height);
   border: var(--border-strong) solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -943,105 +1294,6 @@ button .buttonIcon {
   color: var(--text-muted);
   font-size: 13px;
   letter-spacing: var(--tracking-label);
-}
-
-.accountChip {
-  border: var(--border-strong) solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  padding: var(--space-1);
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 34px;
-  align-items: center;
-  min-height: 46px;
-  min-width: 0;
-  width: 100%;
-  transition: gap 90ms cubic-bezier(0.4, 0, 0.2, 1), padding 90ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.accountIcon {
-  width: 34px;
-  height: 34px;
-  border: var(--border-strong) solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-muted);
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-}
-
-.accountIcon svg,
-.accountLogoutButton svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-}
-
-.accountName {
-  min-width: 0;
-  font-size: 12px;
-  font-weight: var(--weight-title);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 1;
-  max-width: 150px;
-  visibility: visible;
-  transition: opacity 80ms ease, max-width var(--sidebar-ease), visibility 80ms ease;
-}
-
-.accountLogoutButton {
-  width: 34px;
-  min-width: 34px;
-  max-width: 34px;
-  min-height: 34px;
-  padding: 0;
-  border-radius: var(--radius-sm);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: var(--surface);
-  color: var(--text);
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 80ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 80ms ease, padding var(--sidebar-ease), margin var(--sidebar-ease), border-width var(--sidebar-ease);
-}
-
-.sideNav .accountLogoutButton {
-  width: 34px;
-  min-width: 34px;
-  min-height: 34px;
-  padding: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: opacity 80ms ease, max-width var(--sidebar-ease), min-width var(--sidebar-ease), visibility 80ms ease;
-}
-
-.settingsNavLabel {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  line-height: 1.25;
-  padding-block: 1px;
-}
-
-.settingsVersionText {
-  color: var(--sidebar-foreground);
-  font-size: 11px;
-  font-weight: var(--weight-heading);
-  letter-spacing: 0;
-  line-height: 1.25;
-  padding: 1px 5px;
-  border: 1px solid color-mix(in srgb, var(--sidebar-foreground) 18%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
-  text-transform: none;
 }
 
 .usersSettings {
@@ -1197,13 +1449,13 @@ button .buttonIcon {
   width: min(520px, 100%);
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-lg);
-  background: var(--glass-tint-strong);
+  background: var(--glass-surface);
   padding: var(--space-5);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
-  -webkit-backdrop-filter: var(--glass-filter-modal);
-  backdrop-filter: var(--glass-filter-modal);
+  box-shadow: var(--glass-shadow-modal);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 
 .modalCloseButton {
@@ -1467,19 +1719,11 @@ button .buttonIcon {
   min-width: 0;
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  /* The strip carries the glass classes and the refractive layer from
-     `ActiveServerStrip`, so it takes the chrome material from `primitives.css`
-     rather than repainting itself opaque here -- which is what previously left
-     the refraction layer rendering underneath a solid fill. */
-  border: 1px solid var(--glass-edge);
+  /* The strip sits in the page flow, so it is a flat panel like its neighbours. */
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--glass-shadow-chrome);
-}
-
-/* A compact strip needs one crisp boundary. The shared inset highlight and
-   directional rim sit just inside its real border and read as a second card. */
-.activeServerStrip::after {
-  display: none;
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
 }
 
 .activeServerStrip .serverStripPrimary {
@@ -1489,10 +1733,6 @@ button .buttonIcon {
   flex-wrap: wrap;
   gap: var(--space-3);
   min-width: 0;
-}
-
-.themeDark .activeServerStrip {
-  border-color: var(--glass-edge);
 }
 
 .activeServerStrip .serverStripLeft {
@@ -1507,11 +1747,11 @@ button .buttonIcon {
   width: 34px;
   height: 34px;
   min-width: 34px;
-  border-color: var(--glass-edge);
+  border-color: var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
   color: var(--accent);
-  box-shadow: var(--glass-highlight);
+  box-shadow: none;
 }
 
 .activeServerStrip .server-icon-cube {
@@ -1562,13 +1802,13 @@ button .buttonIcon {
   gap: 6px;
   width: max-content;
   max-width: min(360px, calc(100vw - 32px));
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  background: var(--glass-tint-menu);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-floating);
-  -webkit-backdrop-filter: var(--glass-filter-floating);
-  backdrop-filter: var(--glass-filter-floating);
+  background: var(--glass-surface-menu);
+  box-shadow: var(--glass-shadow-floating);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   color: var(--text);
   font-size: 12px;
   line-height: 1.45;
@@ -1642,8 +1882,8 @@ button .buttonIcon {
 .activeServerStrip .runtimeBadge {
   flex: 0 0 auto;
   padding: 5px 10px;
-  border-color: var(--glass-edge);
-  background: var(--glass-tint-soft);
+  border-color: var(--surface-border);
+  background: var(--fill-subtle);
   color: var(--text-muted);
   font-size: 11px;
   font-weight: var(--weight-meta);
@@ -1754,7 +1994,7 @@ button .buttonIcon {
 
 .activeServerStrip .serverRuntimeAlert.compact {
   width: auto;
-  min-height: 40px;
+  min-height: var(--control-height-default);
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -1767,8 +2007,8 @@ button .buttonIcon {
 }
 
 .activeServerStrip .uiButton.runtimeControlButton {
-  min-height: 40px;
-  height: 40px;
+  min-height: var(--control-height-default);
+  height: var(--control-height-default);
   padding-inline: var(--space-4);
   border-radius: var(--radius-sm);
   font-size: var(--type-button-size);
@@ -1786,28 +2026,22 @@ button .buttonIcon {
   min-width: 112px;
 }
 
-/* Neutral controls on the strip are glass chips rather than opaque buttons, so
-   the bar reads as one material with its controls cut from it. Start and Stop
-   stay solid: a prominent, destructive or primary action should not be
-   see-through. */
+/* Restart is the strip's neutral action, so it looks like every other secondary
+   button; Start and Stop keep their solid status colours. */
 .activeServerStrip .uiButton.runtimeControlButton.restart {
-  /* The secondary-control edge, as on every other secondary button: the bare glass edge is
-     near-white and vanished against the light theme's strip. */
   border-color: var(--control-secondary-edge);
-  background: var(--glass-tint-soft);
+  background: var(--solid-control-surface);
   color: var(--text);
   box-shadow: var(--shadow-xs);
-  -webkit-backdrop-filter: var(--glass-filter-control);
-  backdrop-filter: var(--glass-filter-control);
 }
 
 /* The strip restates the base colours of Restart, which also outranks the
    `uiButton--secondary` hover state. The values match the primitive it shadows
    so the strip responds like every other control. */
 .activeServerStrip .uiButton.runtimeControlButton.restart:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-muted));
-  background: var(--sentinel-accent-soft);
-  color: var(--sentinel-accent-strong);
+  border-color: var(--control-secondary-edge);
+  background: color-mix(in srgb, var(--solid-control-surface), var(--text) 6%);
+  color: var(--text);
 }
 
 .activeServerStrip .uiButton.runtimeControlButton.start:hover:not(:disabled) {
@@ -1824,9 +2058,9 @@ button .buttonIcon {
 
 .activeServerStrip .refreshStatusButton {
   width: 40px;
-  height: 40px;
+  height: var(--control-height-default);
   min-width: 40px;
-  min-height: 40px;
+  min-height: var(--control-height-default);
   /* A plain secondary control, like Restart beside it: the accent tint it had only showed in the
      light theme, where it read as a selected state. */
   border-color: var(--control-secondary-edge);
@@ -1859,27 +2093,9 @@ button .buttonIcon {
   }
 }
 
-/* The sidebar collapse animates width, padding and label opacity from this
-   file, so it is also where those transitions have to be switched off --
-   `motion.css` loads later but never named them, which left collapsing the rail
-   as the one motion in the shell a reduced-motion visitor still saw. */
+/* Collapsing the rail animates the shell's columns. */
 @media (prefers-reduced-motion: reduce) {
-  .brandBlock,
-  .brandLockup,
-  .brandLockup > div,
-  .navLabel,
-  .accountChip,
-  .accountName,
-  .accountLogoutButton,
-  .sideNav .accountLogoutButton {
-    transition: none;
-  }
-
   .appShell { transition: none; }
-
-  .sideNav button {
-    transition: background-color 100ms, border-color 100ms, color 100ms;
-  }
 }
 
 /* Responsive rules for this owner. Keep these beside the base rules instead of returning them to responsive.css. */
@@ -1934,7 +2150,7 @@ button .buttonIcon {
   padding: 0;
 }
 
-.usersSettings { background: var(--surface-raised); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.usersSettings { background: var(--surface-raised); box-shadow: none; }
 
 .userModalHeader {
   min-width: 0;
@@ -1953,8 +2169,6 @@ button .buttonIcon {
 .userModalForm {
   min-width: 0;
 }
-
-
 
 .userModalForm label.checkLine {
   display: flex;

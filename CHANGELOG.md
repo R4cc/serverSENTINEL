@@ -1,5 +1,17 @@
 # Changelog
 
+## 26.11.3 - 2026-11-10
+
+- Redesigned the interface around a quieter, denser look: neutral flat surfaces with hairline borders, a sidebar that follows the light or dark theme, a neutral highlight for the current page, sentence-case labels, and smaller desktop controls. Touch screens keep finger-sized controls.
+- Redesigned the sidebar as a quiet list: a compact header, a "Server" label in place of divider lines, a slimmer server switcher, flat page rows without the indent guide, the panel version as plain text, and the account shown by its initial. The collapsed rail is narrower.
+- Glass is now reserved for layers that float above the page: menus, dialogs, drawers, tooltips, toasts and sticky bars. It is a soft blur with no refraction, and page panels are opaque.
+- Added Translucency and Contrast sliders under Settings > Appearance. Translucency sets how see-through floating layers are, down to fully solid; Contrast strengthens secondary text and borders. Both are saved in this browser.
+- The system's reduced-transparency preference now makes every floating layer solid.
+
+## 26.11.2 - 2026-11-10
+
+- Redesigned the installed-mods update action: the new version now sits beside a solid Update button instead of inside a split, input-like control, and review-required updates use the same layout.
+
 ## 26.11.1 - 2026-11-03
 
 - Kept action menus open when their button's focus scroll finishes, while still closing them when scrolling moves the button.

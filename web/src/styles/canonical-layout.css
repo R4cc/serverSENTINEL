@@ -7,12 +7,10 @@
   --side-rail-max-width: 400px;
   --page-gutter: var(--space-5);
   --panel-gap: var(--space-4);
-  --toolbar-min-height: 44px;
-  --control-height: 40px;
+  --toolbar-min-height: 40px;
+  --control-height: var(--control-height-default);
   --modal-small-width: 480px;
   --modal-medium-width: 760px;
-  --sidebar-width: 248px;
-  --sidebar-rail-size: 40px;
 }
 
 .workspace {
@@ -26,45 +24,6 @@
   align-content: start;
 }
 
-.sidebar {
-  padding: var(--space-3);
-  gap: var(--space-3);
-}
-
-.brandBlock {
-  padding-bottom: var(--space-3);
-}
-
-.brandLogo {
-  width: var(--sidebar-rail-size);
-  height: var(--sidebar-rail-size);
-}
-
-.sideNav {
-  gap: 4px;
-}
-
-.sideNav button,
-.accountChip {
-  min-height: 40px;
-  border-radius: 8px;
-}
-
-.sideNav button {
-  padding: 8px 10px;
-  gap: var(--space-2);
-}
-
-.accountChip {
-  padding: 6px 8px;
-  gap: var(--space-2);
-}
-
-.sidebarDivider {
-  height: 1px;
-  margin: 6px 0;
-}
-
 .workspaceHeader {
   min-height: 0;
   margin: 0;
@@ -76,7 +35,6 @@
 .workspaceHeader > div:first-child {
   min-width: 0;
 }
-
 
 .workspaceActions,
 .selectionActions,
@@ -252,7 +210,6 @@
   width: 100%;
 }
 
-
 .terminal {
   min-height: 0;
 }
@@ -321,28 +278,6 @@
   overflow-wrap: break-word;
   word-break: normal;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 .scheduleEditOptions {
   align-items: flex-start;
@@ -416,7 +351,6 @@
   width: min(var(--modal-medium-width), calc(100vw - 32px));
 }
 
-
 .fileEditorModal {
   width: 90vw;
   height: 90vh;
@@ -474,7 +408,6 @@
 .addNodeStatusCard {
   padding: var(--space-3);
 }
-
 
 @media (max-width: 1180px) {
   .workspace {
@@ -558,7 +491,6 @@
     padding-bottom: var(--space-3);
   }
 
-
 .activeServerStrip,
 .panel,
 .modalBody,
@@ -583,8 +515,6 @@
     display: grid;
     grid-template-columns: 1fr;
   }
-
-
 
   .modalBackdrop {
     padding: var(--space-2);

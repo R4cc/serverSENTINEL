@@ -679,13 +679,11 @@
   padding: var(--space-3);
 }
 
-.filesPage .filesPanel.uiGlassSurface,
-.filesPage .fileDetailsPanel.uiGlassSurface {
-  border-color: var(--glass-edge);
-  background: var(--glass-tint);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+.filesPage .filesPanel.uiSurface,
+.filesPage .fileDetailsPanel.uiSurface {
+  border-color: var(--surface-border);
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
 }
 
 .filesPage .fileNavBar {
@@ -702,12 +700,12 @@
 }
 
 .filesPage .fileListSurface > .selectionActionBar { background: transparent; }
-.filesPage .fileTableHead { background: var(--glass-tint-strong); -webkit-backdrop-filter: var(--glass-filter-chrome); backdrop-filter: var(--glass-filter-chrome); }
+.filesPage .fileTableHead { background: var(--glass-surface); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .filesPage .fileTableRow { border-radius: var(--radius-sm); background: transparent; }
-.filesPage .fileTableRow:hover { background: var(--glass-tint-soft); }
+.filesPage .fileTableRow:hover { background: var(--fill-subtle); }
 .filesPage .fileTableRow:focus-visible { outline-offset: -2px; }
 .filesPage .fileTableRow.selected { background: var(--sentinel-accent-soft); }
-.filesPage .fileBreadcrumbs button.active { background: var(--glass-tint-soft); box-shadow: var(--glass-highlight); }
+.filesPage .fileBreadcrumbs button.active { background: var(--fill-subtle); box-shadow: none; }
 
 .filesPage .fileDetailsTitle {
   padding: 0 0 var(--space-4);
@@ -725,13 +723,6 @@
 .filesPage .previewUnavailable { border: 1px solid var(--border-muted); background: color-mix(in srgb, var(--surface-muted) 70%, transparent); }
 .filesPage .previewUnavailable .fileTypeIcon { margin-bottom: var(--space-1); }
 .filesPage .previewUnavailable .uiButton { margin-top: var(--space-2); }
-
-@media (prefers-reduced-transparency: reduce) {
-  .filesPage .filesPanel.uiGlassSurface,
-  .filesPage .fileDetailsPanel.uiGlassSurface,
-  .filesPage .fileTableHead { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; }
-}
-
 .fileTableRow {
   transition: background 150ms linear, border-color 150ms linear, color 150ms linear, transform 150ms linear;
 }
@@ -1073,7 +1064,7 @@
 
 .filesPage .fileBreadcrumbs button:hover:not(:disabled) {
   border-color: transparent;
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
   color: var(--text);
 }
 
@@ -1286,11 +1277,4 @@
     align-items: start;
     padding-top: min(18vh, 160px);
   }
-}
-
-/* In the light theme the page's cyan and lavender wash showed through the file panels strongly
-   enough to compete with the selection tint. The panels stay glass, over a near-solid fill. */
-.themeLight .filesPage .filesPanel.uiGlassSurface,
-.themeLight .filesPage .fileDetailsPanel.uiGlassSurface {
-  background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
 }

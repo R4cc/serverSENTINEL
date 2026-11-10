@@ -172,7 +172,7 @@ describe("dense node fleets", () => {
     expect(html).toContain('aria-controls="node-servers-10000000-0000-4000-8000-000000000001"');
     expect(html).not.toContain('class="nodeTile"');
     expect(html).not.toContain("nodeServerTile");
-    expect(html.match(/uiSurface--glass uiGlassSurface nodeListItem/g)).toHaveLength(8);
+    expect(html.match(/uiSurface uiSurface--flush uiSurface--default nodeListItem/g)).toHaveLength(8);
     expect(html.match(/nodeFleetMetric/g)).toHaveLength(3);
   });
 

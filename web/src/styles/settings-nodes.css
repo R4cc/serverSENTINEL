@@ -69,10 +69,10 @@
   max-height: calc(100dvh - 32px);
   overflow: hidden;
   padding: 0;
-  border-color: var(--glass-edge);
+  border-color: var(--surface-border);
   border-radius: var(--radius-md);
-  background: var(--glass-tint-strong);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-shadow-modal);
 }
 
 .nodeModalBackdrop {
@@ -126,10 +126,10 @@
   flex: none;
   width: 36px;
   height: 36px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
-  box-shadow: var(--glass-highlight);
+  background: var(--fill-subtle);
+  box-shadow: none;
   color: var(--accent);
 }
 
@@ -267,8 +267,6 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 .installTabs {
@@ -278,9 +276,9 @@
   width: fit-content;
   max-width: 100%;
   padding: 4px;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .installTabs .uiButton {
@@ -290,9 +288,9 @@
 }
 
 .installTabs .uiButton.active {
-  background: var(--glass-tint);
-  border-color: var(--glass-edge);
-  box-shadow: var(--glass-highlight), var(--shadow-xs);
+  background: var(--panel-surface);
+  border-color: var(--surface-border);
+  box-shadow: var(--shadow-xs);
   color: var(--text);
 }
 
@@ -306,7 +304,6 @@
   font-weight: var(--weight-strong);
   letter-spacing: var(--tracking-badge);
   line-height: 1.1;
-  text-transform: uppercase;
 }
 
 .sensitiveHint {
@@ -323,7 +320,7 @@
   background: var(--terminal-bg);
 }
 
-/* The button floats on the terminal-coloured snippet, so its rim and fill are
+/* The button floats on the terminal-coloured snippet, so its border and fill are
    mixed from the terminal foreground rather than a hard-coded white. */
 .installCopyButton.uiButton {
   position: absolute;
@@ -485,9 +482,9 @@
   height: 56px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
   font-size: 32px;
   font-weight: var(--weight-title);
   line-height: 1;
@@ -1128,7 +1125,7 @@
   right: 0;
   bottom: -19px;
   width: 100%;
-  height: 44px;
+  height: var(--control-input-height);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1255,7 +1252,7 @@
 
 .memoryNumberInputWrap input,
 .protocolInputWrap input {
-  height: 44px;
+  height: var(--control-input-height);
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -1431,14 +1428,14 @@
 
 .additionalPortRow input,
 .additionalPortRow select {
-  height: 40px;
+  height: var(--control-height-default);
 }
 
 .additionalPortRemoveButton {
   width: 40px;
   min-width: 40px;
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
   padding: 0;
 }
 
@@ -1909,17 +1906,14 @@
   }
 }
 
-/* The summary tiles are the first surfaces on the Overview and Nodes pages and
-   carry no dense content, so they take the panel material rather than an opaque
-   fill -- the tile row is where the shell's translucency is most legible. */
+/* The summary tiles head the Overview and Nodes pages; they are ordinary flat
+   panels, like the content below them. */
 .summaryTile {
   min-height: 72px;
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-md);
-  background: var(--glass-tint);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
-  -webkit-backdrop-filter: var(--glass-filter-panel);
-  backdrop-filter: var(--glass-filter-panel);
+  background: var(--panel-surface);
+  box-shadow: var(--panel-shadow);
   padding: var(--space-3);
   display: grid;
   grid-template-rows: auto auto;
@@ -1931,31 +1925,6 @@
 
 .summaryTile::before {
   display: none;
-}
-
-/* State is a tint mixed into the glass, not a replacement for it: mixing against
-   `--surface-raised` would quietly turn a status tile opaque and break the row. */
-.summaryTile.running,
-.summaryTile.state.running {
-  border-color: color-mix(in srgb, var(--sentinel-success) 34%, var(--glass-edge));
-  background: color-mix(in srgb, var(--sentinel-success) 9%, var(--glass-tint));
-}
-
-.summaryTile.stopped,
-.summaryTile.state.stopped {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--glass-edge));
-  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--glass-tint));
-}
-
-.summaryTile.danger,
-.summaryTile.state.danger {
-  border-color: color-mix(in srgb, var(--sentinel-danger) 34%, var(--glass-edge));
-  background: color-mix(in srgb, var(--sentinel-danger) 9%, var(--glass-tint));
-}
-
-.summaryTile.neutral {
-  border-color: color-mix(in srgb, var(--text-soft) 34%, var(--glass-edge));
-  background: color-mix(in srgb, var(--text-soft) 7%, var(--glass-tint));
 }
 
 .summaryTile span,
@@ -2064,15 +2033,13 @@
   --node-details-padding: clamp(24px, 2.5vw, 40px);
   height: 100dvh;
   min-height: 0;
-  border-left: var(--border-subtle) solid var(--glass-edge);
-  background: var(--glass-tint-strong);
-  box-shadow: var(--glass-highlight), var(--glass-shadow-modal);
-  -webkit-backdrop-filter: var(--glass-filter-modal);
-  backdrop-filter: var(--glass-filter-modal);
+  border-left: var(--border-subtle) solid var(--surface-border);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-shadow-modal);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   animation: nodeDrawerSlideIn 100ms ease-out;
 }
-
-.nodeDetailsDrawer > .uiLiquidGlassEffect { display: none; }
 
 .nodeDetailsDrawer:focus {
   outline: none;
@@ -2082,7 +2049,7 @@
 .nodeDrawerFooter {
   flex: 0 0 auto;
   border-color: var(--border-row);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .nodeDrawerHeader {
@@ -2140,10 +2107,10 @@
   height: 40px;
   flex: 0 0 40px;
   place-items: center;
-  border: var(--border-subtle) solid var(--glass-edge);
+  border: var(--border-subtle) solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: var(--glass-tint-soft);
-  box-shadow: var(--glass-highlight);
+  background: var(--fill-subtle);
+  box-shadow: none;
   color: var(--accent);
 }
 
@@ -2547,7 +2514,7 @@
   }
 }
 
-.nodeDrawerEyebrow { color: var(--accent); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-badge); text-transform: uppercase; }
+.nodeDrawerEyebrow { color: var(--accent); font-size: var(--type-meta-size); font-weight: var(--weight-meta); letter-spacing: var(--tracking-badge); }
 .nodeVersionComparison { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); margin: 0; }
 .nodeVersionComparison > div { min-width: 0; padding: var(--space-2) 0; }
 .nodeVersionComparison > div:nth-child(2) { border-left: 1px solid var(--border-row); padding-left: var(--space-4); }
@@ -2600,7 +2567,7 @@
 .installSnippetShell {
   overflow-x: auto;
   border-color: color-mix(in srgb, var(--border) 54%, var(--surface));
-  box-shadow: var(--glass-highlight), var(--glass-shadow-panel);
+  box-shadow: var(--panel-shadow);
 }
 
 .nodeInstallHeader,
@@ -2670,18 +2637,12 @@
 .nodeModalHeader,
 .nodeModalFooter.inline {
   border-color: var(--border-row);
-  background: var(--glass-tint-soft);
+  background: var(--fill-subtle);
 }
 
 .nodeModalBody {
   background: transparent;
 }
-
-@media (prefers-reduced-transparency: reduce) {
-  .nodeDetailsDrawer, .nodeModalPanel { background: var(--surface-raised); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
-  .nodeInstallBox { background: transparent; box-shadow: none; }
-}
-
 @media (max-width: 720px) {
 
   .nodeModalHeader,

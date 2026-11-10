@@ -7,7 +7,7 @@ import type { ActivePage } from "../types";
 import { webModules } from "../app/moduleRegistry";
 import { AppSidebar } from "./AppSidebar";
 
-function renderSidebar(activePage: "nodes" | "overview", withServer = true, availablePages?: (page: ActivePage) => boolean, nodeUpdateNames: string[] = []) {
+function renderSidebar(activePage: "nodes" | "overview", withServer = true, availablePages?: (page: ActivePage) => boolean, nodeUpdateNames: string[] = [], account: { demoMode?: boolean; accountName?: string } = {}) {
   const activeServer = withServer ? demoServer() : undefined;
   return renderToStaticMarkup(
     <AppSidebar
@@ -27,10 +27,10 @@ function renderSidebar(activePage: "nodes" | "overview", withServer = true, avai
       serverPageDisabledReason="Select a managed server first"
       supportsManagedMods
       managedContent={fabricContentTerminology}
-      demoMode={false}
+      demoMode={account.demoMode ?? false}
       panelVersion="1.8.0"
       nodeUpdateNames={nodeUpdateNames}
-      accountName="Administrator"
+      accountName={"accountName" in account ? account.accountName : "Administrator"}
       onLogout={vi.fn()}
     />
   );
@@ -84,5 +84,26 @@ describe("AppSidebar navigation semantics", () => {
         expect(html, `${module.id} -> ${page}`).toContain(`data-nav-page="${page}"`);
       }
     }
+  });
+});
+
+describe("AppSidebar layout", () => {
+  it("groups the server pages under a label instead of divider rules", () => {
+    const html = renderSidebar("overview");
+    expect(html).not.toContain("sidebarDivider");
+    expect(html).toMatch(/class="sidebarSectionLabel"[^>]*>Server</);
+    // The label names the group, so the switcher no longer repeats it as an eyebrow.
+    expect(html).not.toContain("Managed server");
+  });
+
+  it("shows the panel version as plain text beside Settings", () => {
+    expect(renderSidebar("overview")).toContain('class="settingsVersionText">v1.8.0</span>');
+  });
+
+  it("identifies the account by its initial", () => {
+    expect(renderSidebar("overview")).toMatch(/class="accountIcon" aria-hidden="true">A</);
+    expect(renderSidebar("overview", true, undefined, [], { accountName: "  bob" })).toMatch(/class="accountIcon" aria-hidden="true">B</);
+    expect(renderSidebar("overview", true, undefined, [], { demoMode: true })).toMatch(/class="accountIcon" aria-hidden="true">D</);
+    expect(renderSidebar("overview", true, undefined, [], { accountName: undefined })).toMatch(/class="accountIcon" aria-hidden="true">A</);
   });
 });

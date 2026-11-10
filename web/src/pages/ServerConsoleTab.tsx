@@ -122,7 +122,7 @@ export function ServerConsoleTab({
 
   return (
     <section className="tabPage layoutWide consoleTabPage" hidden={!active}>
-      <Surface className="consolePanel" material="glass">
+      <Surface className="consolePanel">
         {/* The page is already titled Console, so this row carries what can be done with the output. */}
         <PanelHeader
           className="consolePanelHeader"

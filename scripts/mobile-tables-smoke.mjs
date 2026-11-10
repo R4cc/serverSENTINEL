@@ -89,7 +89,7 @@ try {
           await row.evaluate((element) => {
             element.querySelector(".modsWorkspaceIdentity strong").textContent = "A very long mod name with compatibility extensions";
             element.querySelector(".modsWorkspaceVersion").textContent = "1.21.4-fabric-build.1234567890";
-            element.querySelector(".modsUpdateTransition strong").textContent = "1.21.5-fabric-build.9876543210";
+            element.querySelector(".modsUpdateVersions strong").textContent = "1.21.5-fabric-build.9876543210";
           });
           const clipping = await row.locator("strong, .modsWorkspaceVersion, .modsUpdateAction").evaluateAll((elements) => elements.some((element) => element.scrollWidth > element.clientWidth + 1));
           assert(!clipping, `${name}: long mod names or versions are clipped`);

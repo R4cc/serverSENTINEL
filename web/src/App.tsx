@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
@@ -42,6 +42,7 @@ import { loadMinecraftTerminal, ServerConsoleTab } from "./pages/ServerConsoleTa
 import { loadServerCreatePage, ServerCreateTab } from "./pages/ServerCreateTab";
 import { clearStoredCommandHistory, persistCommandHistory, readConsoleHistoryEnabled } from "./features/settings/settingsPreferences";
 import { resolvedThemeClassName, resolveDarkTheme } from "./features/settings/themePreferences";
+import { applyAppearance } from "./features/settings/appearancePreferences";
 import { managedContentTerminology } from "./features/mods/contentTerminology";
 import type { ModsModuleBridge } from "./features/mods/ModsModule";
 import { readStoredFileLocation } from "./features/files/fileLocationStorage";
@@ -165,6 +166,10 @@ export default function App() {
   const {
     themePreference,
     setThemePreference,
+    translucency,
+    setTranslucency,
+    contrast,
+    setContrast,
     demoMode,
     setDemoMode,
     regionalFormatPreference,
@@ -320,6 +325,12 @@ export default function App() {
     }
   }, [consoleConnectionState]);
 
+  // The glass material and the contrast-adjusted colours derive from custom properties on the
+  // root element, so one write restyles every surface without a re-render. It runs before paint
+  // so a saved preference never shows a frame of the defaults.
+  useLayoutEffect(() => {
+    applyAppearance(document.documentElement, translucency, contrast);
+  }, [translucency, contrast]);
   const darkMode = resolveDarkTheme(themePreference, systemDark);
   const themeClassName = resolvedThemeClassName(themePreference, systemDark);
   useEffect(() => {
@@ -332,7 +343,7 @@ export default function App() {
     // read, so both are written with the colour the app actually resolved to.
     const themeColors = Array.from(document.querySelectorAll('meta[name="theme-color"]'));
     const previousThemeColors = themeColors.map((meta) => meta.getAttribute("content"));
-    const surface = getComputedStyle(root).getPropertyValue("--surface").trim();
+    const surface = getComputedStyle(root).getPropertyValue("--app-background").trim();
     if (surface) for (const meta of themeColors) meta.setAttribute("content", surface);
     return () => {
       root.classList.remove(...classes);
@@ -2260,7 +2271,11 @@ export default function App() {
             panelTimeZone={panelTimeZone}
             browserTimeZone={browserTimeZone}
             displayTimeZone={displayTimeZone}
+            translucency={translucency}
+            contrast={contrast}
             onThemeChange={setThemePreference}
+            onTranslucencyChange={setTranslucency}
+            onContrastChange={setContrast}
             onRelativeTimestampsChange={setRelativeTimestamps}
             onRegionalFormatChange={setRegionalFormatPreference}
             onDisplayTimeZoneChange={setDisplayTimeZonePreference}

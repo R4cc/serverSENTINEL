@@ -117,14 +117,18 @@ describe("stylesheet ownership", () => {
     expect(primitiveStyles).toContain(".uiMetricTile");
     expect(primitiveStyles).toContain(".uiHelpTooltip");
     expect(primitiveStyles).toContain(".uiGlassSurface");
-    expect(primitiveStyles).toContain(".uiSurface--solid");
-    expect(primitiveStyles).toContain("prefers-reduced-transparency");
+    expect(primitiveStyles).toContain(".uiRange");
   });
 
   it("centralizes glass tokens and preserves opaque data surfaces", () => {
-    for (const token of ["--glass-tint", "--glass-edge", "--glass-blur-panel", "--glass-saturation", "--glass-shadow-panel"]) {
+    for (const token of ["--glass-opacity", "--glass-blur", "--glass-saturation", "--glass-surface", "--glass-border", "--glass-filter", "--glass-shadow-floating", "--panel-surface"]) {
       expect(tokenStyles).toContain(`${token}:`);
     }
+    // Reduced transparency is answered once, by the tokens every glass layer derives from.
+    expect(tokenStyles).toContain("prefers-reduced-transparency");
+    // A page panel is opaque: only the tiers that float take a backdrop filter.
+    expect(primitiveStyles).toMatch(/\.uiGlassSurface \{[^}]*backdrop-filter: var\(--glass-filter\)/);
+    expect(primitiveStyles).not.toMatch(/^\.uiSurface[^{]*\{[^}]*backdrop-filter/m);
     for (const surface of ["consolePanel", "fileEditorModal", "serverTimelinePanel", "filesPanel", "modsWorkspaceInstalled", "scheduleTableCard", "settingsHubContent"]) {
       expect(Object.values(featureStyles).some((sheet) => sheet.includes(`.${surface}`))).toBe(true);
     }

@@ -1,6 +1,5 @@
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
-import { GlassEffect } from "./GlassEffect";
 import { useDialogFocus } from "./useDialogFocus";
 
 export function DialogSurface({
@@ -50,7 +49,6 @@ export function DialogSurface({
       aria-describedby={describedBy}
       tabIndex={-1}
     >
-      <GlassEffect variant="modal" />
       {children}
     </section>
   );

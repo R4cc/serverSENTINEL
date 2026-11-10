@@ -5,7 +5,6 @@ import { AppIcon } from "./FileTypeIcon";
 import { RestartRequiredBadge } from "./RestartRequiredBadge";
 import { RuntimeControls } from "./RuntimeControls";
 import { Banner, Button, Spinner, StatusBadge } from "./UiPrimitives";
-import { GlassEffect } from "./GlassEffect";
 
 export type ServerStripHealth = { tone: string; message: string } | null;
 export type ServerStripAlert = { title: string; message: string } | null;
@@ -72,8 +71,7 @@ export function ActiveServerStrip({
   const controlsId = useId();
   const controlsOpen = expandedServerId === server.id || Boolean(runtimeAction) || Boolean(status && ["starting", "stopping", "restarting"].includes(status.lifecycle.state));
   return (
-    <div className={`activeServerStrip uiGlassSurface uiGlassSurface--chrome ${controlsOpen ? "serverControlsExpanded" : ""} ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
-      <GlassEffect variant="chrome" />
+    <div className={`activeServerStrip ${controlsOpen ? "serverControlsExpanded" : ""} ${runtimeAction ? `runtimeAction-${runtimeAction}` : ""} ${runtimeFeedbackAction ? `runtimeFeedback-${runtimeFeedbackAction}` : ""}`.replace(/\s+/g, " ").trim()}>
       <div className="serverStripPrimary">
         <div className="serverStripLeft">
           <div className="serverStripIcon">
