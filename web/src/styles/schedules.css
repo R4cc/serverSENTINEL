@@ -73,8 +73,15 @@
   align-content: start;
 }
 
+/* Side by side only where the 1600px-wide card would otherwise strand each run's
+   name far from its time. Below this the single column rules further down apply. */
+@media (min-width: 1500px) {
+  .scheduleWorkspaceGrid { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); }
+}
+
 .scheduleTableCard.uiSurface { background: var(--panel-surface); border-color: var(--surface-border); box-shadow: var(--panel-shadow); }
-.scheduleWorkspaceGrid > .scheduledRunsCard { background: transparent; box-shadow: none; border-radius: 0; }
+/* Recent runs is a panel like the table above it, not loose rows on the canvas. */
+.scheduleWorkspaceGrid > .scheduledRunsCard { border: var(--border-subtle) solid var(--surface-border); border-radius: var(--radius-md); background: var(--panel-surface); box-shadow: var(--panel-shadow); }
 
 .scheduleWorkspaceGrid > .scheduleTableCard,
 .scheduleWorkspaceGrid > .scheduledRunsCard {
@@ -94,7 +101,7 @@
 }
 
 .scheduleCardHeader.compact {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .scheduleTableFrame {
@@ -109,7 +116,10 @@
 .scheduleTableHeader,
 .scheduleTableRow {
   display: grid;
-  grid-template-columns: minmax(220px, 1.7fr) minmax(160px, 1fr) minmax(115px, .8fr) minmax(115px, .8fr) 76px 44px;
+  /* The name column takes the slack, so on a wide screen the description has room
+     and the time columns stay together instead of drifting apart. The minimums
+     must fit the half-width card that starts at 1500px. */
+  grid-template-columns: minmax(180px, 3fr) minmax(140px, 1.1fr) minmax(110px, 1fr) minmax(110px, 1fr) 76px 44px;
   gap: var(--space-3);
   align-items: center;
 }
@@ -204,7 +214,19 @@
   white-space: nowrap;
 }
 
-.scheduleNameCell small,
+.scheduleNameCell small {
+  /* A description wraps to a second line before it is cut. */
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-ui);
+  white-space: normal;
+}
+
 .scheduleCell small {
   overflow: hidden;
   color: var(--text-muted);
@@ -324,34 +346,38 @@
   min-height: 0;
   display: grid;
   align-content: start;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2) var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   overflow: visible;
-  padding: 0 var(--space-3);
+  /* Inset so a row's hover wash is a rounded chip inside the card, not a full-bleed band. */
+  padding: 0 var(--space-2) var(--space-2);
 }
 
 .scheduledRunItem {
   min-width: 0;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  /* One run per line, read left to right like a table row: what ran and how it
+     ended, when, and the way into its details at the row's own right edge. */
+  grid-template-columns: 32px minmax(0, 1fr) auto 32px;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-3);
-  border: 1px solid transparent;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   transition: background var(--control-transition), border-color var(--control-transition);
 }
 
+.scheduledRunItem + .scheduledRunItem { box-shadow: 0 -1px 0 var(--border-row); }
+
 .scheduledRunItem:hover,
 .scheduledRunItem:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border-row));
   background: var(--fill-subtle);
 }
 
 .scheduledRunItem.active,
 .scheduledRunItem.running {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border-row));
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .scheduledRunMarker {
@@ -374,7 +400,6 @@
 
 .scheduledRunMarker:has(svg)::before { content: none; }
 .scheduledRunMarker svg { width: 16px; height: 16px; }
-.scheduledRunsCard { border-top: 1px solid var(--border-row); }
 
 .scheduledRunItem.active .scheduledRunMarker,
 .scheduledRunItem.running .scheduledRunMarker {
@@ -424,11 +449,11 @@
 }
 
 .scheduledRunTime {
-  grid-column: 2;
+  grid-column: 3;
   display: grid;
-  justify-items: start;
+  justify-items: end;
   gap: 2px;
-  text-align: left;
+  text-align: right;
 }
 
 .scheduledRunTime span {
@@ -442,9 +467,8 @@
 }
 
 .scheduledRunActions {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  align-self: start;
+  grid-column: 4;
+  align-self: center;
   display: flex;
   justify-content: flex-end;
 }
@@ -1637,6 +1661,7 @@
 
   .scheduledRunItem {
     grid-template-columns: 32px minmax(0, 1fr) auto;
+    padding-inline: var(--space-3);
   }
 
   .scheduledRunTime {

@@ -36,6 +36,14 @@
   min-width: 0;
 }
 
+/* On a server page the server card directly below already separates the title from the
+   content, so the title drops its own rule and padding instead of stacking two dividers
+   (about 30px of chrome) above every page. */
+.workspaceServerPage > .workspaceHeader {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
 .workspaceActions,
 .selectionActions,
 .modInstallFooter,
@@ -305,7 +313,6 @@
 }
 
 .nodesPage {
-  max-width: 1280px;
   gap: var(--space-3);
 }
 

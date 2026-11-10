@@ -125,7 +125,25 @@ const minecraftAnsiStyles: Record<string, string> = {
  * here is already whole.
  */
 export function minecraftLogToTerminalText(text: string) {
-  return minecraftFormattingToAnsi(text).replace(/\r?\n/g, "\r\n");
+  return minecraftLogLevelsToAnsi(minecraftFormattingToAnsi(text)).replace(/\r?\n/g, "\r\n");
+}
+
+const timestampedLine = /^(\[\d{2}:\d{2}:\d{2}(?:\.\d+)?\])([^\n]*)$/gm;
+const logLevel = /\/(WARN|WARNING|ERROR|FATAL|SEVERE)\]/;
+
+/**
+ * Gives a log line the reading cues every server console has: the leading timestamp is dimmed,
+ * and a WARN line is amber and an ERROR, FATAL or SEVERE line red. Only lines that open with a
+ * `[HH:MM:SS]` stamp are touched, the colours are the terminal theme's own (so they follow light
+ * and dark), and the foreground is restored at the end of the line so nothing bleeds onward.
+ * Colours a plugin printed itself still win, because they come later in the line.
+ */
+export function minecraftLogLevelsToAnsi(text: string) {
+  return text.replace(timestampedLine, (_line, stamp: string, rest: string) => {
+    const level = logLevel.exec(rest)?.[1];
+    const colour = level ? (level.startsWith("WARN") ? "\x1b[33m" : "\x1b[31m") : "";
+    return `\x1b[2m${stamp}\x1b[22m${colour}${rest}${colour ? "\x1b[39m" : ""}`;
+  });
 }
 
 /** Console lines as a reader would copy or save them: formatting codes removed, one line per row. */

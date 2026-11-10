@@ -1217,9 +1217,25 @@
   font-weight: var(--weight-strong);
 }
 
-.memoryTicks span {
-  min-width: 0;
+/* Each label sits at its value's true position on the track; the end labels are
+   anchored inward so they never overhang the track. */
+.memoryTicks {
+  position: relative;
+  display: block;
+  min-height: 1.4em;
 }
+
+.memoryTicks span {
+  position: absolute;
+  top: 0;
+  left: var(--tick-percent);
+  min-width: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.memoryTicks span:first-child { transform: none; }
+.memoryTicks span:last-child { transform: translateX(-100%); }
 
 .memoryRangeMeta {
   padding-top: var(--space-2);
@@ -1890,8 +1906,7 @@
     gap: var(--space-2);
   }
 
-  .memoryTicks span:nth-child(2),
-  .memoryTicks span:nth-child(4) {
+  .memoryTicks span:not(:first-child):not(:last-child) {
     display: none;
   }
 

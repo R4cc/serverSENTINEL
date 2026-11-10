@@ -6,7 +6,7 @@ import {
   type SortingState
 } from "@tanstack/react-table";
 import { sortableTableFeatures, type SortableTableFeatures } from "../utils/tableFeatures";
-import { Activity, ChartColumn, ChevronDown, Globe, MapPin, Users, Wifi, Wrench, type LucideIcon } from "lucide-react";
+import { Activity, ChartColumn, ChevronDown, Globe, MapPin, Moon, Users, Wifi, type LucideIcon } from "lucide-react";
 import type { ManagedServer, PlayerActivityHour, PlayerInsightsEntry, PlayerInsightsResponse, PlayerRegionSummary } from "../types";
 import { SearchField } from "../components/SearchField";
 import { InlineState } from "../components/InlineState";
@@ -69,13 +69,17 @@ function PlayerLocationDisplay({ location }: { location: PlayerInsightsEntry["lo
   if (!location) return <span className="playerLocation"><span className="playerLocationText">No location resolved</span></span>;
   const flag = countryFlag(location.countryCode);
   const label = formatLocation(location);
+  const accuracy = locationAccuracyPresentation(location);
+  // Precise is the normal case. A badge on every row drowned out the rows that are
+  // only approximate, so precision is badged only when it is the exception.
+  const precise = accuracy?.tone === "precise";
   return (
     <span className="playerLocation">
-      <span className="playerLocationLabel" title={label}>
+      <span className="playerLocationLabel" title={precise && accuracy ? `${label}. ${accuracy.description}` : label}>
         {flag && <span className="playerCountryFlag" aria-hidden="true">{flag}</span>}
         <span className="playerLocationText">{label}</span>
       </span>
-      <LocationAccuracyBadge location={location} />
+      {!precise && <LocationAccuracyBadge location={location} />}
     </span>
   );
 }
@@ -256,7 +260,6 @@ function PlayerRoster({
                     )}
                     <span className="playerIdentityCopy">
                       <strong>{entry.player}</strong>
-                      {entry.online && <small className="playerOnlineFlag">Online</small>}
                     </span>
                   </span>
                 </th>
@@ -267,7 +270,13 @@ function PlayerRoster({
                 <td className={`playerNumericColumn playerLatency playerLatency--${entry.online ? latencyTone(entry.pingMs) : "neutral"}`} data-label="Ping">
                   <PlayerPingDisplay entry={entry} formatDate={formatDate} />
                 </td>
-                <td className="playerNumericColumn" data-label="Last seen">{entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}</td>
+                <td className="playerNumericColumn" data-label="Last seen">
+                  {/* A connected player is being seen right now; their stored timestamp is when
+                      this session was last recorded, which read as hours-old beside "Online". */}
+                  {entry.online
+                    ? <span className="playerSeenNow" title={entry.lastSeenAt ? `Connected; last recorded ${formatDate(entry.lastSeenAt)}` : "Connected"}>Now</span>
+                    : entry.lastSeenAt ? formatDate(entry.lastSeenAt) : unknownValue}
+                </td>
               </tr>
             );
           })}
@@ -495,7 +504,7 @@ export function PlayersPage({
         />
         <MetricTile
           variant="summary"
-          icon={<Wrench aria-hidden="true" />}
+          icon={<Moon aria-hidden="true" />}
           iconPlacement="leading"
           label="Quietest hours"
           value={formatMaintenanceWindow(summary?.maintenanceWindow, insights?.timeZone ?? "UTC")}

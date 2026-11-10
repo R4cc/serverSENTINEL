@@ -8,7 +8,9 @@
 .nodesToolbar .uiSearchField { width: min(100%, 380px); }
 .nodesToolbar .uiToolbarMeta { display: none; }
 .nodesBoard { min-width: 0; }
-.nodeList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: var(--space-5); }
+/* Cards fill the width the page has: one column on a laptop, two on a desktop, three at 1920px,
+   instead of stopping at a fixed cap that left a dead band on wide screens. */
+.nodeList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr)); align-items: start; gap: var(--space-5); }
 .nodeListItem { min-width: 0; display: flex; flex-direction: column; }
 .nodeListRow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: var(--space-5); min-width: 0; }
 .nodeListIdentity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
@@ -16,7 +18,9 @@
 .nodeListMark svg { width: 19px; height: 19px; }
 .nodeListMark.ready { color: var(--status-success-foreground); }
 .nodeListMark.limited { color: var(--status-danger-foreground); }
-.nodeListCopy { display: grid; gap: var(--space-1); min-width: 0; }
+/* Positioned so the screen-reader-only status inside it is contained here; unpositioned it is placed
+   against the page, where WebKit lets it stretch the document past the clipped shell. */
+.nodeListCopy { position: relative; display: grid; gap: var(--space-1); min-width: 0; }
 .nodeListName { margin: 0; color: var(--text); font-size: var(--type-row-title-size); font-weight: var(--weight-title); line-height: 1.3; overflow-wrap: anywhere; }
 .nodeListMeta { margin: 0; color: var(--text-muted); font-size: var(--type-meta-size); line-height: 1.4; overflow-wrap: anywhere; }
 .nodeListBadges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-1); flex: 0 1 auto; max-width: 45%; }
@@ -36,7 +40,7 @@
 .nodeServerRowIcon svg, .nodePlayerIcon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nodeServerRowArrow svg { width: 14px; height: 14px; }
 .nodeServerRowName { min-width: 0; font-size: var(--type-body-size); font-weight: var(--weight-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nodeServerRowState { display: inline-flex; align-items: center; gap: 5px; color: var(--text-soft); font-size: var(--type-badge-size); white-space: nowrap; }
+.nodeServerRowState { position: relative; display: inline-flex; align-items: center; gap: 5px; color: var(--text-soft); font-size: var(--type-badge-size); white-space: nowrap; }
 .nodeServerRowState.running { color: var(--status-success-foreground); }
 .nodeServerRowState.stopped { color: var(--status-danger-foreground); }
 .nodeServerRowPlayers { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--text-muted); font-size: var(--type-meta-size); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -46,9 +50,7 @@
 .nodeCardFooter { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-row); background: var(--fill-subtle); }
 .nodeListActions { display: flex; align-items: center; gap: var(--space-2); }
 .nodeUpgradeButton.uiButton { color: var(--sentinel-accent-strong); }
-@media (max-width: 1250px) {
-  .nodeList { grid-template-columns: minmax(0, 1fr); }
-}
+.nodeUpdateNote { color: var(--text-muted); font-size: var(--type-meta-size); font-weight: var(--weight-title); }
 @media (max-width: 720px) {
   .nodesFleetSummary { gap: var(--space-2); }
   .nodesFleetSummary .uiMetricTile { grid-template-columns: minmax(0, 1fr); padding: var(--space-3); }

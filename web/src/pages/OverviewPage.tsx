@@ -210,6 +210,8 @@ export function OverviewSummary({
         icon={<HardDrive />}
         iconPlacement="leading"
         tone={storageLow ? "warning" : "neutral"}
+        // The warning glyph alone never said what was wrong; the tile now names the threshold.
+        detail={storageLow && storagePercent !== null ? `${storagePercent < 1 ? "<1" : Math.round(storagePercent)}% left · warns below 10%` : undefined}
         value={storageAvailableBytes === null
           ? storageLoading
             ? <SkeletonBlock className="overviewSummaryValueSkeleton" />

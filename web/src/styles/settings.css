@@ -250,7 +250,7 @@
   height: 26px;
   display: flex;
   align-items: center;
-  border: 1px solid var(--border-row);
+  border: 1px solid var(--control-off-edge);
   border-radius: 999px;
   background: var(--surface-muted);
   padding: 3px;
@@ -310,7 +310,8 @@
 .settingsHubRow {
   min-height: 76px;
   display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(260px, 1.15fr);
+  /* The label column is capped so each control starts near its label on a wide screen. */
+  grid-template-columns: minmax(220px, 340px) minmax(260px, 1fr);
   align-items: center;
   gap: var(--space-5);
   padding: var(--space-3) var(--space-5);
@@ -366,7 +367,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .settingsHubControl > select {
@@ -411,7 +412,7 @@
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.4;
-  text-align: right;
+  text-align: left;
 }
 
 .settingsHubControl > .uiButton {
@@ -419,10 +420,13 @@
 }
 
 .settingsHubToggle {
+  /* The same 310px column as the selects and sliders, starting at its left edge,
+     so a toggle lines up with the controls in the rows around it. */
+  width: min(100%, 310px);
   min-height: var(--control-input-height);
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--space-3);
   cursor: pointer;
 }
@@ -458,18 +462,19 @@
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--surface-raised);
+  background: var(--control-off-edge);
   box-shadow: var(--shadow-xs);
-  transition: transform 150ms ease;
+  transition: transform 150ms ease, background 150ms ease;
 }
 
 .settingsHubToggle input:checked + .settingsHubToggleTrack {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--control-on-fill);
+  background: var(--control-on-fill);
 }
 
 .settingsHubToggle input:checked + .settingsHubToggleTrack > span {
   transform: translateX(20px);
+  background: var(--swiss-white);
 }
 
 .settingsHubToggle input:focus-visible + .settingsHubToggleTrack {

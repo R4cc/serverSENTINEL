@@ -4,6 +4,10 @@ body {
   font-size: var(--type-body-size);
   font-weight: var(--weight-body);
   line-height: 1.5;
+  /* Switzer's space is narrow; at meta and badge sizes "18 online" or "Show more players"
+     read as a single word. A small fixed addition keeps words apart without loosening
+     the letters. */
+  word-spacing: 0.06em;
 }
 
 h1,

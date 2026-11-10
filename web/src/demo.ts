@@ -916,14 +916,20 @@ export function recordDemoRuntimeEvent(serverId: string, action: "stop" | "resta
 }
 
 export function demoOverviewData(running: boolean, serverId = demoServerId): ServerOverviewData {
-  const events = demoSession(serverId).events
+  const sessionEvents = demoSession(serverId).events;
+  const events = sessionEvents
     .slice()
     .sort((left, right) => right.occurredAt - left.occurredAt)
     .map(({ occurredAt: _occurredAt, ...event }) => event);
+  // Uptime counts from the most recent start the demo's own timeline shows. Stamping the
+  // moment the demo loaded read "Uptime 0m" beside a "Server started" marker 30 minutes back.
+  const latestStart = sessionEvents
+    .filter((event) => event.eventType === "server_started" || event.eventType === "server_restarted")
+    .reduce<number | undefined>((latest, event) => latest === undefined || event.occurredAt > latest ? event.occurredAt : latest, undefined);
   return {
     eventsStatus: "ok",
     activity: {
-      lastStartedAt: running ? new Date(demoStartedAt).toISOString() : new Date(demoStartedAt - 86_400_000).toISOString(),
+      lastStartedAt: running ? new Date(latestStart ?? demoStartedAt).toISOString() : new Date(demoStartedAt - 86_400_000).toISOString(),
       lastStoppedAt: running ? new Date(demoStartedAt - 86_400_000).toISOString() : new Date().toISOString(),
       lastRestartAt: new Date(demoStartedAt).toISOString(),
       currentWorld: "world",

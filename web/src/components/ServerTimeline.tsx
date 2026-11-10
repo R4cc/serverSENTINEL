@@ -32,10 +32,12 @@ import {
   clampTimelineWindow,
   dataZoomWindow,
   defaultTimelinePalette,
+  formatTimelineMetric,
   liveTimelineWindow,
   timelineChartGrid,
   timelineMetricBandGrid,
   timelineHoverTooltipHtml,
+  timelineMetricSummary,
   timelineNeedsRefill,
   timelineQueryWindow,
   timelineRetentionMs,
@@ -1513,6 +1515,7 @@ export function ServerTimeline({
           {metricBands.map((band) => (
             <section className={`serverTimelineMetricBand${band.prominent ? " is-prominent" : " is-compact"}`} key={band.key} aria-label={`${band.label} timeline`}>
               <strong className={`serverTimelineMetricBandLabel tone-${band.key}`}>{band.label}</strong>
+              <MetricBandSummary samples={data?.samples} seriesKey={band.series[0]} viewport={viewport} />
               <EChartsCanvas
                 option={metricOptions.get(band.key)!}
                 onDataZoom={handleDataZoom}
@@ -1544,5 +1547,19 @@ export function ServerTimeline({
       </div>
       {!loading && !allLayersHidden && !data?.samples.length && !markers.length && !playerRows.length && <div className="serverTimelineEmpty">No timeline data is available for this window.</div>}
     </section>
+  );
+}
+
+/** The band's current reading and its average over the visible window, under the band name. */
+function MetricBandSummary({ samples, seriesKey, viewport }: { samples: ServerTimelineResourcePoint[] | undefined; seriesKey: SeriesKey; viewport: TimelineWindow }) {
+  const summary = useMemo(() => timelineMetricSummary(samples ?? [], seriesKey, viewport), [samples, seriesKey, viewport]);
+  if (summary.latest === undefined) return null;
+  return (
+    <span className="serverTimelineMetricBandSummary">
+      <span className="serverTimelineMetricBandValue">{formatTimelineMetric(seriesKey, summary.latest)}</span>
+      {summary.average !== undefined && seriesKey !== "playersOnline" && (
+        <small>avg {formatTimelineMetric(seriesKey, summary.average)}</small>
+      )}
+    </span>
   );
 }

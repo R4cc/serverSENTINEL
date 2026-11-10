@@ -621,6 +621,11 @@ export function NodesPage({
             const canAddServer = isNodeRuntimeUsable(node);
             const addServerReason = nodeBlockReason(node) || "Node cannot host new servers right now.";
             const nodePlayers = node.servers.reduce((total, server) => total + onlinePlayers(playerSnapshots[server.id]), 0);
+            // A plainly online node gets no pill: the badge only earns its place on an exception.
+            const showStatusBadge = Boolean(operation) || node.status !== "online";
+            // When this visitor can never press Upgrade -- the node is not live, or they lack the
+            // permission -- a permanently greyed button is replaced by a note saying what is pending.
+            const showUpdateNote = nodeUpdateAvailable(node) && (!nodeCanPanelUpdate(node) || !canManageNodes) && !operation;
             const nodeMeta = [
               node.isInternal ? "Panel host" : "Remote host",
               node.isInternal ? "" : node.agentVersion ? `Agent ${node.agentVersion}` : "Agent version unknown"
@@ -632,17 +637,20 @@ export function NodesPage({
                     <span className={`nodeListMark ${statusTone(node.status)}`} aria-hidden="true">{node.isInternal ? <Server /> : <Network />}</span>
                     <div className="nodeListCopy">
                       <h3 className="nodeListName" title={node.name}>{node.name}</h3>
+                      {!showStatusBadge && <span className="srOnly">Status: {node.status}</span>}
                       <p className="nodeListMeta">{nodeMeta.join(" · ")}</p>
                     </div>
                   </div>
                   <div className="nodeListBadges">
-                    <StatusBadge
-                      tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
-                      className={`nodeListStatus ${operation ? operation.phase : statusTone(node.status)}`}
-                    >
-                      {operation?.phase === "waiting" && <Spinner size="xs" />}
-                      {operationLabel || node.status}
-                    </StatusBadge>
+                    {showStatusBadge && (
+                      <StatusBadge
+                        tone={operation?.phase === "waiting" ? "accent" : operation?.phase === "timed-out" ? "danger" : sharedStatusTone(node.status)}
+                        className={`nodeListStatus ${operation ? operation.phase : statusTone(node.status)}`}
+                      >
+                        {operation?.phase === "waiting" && <Spinner size="xs" />}
+                        {operationLabel || node.status}
+                      </StatusBadge>
+                    )}
                     {nodePanelUpdateRequired(node) && (
                       <StatusBadge tone="warning" className="nodeListStatus warning" title={`Node agent ${node.agentVersion} is newer than panel ${panelVersion}. Update the panel before changing this node.`}>Panel update required</StatusBadge>
                     )}
@@ -672,10 +680,11 @@ export function NodesPage({
                           <button key={server.id} type="button" className="nodeServerRow" onClick={() => onSelectServer(server.id)}>
                             <span className="nodeServerRowIcon" aria-hidden="true"><Box /></span>
                             <span className="nodeServerRowName" title={server.displayName}>{server.displayName}</span>
-                            <span className={`nodeServerRowState ${state.toLowerCase()}`}>
+                            <span className={`nodeServerRowState ${state.toLowerCase()}`} title={`${state.charAt(0)}${state.slice(1).toLowerCase()}`}>
                               <span className={`nodeStatusDot ${state === "RUNNING" ? "online" : state === "STOPPED" ? "offline" : "unknown"}`} aria-hidden="true" />
-                              {/* The state is an uppercase token in data; it reads as a sentence-case word. */}
-                              {state.charAt(0)}{state.slice(1).toLowerCase()}
+                              {/* The state is an uppercase token in data; it reads as a sentence-case word. Running is
+                                  the normal case, so it is left to the green dot and only an exception is spelled out. */}
+                              <span className={state === "RUNNING" ? "srOnly" : undefined}>{state.charAt(0)}{state.slice(1).toLowerCase()}</span>
                             </span>
                             <span className={`nodeServerRowPlayers${snapshot?.state === "stale" ? " unknown" : ""}`} title={playerLabel === "-" ? "Player count unavailable" : `${playerLabel} players online${snapshot?.state === "stale" ? " (last verified snapshot)" : ""}`}>
                               {playerLabel !== "-" && <span className="nodePlayerIcon" aria-hidden="true"><Users /></span>}
@@ -708,7 +717,8 @@ export function NodesPage({
                     <AppIcon name="plus" /> Add server
                   </Button>
                   <div className="nodeListActions">
-                    {nodeUpdateAvailable(node) && (
+                    {showUpdateNote && <span className="nodeUpdateNote" title={canManageNodes ? nodeUpdateTitle(node) : "An agent update is available. Manage nodes permission is required to apply it."}>Update available</span>}
+                    {nodeUpdateAvailable(node) && !showUpdateNote && (
                       <Button
                         variant="secondary"
                         compact

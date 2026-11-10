@@ -132,12 +132,11 @@ describe("the Players workspace with partial knowledge", () => {
     expect(html).not.toContain(" ms<");
   });
 
-  it("keeps location compact while exposing its flag and accuracy explanation on the badge", () => {
+  it("keeps a precise location compact, explaining its accuracy without badging every row", () => {
     const html = render({ insights: partial });
     expect(html).toContain("🇩🇰");
     expect(html).toContain("Copenhagen, Denmark");
-    expect(html).toContain(">Precise</span>");
-    expect(html).toContain('role="tooltip"');
+    expect(html).not.toContain(">Precise</span>");
     expect(html).toContain("IP-based location estimate. Expected accuracy is roughly within 20 km.");
     expect(html).not.toContain("Approximate, within about 20 km");
   });
@@ -161,6 +160,13 @@ describe("the Players workspace with partial knowledge", () => {
     const html = render({ insights: partial });
     expect(html).toContain("1 online · 2 known");
     expect(html).toContain('data-label="Last seen"');
+  });
+
+  it("says a connected player is online once, in the Last seen cell", () => {
+    const html = render({ insights: partial });
+    // The name column used to repeat "Online" under every connected player.
+    expect(html).not.toContain("playerOnlineFlag");
+    expect(html.match(/class="playerSeenNow"/g)).toHaveLength(2);
   });
 
   it("offers the address field only to an account that may change it", () => {

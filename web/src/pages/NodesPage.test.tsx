@@ -195,3 +195,35 @@ describe("dense node fleets", () => {
     expect(html).not.toContain("Manage users permission is required");
   });
 });
+
+describe("node card status and update affordances", () => {
+  const current = { ...denseNode(1, 0), agentVersion: "1.7.0", buildId: "test-build" };
+
+  it("hides the status pill for a plainly online node but keeps it as screen-reader text", () => {
+    const html = renderDenseNodesPage([current]);
+
+    expect(html).not.toContain("nodeListStatus");
+    expect(html).toContain('<span class="srOnly">Status: online</span>');
+  });
+
+  it("keeps the status pill for a node that is not online", () => {
+    const html = renderDenseNodesPage([{ ...current, status: "offline" }]);
+
+    expect(html).toMatch(/<span class="uiStatusBadge [^"]*nodeListStatus/);
+    expect(html).not.toContain("Status: offline");
+  });
+
+  it("shows an update note instead of a disabled upgrade for an offline node", () => {
+    const html = renderDenseNodesPage([{ ...current, status: "offline", agentVersion: "1.6.0" }]);
+
+    expect(html).toMatch(/<span class="nodeUpdateNote" title="Bring the node online before updating">Update available<\/span>/);
+    expect(html).not.toContain("nodeUpgradeButton");
+  });
+
+  it("keeps the upgrade button for an online node with an update", () => {
+    const html = renderDenseNodesPage([{ ...current, agentVersion: "1.6.0" }]);
+
+    expect(html).toContain("nodeUpgradeButton");
+    expect(html).not.toContain("nodeUpdateNote");
+  });
+});

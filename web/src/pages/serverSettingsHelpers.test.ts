@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preferredMinecraftVersion, runtimeMinecraftOptions } from "./serverSettingsHelpers";
+import { memoryScaleTicks, preferredMinecraftVersion, runtimeMinecraftOptions } from "./serverSettingsHelpers";
 
 describe("preferredMinecraftVersion", () => {
   it("defaults to the newest release returned by the runtime provider", () => {
@@ -24,5 +24,23 @@ describe("preferredMinecraftVersion", () => {
 describe("runtimeMinecraftOptions", () => {
   it("does not expose fallback versions while the live catalog is still loading", () => {
     expect(runtimeMinecraftOptions([], false)).toEqual([]);
+  });
+});
+
+describe("memoryScaleTicks", () => {
+  it("labels the heap scale in even power-of-two steps at their true positions", () => {
+    expect(memoryScaleTicks(1, 16).map((tick) => tick.value)).toEqual([1, 4, 8, 12, 16]);
+    const ticks = memoryScaleTicks(1, 16);
+    expect(ticks[0].percent).toBe(0);
+    expect(ticks.at(-1)?.percent).toBe(100);
+    expect(ticks[2].percent).toBeCloseTo((7 / 15) * 100);
+  });
+
+  it("drops an interior tick that would crowd an end label", () => {
+    expect(memoryScaleTicks(1, 8).map((tick) => tick.value)).toEqual([1, 4, 6, 8]);
+  });
+
+  it("returns a single label for an empty range", () => {
+    expect(memoryScaleTicks(4, 4)).toEqual([{ value: 4, percent: 0 }]);
   });
 });

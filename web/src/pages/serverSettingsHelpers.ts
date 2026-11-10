@@ -157,6 +157,24 @@ export function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Labels for the heap scale, each with its true position on the track. Interior ticks are whole
+ * multiples of a power-of-two step (memory is reasoned about in 2, 4, 8 GB), so the gaps between
+ * labels are equal. Rounded quarter points produced uneven runs such as 1, 5, 9, 12, 16 GB.
+ * An interior tick crowding either end label is dropped.
+ */
+export function memoryScaleTicks(min: number, max: number): { value: number; percent: number }[] {
+  const span = max - min;
+  if (!(span > 0)) return [{ value: min, percent: 0 }];
+  let step = 1;
+  while (step < span / 4) step *= 2;
+  const interior: number[] = [];
+  for (let value = Math.ceil((min + 1e-9) / step) * step; value < max; value += step) {
+    if (value - min >= step * 0.6 && max - value >= step * 0.6) interior.push(value);
+  }
+  return [min, ...interior, max].map((value) => ({ value, percent: ((value - min) / span) * 100 }));
+}
+
 export function memoryBoundsForNode(totalMemory: number): MemoryBounds {
   const max = totalMemoryGb(totalMemory);
   return {

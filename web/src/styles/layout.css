@@ -2324,7 +2324,18 @@ button .buttonIcon {
   background: color-mix(in srgb, var(--sentinel-success) 84%, var(--text));
 }
 
+/* Stop is destructive but it is not the page's task: on Files or Mods a solid red
+   fill made it the loudest thing on screen. It rests as an outlined control with a
+   red label and fills only under the pointer; the confirmation dialog keeps the
+   solid critical button for the moment of commitment. */
 .uiButton.runtimeControlButton.stop {
+  border-color: color-mix(in srgb, var(--sentinel-danger) 55%, var(--control-secondary-edge));
+  background: var(--solid-control-surface);
+  color: var(--status-danger-foreground);
+  box-shadow: var(--shadow-xs);
+}
+
+.uiButton.runtimeControlButton.stop:hover:not(:disabled) {
   border-color: var(--sentinel-danger);
   background: var(--sentinel-danger);
   color: var(--sentinel-danger-contrast);
