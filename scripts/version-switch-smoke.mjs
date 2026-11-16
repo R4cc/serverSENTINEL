@@ -76,6 +76,8 @@ try {
     };
     const nodes = [{ id: "local", name: "Panel Host", type: "local", status: "online", isInternal: true, dockerStatus: "available", dataPathStatus: "ready", totalMemory: 32 * 1024 ** 3 }];
     const requests = { plan: [], apply: [] };
+    let releaseMinecraftVersions;
+    const minecraftVersionsReady = new Promise((resolve) => { releaseMinecraftVersions = resolve; });
     let releaseApply;
     const page = await context.newPage();
     const errors = [];
@@ -91,6 +93,7 @@ try {
       if (path.endsWith("/events")) return json({ events: [], activity: {} });
       if (path.endsWith("/storage")) return json({ worldSizeBytes: 1, totalBytes: 100, availableBytes: 80 });
       if (path === "/api/runtime/fabric/minecraft-versions") {
+        await minecraftVersionsReady;
         return json({ versions: ["1.21.4", "1.21.3", "1.21.1", "1.20.6"].map((id) => ({ id, type: "release", supported: true })) });
       }
       if (path === "/api/runtime/fabric/versions") return json({ runtimeVersions: [{ id: "0.16.14", runtimeVersion: "0.16.14", stable: true }, { id: "0.16.10", runtimeVersion: "0.16.10", stable: true }] });
@@ -128,7 +131,10 @@ try {
       const dialog = page.getByRole("dialog", { name: "Switch Minecraft version" });
       await dialog.waitFor();
       const minecraft = dialog.getByLabel("Minecraft version", { exact: true });
-      await page.waitForFunction(() => document.querySelectorAll(".versionSwitchModal select option").length > 1);
+      // Hold the catalogue until the dialog opens to exercise its initial offline fallback.
+      // Existing options do not mean the asynchronous catalogue has reached React yet.
+      releaseMinecraftVersions();
+      await minecraft.locator('option[value="1.21.4"]:checked').waitFor({ state: "attached" });
       assert.equal(await minecraft.inputValue(), "1.21.4", "The newest other release is not preselected");
       assert.match(await dialog.innerText(), /Currently 1\.21\.1/);
       await capture(page, `${width}-${theme}-choose`);
@@ -184,6 +190,7 @@ try {
       console.error(errors);
       throw error;
     } finally {
+      releaseMinecraftVersions();
       releaseApply?.();
       await context.close();
     }
