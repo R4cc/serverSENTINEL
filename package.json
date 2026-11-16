@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "26.11.5",
+  "version": "26.11.6",
   "private": true,
   "packageManager": "npm@12.2.1",
   "workspaces": [
@@ -20,6 +20,7 @@
     "test:overview-mods": "npm run build && node scripts/overview-mods-polish-smoke.mjs",
     "test:search": "npm run build && node scripts/search-workflows-smoke.mjs",
     "test:mod-history": "npm run build && node scripts/mod-history-smoke.mjs",
+    "test:version-switch": "npm run build && node scripts/version-switch-smoke.mjs",
     "test:loading": "npm run build && node scripts/loading-workflows-smoke.mjs",
     "test:browser:ci": "npm run build && node scripts/browser-ci.mjs",
     "test:smoke": "npm run build && node scripts/console-smoke.mjs && node scripts/console-loading-smoke.mjs && node scripts/mobile-ui-smoke.mjs && node scripts/module-gating-smoke.mjs && node scripts/overview-timeline-smoke.mjs && node scripts/search-workflows-smoke.mjs && node scripts/loading-workflows-smoke.mjs",

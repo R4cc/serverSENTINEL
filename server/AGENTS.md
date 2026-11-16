@@ -13,6 +13,7 @@ The root `AGENTS.md` still applies. Use this table to enter the backend through 
 | Remote nodes and protocol | `src/nodes/protocol.ts`, `src/nodes/remoteNodeRuntime.ts`, `src/nodes/nodeAgent.ts` |
 | Files and archives | `src/files/fileService.ts`, `src/core.ts`, `src/zipArchive.ts`, `src/downloadArchive.ts` |
 | Mods and Modrinth | `src/mods/modService.ts`, `src/mods/managedContent.ts`, `src/modrinth/`; registered as the `managedContent` module |
+| Minecraft version switch | `src/servers/versionSwitch.ts` (runtime, image, orchestration); the mods/plugins half is `src/mods/versionSwitchContentService.ts` and the pure planner `src/mods/versionSwitchContent.ts` |
 | Optional feature modules | `src/modules/`; the shared catalog is `shared/src/modules.ts` and the API is `src/routes/moduleRoutes.ts` |
 | Schedules | `src/schedules/` and `src/routes/scheduleRoutes.ts`; registered as the `schedules` module |
 | Imports, exports, and operations | `src/operations/`, `src/importExport.ts`, `src/routes/importExportRoutes.ts` |

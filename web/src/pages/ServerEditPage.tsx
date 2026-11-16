@@ -1,7 +1,9 @@
 import "../styles/server-properties.css";
-import { useJavaMemory, useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
+import { useJavaMemory } from "./useServerSettings";
+import { VersionSwitchModal, type VersionSwitchSimulation } from "./VersionSwitchModal";
+import type { VersionSwitchResult } from "@serversentinel/contracts";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { Archive, ChevronDown, Cpu, Network, Power, Save, Settings2, SlidersHorizontal, Trash2, Undo2 } from "lucide-react";
+import { Archive, ArrowUpDown, ChevronDown, Cpu, Network, Power, Save, Settings2, SlidersHorizontal, Trash2, Undo2 } from "lucide-react";
 import { defaultDockerImageForMinecraftVersion, serverRuntimeDefinition } from "@serversentinel/contracts";
 import { dockerContainerNameInputPattern, runtimeJarFilenameInputPattern } from "../utils/inputPatterns";
 import type { ManagedServer } from "../types";
@@ -202,7 +204,9 @@ export function ServerEditForm({
   dangerZone,
   disabledReason = "",
   disabled = false,
-  saving = false
+  saving = false,
+  onVersionSwitched,
+  versionSwitchSimulation
 }: {
   server: ManagedServer;
   totalMemory: number;
@@ -212,6 +216,9 @@ export function ServerEditForm({
   disabledReason?: string;
   disabled?: boolean;
   saving?: boolean;
+  /** Called after a Minecraft version switch finished, so the page can reload the server and its content. */
+  onVersionSwitched?: (result: VersionSwitchResult & { server?: ManagedServer }) => void | Promise<void>;
+  versionSwitchSimulation?: VersionSwitchSimulation;
 }) {
   const initialJavaArgs = server.javaArgs || memoryArgs(parseMaxMemoryGb(server.javaArgs));
   const initialMemory = parseJavaMemoryArgs(initialJavaArgs);
@@ -221,20 +228,11 @@ export function ServerEditForm({
   const formId = `server-settings-form-${server.id}`;
   const [displayName, setDisplayName] = useState(server.displayName);
   const runtime = serverRuntimeDefinition(server.runtimeProfile.runtimeType);
-  const [minecraftVersion, setMinecraftVersion] = useState(server.runtimeProfile.minecraftVersion);
-  const [runtimeVersion, setRuntimeVersion] = useState(server.runtimeProfile.runtimeVersion);
-  const { versions: availableMinecraftVersions } = useMinecraftVersions(runtime.type, server.runtimeProfile.minecraftVersion, server.id);
-  const { versions: availableRuntimeVersions } = useRuntimeVersions(runtime.type, minecraftVersion, true);
+  // Versions change only through the switch dialog, which moves installed mods along with them.
+  const minecraftVersion = server.runtimeProfile.minecraftVersion;
+  const runtimeVersion = server.runtimeProfile.runtimeVersion ?? "";
+  const [versionSwitchOpen, setVersionSwitchOpen] = useState(false);
   const [dockerImage, setDockerImage] = useState(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
-  /**
-   * True once the image no longer matches what serverSENTINEL would pick for the selected version,
-   * which is the signal to stop moving it. Without this the form posts the stored image back
-   * unchanged, so upgrading across a Java boundary leaves the server on a runtime that cannot load
-   * the jar the upgrade downloads.
-   */
-  const [dockerImageCustomized, setDockerImageCustomized] = useState(
-    Boolean(server.dockerImage) && server.dockerImage !== defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion)
-  );
   const [serverJar, setServerJar] = useState(server.runtimeProfile.jarArtifact.filename);
   const [dockerContainer, setDockerContainer] = useState(server.dockerContainer || "");
   const { minimumHeapGb, maximumHeapGb, javaArgs, updateMinimumHeap, updateMaximumHeap, updateJavaArgs, resetMemory } = useJavaMemory(memoryBounds, {
@@ -253,8 +251,6 @@ export function ServerEditForm({
   const queryPortValid = isValidServerPort(queryPort);
   const portConflict = serverPort === queryPort;
   const memoryWarning = maximumHeapGb > memoryBounds.max * 0.8;
-  const currentMinecraftVersionListed = availableMinecraftVersions.some((version) => version.version === minecraftVersion);
-  const currentRuntimeVersionListed = !runtimeVersion || availableRuntimeVersions.some((version) => version.runtimeVersion === runtimeVersion);
 
   useEffect(() => {
     resetFormState();
@@ -271,12 +267,7 @@ export function ServerEditForm({
     const nextMaximum = clampNumber(nextMemory.xmxGb ?? parseMaxMemoryGb(nextJavaArgs), memoryBounds.min, memoryBounds.max);
     const nextMinimum = clampNumber(nextMemory.xmsGb ?? nextMaximum, memoryBounds.min, nextMaximum);
     setDisplayName(server.displayName);
-    setMinecraftVersion(server.runtimeProfile.minecraftVersion);
-    setRuntimeVersion(server.runtimeProfile.runtimeVersion);
     setDockerImage(server.dockerImage || defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion));
-    setDockerImageCustomized(
-      Boolean(server.dockerImage) && server.dockerImage !== defaultDockerImageForMinecraftVersion(server.runtimeProfile.minecraftVersion)
-    );
     setServerJar(server.runtimeProfile.jarArtifact.filename);
     setDockerContainer(server.dockerContainer || "");
     resetMemory(nextMinimum, nextMaximum, nextJavaArgs);
@@ -303,33 +294,32 @@ export function ServerEditForm({
               <PanelHeader
                 title={<><span className="propertiesSectionIcon" aria-hidden="true"><Settings2 /></span>General</>}
                 description="Identity, runtime versions, and startup."
-                actions={<StatusBadge>{runtime.displayName}</StatusBadge>}
+                actions={<>
+                  <StatusBadge>{runtime.displayName}</StatusBadge>
+                  {runtime.managedProvisioning && onVersionSwitched && (
+                    <Button
+                      variant="secondary"
+                      compact
+                      onClick={() => setVersionSwitchOpen(true)}
+                      disabled={disabled || dirty}
+                      title={dirty ? "Save or discard your changes first" : disabled ? disabledReason || undefined : "Move this server and its content to another Minecraft version"}
+                    >
+                      <ArrowUpDown className="buttonIcon" aria-hidden="true" />
+                      Switch version
+                    </Button>
+                  )}
+                </>}
               />
               <div className="propertiesSectionBody">
                 <div className="propertiesFieldGrid three">
                   <FormField htmlFor="properties-display-name" label="Display name" required>
                     <input id="properties-display-name" name="displayName" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} />
                   </FormField>
-                  <FormField htmlFor="properties-minecraft-version" label="Minecraft version" descriptionPlacement="after" description={<>Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</>}>
-                    <select id="properties-minecraft-version" name="minecraftVersion" value={minecraftVersion} onChange={(event) => {
-                      setMinecraftVersion(event.target.value);
-                      setRuntimeVersion("");
-                      if (!dockerImageCustomized) setDockerImage(defaultDockerImageForMinecraftVersion(event.target.value));
-                    }}>
-                      {minecraftVersion && !currentMinecraftVersionListed && <option value={minecraftVersion}>{minecraftVersion}</option>}
-                      {runtime.managedProvisioning && availableMinecraftVersions.length ? availableMinecraftVersions.map((version) => (
-                        <option key={version.version} value={version.version}>{version.version}</option>
-                      )) : <option value={server.runtimeProfile.minecraftVersion}>{server.runtimeProfile.minecraftVersion}</option>}
-                    </select>
+                  <FormField className="propertiesVersionReadout" htmlFor="properties-minecraft-version" label="Minecraft version" descriptionPlacement="after" description={<>Current: {versionValue(detectedMinecraftVersion)} ({versionSourceLabel(detectedMinecraftVersion.source)})</>}>
+                    <input id="properties-minecraft-version" name="minecraftVersion" value={minecraftVersion} readOnly />
                   </FormField>
-                  <FormField htmlFor="properties-runtime-version" label={runtime.versionLabel} descriptionPlacement="after" description={<>Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</>}>
-                    <select id="properties-runtime-version" name="runtimeVersion" value={runtimeVersion} onChange={(event) => setRuntimeVersion(event.target.value)}>
-                      {runtime.managedProvisioning && <option value="">Latest stable</option>}
-                      {runtimeVersion && (!runtime.managedProvisioning || !currentRuntimeVersionListed) && <option value={runtimeVersion}>{runtimeVersion}</option>}
-                      {runtime.managedProvisioning && availableRuntimeVersions.map((version) => (
-                        <option key={version.id} value={version.runtimeVersion}>{version.runtimeVersion}{version.stable === false ? " (Development)" : ""}</option>
-                      ))}
-                    </select>
+                  <FormField className="propertiesVersionReadout" htmlFor="properties-runtime-version" label={runtime.versionLabel} descriptionPlacement="after" description={<>Current: {versionValue(detectedRuntimeVersion)} ({versionSourceLabel(detectedRuntimeVersion.source)})</>}>
+                    <input id="properties-runtime-version" name="runtimeVersion" value={runtimeVersion} placeholder="Latest stable" readOnly />
                   </FormField>
                 </div>
                 <label className="propertiesStartupToggle">
@@ -434,10 +424,7 @@ export function ServerEditForm({
                     htmlFor="edit-docker-image"
                     help={<HelpTooltip label="Docker runtime image" id="edit-docker-image-description">Java runtime image used for the server container.</HelpTooltip>}
                   >
-                    <select id="edit-docker-image" name="dockerImage" value={dockerImage} onChange={(event) => {
-                      setDockerImage(event.target.value);
-                      setDockerImageCustomized(event.target.value !== defaultDockerImageForMinecraftVersion(minecraftVersion));
-                    }} aria-describedby="edit-docker-image-description">
+                    <select id="edit-docker-image" name="dockerImage" value={dockerImage} onChange={(event) => setDockerImage(event.target.value)} aria-describedby="edit-docker-image-description">
                       <option value="eclipse-temurin:21-jre">Java 21 runtime</option>
                       <option value="eclipse-temurin:17-jre">Java 17 runtime</option>
                       <option value="eclipse-temurin:25-jre">Java 25 runtime</option>
@@ -519,6 +506,15 @@ export function ServerEditForm({
           {exportPanel && <div className="propertiesExportZone">{exportPanel}</div>}
           {dangerZone && <div className="propertiesDangerZone">{dangerZone}</div>}
         </div>
+      )}
+      {/* Outside the form: React events bubble through the portal, and its fields are not settings. */}
+      {versionSwitchOpen && onVersionSwitched && (
+        <VersionSwitchModal
+          server={server}
+          simulation={versionSwitchSimulation}
+          onClose={() => setVersionSwitchOpen(false)}
+          onSwitched={onVersionSwitched}
+        />
       )}
     </div>
   );

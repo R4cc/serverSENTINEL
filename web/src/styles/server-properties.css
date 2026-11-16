@@ -223,3 +223,59 @@
   .propertiesMemorySection .memoryNumberFields,
   .propertiesNetworkProtocols { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Minecraft version switch: a read-only version pair in General, changed through its own dialog. */
+.propertiesVersionReadout input[readonly] { color: var(--text); background: var(--surface-muted); cursor: default; }
+.versionSwitchBackdrop { z-index: 150; }
+.versionSwitchModal { width: min(720px, calc(100vw - 32px)); }
+.versionSwitchHeading { display: grid; gap: 2px; min-width: 0; }
+.versionSwitchHeading h2 { min-width: 0; overflow-wrap: anywhere; }
+.versionSwitchHeading p { margin: 0; color: var(--text-muted); font-size: var(--type-helper-size); overflow-wrap: anywhere; }
+.versionSwitchBody { display: grid; align-content: start; gap: var(--space-4); }
+.versionSwitchIntro { margin: 0; color: var(--text-muted); }
+.versionSwitchFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.versionSwitchSummary { display: grid; border: 1px solid var(--border-row); border-radius: var(--radius-sm); background: var(--surface-muted); }
+.versionSwitchTransition { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-width: 0; padding: var(--space-2) var(--space-3); }
+.versionSwitchTransition + .versionSwitchTransition { border-top: 1px solid var(--border-row); }
+.versionSwitchTransitionLabel { flex: none; color: var(--text-muted); font-size: var(--type-helper-size); }
+.versionSwitchTransitionValues { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); min-width: 0; font-family: var(--font-mono); font-size: var(--type-helper-size); font-variant-numeric: tabular-nums; }
+.versionSwitchTransitionValues > * { min-width: 0; overflow-wrap: anywhere; text-align: right; }
+.versionSwitchTransitionValues svg { flex: none; width: 14px; height: 14px; color: var(--text-soft); }
+.versionSwitchTransition--changed .versionSwitchTransitionValues strong { color: var(--text); font-weight: var(--weight-strong); }
+.versionSwitchTransition:not(.versionSwitchTransition--changed) .versionSwitchTransitionValues { color: var(--text-muted); }
+.versionSwitchCounts { margin: 0; font-size: var(--type-helper-size); color: var(--text-muted); }
+.versionSwitchCounts strong { color: var(--text); font-weight: var(--weight-strong); }
+.versionSwitchGroups { display: grid; gap: var(--space-3); }
+.versionSwitchGroup { display: grid; gap: var(--space-2); min-width: 0; }
+.versionSwitchGroupTitle { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--type-helper-size); font-weight: var(--weight-strong); color: var(--text); }
+details.versionSwitchGroup > summary { list-style: none; cursor: pointer; border-radius: var(--radius-sm); }
+details.versionSwitchGroup > summary::-webkit-details-marker { display: none; }
+details.versionSwitchGroup > summary svg { width: 15px; height: 15px; margin-left: auto; color: var(--text-soft); transition: transform var(--control-transition); }
+details.versionSwitchGroup[open] > summary svg { transform: rotate(180deg); }
+.versionSwitchRows { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border-row); border-radius: var(--radius-sm); }
+.versionSwitchRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); min-width: 0; padding: var(--space-2) var(--space-3); }
+.versionSwitchRow + .versionSwitchRow { border-top: 1px solid var(--border-row); }
+.versionSwitchRow > img,
+.versionSwitchRow > .modsWorkspaceFallback { width: 32px; height: 32px; border-radius: var(--radius-sm); object-fit: cover; }
+.versionSwitchRowCopy { display: grid; gap: 2px; min-width: 0; }
+.versionSwitchRowCopy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-strong); }
+.versionSwitchRowCopy small { color: var(--text-muted); font-size: var(--type-helper-size); line-height: 1.4; }
+.versionSwitchGroup--danger .versionSwitchRowCopy small { color: var(--status-danger-foreground); }
+.versionSwitchRowVersions { display: flex; align-items: center; gap: var(--space-1); max-width: 220px; min-width: 0; font-family: var(--font-mono); font-size: var(--type-meta-size); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.versionSwitchRowVersions > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The installed version is short and identifies the change; a long target label gives way first. */
+.versionSwitchRowVersions > span:first-child:not(:last-child) { flex: 0 0 auto; max-width: 96px; }
+.versionSwitchRowVersions > span:last-child { color: var(--text); }
+.versionSwitchRowVersions svg { flex: none; width: 12px; height: 12px; }
+.versionSwitchBackup { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-row); border-radius: var(--radius-sm); font-weight: var(--weight-strong); cursor: pointer; }
+.versionSwitchProgress { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--text-muted); }
+
+@media (max-width: 640px) {
+  .versionSwitchFields { grid-template-columns: minmax(0, 1fr); }
+  .versionSwitchTransition { display: grid; gap: 2px; }
+  .versionSwitchTransitionValues { justify-content: flex-start; }
+  .versionSwitchTransitionValues > * { text-align: left; }
+  .versionSwitchRow { grid-template-columns: auto minmax(0, 1fr); }
+  .versionSwitchRowVersions { grid-column: 2; max-width: none; }
+  .versionSwitchModal .modalFooter button { flex: 1 1 0; }
+}

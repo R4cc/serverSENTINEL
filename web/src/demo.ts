@@ -1,3 +1,4 @@
+import { sortVersionSwitchContent, versionSwitchContentCounts, versionSwitchDirection, versionSwitchOutcomeCounts, versionSwitchPlannedStatus, versionSwitchWorldWarning, type VersionSwitchContentEntry, type VersionSwitchOutcome, type VersionSwitchPlan, type VersionSwitchResult } from "@serversentinel/contracts";
 import { demoFleetServerPrefix, demoServerId } from "./demoRuntime";
 import type { ModsDemoFixtureName } from "./features/mods/modsDemoFixtures";
 import type { FileListing, InstalledMod, ManagedNode, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from "./types";
@@ -1139,4 +1140,60 @@ export function modsForDemoFixture(fixture: ModsDemoFixtureName): InstalledMod[]
   if (fixture === "mixed") return mixedHealthMods();
   if (fixture === "updates") return updateAvailableMods();
   return initialDemoMods.map(cloneMod);
+}
+
+/**
+ * The browser-only demo server cannot reach Modrinth, so a version switch is simulated: every
+ * fourth identified mod has no build for the target and unidentified jars cannot be checked, which
+ * shows the disabled path next to ordinary updates.
+ */
+export function demoVersionSwitchPlan(server: ManagedServer, mods: InstalledMod[], request: { minecraftVersion: string; runtimeVersion?: string }): VersionSwitchPlan {
+  const profile = server.runtimeProfile;
+  const target = request.minecraftVersion;
+  const sameVersion = target === profile.minecraftVersion;
+  const content = mods.map((mod, index): VersionSwitchContentEntry => {
+    const base = {
+      filename: mod.filename,
+      displayName: mod.displayName,
+      iconUrl: mod.iconUrl,
+      projectId: mod.modrinth?.projectId,
+      enabled: mod.enabled,
+      currentVersion: mod.modrinth?.versionNumber
+    };
+    if (!mod.enabled) return { ...base, action: "unchanged", reason: "Already disabled." };
+    if (sameVersion || mod.modrinth?.gameVersions.includes(target)) {
+      return { ...base, action: "keep", targetVersion: base.currentVersion, reason: `The installed version already supports Minecraft ${target}.` };
+    }
+    if (!mod.modrinth) return { ...base, action: "disable", reason: `Not identified on Modrinth, so Minecraft ${target} support cannot be verified.` };
+    if (index % 4 === 3) return { ...base, action: "disable", reason: `No Fabric version for Minecraft ${target} is published on Modrinth.` };
+    const targetVersion = `${(mod.modrinth.versionNumber || "1.0.0").split("+")[0]}+${target}`;
+    return { ...base, action: "update", targetVersion, targetVersionId: `${mod.modrinth.projectId}-${target}`, targetFilename: `${mod.modrinth.projectId}-${targetVersion}.jar`, reason: `Version ${targetVersion} supports Minecraft ${target}.` };
+  });
+  const direction = versionSwitchDirection(profile.minecraftVersion, target);
+  const worldWarning = versionSwitchWorldWarning(direction, profile.minecraftVersion, target);
+  sortVersionSwitchContent(content);
+  return {
+    serverId: server.id,
+    generatedAt: new Date().toISOString(),
+    runtimeType: profile.runtimeType,
+    current: { minecraftVersion: profile.minecraftVersion, runtimeVersion: profile.runtimeVersion, dockerImage: server.dockerImage },
+    target: { minecraftVersion: target, runtimeVersion: request.runtimeVersion || profile.runtimeVersion, dockerImage: server.dockerImage },
+    direction,
+    contentKind: "mods",
+    content,
+    counts: versionSwitchContentCounts(content),
+    warnings: worldWarning ? [worldWarning] : []
+  };
+}
+
+export function demoVersionSwitchResult(plan: VersionSwitchPlan): VersionSwitchResult {
+  const outcomes = plan.content.map((entry): VersionSwitchOutcome => ({
+    filename: entry.filename,
+    displayName: entry.displayName,
+    plannedAction: entry.action,
+    status: versionSwitchPlannedStatus[entry.action],
+    version: entry.action === "update" || entry.action === "install" ? entry.targetVersion : entry.currentVersion,
+    reason: entry.reason
+  }));
+  return { plan, outcomes, counts: versionSwitchOutcomeCounts(outcomes) };
 }

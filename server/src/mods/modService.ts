@@ -22,7 +22,7 @@ import { assessRequiredModDependencies } from "../modrinth/dependencyHealth.js";
 import { createModUpdatePlan } from "../modrinth/updatePlan.js";
 import type { ModUpdateScan } from "../modrinth/updatePlanCoordinator.js";
 import { assertDownloadableModrinthFile, assertVersionInstallable, compatibilityFromSelectedVersion } from "../modrinth/installPolicy.js";
-import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
+import { allowedForChannel, fetchProject, latestCompatibleVersionFor, fetchProjects, fetchProjectVersions, fetchVersions, latestCompatibleProjectVersion, minecraftVersionFacetValues, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, modrinthVersionIsNewer, normalizeReleaseChannel, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import { deleteModIcon, ensureModrinthIconForFile, iconContentType, isMissingPathError, modIconKey, modrinthIconProxyUrl, saveModIcon } from "./icons.js";
 import { activeModMutations, assertJarBuffer, modFileSizeLimit, uploadManagedContentBuffer, withModMutationLock } from "./managedContent.js";
 import { managedContentRuntime } from "../servers/versions.js";
@@ -953,11 +953,7 @@ export async function updateModrinthMod(server: ManagedServer, input: unknown) {
       contentKind: contentDefinition.singular,
       minecraftVersion: targetRuntime.minecraftVersion
     };
-    const versions = await fetchProjectVersions(metadata.projectId, versionFilter, { forceRefresh: true });
-    let latest = latestCompatibleProjectVersion(versions, { ...versionFilter, channel: selectedChannel });
-    if (!latest) {
-      latest = latestCompatibleProjectVersion(await fetchProjectVersions(metadata.projectId, undefined, { forceRefresh: true }), { ...versionFilter, channel: selectedChannel });
-    }
+    const latest = await latestCompatibleVersionFor(metadata.projectId, { ...versionFilter, channel: selectedChannel }, { forceRefresh: true });
     const file = modrinthJarFile(latest);
     if (!latest || !file) {
       throw new Error("No compatible installable update was found for that project");

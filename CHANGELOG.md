@@ -1,5 +1,10 @@
 # Changelog
 
+## 26.11.6 - 2026-11-16
+
+- Added **Switch version** to server Settings. It opens a dialog to pick a new Minecraft version and Fabric loader or Paper build, then checks every installed mod or plugin against it before anything changes: those with a matching version on Modrinth switch to it, newly required dependencies are installed, and anything without a compatible version — or that cannot be checked — is disabled rather than deleted. A review step lists what will happen and why, warns before a world downgrade, and a final overview reports what was updated, installed and disabled. The Java image follows the new version unless a custom image was chosen.
+- Minecraft and loader versions on the Settings page are now read-only and change only through Switch version, so a version change can no longer leave mods behind on the old version.
+
 ## 26.11.5 - 2026-11-10
 
 - The Update and Review update buttons on installed mods now line up in a column instead of shifting with the length of each mod's new version.

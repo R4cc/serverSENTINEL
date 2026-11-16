@@ -125,3 +125,23 @@ describe("demo session generation", () => {
     expect(messages.toLowerCase()).not.toContain("alex");
   });
 });
+
+describe("demo version switch", () => {
+  it("updates identified mods, disables unverifiable ones, and leaves disabled ones alone", async () => {
+    const { demoServer, demoVersionSwitchPlan, demoVersionSwitchResult, modsForDemoFixture } = await import("./demo");
+    const server = demoServer();
+    const mods = modsForDemoFixture("mixed");
+    const plan = demoVersionSwitchPlan(server, mods, { minecraftVersion: "26.2" });
+
+    expect(plan.direction).toBe("upgrade");
+    expect(plan.content).toHaveLength(mods.length);
+    expect(plan.content.find((entry) => entry.filename === "manual-unknown-fixture.jar")?.action).toBe("disable");
+    expect(plan.content.some((entry) => entry.action === "update" && entry.targetVersion?.endsWith("+26.2"))).toBe(true);
+    // Disabled entries lead the overview.
+    expect(plan.content[0].action).toBe("disable");
+
+    const result = demoVersionSwitchResult(plan);
+    expect(result.counts.disabled).toBe(plan.counts.disable);
+    expect(result.counts.updated).toBe(plan.counts.update);
+  });
+});
