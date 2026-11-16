@@ -304,7 +304,7 @@ export function ServerEditForm({
                       disabled={disabled || dirty}
                       title={dirty ? "Save or discard your changes first" : disabled ? disabledReason || undefined : "Move this server and its content to another Minecraft version"}
                     >
-                      <ArrowUpDown aria-hidden="true" />
+                      <ArrowUpDown className="buttonIcon" aria-hidden="true" />
                       Switch version
                     </Button>
                   )}
