@@ -342,6 +342,123 @@ export type SafeBatchUpdateResult = {
   counts: { requested: number; updated: number; skipped: number; failed: number };
 };
 
+/**
+ * What switching a server to another Minecraft version does to one installed mod or plugin.
+ * `keep`: the installed version already supports the target. `update`: a version for the target
+ * replaces it. `install`: a newly required dependency is added. `disable`: nothing installable
+ * exists for the target, so it is switched off. `unchanged`: already disabled and left alone.
+ */
+export type VersionSwitchContentAction = "keep" | "update" | "install" | "disable" | "unchanged";
+
+export type VersionSwitchContentEntry = {
+  /** Installed filename; for `install` entries, the filename the dependency will get. */
+  filename: string;
+  displayName: string;
+  iconUrl?: string;
+  projectId?: string;
+  enabled: boolean;
+  action: VersionSwitchContentAction;
+  currentVersion?: string;
+  targetVersion?: string;
+  targetVersionId?: string;
+  targetFilename?: string;
+  reason: string;
+  /** For `install` entries: the installed content that needs it. */
+  requiredBy?: string[];
+};
+
+export type VersionSwitchPlan = {
+  serverId: string;
+  generatedAt: string;
+  runtimeType: ServerRuntimeType;
+  current: { minecraftVersion: string; runtimeVersion?: string; dockerImage?: string };
+  target: { minecraftVersion: string; runtimeVersion?: string; dockerImage?: string };
+  direction: "upgrade" | "downgrade" | "same";
+  contentKind: RuntimeContentKind;
+  content: VersionSwitchContentEntry[];
+  /** Set when installed content is left untouched, for example with the module switched off. */
+  contentSkippedReason?: string;
+  counts: Record<VersionSwitchContentAction, number>;
+  warnings: string[];
+};
+
+export type VersionSwitchOutcomeStatus = "kept" | "updated" | "installed" | "disabled" | "unchanged" | "failed";
+
+export type VersionSwitchOutcome = {
+  filename: string;
+  displayName: string;
+  plannedAction: VersionSwitchContentAction;
+  status: VersionSwitchOutcomeStatus;
+  /** Filename after the switch, when it changed. */
+  finalFilename?: string;
+  version?: string;
+  reason?: string;
+};
+
+export type VersionSwitchResult = {
+  plan: VersionSwitchPlan;
+  outcomes: VersionSwitchOutcome[];
+  counts: Record<VersionSwitchOutcomeStatus, number>;
+};
+
+const versionSwitchActionOrder: Record<VersionSwitchContentAction, number> = { disable: 0, install: 1, update: 2, keep: 3, unchanged: 4 };
+
+/** Orders a plan for review: what needs attention first, then by name. */
+export function sortVersionSwitchContent<T extends Pick<VersionSwitchContentEntry, "action" | "displayName">>(entries: T[]) {
+  return entries.sort((left, right) => versionSwitchActionOrder[left.action] - versionSwitchActionOrder[right.action]
+    || left.displayName.localeCompare(right.displayName));
+}
+
+export function versionSwitchDirection(from: string, to: string): VersionSwitchPlan["direction"] {
+  const comparison = compareMinecraftVersions(to, from);
+  return comparison > 0 ? "upgrade" : comparison < 0 ? "downgrade" : "same";
+}
+
+/** Worlds only move forward between Minecraft versions; both directions call for a backup. */
+export function versionSwitchWorldWarning(direction: VersionSwitchPlan["direction"], from: string, to: string) {
+  if (direction === "downgrade") return `Minecraft does not support opening a world in an older version. Back up the world first: loading it in ${to} can corrupt or lose data.`;
+  if (direction === "upgrade") return `Once the world is opened in ${to} it cannot be opened in ${from} again. Back up the world first.`;
+  return undefined;
+}
+
+export function versionSwitchContentCounts(entries: readonly Pick<VersionSwitchContentEntry, "action">[]): VersionSwitchPlan["counts"] {
+  const counts: VersionSwitchPlan["counts"] = { keep: 0, update: 0, install: 0, disable: 0, unchanged: 0 };
+  for (const entry of entries) counts[entry.action] += 1;
+  return counts;
+}
+
+/** The outcome each planned action reports when it goes as planned. */
+export const versionSwitchPlannedStatus: Readonly<Record<VersionSwitchContentAction, VersionSwitchOutcomeStatus>> = {
+  keep: "kept", update: "updated", install: "installed", disable: "disabled", unchanged: "unchanged"
+};
+
+export function versionSwitchOutcomeCounts(outcomes: readonly Pick<VersionSwitchOutcome, "status">[]): VersionSwitchResult["counts"] {
+  const counts: VersionSwitchResult["counts"] = { kept: 0, updated: 0, installed: 0, disabled: 0, unchanged: 0, failed: 0 };
+  for (const outcome of outcomes) counts[outcome.status] += 1;
+  return counts;
+}
+
+/**
+ * Orders two Minecraft release identifiers numerically (`1.21.10` after `1.21.9`). Pre-release
+ * suffixes sort before their release. Unparsable values compare as equal.
+ */
+export function compareMinecraftVersions(left: string, right: string) {
+  const parse = (value: string) => {
+    const match = value.trim().match(/^(\d+)\.(\d+)(?:\.(\d+))?(.*)$/);
+    return match ? { parts: [Number(match[1]), Number(match[2]), Number(match[3] ?? 0)], suffix: match[4] } : null;
+  };
+  const a = parse(left);
+  const b = parse(right);
+  if (!a || !b) return 0;
+  for (let index = 0; index < 3; index += 1) {
+    if (a.parts[index] !== b.parts[index]) return a.parts[index] - b.parts[index];
+  }
+  if (a.suffix === b.suffix) return 0;
+  if (!a.suffix) return 1;
+  if (!b.suffix) return -1;
+  return a.suffix < b.suffix ? -1 : 1;
+}
+
 export function modUpdatePlanCounts(updates: readonly Pick<ModUpdatePlanEntry, "status">[]): ModUpdatePlan["counts"] {
   return {
     totalInstalled: updates.length,

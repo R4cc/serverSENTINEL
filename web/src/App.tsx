@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { ApiError, api } from "./api";
 import { demoFixtures, demoServerId, isDemoServerId, loadDemoFixtures } from "./demoRuntime";
 import type { ActivePage, AppState, AuthSession, ConsoleBacklog, ConsoleLine, ConsoleStreamFrame, ManagedNode, ManagedServer, ModuleAccessState, NotificationTone, OperationRecord, PlayerSnapshot, PlayerSnapshotsResponse, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse, GeneralJob } from "./types";
+import type { VersionSwitchResult } from "@serversentinel/contracts";
 import { runtimeTone } from "./utils/format";
 import { hasPermission } from "./utils/permissions";
 import { trimFormValue } from "./utils/validation";
@@ -1900,6 +1901,18 @@ export default function App() {
     }
   }
 
+  // The dialog itself reports every outcome, so no toast repeats it over the dialog.
+  async function handleVersionSwitched(result: VersionSwitchResult & { server?: ManagedServer }) {
+    if (activeServerIsDemo) {
+      const disabled = new Set(result.outcomes.filter((outcome) => outcome.status === "disabled").map((outcome) => outcome.filename));
+      setDemoInstalledMods((mods) => mods.map((mod) => disabled.has(mod.filename) ? { ...mod, enabled: false } : mod));
+      return;
+    }
+    await refreshApp();
+    if (result.server) await refreshStatus(result.server.id);
+    await modsBridge?.refreshAfterFileChange();
+  }
+
   function currentPanelUrl() {
     return window.location.origin;
   }
@@ -2532,6 +2545,11 @@ export default function App() {
                     server={activeServer}
                     totalMemory={activeNode.totalMemory || effectiveAppState.totalMemory}
                     onSubmit={updateServer}
+                    onVersionSwitched={handleVersionSwitched}
+                    versionSwitchSimulation={activeServerIsDemo ? {
+                      plan: async (request) => demoFixtures().demoVersionSwitchPlan(activeServer, demoInstalledMods, request),
+                      apply: async (request) => demoFixtures().demoVersionSwitchResult(demoFixtures().demoVersionSwitchPlan(activeServer, demoInstalledMods, request))
+                    } : undefined}
                     disabled={serverSettingsLocked || serverSettingsSaving}
                     disabledReason={serverSettingsLockedReason}
                     saving={serverSettingsSaving}

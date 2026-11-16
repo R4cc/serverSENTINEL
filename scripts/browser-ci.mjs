@@ -11,6 +11,7 @@ const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const suites = [
   [3, "server-settings", "scripts/server-settings-smoke.mjs"],
   [46, "properties-ui", "scripts/properties-ui-smoke.mjs"],
+  [20, "version-switch", "scripts/version-switch-smoke.mjs"],
   [103, "schedules-ui", "scripts/schedules-ui-smoke.mjs"],
   [29, "nodes-ui", "scripts/nodes-ui-smoke.mjs"],
   [5, "files-workspace", "scripts/files-workspace-smoke.mjs"],

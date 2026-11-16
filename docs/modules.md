@@ -50,6 +50,24 @@ Local and remote metadata identification batch up to 100 file hashes per request
 persists when the saved preferences have not changed during the scan, so installs, removals, and
 version/channel changes made while a check is pending remain authoritative.
 
+## Minecraft version switches
+
+**Switch version** in server Settings is core, but it moves managed content with it. The panel
+plans first (`POST /api/servers/:id/version-switch/plan`) and changes nothing: it resolves the
+Fabric loader or Paper build for the target, then checks each installed jar against Modrinth.
+A jar whose installed version already lists the target is kept; one with a version for the target
+switches to it on the jar's own release channel; newly required dependencies are added; anything
+else — no build for the target, no Modrinth identity, or a failed lookup — is disabled, never
+deleted. Required dependencies are re-checked until stable, so a mod whose dependency is disabled
+is disabled too. A loader- or build-only change keeps every jar.
+
+Applying (`POST /api/servers/:id/version-switch`) requires a stopped server, re-plans, switches the
+runtime through the ordinary settings update, and then changes content as one recorded batch in
+**Update history**. A jar whose update or install fails at that point is disabled so the server can
+start, and the result lists every outcome. With managed content switched off, or for an account
+without `mods.update`, `mods.enableDisable` and `mods.install`, the runtime still switches and the
+plan says that installed content was left alone.
+
 ## The two gates
 
 Whether a module reaches a person is decided twice, and both answers must be yes.

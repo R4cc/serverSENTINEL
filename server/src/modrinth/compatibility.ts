@@ -442,3 +442,16 @@ export async function resolveModrinthProjectCompatibility(options: Compatibility
     return unknownCompatibility();
   }
 }
+
+/**
+ * The newest installable version of a project for a target, from the filtered listing or, when
+ * that has no match, from the full listing filtered locally — the rule updates have always used.
+ */
+export async function latestCompatibleVersionFor(
+  projectId: string,
+  options: VersionCompatibilityOptions,
+  fetchOptions: { forceRefresh?: boolean } = {}
+): Promise<ModrinthVersion | undefined> {
+  return latestCompatibleProjectVersion(await fetchProjectVersions(projectId, options, fetchOptions), options)
+    ?? latestCompatibleProjectVersion(await fetchProjectVersions(projectId, undefined, fetchOptions), options);
+}

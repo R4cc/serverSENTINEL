@@ -1,7 +1,7 @@
 import { serverMutations } from "../servers/mutationCoordinator.js";
 import type { FastifyInstance } from "fastify";
 import { runtimeForNodeId, runtimeForServer, services } from "../appServices.js";
-import { config, maxServerPort, minServerPort } from "../config.js";
+import { config } from "../config.js";
 import { commandRateLimit, destructiveRateLimit, provisionRateLimit, runtimeActionRateLimit } from "../http/rateLimits.js";
 import { badRequest, validateRuntimeActionReason } from "../http/validation.js";
 import { apiErrorResponse, throwHttp } from "../http/errors.js";
@@ -11,11 +11,13 @@ import { serverRuntimeDefinition } from "@serversentinel/contracts";
 import { activeScheduledRunsFor } from "../schedules/activeRuns.js";
 import { requireNoActiveModMutation } from "../mods/modService.js";
 import { removeModHistoryArchives } from "../mods/modHistory.js";
-import { allocateQueryPort, assertNodePortsAvailable, assertUniqueDockerHostPorts, dockerPortsWithManagedEntries, isValidServerPort, normalizeCreateServerPorts, normalizeManagedPorts, queryPortEntry } from "../servers/ports.js";
+import { assertNodePortsAvailable, normalizeCreateServerPorts } from "../servers/ports.js";
 import { runtimeProfileForServer } from "../runtime/profile.js";
 import { currentSessionUser, requireRequestPermission } from "../auth/sessionService.js";
 import { watchSocketAuthorization } from "../auth/socketAuthorization.js";
 import { getServer, listManagedServers } from "../servers/store.js";
+import { applyServerSettingsUpdate } from "../servers/serverSettingsUpdate.js";
+import { applyMinecraftVersionSwitch, parseVersionSwitchRequest, planMinecraftVersionSwitch } from "../servers/versionSwitch.js";
 import { publicServerStatus } from "../servers/publicViews.js";
 import { serverJarProvider, startProvisionOperation } from "../servers/provisioning.js";
 import { type CreateServerInput } from "../servers/ports.js";
@@ -99,27 +101,26 @@ app.put<{
   return serverMutations.run(request.params.id, async () => {
     const server = await getServer(request.params.id);
     await requireServerStoppedForMutableConfiguration(server);
-    const nextDisplayName = request.body.displayName?.trim() || server.displayName;
-    const servers = await listManagedServers();
-    if (servers.some((candidate) => candidate.id !== server.id && candidate.displayName.toLowerCase() === nextDisplayName.toLowerCase())) {
-      throw new Error("A managed server with this display name already exists");
-    }
-    const serverPort = request.body.serverPort?.trim();
-    if (serverPort && !isValidServerPort(serverPort)) {
-      throw new Error(`Server port must be between ${minServerPort} and ${maxServerPort}`);
-    }
-    const requestedDockerPorts = request.body.dockerPorts?.trim() || (serverPort ? `${serverPort}:${serverPort}/tcp` : server.dockerPorts);
-    const currentQueryPort = server.managedPorts?.find((port) => port.type === "query")?.externalPort;
-    const queryPort = request.body.queryPort?.trim() || (currentQueryPort ? String(currentQueryPort) : undefined);
-    const allocatedQueryPort = allocateQueryPort(servers, server.nodeId, requestedDockerPorts || "", queryPort, { ignoreServerId: server.id });
-    const managedPorts = normalizeManagedPorts(requestedDockerPorts || "", [queryPortEntry(allocatedQueryPort)]);
-    const dockerPorts = dockerPortsWithManagedEntries(requestedDockerPorts || "", managedPorts);
-    if (dockerPorts) {
-      assertUniqueDockerHostPorts(dockerPorts);
-      assertNodePortsAvailable(servers, server.nodeId, dockerPorts, { ignoreServerId: server.id });
-    }
-    const updatedServer = await services.exportCoordinator.withMutation(server.id, () => runtimeForServer(server).updateServer(server, { ...request.body, dockerPorts, queryPort: String(allocatedQueryPort) }));
+    const updatedServer = await applyServerSettingsUpdate(server, request.body);
     return runtimeForServer(updatedServer).publicServer(updatedServer);
+  });
+});
+
+app.post<{ Params: { id: string }; Body: { minecraftVersion?: string; runtimeVersion?: string } }>("/api/servers/:id/version-switch/plan", runtimeActionRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "servers.editSettings");
+  const server = await getServer(request.params.id);
+  return planMinecraftVersionSwitch(server, parseVersionSwitchRequest(request.body), user);
+});
+
+app.post<{ Params: { id: string }; Body: { minecraftVersion?: string; runtimeVersion?: string } }>("/api/servers/:id/version-switch", destructiveRateLimit, async (request) => {
+  const user = await requireRequestPermission(request, "servers.editSettings");
+  const switchRequest = parseVersionSwitchRequest(request.body);
+  return serverMutations.run(request.params.id, async () => {
+    const server = await getServer(request.params.id);
+    await requireServerStoppedForMutableConfiguration(server);
+    requireNoActiveModMutation(server.id);
+    const { server: updatedServer, result } = await applyMinecraftVersionSwitch(server, switchRequest, user);
+    return { ...result, server: await runtimeForServer(updatedServer).publicServer(updatedServer) };
   });
 });
 

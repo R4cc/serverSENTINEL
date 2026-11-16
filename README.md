@@ -12,6 +12,7 @@ A web panel for managing Minecraft servers across Docker hosts: server lifecycle
 - Start, stop, and restart servers
 - Search for and install Fabric mods or Paper plugins through Modrinth
 - Get notified when a compatible mod or plugin update is available and update in one click
+- Switch a server to another Minecraft version, with its mods or plugins moved to matching versions and incompatible ones disabled
 - View the live console and send commands
 - Browse, upload, edit, and manage server files
 - Add existing mod or plugin files and manage installed content

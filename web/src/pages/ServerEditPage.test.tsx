@@ -29,10 +29,11 @@ const server: ManagedServer = {
   updatedAt: "2026-01-01T00:00:00.000Z"
 };
 
-function renderForm(disabled = false, disabledReason = "", saving = false) {
+function renderForm(disabled = false, disabledReason = "", saving = false, onVersionSwitched?: () => void) {
   return renderToStaticMarkup(
     <ServerEditForm
       server={server}
+      onVersionSwitched={onVersionSwitched}
       totalMemory={16 * 1024 * 1024 * 1024}
       onSubmit={vi.fn()}
       disabled={disabled}
@@ -45,6 +46,21 @@ function renderForm(disabled = false, disabledReason = "", saving = false) {
 }
 
 describe("ServerEditForm", () => {
+  it("shows versions read-only and changes them only through the switch dialog", () => {
+    const html = renderForm(false, "", false, vi.fn());
+
+    expect(html).toMatch(/<input id="properties-minecraft-version" readOnly="" name="minecraftVersion" value="1.21.4"\/>/);
+    expect(html).toMatch(/<input id="properties-runtime-version"[^>]*readOnly="" name="runtimeVersion" value="0.16.10"\/>/);
+    expect(html).not.toContain('<select id="properties-minecraft-version"');
+    expect(html).toContain("Switch version");
+    expect(renderForm()).not.toContain("Switch version");
+  });
+
+  it("disables the version switch while settings are locked", () => {
+    const html = renderForm(true, "Stop the server first.", false, vi.fn());
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*title="Stop the server first."[^>]*>.*?Switch version/);
+  });
+
   it("keeps configuration fields in one form with an advanced disclosure and no idle actions", () => {
     const html = renderForm();
 
