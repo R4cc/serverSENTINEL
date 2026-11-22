@@ -8,6 +8,8 @@ import { getInstalledModHealth, modVersion } from "./modHealth";
 import { applyUpdatePlanEntry, updatePlanEntryLookup } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { filterInstalledMods } from "./modsWorkspaceHelpers";
+import { buildModDependencyGraph } from "./modDependencyGraph";
+import { RequiredByChip } from "./ModDependencyLinks";
 import { ModStatusBadge } from "./ModStatusBadge";
 import { SearchField } from "../../components/SearchField";
 import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
@@ -38,6 +40,12 @@ function canonicalModFilename(filename: string) {
 
 export function InstalledModsList({ terminology = fabricContentTerminology, mods, restartRequiredChanges = [], query, busy, locked, switchLocked = locked, dependencyInstallLocked = locked, onQueryChange, onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails, onDropFiles, dropLocked = false, updatePlan }: Props) {
   const deferredQuery = useDeferredValue(query);
+  // Built from every installed mod, not the filtered rows, so a search that hides a library's
+  // parent still names it on the library's row.
+  const dependencyGraph = useMemo(() => buildModDependencyGraph(mods), [mods]);
+  // The row under the pointer or keyboard focus. Its libraries and dependents are tinted so the
+  // relationship reads across the list without opening anything.
+  const [linkSource, setLinkSource] = useState<string | null>(null);
   // Filtering, health resolution, and sorting cost more than the rows they feed, and the parent
   // re-renders for reasons that have nothing to do with this list. Deferring the query keeps the
   // search control responsive even when a large installation has hundreds of rows to rank.
@@ -57,6 +65,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
         const identity = mod.modrinth?.projectId ? `modrinth:${mod.modrinth.projectId}` : `file:${filename}`;
         return {
           mod,
+          links: dependencyGraph.linksFor(mod),
           plannedUpdate,
           installedVersion: modVersion(mod),
           health: getInstalledModHealth(applyUpdatePlanEntry(mod, plannedUpdate), terminology),
@@ -67,7 +76,13 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
         };
       })
       .sort((a, b) => Number(b.updateAvailable) - Number(a.updateAvailable));
-  }, [deferredQuery, mods, restartRequiredChanges, terminology, updatePlan]);
+  }, [deferredQuery, dependencyGraph, mods, restartRequiredChanges, terminology, updatePlan]);
+  const linkedToSource = useMemo(() => {
+    const source = linkSource ? mods.find((mod) => mod.filename === linkSource) : undefined;
+    if (!source) return new Set<string>();
+    const links = dependencyGraph.linksFor(source);
+    return new Set([...links.requires, ...links.requiredBy].map((mod) => mod.filename));
+  }, [dependencyGraph, linkSource, mods]);
   const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
 
@@ -109,14 +124,27 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
           Array.from({ length: 5 }, (_, index) => <InstalledModSkeletonRow key={index} />)
         ) : visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? `No matching ${terminology.plural}` : `No ${terminology.plural} installed yet`} message={mods.length ? "Try a different search." : `Add a compatible ${terminology.runtimeName} ${terminology.singular} or upload a jar to get started.`} />
-        ) : visible.map(({ mod, plannedUpdate, installedVersion, health, requiresRestart }) => {
+        ) : visible.map(({ mod, links, plannedUpdate, installedVersion, health, requiresRestart }) => {
           const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
           const icon = modIconSource(mod.iconUrl);
+          const hasLinks = links.requires.length > 0 || links.requiredBy.length > 0;
+          const rowState = [
+            mod.enabled ? "" : "isDisabled",
+            linkedToSource.has(mod.filename) ? "isDependencyLinked" : "",
+            linkSource === mod.filename && linkedToSource.size > 0 ? "isDependencySource" : ""
+          ].filter(Boolean).join(" ");
           return (
             <article
               key={mod.filename}
-              className={`modsWorkspaceRow ${mod.enabled ? "" : "isDisabled"}`}
+              className={`modsWorkspaceRow ${rowState}`.trim()}
               role="listitem"
+              onPointerEnter={() => setLinkSource(hasLinks ? mod.filename : null)}
+              onPointerLeave={() => setLinkSource((current) => current === mod.filename ? null : current)}
+              onFocus={() => setLinkSource(hasLinks ? mod.filename : null)}
+              onBlur={(event) => {
+                if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                setLinkSource((current) => current === mod.filename ? null : current);
+              }}
             >
               <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} title={`Open details for ${mod.displayName}`}>
                 <ModIconImage src={icon} fallback="JAR" />
@@ -129,6 +157,7 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
                     ? <span className="modsHealthQuiet"><span className="modsHealthQuietDot" aria-hidden="true" />{health.label}</span>
                     : <ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>}
                   {requiresRestart && <ModStatusBadge tone="restart">Requires restart</ModStatusBadge>}
+                  <RequiredByChip mod={mod} requiredBy={links.requiredBy} terminology={terminology} onOpen={onDetails} />
                 </div>
                 <div className="modsWorkspaceVersion" title={installedVersion}>{installedVersion}</div>
               </div>

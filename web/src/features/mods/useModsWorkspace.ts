@@ -10,6 +10,7 @@ import { createDemoUpdatePlan, retainNewestUpdatePlan, safeUpdateRequestGroups, 
 import { demoFixtureFailureMessage, readModsDemoFixture } from "./modsDemoFixtures";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 import { managedContentTerminology } from "./contentTerminology";
+import { buildModDependencyGraph, enabledDependents, formatModNames, reconcileDependencyHealth } from "./modDependencyGraph";
 import { useRequestScope } from "../../utils/useRequestScope";
 
 const modSearchDebounceMs = 350;
@@ -230,7 +231,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
   searchQueryRef.current = query.trim();
   showIncompatibleResultsRef.current = showIncompatibleResults;
 
-  const currentInstalledMods = installedModsServerId === activeServer?.id ? installedMods : [];
+  // Dependency health follows enable/disable immediately instead of waiting for the next scan.
+  const currentInstalledMods = useMemo(
+    () => installedModsServerId === activeServer?.id ? reconcileDependencyHealth(installedMods) : [],
+    [activeServer?.id, installedMods, installedModsServerId]
+  );
   const currentUpdatePlan = updatePlan?.serverId === activeServer?.id ? updatePlan : null;
   const detailsMod = useMemo(() => currentInstalledMods.find((mod) => installedModKey(mod) === detailsModKey) ?? null, [detailsModKey, currentInstalledMods]);
   const selectedVersion = useMemo(() => {
@@ -863,9 +868,15 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     setNotice("");
     setActiveJobs((current) => [...current, { id: jobId, type: "mod-install", status: "running", title: "Installing dependencies", subject: mod.displayName, progress: 10, task: "Resolving required dependencies", dismissible: false }]);
     if (activeServerIsDemo) {
+      // Like the server, a dependency that is installed but switched off is repaired by enabling it.
+      const disabledDependencies = mod.dependencyHealth.missing.filter((dependency) => dependency.disabled);
+      const isDisabledDependency = (candidate: InstalledMod) => !candidate.enabled && disabledDependencies.some((dependency) => (
+        (dependency.projectId && candidate.modrinth?.projectId === dependency.projectId)
+        || (dependency.versionId && candidate.modrinth?.versionId === dependency.versionId)
+      ));
       const repair = (current: InstalledMod[]) => current.map((candidate) => installedModKey(candidate) === installedModKey(mod)
-        ? { ...candidate, dependencyHealth: { status: "satisfied" as const, requiredCount: candidate.dependencyHealth?.requiredCount ?? count, missing: [] } }
-        : candidate);
+        ? { ...candidate, dependencyHealth: { ...candidate.dependencyHealth, status: "satisfied" as const, requiredCount: candidate.dependencyHealth?.requiredCount ?? count, missing: [] } }
+        : isDisabledDependency(candidate) ? { ...candidate, enabled: true } : candidate);
       setDemoInstalledMods(repair);
       if (isCurrent()) setInstalledMods(repair);
       removeJob(jobId);
@@ -1082,9 +1093,13 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (modsLocked || !canManage || !activeServer) return;
     const isCurrent = requests.capture();
     setNotice("");
+    // Removing a library is the one removal that breaks other mods, so the confirmation names them.
+    const dependents = enabledDependents(buildModDependencyGraph(currentInstalledMods).linksFor(mod));
     const confirmed = await requestConfirmation({
       title: `Remove ${mod.displayName}?`,
-      description: `Remove this installed ${terminology.singular} from the server.`,
+      description: dependents.length
+        ? `${formatModNames(dependents, 3)} ${dependents.length === 1 ? "requires" : "require"} this ${terminology.singular} and will not load without it.`
+        : `Remove this installed ${terminology.singular} from the server.`,
       details: mod.filename,
       warning: `The ${terminology.singular} file will be deleted from the server's ${terminology.directory} folder.`,
       confirmLabel: `Remove ${terminology.singular}`,

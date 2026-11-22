@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.11.7 - 2026-11-22
+
+- Mods and plugins installed as a dependency now link to what needs them. A library's row says **Required by** and names the mod, and one click opens that mod. A library several mods share opens a menu of them. Pointing at any row highlights the mods it is linked to.
+- Mod details has a **Dependencies** section listing what the mod requires and what requires it. Each entry opens that mod in place. It also says which mods stop loading if this one is disabled or removed.
+- Disabling a library now marks the mods that need it as **Missing dependency** right away, and the library's own row warns **Needed by** until it is enabled again. Removing a library names the mods that will stop loading in the confirmation.
+
 ## 26.11.6 - 2026-11-16
 
 - Added **Switch version** to server Settings. It opens a dialog to pick a new Minecraft version and Fabric loader or Paper build, then checks every installed mod or plugin against it before anything changes: those with a matching version on Modrinth switch to it, newly required dependencies are installed, and anything without a compatible version — or that cannot be checked — is disabled rather than deleted. A review step lists what will happen and why, warns before a world downgrade, and a final overview reports what was updated, installed and disabled. The Java image follows the new version unless a custom image was chosen.

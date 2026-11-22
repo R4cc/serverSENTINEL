@@ -314,6 +314,11 @@ export type InstalledMod = {
   dependencyHealth?: {
     status: "satisfied" | "missing" | "unknown";
     requiredCount: number;
+    /** Every required dependency, satisfied or not. Absent from panels that predate dependency links. */
+    required?: Array<{
+      projectId?: string;
+      versionId?: string;
+    }>;
     missing: Array<{
       projectId?: string;
       versionId?: string;

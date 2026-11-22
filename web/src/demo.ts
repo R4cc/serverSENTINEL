@@ -421,7 +421,8 @@ const initialDemoMods: InstalledMod[] = [
       loaders: ["fabric"],
       installedAt: new Date(demoStartedAt - 172_800_000).toISOString(),
       installedWithForceIncompatible: false
-    }
+    },
+    dependencyHealth: { status: "satisfied", requiredCount: 2, required: [{ projectId: "fabric-api" }, { projectId: "cloth-config" }], missing: [] }
   },
   {
     filename: "fabric-api-0.149.1+26.1.2.jar",
@@ -473,7 +474,8 @@ const initialDemoMods: InstalledMod[] = [
       loaders: ["fabric"],
       installedAt: new Date(demoStartedAt - 172_800_000).toISOString(),
       installedWithForceIncompatible: false
-    }
+    },
+    dependencyHealth: { status: "satisfied", requiredCount: 1, required: [{ projectId: "fabric-api" }], missing: [] }
   },
   {
     filename: "sodium-fabric-0.5.8+mc26.1.2.jar",
@@ -499,7 +501,8 @@ const initialDemoMods: InstalledMod[] = [
       loaders: ["fabric"],
       installedAt: new Date(demoStartedAt - 86_400_000).toISOString(),
       installedWithForceIncompatible: false
-    }
+    },
+    dependencyHealth: { status: "satisfied", requiredCount: 1, required: [{ projectId: "fabric-api" }], missing: [] }
   },
   {
     filename: "lithium-fabric-0.2.4.2_mc26.1.2.jar",
@@ -524,6 +527,32 @@ const initialDemoMods: InstalledMod[] = [
       gameVersions: ["26.1.2"],
       loaders: ["fabric"],
       installedAt: new Date(demoStartedAt - 86_400_000).toISOString(),
+      installedWithForceIncompatible: false
+    }
+  },
+  {
+    filename: "cloth-config-17.0.144-fabric.jar",
+    displayName: "Cloth Config API",
+    description: "Configuration screen library used by other mods.",
+    enabled: true,
+    size: 1048576,
+    modifiedAt: new Date(demoStartedAt - 172_800_000).toISOString(),
+    compatibility: { status: "compatible", compatible: true, reason: "Compatible with this server", matchedGameVersions: ["26.1.2"] },
+    versionInfo: {
+      currentVersion: "17.0.144",
+      currentChannel: "release",
+      latestVersion: "17.0.144",
+      latestChannel: "release",
+      upToDate: true
+    },
+    modrinth: {
+      projectId: "cloth-config",
+      versionId: "cloth-123",
+      filename: "cloth-config-17.0.144-fabric.jar",
+      versionNumber: "17.0.144",
+      gameVersions: ["26.1.2"],
+      loaders: ["fabric"],
+      installedAt: new Date(demoStartedAt - 172_800_000).toISOString(),
       installedWithForceIncompatible: false
     }
   }
@@ -1040,7 +1069,11 @@ function cloneMod(mod: InstalledMod): InstalledMod {
   return {
     ...mod,
     compatibility: mod.compatibility ? { ...mod.compatibility } : undefined,
-    dependencyHealth: mod.dependencyHealth ? { ...mod.dependencyHealth, missing: mod.dependencyHealth.missing.map((dependency) => ({ ...dependency })) } : undefined,
+    dependencyHealth: mod.dependencyHealth ? {
+      ...mod.dependencyHealth,
+      required: mod.dependencyHealth.required?.map((dependency) => ({ ...dependency })),
+      missing: mod.dependencyHealth.missing.map((dependency) => ({ ...dependency }))
+    } : undefined,
     versionInfo: mod.versionInfo ? { ...mod.versionInfo } : mod.versionInfo,
     modrinth: mod.modrinth ? { ...mod.modrinth, gameVersions: [...mod.modrinth.gameVersions], loaders: [...mod.modrinth.loaders] } : undefined
   };
@@ -1121,7 +1154,7 @@ function mixedHealthMods(): InstalledMod[] {
       compatibility: { status: "incompatible", compatible: false, reason: "Client-only mod", serverSide: "unsupported", clientSide: "required" },
       versionInfo: { ...upToDate.versionInfo, currentVersion: "3.0.3", latestVersion: "3.1.0", latestChannel: "release", upToDate: false }
     },
-    { ...manual, filename: "manual-unknown-fixture.jar", displayName: "Manual Unknown Fixture", compatibility: undefined, versionInfo: null, modrinth: undefined },
+    { ...manual, filename: "manual-unknown-fixture.jar", displayName: "Manual Unknown Fixture", compatibility: undefined, dependencyHealth: undefined, versionInfo: null, modrinth: undefined },
     {
       ...dependency,
       displayName: "Missing Dependency Fixture",

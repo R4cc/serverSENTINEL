@@ -1,5 +1,5 @@
 import "../styles/mods.css";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { ActionMenu } from "../components/ActionMenu";
 import { AppIcon } from "../components/FileTypeIcon";
 import { InlineState } from "../components/InlineState";
@@ -7,6 +7,7 @@ import { Banner, Button, Toolbar } from "../components/UiPrimitives";
 import { AddModsWorkflow } from "../features/mods/AddModsWorkflow";
 import { InstalledModsList } from "../features/mods/InstalledModsList";
 import { ModDetailsPanel } from "../features/mods/ModDetailsPanel";
+import { buildModDependencyGraph } from "../features/mods/modDependencyGraph";
 import type { ModsWorkspaceController } from "../features/mods/useModsWorkspace";
 import type { RestartRequiredChange } from "../types";
 import { canUpdateAllSafe, modUpdateCheckProgressLabel, updatePlanEntryForMod } from "../features/mods/modUpdatePlan";
@@ -55,6 +56,7 @@ export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serve
   const canRunSafeBatch = canUpdateAllSafe(data.updatePlan, access.changesAllowed, state.batchUpdateRunning);
   const showSafeBatch = Boolean(data.updatePlan?.counts.safeUpdates && (access.changesAllowed || state.batchUpdateRunning));
   const updateCheckWaitingForMods = state.modsLoading && !state.updatePlanLoading;
+  const dependencyGraph = useMemo(() => buildModDependencyGraph(data.installedMods), [data.installedMods]);
   const checkedPlan = data.updatePlan && Date.parse(data.updatePlan.generatedAt) > 0 ? data.updatePlan : null;
 
   return (
@@ -86,7 +88,7 @@ export function ModsPage({ workspace, runtimeType, restartRequiredChanges, serve
         : <InstalledModsList terminology={terminology} mods={data.installedMods} restartRequiredChanges={restartRequiredChanges} query={state.installedQuery} busy={state.modsLoading} locked={access.toggleLocked} switchLocked={access.locked} dependencyInstallLocked={access.addDisabled} onQueryChange={actions.setInstalledQuery} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onInstallDependencies={actions.installMissingDependencies} onSwitchVersion={actions.openSwitchVersionReview} onDetails={actions.setDetailsMod} onDropFiles={actions.uploadModFiles} dropLocked={access.uploadDisabled} updatePlan={data.updatePlan} />}
       {(state.addOpen || state.detailsMod) && <div className="modsDrawerBackdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) state.addOpen ? !state.installState?.installing && actions.closeAdd() : actions.setDetailsMod(null); }}>
         {state.addOpen && <DialogSurface mobileFullscreen className="modsWorkflowDrawer" labelledBy="add-mods-title" initialFocusRef={searchInputRef} dismissible={!state.installState?.installing} onClose={actions.closeAdd}><span id="add-mods-title" className="visuallyHidden">Add {terminology.plural}</span><AddModsWorkflow searchInputRef={searchInputRef} terminology={terminology} query={state.query} results={data.searchResults} total={data.searchTotal} installedMods={data.installedMods} searching={state.searching} loadingMore={state.loadingMore} error={state.searchError} configured={access.modrinthConfigured} versionsUnknown={serverContext.versionsUnknown} contextMessage={serverContext.contextMessage} minecraftVersion={serverContext.minecraftVersion} showIncompatibleResults={state.showIncompatibleResults} locked={access.locked} sentinelRef={refs.sentinelRef} installState={state.installState} selectedVersion={derived.selectedVersion} requiredDependencies={derived.pendingDependencies} canContinue={derived.canContinueInstall} formatDate={formatters.date} formatNumber={formatters.number} onClose={actions.closeAdd} onQueryChange={actions.setQuery} onShowIncompatibleResultsChange={actions.setShowIncompatibleResults} onChoose={actions.openInstallReview} onRetrySearch={actions.retrySearch} onInstallClose={actions.closeInstall} onChannelChange={(mod, channel) => void actions.loadInstallVersions(mod, channel)} onSelectVersion={actions.selectInstallVersion} onToggleAdvanced={actions.toggleAdvanced} onAcknowledge={actions.acknowledgeInstall} onContinue={actions.continueInstallReview} onBack={actions.backInstall} onInstall={actions.installSelectedMod} /></DialogSurface>}
-        {state.detailsMod && <ModDetailsPanel terminology={terminology} mod={state.detailsMod} locked={access.locked} reviewAcknowledgementLocked={access.reviewAcknowledgementLocked} dependencyInstallLocked={access.addDisabled} formatDate={formatters.date} onClose={() => actions.setDetailsMod(null)} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onInstallDependencies={actions.installMissingDependencies} onRemove={actions.removeMod} onAcknowledgeReview={actions.acknowledgeModReview} updatePlanEntry={updatePlanEntryForMod(data.updatePlan, state.detailsMod)} />}
+        {state.detailsMod && <ModDetailsPanel terminology={terminology} mod={state.detailsMod} locked={access.locked} reviewAcknowledgementLocked={access.reviewAcknowledgementLocked} dependencyInstallLocked={access.addDisabled} formatDate={formatters.date} onClose={() => actions.setDetailsMod(null)} onToggle={actions.setInstalledModEnabled} onUpdate={actions.updateMod} onInstallDependencies={actions.installMissingDependencies} onRemove={actions.removeMod} onAcknowledgeReview={actions.acknowledgeModReview} dependencyLinks={dependencyGraph.linksFor(state.detailsMod)} onOpenMod={actions.setDetailsMod} updatePlanEntry={updatePlanEntryForMod(data.updatePlan, state.detailsMod)} />}
       </div>}
     </section>
   );

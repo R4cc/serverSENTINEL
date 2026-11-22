@@ -12,6 +12,7 @@ describe("Modrinth dependency health", () => {
     expect(health).toEqual({
       status: "missing",
       requiredCount: 2,
+      required: [{ projectId: "fabric-api", versionId: undefined }, { projectId: "cloth-config", versionId: "cloth-v1" }],
       missing: [{ projectId: "cloth-config", versionId: "cloth-v1", disabled: false }]
     });
   });
