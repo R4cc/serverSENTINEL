@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.11.12 - 2026-11-23
+
+- The Docker image now runs on Node.js 26 (previously Node.js 22) and builds its network probe on Alpine 3.24.
+- Updated server and web dependencies, including Fastify plugins, better-sqlite3 and ws. This also resolves two moderate security advisories in the `glob` and `minimatch` packages.
+- Oversized mod downloads are still stopped at the size limit without reading further ahead under Node.js 26.
+
 ## 26.11.11 - 2026-11-23
 
 - Event markers on the Overview timeline no longer draw on top of each other. Markers that would touch are combined into one, and its count and popover list every event it holds.
