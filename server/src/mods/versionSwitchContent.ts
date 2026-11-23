@@ -1,5 +1,5 @@
 import { sortVersionSwitchContent, type VersionSwitchContentEntry } from "@serversentinel/contracts";
-import { modrinthJarFile } from "../modrinth/compatibility.js";
+import { modrinthJarFile, normalizeReleaseChannel, versionChannel, widerReleaseChannel } from "../modrinth/compatibility.js";
 import type { ModrinthProject, ModrinthVersion, ReleaseChannel } from "../types.js";
 
 /**
@@ -16,6 +16,8 @@ export type VersionSwitchInstalledContent = {
     projectId: string;
     versionId: string;
     versionNumber?: string;
+    /** The release channel of the installed version, when Modrinth reported one. */
+    versionType?: string;
     gameVersions: string[];
     loaders: string[];
   };
@@ -37,6 +39,18 @@ export type VersionSwitchContentContext = {
 };
 
 const maxDependencyPasses = 8;
+
+/**
+ * The channel a jar is switched within. The stored preference defaults to release, but a jar that
+ * already runs a beta or alpha build has accepted that channel: projects that publish only betas
+ * would otherwise never find a version for the target.
+ */
+export function versionSwitchChannel(item: Pick<VersionSwitchInstalledContent, "channel" | "metadata">): ReleaseChannel {
+  const installed = item.metadata?.versionType ? versionChannel(item.metadata.versionType) : "release";
+  return widerReleaseChannel(normalizeReleaseChannel(item.channel), installed);
+}
+
+const channelLabel: Record<ReleaseChannel, string> = { release: "release", beta: "beta", alpha: "alpha" };
 
 function enabledAfter(entry: VersionSwitchContentEntry) {
   return entry.action === "keep" || entry.action === "install" || (entry.action === "update" && entry.enabled);
@@ -99,9 +113,10 @@ export async function planVersionSwitchContent(
       if (item.enabled) keptVersionIds.push([entry, metadata.versionId]);
       return;
     }
+    const channel = versionSwitchChannel(item);
     let latest: ModrinthVersion | undefined;
     try {
-      latest = await lookups.latestForTarget(metadata.projectId, item.channel);
+      latest = await lookups.latestForTarget(metadata.projectId, channel);
     } catch (error) {
       push(item.enabled
         ? { ...base, action: "disable", reason: `Could not check for a ${target} version: ${errorMessage(error, "Modrinth could not be reached")}` }
@@ -109,9 +124,19 @@ export async function planVersionSwitchContent(
       return;
     }
     if (!latest) {
+      // Say so when the target exists only in a less stable channel than the jar follows, rather
+      // than claiming nothing is published.
+      let outsideChannel: ModrinthVersion | undefined;
+      if (channel !== "alpha") {
+        try { outsideChannel = await lookups.latestForTarget(metadata.projectId, "alpha"); } catch { outsideChannel = undefined; }
+      }
+      const otherChannel = outsideChannel ? channelLabel[versionChannel(outsideChannel.version_type)] : undefined;
+      const missing = otherChannel
+        ? `Only ${otherChannel} ${context.runtimeName} versions for ${target} are published on Modrinth, and this follows the ${channelLabel[channel]} channel.`
+        : `No ${context.runtimeName} version for ${target} is published on Modrinth.`;
       push(item.enabled
-        ? { ...base, action: "disable", reason: `No ${context.runtimeName} version for ${target} is published on Modrinth.` }
-        : { ...base, action: "unchanged", reason: `Already disabled; no ${target} version exists.` });
+        ? { ...base, action: "disable", reason: missing }
+        : { ...base, action: "unchanged", reason: otherChannel ? `Already disabled; ${missing.charAt(0).toLowerCase()}${missing.slice(1)}` : `Already disabled; no ${target} version exists.` });
       return;
     }
     push({

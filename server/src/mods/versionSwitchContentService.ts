@@ -4,7 +4,7 @@ import { fetchProjects, fetchVersions, latestCompatibleVersionFor, minecraftVers
 import { managedContentRuntime } from "../servers/versions.js";
 import { modrinthIconProxyUrl } from "./icons.js";
 import { installModWithRemoteVersionFallback, listModsWithPanelMetadata, modsFromListResult, remoteModMetadata, updateModrinthMod } from "./modService.js";
-import { errorMessage, planVersionSwitchContent, versionSwitchBaseEntry, type VersionSwitchInstalledContent } from "./versionSwitchContent.js";
+import { errorMessage, planVersionSwitchContent, versionSwitchBaseEntry, versionSwitchChannel, type VersionSwitchInstalledContent } from "./versionSwitchContent.js";
 import type { ManagedServer, ReleaseChannel } from "../types.js";
 
 /**
@@ -27,6 +27,7 @@ function installedContent(listed: unknown): VersionSwitchInstalledContent[] {
         projectId: metadata.projectId,
         versionId: metadata.versionId,
         versionNumber: metadata.versionNumber,
+        versionType: metadata.versionType,
         gameVersions: metadata.gameVersions,
         loaders: metadata.loaders
       } : undefined
@@ -38,7 +39,8 @@ function installedContent(listed: unknown): VersionSwitchInstalledContent[] {
 export async function planInstalledContent(server: ManagedServer, minecraftVersion: string): Promise<{ content: VersionSwitchContentEntry[]; channels: ContentChannels }> {
   const naming = managedContentRuntime(server);
   const installed = installedContent(await listModsWithPanelMetadata(server));
-  const channels: ContentChannels = new Map(installed.map((item) => [item.filename, item.channel]));
+  // The apply updates within the same channel the plan searched, so record the effective one.
+  const channels: ContentChannels = new Map(installed.map((item) => [item.filename, versionSwitchChannel(item)]));
   if (minecraftVersion === naming.target.minecraftVersion) {
     // A loader or build change alone leaves the game version, and so every jar's fit, as it was.
     const content = installed.map((item): VersionSwitchContentEntry => ({

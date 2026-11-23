@@ -211,6 +211,11 @@ export function versionChannel(versionType?: string): ReleaseChannel {
   return normalizeReleaseChannel(versionType);
 }
 
+/** The more permissive of two release channels: alpha admits beta and release, beta admits release. */
+export function widerReleaseChannel(left: ReleaseChannel, right: ReleaseChannel): ReleaseChannel {
+  return channelRank[left] >= channelRank[right] ? left : right;
+}
+
 export function allowedForChannel(version: ModrinthVersion, selectedChannel: ReleaseChannel) {
   return channelRank[versionChannel(version.version_type)] <= channelRank[selectedChannel];
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.11.9 - 2026-11-23
+
+- Switch version no longer disables mods that publish only beta or alpha builds when a matching build exists for the new Minecraft version. A mod already running a beta or alpha build is now checked and updated within that channel. When a version exists only in a less stable channel than the mod follows, the review says so instead of claiming nothing is published.
+
 ## 26.11.8 - 2026-11-23
 
 - The Overview no longer redraws in the background while the console streams output, so a busy console scrolls more smoothly.

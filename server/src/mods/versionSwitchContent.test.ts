@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planVersionSwitchContent, type VersionSwitchInstalledContent, type VersionSwitchLookups } from "./versionSwitchContent.js";
+import { planVersionSwitchContent, versionSwitchChannel, type VersionSwitchInstalledContent, type VersionSwitchLookups } from "./versionSwitchContent.js";
 import type { ModrinthVersion } from "../types.js";
 
 const context = {
@@ -61,6 +61,33 @@ describe("planVersionSwitchContent", () => {
     expect(byProject.lithium.reason).toContain("No Fabric version for Minecraft 1.21.4");
     // Disabled mods lead, so the overview opens on what needs attention.
     expect(plan[0].projectId).toBe("lithium");
+  });
+
+  it("searches the installed version's channel when it is wider than the stored preference", async () => {
+    // A project that publishes only betas, installed as a beta while the preference defaulted to release.
+    const beta = { ...version("voicechat", "2.6.27"), version_type: "beta" };
+    const channels: string[] = [];
+    const installed = mod("voicechat", { metadata: { ...mod("voicechat").metadata!, versionType: "beta" } });
+    expect(versionSwitchChannel(installed)).toBe("beta");
+    const plan = await planVersionSwitchContent([installed], context, {
+      ...lookups({}),
+      latestForTarget: async (_projectId, channel) => {
+        channels.push(channel);
+        return channel === "release" ? undefined : beta;
+      }
+    });
+    expect(channels).toEqual(["beta"]);
+    expect(plan).toMatchObject([{ action: "update", targetVersion: "2.6.27" }]);
+  });
+
+  it("names the channel when the target exists only outside the mod's channel", async () => {
+    const beta = { ...version("voicechat", "2.6.27"), version_type: "beta" };
+    const plan = await planVersionSwitchContent([mod("voicechat")], context, {
+      ...lookups({}),
+      latestForTarget: async (_projectId, channel) => channel === "release" ? undefined : beta
+    });
+    expect(plan).toMatchObject([{ action: "disable" }]);
+    expect(plan[0].reason).toBe("Only beta Fabric versions for Minecraft 1.21.4 are published on Modrinth, and this follows the release channel.");
   });
 
   it("keeps a mod whose installed version already supports the target", async () => {
