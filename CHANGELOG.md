@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.11.10 - 2026-11-23
+
+- Fixed **Next: Review & Create** in the create-server wizard starting server creation straight away instead of opening the review step. Pressing Enter in a field now moves to the next step and never creates the server before it has been reviewed.
+- The wizard no longer opens with "Display name is required" on an empty form. The message appears once the field has been left or Next is pressed, and Next moves focus to the name.
+- The wizard lines up with the page title and Cancel button, the last step's title sits beside its number, and completed steps show a visible check in the dark theme. On phones the steps are one compact row of numbers, and the node details, memory values and review summary fit the screen.
+- The resources step says why Next is unavailable, such as an unaccepted EULA, beside the button. The review lists values without stray divider lines and shows "None" when no additional ports are configured.
+- When server creation is unavailable, the page explains why at the top. In demo mode every step can now be explored, and only the final Create Server button is withheld.
+
 ## 26.11.9 - 2026-11-23
 
 - Switch version no longer disables mods that publish only beta or alpha builds when a matching build exists for the new Minecraft version. A mod already running a beta or alpha build is now checked and updated within that channel. When a version exists only in a less stable channel than the mod follows, the review says so instead of claiming nothing is published.

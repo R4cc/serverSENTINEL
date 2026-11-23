@@ -15,6 +15,7 @@ const suites = [
   [103, "schedules-ui", "scripts/schedules-ui-smoke.mjs"],
   [29, "nodes-ui", "scripts/nodes-ui-smoke.mjs"],
   [5, "files-workspace", "scripts/files-workspace-smoke.mjs"],
+  [10, "create-wizard", "scripts/create-wizard-smoke.mjs"],
   [38, "console-loading", "scripts/console-loading-smoke.mjs"],
   [71, "mobile-navigation", "scripts/mobile-ui-smoke.mjs", "--navigation-only"],
   [24, "console", "scripts/console-smoke.mjs"],

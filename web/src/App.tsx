@@ -2280,8 +2280,10 @@ export default function App() {
             nodes={contextNodes}
             preferredNodeId={preferredCreateNodeId}
             totalMemory={effectiveAppState.totalMemory}
-            provisioning={isProvisioning || !canCreateServers}
-            disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
+            // Demo visitors can walk every step; only the final Create Server action is withheld.
+            provisioning={isProvisioning || (!canCreateServers && !demoMode)}
+            disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers && !demoMode ? createServerDisabledReason : ""}
+            createDisabledReason={demoMode ? "You can explore every step, but demo mode cannot create real servers. Exit demo mode to create one." : ""}
             onRefreshNodes={nodesWorkspace.refreshNodes}
             onSubmit={createServer}
           />
