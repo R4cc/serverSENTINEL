@@ -5,7 +5,7 @@ FROM node:22-bookworm-slim AS dependency-base
 
 WORKDIR /app
 
-FROM alpine:3.22 AS tcp-rtt-probe-build
+FROM alpine:3.24 AS tcp-rtt-probe-build
 
 RUN apk add --no-cache build-base linux-headers
 COPY server/native/tcp-rtt-probe.c /src/tcp-rtt-probe.c
