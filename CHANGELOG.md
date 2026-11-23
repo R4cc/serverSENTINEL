@@ -1,5 +1,13 @@
 # Changelog
 
+## 26.11.8 - 2026-11-23
+
+- The Overview no longer redraws in the background while the console streams output, so a busy console scrolls more smoothly.
+- Hovering the Overview timeline no longer redraws the player sessions and charts on every pointer movement.
+- The installed mods list redraws only the rows that change, so an update check or pointing at a row stays responsive on large installations.
+- Sorting large folders in Files and searching a long player roster are faster.
+- Settings stops checking whether the UI cache can be cleared while its tab is in the background.
+
 ## 26.11.7 - 2026-11-22
 
 - Mods and plugins installed as a dependency now link to what needs them. A library's row says **Required by** and names the mod, and one click opens that mod. A library several mods share opens a menu of them. Pointing at any row highlights the mods it is linked to.

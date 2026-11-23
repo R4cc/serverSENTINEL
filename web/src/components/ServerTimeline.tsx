@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ScheduleNavigationTarget,
   ServerTimelineEvent,
@@ -660,7 +660,11 @@ function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) 
   return palette;
 }
 
-function PlayerSessionSection({
+// Memoized so the hover tooltip, which re-renders the timeline on every animation frame the
+// pointer moves over a chart, does not rebuild the player lanes along with it.
+const PlayerSessionSection = memo(PlayerSessionSectionContent);
+
+function PlayerSessionSectionContent({
   rows,
   query,
   viewport,
@@ -1207,15 +1211,15 @@ export function ServerTimeline({
       return;
     }
     const timestamp = viewport.from + (x - metricGrid.left) / plotWidth * (viewport.to - viewport.from);
-    const html = timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate);
     if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
+    // Pointer events can arrive several times per frame; build the tooltip only for the one that is drawn.
     hoverFrameRef.current = window.requestAnimationFrame(() => {
       hoverFrameRef.current = undefined;
       setHoverTooltip({
         x,
         y: rect.top - (visualizationRef.current?.getBoundingClientRect().top ?? rect.top) + metricGrid.top + 8,
         timestamp,
-        html,
+        html: timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate),
         alignEnd: x > rect.width * 0.68,
         pinned: false
       });

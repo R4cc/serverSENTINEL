@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { CustomChart, LineChart } from "echarts/charts";
 import {
   AriaComponent,
@@ -152,7 +152,13 @@ export function createChartInputActivityTracker(onStart: () => void, onFinish: (
   };
 }
 
-export function EChartsCanvas({
+/**
+ * Memoized: a chart's render is only its container, but its parents re-render on pointer hover and
+ * live ticks, and the option effect below is the only thing that should react to them.
+ */
+export const EChartsCanvas = memo(EChartsCanvasContent);
+
+function EChartsCanvasContent({
   option,
   onDataZoom,
   className = "serverTimelineEChart",

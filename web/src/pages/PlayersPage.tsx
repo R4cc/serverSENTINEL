@@ -206,7 +206,12 @@ function PlayerRoster({
     { id: "pingMs", accessorFn: (entry) => entry.online ? entry.pingMs : entry.lastSessionAveragePingMs, header: "Ping" },
     { id: "lastSeenAt", accessorKey: "lastSeenAt", header: "Last seen" }
   ], []);
-  const tableData = useMemo(() => players.filter((entry) => `${entry.player} ${formatLocation(entry.location)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [players, query]);
+  // The searchable text only changes with the roster, not with each keystroke.
+  const searchIndex = useMemo(() => players.map((entry) => `${entry.player} ${formatLocation(entry.location)}`.toLocaleLowerCase()), [players]);
+  const tableData = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    return needle ? players.filter((_, index) => searchIndex[index].includes(needle)) : players;
+  }, [players, query, searchIndex]);
   const table = useTable({
     features: sortableTableFeatures,
     data: tableData,

@@ -1,5 +1,5 @@
-import { useDeferredValue, useMemo, useState, type DragEvent, type ReactNode } from "react";
-import type { InstalledMod, ModUpdatePlan, RestartRequiredChange } from "../../types";
+import { memo, useDeferredValue, useMemo, useRef, useState, type DragEvent, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import type { InstalledMod, ModUpdatePlan, ModUpdatePlanEntry, RestartRequiredChange } from "../../types";
 import { AppIcon } from "../../components/FileTypeIcon";
 import { Button, EmptyState, LoadingLabel, PanelHeader, SkeletonBlock, Surface } from "../../components/UiPrimitives";
 import { ArrowUp, Download, Puzzle } from "lucide-react";
@@ -83,6 +83,18 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
     const links = dependencyGraph.linksFor(source);
     return new Set([...links.requires, ...links.requiredBy].map((mod) => mod.filename));
   }, [dependencyGraph, linkSource, mods]);
+  // The workspace rebuilds its action functions on every render, and it re-renders several times
+  // a second while an update check reports progress. Rows reach the latest action through a ref,
+  // so a memoized row only redraws when its own mod, lock state, or dependency tint changes.
+  const actionsRef = useRef({ onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails });
+  actionsRef.current = { onToggle, onUpdate, onInstallDependencies, onSwitchVersion, onDetails };
+  const rowActions = useMemo<InstalledModRowActions>(() => ({
+    toggle: (mod, enabled) => actionsRef.current.onToggle(mod, enabled),
+    update: (mod) => actionsRef.current.onUpdate(mod),
+    installDependencies: (mod) => actionsRef.current.onInstallDependencies?.(mod),
+    switchVersion: (mod) => actionsRef.current.onSwitchVersion(mod),
+    details: (mod) => actionsRef.current.onDetails(mod)
+  }), []);
   const initialLoading = busy && mods.length === 0;
   const [draggingFiles, setDraggingFiles] = useState(false);
 
@@ -124,80 +136,132 @@ export function InstalledModsList({ terminology = fabricContentTerminology, mods
           Array.from({ length: 5 }, (_, index) => <InstalledModSkeletonRow key={index} />)
         ) : visible.length === 0 ? (
           <EmptyState compact className="modsWorkspaceEmpty" title={mods.length ? `No matching ${terminology.plural}` : `No ${terminology.plural} installed yet`} message={mods.length ? "Try a different search." : `Add a compatible ${terminology.runtimeName} ${terminology.singular} or upload a jar to get started.`} />
-        ) : visible.map(({ mod, links, plannedUpdate, installedVersion, health, requiresRestart }) => {
-          const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
-          const icon = modIconSource(mod.iconUrl);
-          const hasLinks = links.requires.length > 0 || links.requiredBy.length > 0;
-          const rowState = [
-            mod.enabled ? "" : "isDisabled",
-            linkedToSource.has(mod.filename) ? "isDependencyLinked" : "",
-            linkSource === mod.filename && linkedToSource.size > 0 ? "isDependencySource" : ""
-          ].filter(Boolean).join(" ");
-          return (
-            <article
-              key={mod.filename}
-              className={`modsWorkspaceRow ${rowState}`.trim()}
-              role="listitem"
-              onPointerEnter={() => setLinkSource(hasLinks ? mod.filename : null)}
-              onPointerLeave={() => setLinkSource((current) => current === mod.filename ? null : current)}
-              onFocus={() => setLinkSource(hasLinks ? mod.filename : null)}
-              onBlur={(event) => {
-                if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-                setLinkSource((current) => current === mod.filename ? null : current);
-              }}
-            >
-              <button type="button" className="modsWorkspaceIdentity" onClick={() => onDetails(mod)} title={`Open details for ${mod.displayName}`}>
-                <ModIconImage src={icon} fallback="JAR" />
-                <span><strong title={mod.displayName}>{mod.displayName}</strong>{mod.description && <small title={mod.description}>{mod.description}</small>}</span>
-                <AppIcon name="chevronRight" />
-              </button>
-              <div className="modsWorkspaceMetadata">
-                <div className="modsWorkspaceStatus">
-                  {health.tone === "ready"
-                    ? <span className="modsHealthQuiet"><span className="modsHealthQuietDot" aria-hidden="true" />{health.label}</span>
-                    : <ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>}
-                  {requiresRestart && <ModStatusBadge tone="restart">Requires restart</ModStatusBadge>}
-                  <RequiredByChip mod={mod} requiredBy={links.requiredBy} terminology={terminology} onOpen={onDetails} />
-                </div>
-                <div className="modsWorkspaceVersion" title={installedVersion}>{installedVersion}</div>
-              </div>
-              <div className="modsWorkspaceUpdate">
-                {health.key === "missing_dependencies" && (
-                  <Button variant="secondary" compact className="modsReviewAction" onClick={() => onInstallDependencies?.(mod)} disabled={dependencyInstallLocked} title={health.detailDescription}>
-                    Install dependencies
-                  </Button>
-                )}
-                {plannedUpdate?.status === "safe_update" && (
-                  <ModUpdateCell targetVersion={targetVersion} actionTone="update">
-                    <Button variant="primary" compact className="modsUpdateAction" onClick={() => onUpdate(mod)} disabled={locked} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
-                      <Download aria-hidden="true" />
-                      <span className="modsUpdateActionLabel">Update</span>
-                      <span className="srOnly"> {mod.displayName}</span>
-                    </Button>
-                  </ModUpdateCell>
-                )}
-                {plannedUpdate?.status === "needs_review" && (
-                  <ModUpdateCell targetVersion={targetVersion} actionTone="review">
-                    <Button variant="secondary" compact className="modsReviewAction" onClick={() => onDetails(mod)} disabled={locked} title={health.shortDescription}>
-                      {health.primaryActionLabel}
-                    </Button>
-                  </ModUpdateCell>
-                )}
-              </div>
-              <div className="modsWorkspaceEnabled">
-                <label className="switch modsWorkspaceSwitch">
-                  <input type="checkbox" checked={mod.enabled} onChange={() => onToggle(mod, !mod.enabled)} disabled={locked} aria-label={`${mod.enabled ? "Disable" : "Enable"} ${mod.displayName}`} />
-                  <span className="slider" />
-                </label>
-              </div>
-              <Button variant="ghost" iconOnly className="modsWorkspaceSwitchVersionButton" onClick={() => onSwitchVersion(mod)} disabled={switchLocked || !mod.modrinth} aria-label={`Switch version for ${mod.displayName}`} title={mod.modrinth ? `Switch version for ${mod.displayName}` : `Only Modrinth-managed ${terminology.plural} can switch versions`}><AppIcon name="switch" /></Button>
-            </article>
-          );
-        })}
+        ) : visible.map((item) => (
+          <InstalledModRow
+            key={item.mod.filename}
+            item={item}
+            terminology={terminology}
+            locked={locked}
+            switchLocked={switchLocked}
+            dependencyInstallLocked={dependencyInstallLocked}
+            linked={linkedToSource.has(item.mod.filename)}
+            linkSource={linkSource === item.mod.filename && linkedToSource.size > 0}
+            setLinkSource={setLinkSource}
+            actions={rowActions}
+          />
+        ))}
       </div>
     </Surface>
   );
 }
+
+type InstalledModRowItem = {
+  mod: InstalledMod;
+  links: ReturnType<ReturnType<typeof buildModDependencyGraph>["linksFor"]>;
+  plannedUpdate: ModUpdatePlanEntry | null;
+  installedVersion: string;
+  health: ReturnType<typeof getInstalledModHealth>;
+  requiresRestart: boolean;
+};
+
+type InstalledModRowActions = {
+  toggle: (mod: InstalledMod, enabled: boolean) => void;
+  update: (mod: InstalledMod) => void;
+  installDependencies: (mod: InstalledMod) => void;
+  switchVersion: (mod: InstalledMod) => void;
+  details: (mod: InstalledMod) => void;
+};
+
+const InstalledModRow = memo(function InstalledModRow({
+  item: { mod, links, plannedUpdate, installedVersion, health, requiresRestart },
+  terminology,
+  locked,
+  switchLocked,
+  dependencyInstallLocked,
+  linked,
+  linkSource,
+  setLinkSource,
+  actions
+}: {
+  item: InstalledModRowItem;
+  terminology: ManagedContentTerminology;
+  locked: boolean;
+  switchLocked: boolean;
+  dependencyInstallLocked: boolean;
+  linked: boolean;
+  linkSource: boolean;
+  setLinkSource: Dispatch<SetStateAction<string | null>>;
+  actions: InstalledModRowActions;
+}) {
+    const targetVersion = plannedUpdate?.targetVersion || mod.versionInfo?.latestVersion;
+    const icon = modIconSource(mod.iconUrl);
+    const hasLinks = links.requires.length > 0 || links.requiredBy.length > 0;
+    const rowState = [
+      mod.enabled ? "" : "isDisabled",
+      linked ? "isDependencyLinked" : "",
+      linkSource ? "isDependencySource" : ""
+    ].filter(Boolean).join(" ");
+    return (
+      <article
+        key={mod.filename}
+        className={`modsWorkspaceRow ${rowState}`.trim()}
+        role="listitem"
+        onPointerEnter={() => setLinkSource(hasLinks ? mod.filename : null)}
+        onPointerLeave={() => setLinkSource((current) => current === mod.filename ? null : current)}
+        onFocus={() => setLinkSource(hasLinks ? mod.filename : null)}
+        onBlur={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          setLinkSource((current) => current === mod.filename ? null : current);
+        }}
+      >
+        <button type="button" className="modsWorkspaceIdentity" onClick={() => actions.details(mod)} title={`Open details for ${mod.displayName}`}>
+          <ModIconImage src={icon} fallback="JAR" />
+          <span><strong title={mod.displayName}>{mod.displayName}</strong>{mod.description && <small title={mod.description}>{mod.description}</small>}</span>
+          <AppIcon name="chevronRight" />
+        </button>
+        <div className="modsWorkspaceMetadata">
+          <div className="modsWorkspaceStatus">
+            {health.tone === "ready"
+              ? <span className="modsHealthQuiet"><span className="modsHealthQuietDot" aria-hidden="true" />{health.label}</span>
+              : <ModStatusBadge tone={health.tone}>{health.label}</ModStatusBadge>}
+            {requiresRestart && <ModStatusBadge tone="restart">Requires restart</ModStatusBadge>}
+            <RequiredByChip mod={mod} requiredBy={links.requiredBy} terminology={terminology} onOpen={actions.details} />
+          </div>
+          <div className="modsWorkspaceVersion" title={installedVersion}>{installedVersion}</div>
+        </div>
+        <div className="modsWorkspaceUpdate">
+          {health.key === "missing_dependencies" && (
+            <Button variant="secondary" compact className="modsReviewAction" onClick={() => actions.installDependencies(mod)} disabled={dependencyInstallLocked} title={health.detailDescription}>
+              Install dependencies
+            </Button>
+          )}
+          {plannedUpdate?.status === "safe_update" && (
+            <ModUpdateCell targetVersion={targetVersion} actionTone="update">
+              <Button variant="primary" compact className="modsUpdateAction" onClick={() => actions.update(mod)} disabled={locked} title={`Download and install${targetVersion ? ` ${targetVersion}` : " the available update"}`}>
+                <Download aria-hidden="true" />
+                <span className="modsUpdateActionLabel">Update</span>
+                <span className="srOnly"> {mod.displayName}</span>
+              </Button>
+            </ModUpdateCell>
+          )}
+          {plannedUpdate?.status === "needs_review" && (
+            <ModUpdateCell targetVersion={targetVersion} actionTone="review">
+              <Button variant="secondary" compact className="modsReviewAction" onClick={() => actions.details(mod)} disabled={locked} title={health.shortDescription}>
+                {health.primaryActionLabel}
+              </Button>
+            </ModUpdateCell>
+          )}
+        </div>
+        <div className="modsWorkspaceEnabled">
+          <label className="switch modsWorkspaceSwitch">
+            <input type="checkbox" checked={mod.enabled} onChange={() => actions.toggle(mod, !mod.enabled)} disabled={locked} aria-label={`${mod.enabled ? "Disable" : "Enable"} ${mod.displayName}`} />
+            <span className="slider" />
+          </label>
+        </div>
+        <Button variant="ghost" iconOnly className="modsWorkspaceSwitchVersionButton" onClick={() => actions.switchVersion(mod)} disabled={switchLocked || !mod.modrinth} aria-label={`Switch version for ${mod.displayName}`} title={mod.modrinth ? `Switch version for ${mod.displayName}` : `Only Modrinth-managed ${terminology.plural} can switch versions`}><AppIcon name="switch" /></Button>
+      </article>
+    );
+});
 
 function InstalledModSkeletonRow() {
   return (
