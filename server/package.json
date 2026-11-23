@@ -19,7 +19,7 @@
     "@fastify/helmet": "^13.2.0",
     "@fastify/multipart": "^10.1.7",
     "@fastify/rate-limit": "^11.2.2",
-    "@fastify/static": "^10.1.8",
+    "@fastify/static": "^10.1.12",
     "@fastify/websocket": "^11.3.6",
     "@maxmind/geoip2-node": "^7.1.0",
     "@serversentinel/contracts": "26.11.11",
