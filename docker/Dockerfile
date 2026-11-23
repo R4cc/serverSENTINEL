@@ -56,7 +56,7 @@ COPY docker docker
 COPY docker-compose.yml .env.example README.md CHANGELOG.md ./
 RUN npm run build
 
-FROM gcr.io/distroless/nodejs22-debian13:latest AS runtime
+FROM gcr.io/distroless/nodejs26-debian13:latest AS runtime
 
 WORKDIR /app
 ARG SS_BUILD_ID
