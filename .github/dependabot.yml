@@ -1,0 +1,32 @@
+version: 2
+
+# All update pull requests target `dev`; releases reach `main` only through the
+# regular dev -> main release pull request.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /docker
+    target-branch: dev
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
