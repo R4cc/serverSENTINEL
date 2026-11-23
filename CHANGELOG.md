@@ -1,5 +1,12 @@
 # Changelog
 
+## 26.11.11 - 2026-11-23
+
+- Event markers on the Overview timeline no longer draw on top of each other. Markers that would touch are combined into one, and its count and popover list every event it holds.
+- The Mod updates and Schedules cards are only as tall as their rows, instead of leaving a large empty area under a single update or schedule.
+- The Free Space tile's warning reads "Only 8% left" and is no longer cut off. The 10% threshold is in its tooltip.
+- On phones, server events without details no longer spend a line on a dash.
+
 ## 26.11.10 - 2026-11-23
 
 - Fixed **Next: Review & Create** in the create-server wizard starting server creation straight away instead of opening the review step. Pressing Enter in a field now moves to the next step and never creates the server before it has been reviewed.

@@ -411,7 +411,7 @@ export function RecentEventsPanel({
                       </th>
                       <td><span className={`serverEventCategory tone-${category}`}>{serverEventCategoryLabel(category)}</span></td>
                       <td className="serverEventDetails">
-                        <span title={presentation.details}>{presentation.details || "—"}</span>
+                        <span title={presentation.details} className={presentation.details ? undefined : "serverEventDetailsEmpty"}>{presentation.details || "—"}</span>
                         <RelatedEventsTooltip group={group} formatDate={formatDate} />
                       </td>
                       <td className="serverEventTime">

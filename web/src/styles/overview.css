@@ -1421,14 +1421,9 @@ button.overviewCardRow:focus-visible {
   gap: var(--space-2);
 }
 
-/* A capped preview keeps later cards in place while the update plan arrives. */
-.modUpdatesList {
-  min-height: 232px;
-}
-
-.modUpdatesCard .overviewCardBody {
-  min-height: 268px;
-}
+/* The loading skeleton draws its four placeholder rows itself, so the card holds its place while
+   the update plan arrives. Once loaded it is only as tall as its rows; a fixed minimum left one
+   update, or "No updates found", floating over an empty card. */
 
 .overviewSupportListItem {
   min-width: 0;
@@ -1810,6 +1805,11 @@ button.overviewCardRow:focus-visible {
   .serverEventsTable tbody td:nth-child(2) { grid-row: 3; }
   .serverEventsTable .serverEventTime { grid-column: 2; grid-row: 3; align-self: center; white-space: normal; }
   .serverEventsTable .serverEventDetails > span { display: block; white-space: normal; overflow-wrap: anywhere; }
+  /* In the stacked card an event without details would spend a whole line on a dash. The table
+     keeps the dash so its column stays readable; here the category and time move up instead. */
+  .serverEventsTable tbody tr:has(.serverEventDetailsEmpty:only-child) .serverEventDetails { display: none; }
+  .serverEventsTable tbody tr:has(.serverEventDetailsEmpty:only-child) td:nth-child(2),
+  .serverEventsTable tbody tr:has(.serverEventDetailsEmpty:only-child) .serverEventTime { grid-row: 2; }
 }
 
 .serverEventIdentity {
