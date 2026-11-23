@@ -1,5 +1,38 @@
 # Changelog
 
+## 26.11.12 - 2026-11-23
+
+- The Docker image now runs on Node.js 26 (previously Node.js 22) and builds its network probe on Alpine 3.24.
+- Updated server and web dependencies, including Fastify plugins, better-sqlite3 and ws. This also resolves two moderate security advisories in the `glob` and `minimatch` packages.
+- Oversized mod downloads are still stopped at the size limit without reading further ahead under Node.js 26.
+
+## 26.11.11 - 2026-11-23
+
+- Event markers on the Overview timeline no longer draw on top of each other. Markers that would touch are combined into one, and its count and popover list every event it holds.
+- The Mod updates and Schedules cards are only as tall as their rows, instead of leaving a large empty area under a single update or schedule.
+- The Free Space tile's warning reads "Only 8% left" and is no longer cut off. The 10% threshold is in its tooltip.
+- On phones, server events without details no longer spend a line on a dash.
+
+## 26.11.10 - 2026-11-23
+
+- Fixed **Next: Review & Create** in the create-server wizard starting server creation straight away instead of opening the review step. Pressing Enter in a field now moves to the next step and never creates the server before it has been reviewed.
+- The wizard no longer opens with "Display name is required" on an empty form. The message appears once the field has been left or Next is pressed, and Next moves focus to the name.
+- The wizard lines up with the page title and Cancel button, the last step's title sits beside its number, and completed steps show a visible check in the dark theme. On phones the steps are one compact row of numbers, and the node details, memory values and review summary fit the screen.
+- The resources step says why Next is unavailable, such as an unaccepted EULA, beside the button. The review lists values without stray divider lines and shows "None" when no additional ports are configured.
+- When server creation is unavailable, the page explains why at the top. In demo mode every step can now be explored, and only the final Create Server button is withheld.
+
+## 26.11.9 - 2026-11-23
+
+- Switch version no longer disables mods that publish only beta or alpha builds when a matching build exists for the new Minecraft version. A mod already running a beta or alpha build is now checked and updated within that channel. When a version exists only in a less stable channel than the mod follows, the review says so instead of claiming nothing is published.
+
+## 26.11.8 - 2026-11-23
+
+- The Overview no longer redraws in the background while the console streams output, so a busy console scrolls more smoothly.
+- Hovering the Overview timeline no longer redraws the player sessions and charts on every pointer movement.
+- The installed mods list redraws only the rows that change, so an update check or pointing at a row stays responsive on large installations.
+- Sorting large folders in Files and searching a long player roster are faster.
+- Settings stops checking whether the UI cache can be cleared while its tab is in the background.
+
 ## 26.11.7 - 2026-11-22
 
 - Mods and plugins installed as a dependency now link to what needs them. A library's row says **Required by** and names the mod, and one click opens that mod. A library several mods share opens a menu of them. Pointing at any row highlights the mods it is linked to.

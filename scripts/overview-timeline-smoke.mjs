@@ -529,6 +529,12 @@ async function assertStorageSummary(page, expectedVisibleTiles) {
   await spaceRemaining.getByText("8 GiB", { exact: true }).waitFor();
   assert.equal(await spaceRemaining.locator(".lucide-triangle-alert").count(), 1, "The demo's near-full storage card is missing its warning icon");
   assert(await spaceRemaining.evaluate((tile) => tile.classList.contains("uiMetricTile--warning")), "The demo's near-full storage card is missing its warning tone");
+  const storageDetail = await spaceRemaining.locator(".uiMetricTileDetail").evaluate((detail) => ({
+    text: detail.textContent.trim(),
+    clipped: detail.scrollWidth > detail.clientWidth + 1
+  }));
+  assert.match(storageDetail.text, /^Only \d+% left$/, `The near-full storage card should say how much is left: ${JSON.stringify(storageDetail)}`);
+  assert.equal(storageDetail.clipped, false, `The storage warning is cut off: ${JSON.stringify(storageDetail)}`);
   assert.equal(await page.locator(".overviewSummary .uiMetricTile").filter({ hasText: "Fabric" }).count(), 0, "The runtime card still occupies an Overview summary slot");
   assert.equal(await page.locator(".overviewSummary .uiMetricTile:visible").count(), expectedVisibleTiles, "The Overview summary has an unexpected visible card count");
   for (const [name, tile] of [["World Size", worldSize], ["Space Remaining", spaceRemaining]]) {
@@ -618,6 +624,16 @@ async function assertTimelineResponsiveGeometry(context, viewport) {
   const { page, browserErrors } = await createOverviewPage(context, viewport);
   try {
     await waitForTimeline(page);
+    // Event markers share one row; neighbouring time buckets used to draw on top of each other.
+    const markerOverlaps = await page.evaluate(() => {
+      const rects = [...document.querySelectorAll(".timelineAnnotationCluster")]
+        .map((marker) => marker.getBoundingClientRect())
+        .sort((left, right) => left.left - right.left);
+      return rects.slice(1).flatMap((rect, index) => rect.left < rects[index].right - 0.5
+        ? [{ previousRight: rects[index].right, left: rect.left }]
+        : []);
+    });
+    assert.deepEqual(markerOverlaps, [], `Timeline event markers overlap at ${viewport.width}px`);
     const section = page.locator(".serverTimelinePlayers");
     const chart = section.locator(".serverTimelinePlayerChart");
     const collapsedHeight = (await chart.boundingBox())?.height ?? 0;

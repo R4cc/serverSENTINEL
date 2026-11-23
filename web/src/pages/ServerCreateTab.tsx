@@ -25,6 +25,7 @@ export function ServerCreateTab({
   totalMemory,
   provisioning,
   disabledReason,
+  createDisabledReason = "",
   onRefreshNodes,
   onSubmit
 }: {
@@ -37,11 +38,20 @@ export function ServerCreateTab({
   totalMemory?: number;
   provisioning: boolean;
   disabledReason: string;
+  /** Why the final Create Server action is unavailable while the steps stay explorable. */
+  createDisabledReason?: string;
   onRefreshNodes: () => Promise<void> | void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const provisioningRunning = provisionOperation?.status === "queued" || provisionOperation?.status === "running";
+  // The form disables itself when servers cannot be created here; say why up front instead of
+  // only in the tooltip of a greyed-out button.
+  const blockedReason = createDisabledReason || (!provisioningRunning ? disabledReason : "");
   return (
     <section className="createServerPanel">
+      {blockedReason && !provisioningError && (
+        <Banner tone="info" className="createServerBlocked" title="Server creation is unavailable" message={blockedReason} />
+      )}
       {provisionOperation && (provisionOperation.status === "queued" || provisionOperation.status === "running") && (
         <InlineState
           tone="loading"
@@ -71,6 +81,7 @@ export function ServerCreateTab({
           totalMemory={totalMemory}
           provisioning={provisioning}
           disabledReason={disabledReason}
+          createDisabledReason={createDisabledReason}
           onRefreshNodes={onRefreshNodes}
           onSubmit={onSubmit}
         />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ScheduleNavigationTarget,
   ServerTimelineEvent,
@@ -420,23 +420,25 @@ export function clusterTimelineMarkers(markers: TimelineMarker[], from: number, 
     if (!current || !first || marker.occurredAt - first.occurredAt >= bucketMs) groups.push([marker]);
     else current.push(marker);
   }
-  return groups.map((grouped) => {
-    const occurredAt = Math.round(grouped.reduce((total, marker) => total + marker.occurredAt, 0) / grouped.length);
-    return {
-      id: `cluster:${grouped.map((marker) => marker.id).join(":")}`,
-      occurredAt,
-      markers: grouped,
-      tone: grouped.length === 1
-        ? grouped[0].tone
-        : grouped.some((marker) => marker.tone === "server")
-          ? "server"
-          : grouped.some((marker) => marker.tone === "automation")
-            ? "automation"
-            : grouped[0].tone,
-      slot: Math.max(0, Math.min(slots - 1, Math.floor((occurredAt - from) / bucketMs))),
-      slotCount: slots
-    };
-  });
+  return groups.map((grouped) => buildMarkerCluster(grouped, from, bucketMs, slots));
+}
+
+function buildMarkerCluster(grouped: TimelineMarker[], from: number, bucketMs: number, slots: number): MarkerCluster {
+  const occurredAt = Math.round(grouped.reduce((total, marker) => total + marker.occurredAt, 0) / grouped.length);
+  return {
+    id: `cluster:${grouped.map((marker) => marker.id).join(":")}`,
+    occurredAt,
+    markers: grouped,
+    tone: grouped.length === 1
+      ? grouped[0].tone
+      : grouped.some((marker) => marker.tone === "server")
+        ? "server"
+        : grouped.some((marker) => marker.tone === "automation")
+          ? "automation"
+          : grouped[0].tone,
+    slot: Math.max(0, Math.min(slots - 1, Math.floor((occurredAt - from) / bucketMs))),
+    slotCount: slots
+  };
 }
 
 type PositionedMarkerCluster = MarkerCluster & {
@@ -484,10 +486,13 @@ export function timelineClusterIconMarkers(cluster: MarkerCluster) {
   return icons;
 }
 
+// Space kept between two neighbouring markers on the rail.
+const timelineClusterGap = 6;
+
 export function positionTimelineClusters(clusters: MarkerCluster[], from: number, to: number, railWidth = 1_000): PositionedMarkerCluster[] {
   if (to <= from) return [];
   const availableWidth = Math.max(1, railWidth);
-  const measurements = clusters.map((cluster) => {
+  const measure = (cluster: MarkerCluster) => {
     const leftPercent = Math.max(0, Math.min(100, (cluster.occurredAt - from) / (to - from) * 100));
     const center = availableWidth * leftPercent / 100;
     const occurrenceCount = cluster.markers.reduce((total, marker) => total + (marker.occurrences ?? 1), 0);
@@ -505,7 +510,27 @@ export function positionTimelineClusters(clusters: MarkerCluster[], from: number
         ? timelineMarkerDisplayLabel(cluster.markers[0]).primary
         : null
     };
-  });
+  };
+  // Time buckets are narrower than a multi-event marker, so neighbouring buckets — and a marker
+  // flipped to end at the right edge — could draw over each other. Markers that would touch on
+  // this rail are combined into one, whose popover lists every event it holds.
+  const measurements: ReturnType<typeof measure>[] = [];
+  for (const cluster of clusters) {
+    let current = measure(cluster);
+    while (measurements.length) {
+      const previous = measurements[measurements.length - 1];
+      if (current.compactLeft >= previous.compactLeft + previous.compactWidth + timelineClusterGap) break;
+      measurements.pop();
+      const slots = cluster.slotCount;
+      current = measure(buildMarkerCluster(
+        [...previous.cluster.markers, ...current.cluster.markers].sort((left, right) => left.occurredAt - right.occurredAt || left.id.localeCompare(right.id)),
+        from,
+        Math.max(1, (to - from) / slots),
+        slots
+      ));
+    }
+    measurements.push(current);
+  }
   return measurements.map((measurement, index) => {
     const next = measurements[index + 1];
     const inlineWidth = measurement.inlineLabel ? 38 + measurement.inlineLabel.length * 6.2 : 0;
@@ -660,7 +685,11 @@ function useTimelinePresentation(panelRef: React.RefObject<HTMLElement | null>) 
   return palette;
 }
 
-function PlayerSessionSection({
+// Memoized so the hover tooltip, which re-renders the timeline on every animation frame the
+// pointer moves over a chart, does not rebuild the player lanes along with it.
+const PlayerSessionSection = memo(PlayerSessionSectionContent);
+
+function PlayerSessionSectionContent({
   rows,
   query,
   viewport,
@@ -1207,15 +1236,15 @@ export function ServerTimeline({
       return;
     }
     const timestamp = viewport.from + (x - metricGrid.left) / plotWidth * (viewport.to - viewport.from);
-    const html = timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate);
     if (hoverFrameRef.current !== undefined) window.cancelAnimationFrame(hoverFrameRef.current);
+    // Pointer events can arrive several times per frame; build the tooltip only for the one that is drawn.
     hoverFrameRef.current = window.requestAnimationFrame(() => {
       hoverFrameRef.current = undefined;
       setHoverTooltip({
         x,
         y: rect.top - (visualizationRef.current?.getBoundingClientRect().top ?? rect.top) + metricGrid.top + 8,
         timestamp,
-        html,
+        html: timelineHoverTooltipHtml(timestamp, data?.samples ?? [], enabled, clusters, viewport.to - viewport.from, formatDate),
         alignEnd: x > rect.width * 0.68,
         pinned: false
       });

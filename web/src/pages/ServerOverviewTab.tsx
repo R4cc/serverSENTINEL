@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { memo, Suspense } from "react";
 import { lazyPage } from "../app/lazyPage";
 import type { ManagedServer, PlayerSnapshot, ScheduleNavigationTarget, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineResourcePoint, ServerTimelineResponse } from "../types";
 import type { ModUpdatePlan } from "../types";
@@ -22,8 +22,13 @@ export { loadServerTimeline };
  * The overview dashboard. It stays mounted while the rest of the server workspace is browsed and
  * hides itself when another page is showing: the timeline builds three chart instances, and doing
  * that again on every visit costs more than everything else the page does put together.
+ *
+ * It is memoized because it stays mounted under the console: App re-renders once per frame while
+ * console output streams in, and none of that output reaches the overview.
  */
-export function ServerOverviewTab({
+export const ServerOverviewTab = memo(ServerOverviewTabContent);
+
+function ServerOverviewTabContent({
   active,
   server,
   status,

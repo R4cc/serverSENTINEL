@@ -468,6 +468,20 @@ export default function App() {
     }
     return api<ServerStorageSummary>(`/api/servers/${serverId}/storage`, { timeoutMs: 15_000, signal });
   }, [demoMode]);
+  // The overview stays mounted, hidden, while the rest of the workspace is browsed, and it is
+  // memoized so console output flushing into App state does not re-render it once per frame. Its
+  // handlers therefore have to keep their identity across those renders.
+  const activeServerIdForOverview = activeServer?.id;
+  const retryOverview = useCallback(() => {
+    if (activeServerIdForOverview) void refreshOverviewData(activeServerIdForOverview, { showLoading: true });
+  }, [activeServerIdForOverview, refreshOverviewData]);
+  const openModsPage = useCallback(() => setActivePage("mods"), []);
+  const openConsolePage = useCallback(() => setActivePage("console"), []);
+  const openSchedulesPage = useCallback((target?: ScheduleNavigationTarget) => {
+    setScheduleNavigationTarget(target ?? null);
+    setActivePage("schedule");
+  }, []);
+  const refreshModUpdates = useCallback(() => void modsBridge?.refreshUpdates(), [modsBridge]);
   const authOperationalLock = !demoMode && !authSession?.authenticated;
   const nodeOfflineDetected = !activeServerIsDemo && (activeNode.status === "offline" || consoleConnectionState === "offline");
   const confirmedNodeOffline = nodeOfflineDetected && nodeOfflineNoticeVisible;
@@ -2266,8 +2280,10 @@ export default function App() {
             nodes={contextNodes}
             preferredNodeId={preferredCreateNodeId}
             totalMemory={effectiveAppState.totalMemory}
-            provisioning={isProvisioning || !canCreateServers}
-            disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers ? "Create servers permission is required." : ""}
+            // Demo visitors can walk every step; only the final Create Server action is withheld.
+            provisioning={isProvisioning || (!canCreateServers && !demoMode)}
+            disabledReason={isProvisioning ? provisioningNavigationReason : !canCreateServers && !demoMode ? createServerDisabledReason : ""}
+            createDisabledReason={demoMode ? "You can explore every step, but demo mode cannot create real servers. Exit demo mode to create one." : ""}
             onRefreshNodes={nodesWorkspace.refreshNodes}
             onSubmit={createServer}
           />
@@ -2423,7 +2439,7 @@ export default function App() {
                 overviewError={overviewError}
                 overviewLoading={overviewLoading}
                 overviewInitialLoading={overviewInitialLoading}
-                onRetryOverview={() => { void refreshOverviewData(activeServer.id, { showLoading: true }); }}
+                onRetryOverview={retryOverview}
                 timelineVisible={overviewTimelineVisible}
                 timelineLatestSample={timelineLatestSample}
                 onTimelineLatestSample={setTimelineLatestSample}
@@ -2435,15 +2451,12 @@ export default function App() {
                 modUpdatePlan={modsBridge?.updatePlan ?? null}
                 modUpdatePlanLoading={modsBridge?.updatePlanLoading ?? true}
                 canViewMods={canViewMods && supportsManagedMods}
-                onOpenMods={() => setActivePage("mods")}
-                onRefreshModUpdates={() => void modsBridge?.refreshUpdates()}
+                onOpenMods={openModsPage}
+                onRefreshModUpdates={refreshModUpdates}
                 managedContent={managedContent}
                 canViewSchedules={canViewSchedules}
-                onOpenSchedules={(target) => {
-                  setScheduleNavigationTarget(target ?? null);
-                  setActivePage("schedule");
-                }}
-                onOpenConsole={() => setActivePage("console")}
+                onOpenSchedules={openSchedulesPage}
+                onOpenConsole={openConsolePage}
                 relativeTimestamps={relativeTimestamps}
                 formatDate={formatDisplayDate}
                 formatTime={formatDisplayTime}

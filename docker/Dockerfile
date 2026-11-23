@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 
-ARG SS_VERSION=26.11.7
-FROM node:22-bookworm-slim AS dependency-base
+ARG SS_VERSION=26.11.12
+FROM node:26-bookworm-slim AS dependency-base
 
 WORKDIR /app
 
-FROM alpine:3.22 AS tcp-rtt-probe-build
+FROM alpine:3.24 AS tcp-rtt-probe-build
 
 RUN apk add --no-cache build-base linux-headers
 COPY server/native/tcp-rtt-probe.c /src/tcp-rtt-probe.c
@@ -56,7 +56,7 @@ COPY docker docker
 COPY docker-compose.yml .env.example README.md CHANGELOG.md ./
 RUN npm run build
 
-FROM gcr.io/distroless/nodejs22-debian13:latest AS runtime
+FROM gcr.io/distroless/nodejs26-debian13:latest AS runtime
 
 WORKDIR /app
 ARG SS_BUILD_ID

@@ -1,6 +1,6 @@
 import "../styles/server-properties.css";
 import { useJavaMemory, useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { defaultDockerImageForMinecraftVersion, javaMajorVersionForMinecraft, serverRuntimeDefinitions, serverRuntimeTypes, type ServerRuntimeDefinition, type ServerRuntimeType } from "@serversentinel/contracts";
 import { dockerContainerNameInputPattern } from "../utils/inputPatterns";
 import type { ContextNode, RuntimeVersion } from "../types";
@@ -41,6 +41,7 @@ export function ManagedServerForm({
   totalMemory = 0,
   provisioning = false,
   disabledReason = "",
+  createDisabledReason = "",
   onRefreshNodes,
   onSubmit
 }: {
@@ -49,6 +50,8 @@ export function ManagedServerForm({
   totalMemory?: number;
   provisioning?: boolean;
   disabledReason?: string;
+  /** Blocks only the final Create Server action, so every step can still be reviewed. */
+  createDisabledReason?: string;
   onRefreshNodes?: () => Promise<void> | void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -56,6 +59,10 @@ export function ManagedServerForm({
   const usableNodes = useMemo(() => nodes.filter(isNodeRuntimeUsable), [nodes]);
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [displayName, setDisplayName] = useState("");
+  // A field nobody has typed in yet is not wrong; it is only reported once it has been left or
+  // the visitor tries to continue past it.
+  const [displayNameTouched, setDisplayNameTouched] = useState(false);
+  const displayNameInputRef = useRef<HTMLInputElement>(null);
   const [dockerContainer, setDockerContainer] = useState("");
   const [dockerImage, setDockerImage] = useState("");
   const [dockerImageCustomized, setDockerImageCustomized] = useState(false);
@@ -96,7 +103,10 @@ export function ManagedServerForm({
   const serverJarError = validateRuntimeJarFilename(serverJar);
   const javaArgsError = validateJavaArgs(javaArgs);
   const identityReady = !displayNameError;
-  const nextDisabled = provisioning || placementBlocked || !identityReady;
+  const displayNameErrorVisible = Boolean(displayNameError) && (displayNameTouched || displayName !== "");
+  // An empty name does not disable Next: pressing it says what is missing instead of leaving a
+  // greyed-out button whose reason only shows in a tooltip.
+  const nextDisabled = provisioning || placementBlocked;
   const minecraftOptions = useMemo(
     () => runtimeMinecraftOptions(runtimeMinecraftVersions, showSnapshots),
     [runtimeMinecraftVersions, showSnapshots]
@@ -264,9 +274,45 @@ export function ManagedServerForm({
     return true;
   }
 
+  function continueFromPlacement() {
+    if (nextDisabled) return;
+    if (!identityReady) {
+      setDisplayNameTouched(true);
+      displayNameInputRef.current?.focus();
+      return;
+    }
+    setWizardError("");
+    setActiveWizardStep(2);
+  }
+
+  function continueFromRuntime() {
+    if (!runtimeCompatible) return;
+    setWizardError("");
+    setActiveWizardStep(3);
+  }
+
+  function continueFromResources() {
+    if (!resourcesReady) {
+      setWizardError(resourcesBlockedReason || "Complete resources and network settings before continuing.");
+      return;
+    }
+    setWizardError("");
+    setActiveWizardStep(4);
+  }
+
   function submitWizard(event: FormEvent<HTMLFormElement>) {
-    if (!validateWizardBeforeCreate()) {
+    // Enter in a field submits the form from any step. Before the review it moves forward one
+    // step, the same as the Next button, so a server is never created without being reviewed.
+    if (activeWizardStep !== 4) {
       event.preventDefault();
+      if (activeWizardStep === 1) continueFromPlacement();
+      else if (activeWizardStep === 2) continueFromRuntime();
+      else continueFromResources();
+      return;
+    }
+    if (createDisabledReason || !validateWizardBeforeCreate()) {
+      event.preventDefault();
+      if (!createDisabledReason) setDisplayNameTouched(true);
       return;
     }
     onSubmit(event);
@@ -340,17 +386,19 @@ export function ManagedServerForm({
               <div className="createWizardField">
                 <label htmlFor="create-display-name">Display name</label>
                 <input
+                  ref={displayNameInputRef}
                   id="create-display-name"
                   name="displayName"
-                  placeholder="Survival"
+                  placeholder="e.g. Survival"
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}
+                  onBlur={() => setDisplayNameTouched(true)}
                   required
                   maxLength={80}
-                  aria-invalid={Boolean(displayNameError)}
-                  aria-describedby={displayNameError ? "create-display-name-error" : undefined}
+                  aria-invalid={displayNameErrorVisible}
+                  aria-describedby={displayNameErrorVisible ? "create-display-name-error" : undefined}
                 />
-                {displayNameError && <span id="create-display-name-error" className="fieldError">{displayNameError}</span>}
+                {displayNameErrorVisible && <span id="create-display-name-error" className="fieldError">{displayNameError}</span>}
               </div>
 
               <NodeOverviewCard node={selectedNode} fallbackMemory={totalMemory} />
@@ -446,15 +494,15 @@ export function ManagedServerForm({
             onEditStep={setActiveWizardStep}
           />
         )}
-        <div className="modInstallFooter createWizardFooter">
+        {/* Each step's actions are keyed apart. Reusing one element for step 3's Next and step 4's
+            Create Server turned it into a submit button during its own click, so the browser
+            submitted the form and the review step was skipped. */}
+        <div className="modInstallFooter createWizardFooter" key={`footer-${activeWizardStep}`}>
           {activeWizardStep === 1 ? (
             <>
               <span className="modInstallFooterSpacer" />
               <Button
-                onClick={() => {
-                  setWizardError("");
-                  setActiveWizardStep(2);
-                }}
+                onClick={continueFromPlacement}
                 disabled={nextDisabled}
                 title={nextDisabled ? disabledReason || placementBlockedReason || "Complete placement and identity before continuing." : "Continue to runtime"}
               >
@@ -472,11 +520,28 @@ export function ManagedServerForm({
                 <span>Back: Placement & Identity</span>
               </Button>
               <span className="modInstallFooterSpacer" />
-              <Button onClick={() => {
-                setWizardError("");
-                setActiveWizardStep(3);
-              }} disabled={!runtimeCompatible}>
+              <Button onClick={continueFromRuntime} disabled={!runtimeCompatible}>
                 <span>Next: Resources & Network</span>
+                <AppIcon name="chevronRight" />
+              </Button>
+            </>
+          ) : activeWizardStep === 3 ? (
+            <>
+              <Button variant="secondary" onClick={() => {
+                setWizardError("");
+                setActiveWizardStep(2);
+              }}>
+                <AppIcon name="chevronLeft" />
+                <span>Back: Runtime</span>
+              </Button>
+              <span className="modInstallFooterSpacer" />
+              {!resourcesReady && resourcesBlockedReason && <span className="createWizardFooterHint" role="status">{resourcesBlockedReason}</span>}
+              <Button
+                onClick={continueFromResources}
+                disabled={!resourcesReady}
+                title={!resourcesReady ? resourcesBlockedReason || "Complete resources and network settings before continuing." : undefined}
+              >
+                <span>Next: Review & Create</span>
                 <AppIcon name="chevronRight" />
               </Button>
             </>
@@ -484,19 +549,20 @@ export function ManagedServerForm({
             <>
               <Button variant="secondary" onClick={() => {
                 setWizardError("");
-                setActiveWizardStep(activeWizardStep === 3 ? 2 : 3);
+                setActiveWizardStep(3);
               }}>
                 <AppIcon name="chevronLeft" />
-                <span>{activeWizardStep === 3 ? "Back: Runtime" : "Back: Resources & Network"}</span>
+                <span>Back: Resources & Network</span>
               </Button>
               <span className="modInstallFooterSpacer" />
-              <Button type={activeWizardStep === 3 ? "button" : "submit"} onClick={activeWizardStep === 3 ? () => {
-                setWizardError("");
-                setActiveWizardStep(4);
-              } : undefined} disabled={activeWizardStep === 3 ? !resourcesReady : provisioning} title={activeWizardStep === 3 && !resourcesReady ? resourcesBlockedReason || "Complete resources and network settings before continuing." : undefined} reserveLabel={activeWizardStep === 3 ? <><span>Next: Review & Create</span><AppIcon name="chevronRight" /></> : <><AppIcon name="server" /><span>Create Server</span></>}>
-                {activeWizardStep === 4 && <AppIcon name="server" />}
-                <span>{activeWizardStep === 3 ? "Next: Review & Create" : provisioning ? "Creating..." : "Create Server"}</span>
-                {activeWizardStep === 3 && <AppIcon name="chevronRight" />}
+              <Button
+                type="submit"
+                disabled={provisioning || Boolean(createDisabledReason)}
+                title={createDisabledReason || undefined}
+                reserveLabel={<><AppIcon name="server" /><span>Create Server</span></>}
+              >
+                <AppIcon name="server" />
+                <span>{provisioning ? "Creating..." : "Create Server"}</span>
               </Button>
             </>
           )}
@@ -1243,7 +1309,7 @@ function ReviewCreateWizardStep({
           <ReviewSummaryItem label="Java arguments" value={javaArgs || "Default memory args"} />
           <ReviewSummaryItem label="Server port" value={serverPort} sublabel="TCP" />
           <ReviewSummaryItem label="Query port" value={queryPort} sublabel="UDP" />
-          <ReviewSummaryItem label="Additional port bindings" value={String(additionalCount)} sublabel={`${additionalCount === 1 ? "binding" : "bindings"} configured`} />
+          <ReviewSummaryItem label="Additional ports" value={additionalCount ? `${additionalCount} ${additionalCount === 1 ? "binding" : "bindings"}` : "None"} />
           <ReviewSummaryItem label="EULA" value={acceptEula ? "Accepted" : "Not accepted"} tone={acceptEula ? "ok" : "warning"} />
         </ReviewSummaryCard>
 

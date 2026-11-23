@@ -210,8 +210,11 @@ export function OverviewSummary({
         icon={<HardDrive />}
         iconPlacement="leading"
         tone={storageLow ? "warning" : "neutral"}
-        // The warning glyph alone never said what was wrong; the tile now names the threshold.
-        detail={storageLow && storagePercent !== null ? `${storagePercent < 1 ? "<1" : Math.round(storagePercent)}% left · warns below 10%` : undefined}
+        // The warning glyph alone never said what was wrong, so the tile says how much is left. The
+        // threshold goes in the tooltip: in the seven-tile row the full sentence was cut off.
+        detail={storageLow && storagePercent !== null
+          ? <span title="Warns when less than 10% of the disk is free">Only {storagePercent < 1 ? "<1" : Math.round(storagePercent)}% left</span>
+          : undefined}
         value={storageAvailableBytes === null
           ? storageLoading
             ? <SkeletonBlock className="overviewSummaryValueSkeleton" />

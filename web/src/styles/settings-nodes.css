@@ -584,17 +584,18 @@
   min-width: 44px;
 }
 
+/* The wizard spans the workspace like every other page, so its edges line up with the page
+   title and the Cancel action above it. */
 .createServerPanel {
   width: 100%;
   max-width: none;
   margin-bottom: var(--space-4);
   display: grid;
   gap: var(--space-4);
-  justify-items: center;
 }
 
 .createServerPanel > .inlineState {
-  width: min(1080px, 100%);
+  width: 100%;
   margin: 0;
 }
 
@@ -603,13 +604,13 @@
 }
 
 .createWizardPage {
-  width: min(1080px, 100%);
+  width: 100%;
   display: grid;
   gap: var(--space-4);
 }
 
 .applicationCreateSkeleton {
-  width: min(1080px, 100%);
+  width: 100%;
   display: grid;
   gap: var(--space-4);
 }
@@ -679,8 +680,10 @@
   color: var(--text-muted);
 }
 
+/* Without a connector line to absorb the spare width, an `auto` circle column grew instead and
+   pushed the last step's title to the far edge, away from its number. */
 .createWizardStep:last-child {
-  grid-template-columns: auto minmax(0, max-content);
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .createWizardStep > span {
@@ -717,19 +720,21 @@
 }
 
 .createWizardStep.active > span {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--swiss-white);
+  background: var(--control-primary-fill);
+  border-color: var(--control-primary-fill);
+  color: var(--control-primary-text);
 }
 
 .createWizardStep.completed {
   color: var(--text);
 }
 
+/* The check takes the surface colour so it reads against the filled circle in both themes;
+   white on the dark theme's light text colour made it all but invisible. */
 .createWizardStep.completed > span {
   background: var(--text);
   border-color: var(--text);
-  color: var(--swiss-white);
+  color: var(--surface);
 }
 
 .createWizardStep.completed .buttonIcon {
@@ -1198,12 +1203,14 @@
   white-space: nowrap;
 }
 
+/* Centred on its thumb, but never past the track's ends, where a value near either limit hung
+   outside the card. */
 .memoryValueBubble.xms {
-  left: var(--xms-percent);
+  left: clamp(26px, var(--xms-percent), calc(100% - 26px));
 }
 
 .memoryValueBubble.xmx {
-  left: var(--xmx-percent);
+  left: clamp(26px, var(--xmx-percent), calc(100% - 26px));
 }
 
 .memoryTicks,
@@ -1531,12 +1538,15 @@
   display: none;
 }
 
+/* Sized and coloured like the icon chevron on the additional ports disclosure above it. */
 .advancedResourceDisclosure summary::after {
   content: "";
-  width: 11px;
-  height: 11px;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
+  width: 7px;
+  height: 7px;
+  margin: 0 4px 3px;
+  border-right: 1.75px solid currentColor;
+  border-bottom: 1.75px solid currentColor;
+  color: var(--text-muted);
   transform: rotate(45deg);
   transition: transform 150ms linear;
 }
@@ -1651,10 +1661,12 @@
   transform: none;
 }
 
+/* Spacing rather than divider rules separates the values: a divider cannot tell when its item
+   has wrapped to the start of a new row, which left wrapped items indented behind a stray line. */
 .reviewSummaryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0;
+  grid-template-columns: repeat(auto-fill, minmax(min(124px, 100%), 1fr));
+  gap: var(--space-4) var(--space-5);
 }
 
 .reviewSummaryItem {
@@ -1662,13 +1674,6 @@
   display: grid;
   align-content: start;
   gap: var(--space-2);
-  padding: 0 var(--space-4);
-  border-left: var(--border-subtle) solid var(--border-muted);
-}
-
-.reviewSummaryItem:first-child {
-  border-left: 0;
-  padding-left: 0;
 }
 
 .reviewSummaryItem > span {
@@ -1788,31 +1793,57 @@
   gap: var(--space-2);
 }
 
+/* Why Next is unavailable, beside the button rather than only in its tooltip. */
+.createWizardFooterHint {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: var(--weight-strong);
+  line-height: 1.35;
+  text-align: right;
+}
+
 @media (max-width: 980px) {
+  /* A compact progress row: numbered circles joined by lines. The card heading directly below
+     names the current step, so the titles stay available to assistive technology only. Stacking
+     all four titles pushed the form most of a phone screen down. */
   .createWizardStepper,
   .applicationCreateStepper {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: var(--space-2);
   }
 
   .createWizardStep,
-  .createWizardStep:last-child,
-  .applicationCreateStep,
-  .applicationCreateStep:last-child {
-    grid-template-columns: auto minmax(0, 1fr);
+  .applicationCreateStep {
+    grid-template-columns: auto minmax(16px, 1fr);
   }
 
-  .createWizardStep i,
-  .applicationCreateStepLine {
+  .createWizardStep:last-child,
+  .applicationCreateStep:last-child {
+    grid-template-columns: auto;
+  }
+
+  .createWizardStep > div {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .applicationCreateStep > div {
     display: none;
   }
 
-  .createNodeOverviewGrid {
-    grid-template-columns: 48px minmax(0, 1fr);
+  .createWizardStep > span,
+  .applicationCreateStepNumber {
+    width: 32px;
+    height: 32px;
   }
 
-  .createNodeOverviewMetric {
-    padding-left: 0;
-    border-left: 0;
+  .createNodeOverviewGrid {
+    grid-template-columns: 48px repeat(3, minmax(0, 1fr));
   }
 
   .runtimeSummaryGrid {
@@ -1869,6 +1900,10 @@
     width: 100%;
   }
 
+  .createWizardFooterHint {
+    text-align: center;
+  }
+
   .createWizardCard > .modInstallStepIntro,
   .createWizardFields {
     padding: var(--space-3) var(--space-3) 0;
@@ -1876,6 +1911,19 @@
 
   .createNodeOverview {
     padding: var(--space-3);
+  }
+
+  .createNodeOverviewGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .createNodeOverviewIcon {
+    display: none;
+  }
+
+  .createNodeOverviewIcon + .createNodeOverviewMetric {
+    padding-left: 0;
+    border-left: 0;
   }
 
   .nodeSelectRow {

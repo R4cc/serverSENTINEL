@@ -101,7 +101,10 @@ export function useUiCacheClear(inputs: {
     };
     setServerStatus("checking");
     void refreshStatus();
-    const interval = window.setInterval(() => void refreshStatus(), 3_000);
+    // A background tab cannot press the button, so it does not need to know whether it may.
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void refreshStatus();
+    }, 3_000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);

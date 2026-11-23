@@ -19,7 +19,9 @@ export async function downloadModrinthJarStream(file: JarFile, options: {
     if (!response.body) throw new Error("Modrinth JAR download returned no body");
     const hashes = ["sha1", "sha512"].filter((algorithm) => file.hashes?.[algorithm])
       .map((algorithm) => ({ algorithm, hash: createHash(algorithm) }));
-    const source = Readable.fromWeb(response.body as never);
+    // Buffer at most one network chunk ahead so an oversized body stops near the ceiling
+    // (Node 26 otherwise reads further ahead than Node 22 did).
+    const source = Readable.fromWeb(response.body as never, { highWaterMark: 1 });
     const stream = Readable.from((async function* () {
       let bytes = 0;
       let header = Buffer.alloc(0);

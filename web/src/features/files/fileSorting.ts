@@ -11,18 +11,32 @@ export function nextFileSort(current: FileSort, id: FileSortColumn): FileSort {
   return nextTableSort(current, id);
 }
 
-export function sortFileEntries(entries: FileEntry[], sort: FileSort): FileEntry[] {
-  const compareValue = (left: FileEntry, right: FileEntry) => {
-    if (sort.id === "modifiedAt") return new Date(left.modifiedAt).getTime() - new Date(right.modifiedAt).getTime();
-    if (sort.id === "type") return fileDisplayType(left).localeCompare(fileDisplayType(right));
-    if (sort.id === "size") return left.size - right.size;
-    return left.name.localeCompare(right.name);
-  };
+// `localeCompare` without options resolves the default locale on every call; a shared collator
+// gives the same order without that per-comparison cost, which dominates sorting a large folder.
+const nameCollator = new Intl.Collator();
 
-  return [...entries].sort((left, right) => {
-    const folderOrder = Number(right.type === "directory") - Number(left.type === "directory");
+/**
+ * Sorts a folder listing. Each entry's sort key is derived once rather than inside the
+ * comparator, where a date parse or the type lookup's regex chain would otherwise run
+ * O(n log n) times.
+ */
+export function sortFileEntries(entries: FileEntry[], sort: FileSort): FileEntry[] {
+  const keyed = entries.map((entry) => ({
+    entry,
+    directory: entry.type === "directory",
+    key: sort.id === "modifiedAt" ? new Date(entry.modifiedAt).getTime()
+      : sort.id === "type" ? fileDisplayType(entry)
+        : sort.id === "size" ? entry.size
+          : entry.name
+  }));
+  const compareKey = (left: string | number, right: string | number) =>
+    typeof left === "number" && typeof right === "number" ? left - right : nameCollator.compare(String(left), String(right));
+
+  keyed.sort((left, right) => {
+    const folderOrder = Number(right.directory) - Number(left.directory);
     if (folderOrder !== 0) return folderOrder;
-    const compared = compareValue(left, right) || left.name.localeCompare(right.name);
+    const compared = compareKey(left.key, right.key) || nameCollator.compare(left.entry.name, right.entry.name);
     return sort.desc ? -compared : compared;
   });
+  return keyed.map((item) => item.entry);
 }

@@ -344,6 +344,43 @@ describe("server timeline markers", () => {
     expect(positioned.map((cluster) => cluster.inlineLabel)).toEqual(["Server started", "Restart"]);
   });
 
+  it("combines markers from neighbouring buckets that would overlap on the rail", () => {
+    const marker = timelineMarkers(response())[0];
+    // A two-event marker one bucket before a single one: about 80px wide, 42px apart on a 1,000px rail.
+    const clusters = clusterTimelineMarkers([
+      { ...marker, id: "a", occurredAt: 30_000 },
+      { ...marker, id: "b", occurredAt: 30_500 },
+      { ...marker, id: "c", occurredAt: 32_600 }
+    ], 0, 60_000, 24);
+    expect(clusters).toHaveLength(2);
+
+    const positioned = positionTimelineClusters(clusters, 0, 60_000, 1_000);
+    expect(positioned).toHaveLength(1);
+    expect(positioned[0].markers.map((item) => item.id)).toEqual(["a", "b", "c"]);
+    expect(timelineClusterOccurrenceCount(positioned[0])).toBe(3);
+  });
+
+  it("combines a marker flipped against the right edge with the one it would cover", () => {
+    const marker = timelineMarkers(response())[0];
+    const clusters = clusterTimelineMarkers([
+      { ...marker, id: "single", occurredAt: 57_000 },
+      { ...marker, id: "pair-1", occurredAt: 59_500 },
+      { ...marker, id: "pair-2", occurredAt: 59_800 }
+    ], 0, 60_000, 24);
+    const positioned = positionTimelineClusters(clusters, 0, 60_000, 1_000);
+    expect(positioned).toHaveLength(1);
+    expect(positioned[0].alignEnd).toBe(true);
+  });
+
+  it("keeps markers apart when there is room between them", () => {
+    const marker = timelineMarkers(response())[0];
+    const clusters = clusterTimelineMarkers([
+      { ...marker, id: "a", occurredAt: 10_000 },
+      { ...marker, id: "b", occurredAt: 30_000 }
+    ], 0, 60_000, 24);
+    expect(positionTimelineClusters(clusters, 0, 60_000, 1_000)).toHaveLength(2);
+  });
+
   it("only shows an inline event label when it fits to the right without colliding", () => {
     const marker = timelineMarkers(response())[0];
     const separated = [
