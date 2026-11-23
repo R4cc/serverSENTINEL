@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { InstalledMod } from "../../types";
 import { ModDetailsPanel } from "./ModDetailsPanel";
+import { buildModDependencyGraph, type ModDependencyLinks } from "./modDependencyGraph";
 
 const noop = vi.fn();
 
@@ -30,7 +31,7 @@ function mod(overrides: Partial<InstalledMod> = {}): InstalledMod {
   };
 }
 
-function renderPanel(installed: InstalledMod) {
+function renderPanel(installed: InstalledMod, dependencyLinks?: ModDependencyLinks) {
   return renderToStaticMarkup(
     <ModDetailsPanel
       mod={installed}
@@ -42,6 +43,8 @@ function renderPanel(installed: InstalledMod) {
       onUpdate={noop}
       onRemove={noop}
       onAcknowledgeReview={noop}
+      dependencyLinks={dependencyLinks}
+      onOpenMod={noop}
       updatePlanEntry={null}
     />
   );
@@ -80,11 +83,34 @@ describe("ModDetailsPanel", () => {
       }
     }));
 
-    expect(html).toContain("Required dependencies");
+    expect(html).toContain("Dependencies");
+    expect(html).toContain("Requires");
     expect(html).toContain("Fabric API");
     expect(html).toContain("Not installed");
     expect(html).toContain("Cloth Config");
     expect(html).toContain("Disabled");
     expect(html).toContain("Install dependencies");
+  });
+
+  it("links a library to the mods that require it and warns what disabling it breaks", () => {
+    const library = mod({ filename: "fabric-api.jar", displayName: "Fabric API", modrinth: { ...mod().modrinth!, projectId: "fabric-api", versionId: "fapi" } });
+    const sodium = mod({ filename: "sodium.jar", displayName: "Sodium", modrinth: { ...mod().modrinth!, projectId: "sodium", versionId: "sod" }, dependencyHealth: { status: "satisfied", requiredCount: 1, required: [{ projectId: "fabric-api" }], missing: [] } });
+    const lithium = mod({ filename: "lithium.jar", displayName: "Lithium", modrinth: { ...mod().modrinth!, projectId: "lithium", versionId: "lit" }, dependencyHealth: { status: "satisfied", requiredCount: 1, required: [{ projectId: "fabric-api" }], missing: [] } });
+    const graph = buildModDependencyGraph([library, sodium, lithium]);
+
+    const libraryHtml = renderPanel(library, graph.linksFor(library));
+    expect(libraryHtml).toContain("Required by");
+    expect(libraryHtml).toContain('title="Open Lithium"');
+    expect(libraryHtml).toContain('title="Open Sodium"');
+    expect(libraryHtml).toContain("Disabling or removing this mod stops Lithium and Sodium from loading.");
+
+    const parentHtml = renderPanel(sodium, graph.linksFor(sodium));
+    expect(parentHtml).toContain('title="Open Fabric API"');
+    expect(parentHtml).toContain("Installed");
+    expect(parentHtml).not.toContain("Required by");
+  });
+
+  it("omits the dependency section for a mod with no dependency links", () => {
+    expect(renderPanel(mod(), { requires: [], requiredBy: [] })).not.toContain("mod-dependencies-title");
   });
 });

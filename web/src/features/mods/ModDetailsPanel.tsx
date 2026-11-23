@@ -9,6 +9,8 @@ import { applyUpdatePlanEntry } from "./modUpdatePlan";
 import { ModIconImage } from "./ModIconImage";
 import { DialogSurface } from "../../components/DialogSurface";
 import { fabricContentTerminology, type ManagedContentTerminology } from "./contentTerminology";
+import { ModDependencySection } from "./ModDependencyLinks";
+import type { ModDependencyLinks } from "./modDependencyGraph";
 
 function technicalValue(value?: string) {
   if (!value) return "Unknown";
@@ -32,13 +34,19 @@ type Props = {
   onInstallDependencies?: (mod: InstalledMod) => void;
   onRemove: (mod: InstalledMod) => void;
   onAcknowledgeReview: (mod: InstalledMod) => Promise<void> | void;
+  /** Installed mods this one needs and the ones that need it, each opened in place by `onOpenMod`. */
+  dependencyLinks?: ModDependencyLinks;
+  onOpenMod?: (mod: InstalledMod) => void;
   updatePlanEntry?: ModUpdatePlanEntry | null;
 };
 
-export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, locked, reviewAcknowledgementLocked, dependencyInstallLocked = locked, formatDate, onClose, onToggle, onUpdate, onInstallDependencies, onRemove, onAcknowledgeReview, updatePlanEntry }: Props) {
+export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, locked, reviewAcknowledgementLocked, dependencyInstallLocked = locked, formatDate, onClose, onToggle, onUpdate, onInstallDependencies, onRemove, onAcknowledgeReview, dependencyLinks, onOpenMod, updatePlanEntry }: Props) {
   const health = getInstalledModHealth(applyUpdatePlanEntry(mod, updatePlanEntry ?? null), terminology);
   const icon = modIconSource(mod.iconUrl);
   const reviewRef = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const shownFilenameRef = useRef(mod.filename);
   const [reviewingUpdate, setReviewingUpdate] = useState(false);
   const [updateAcknowledged, setUpdateAcknowledged] = useState(false);
   const [reviewingInstalledVersion, setReviewingInstalledVersion] = useState(false);
@@ -71,6 +79,16 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
     setAcknowledgingInstalledReview(false);
   }, [mod.filename, mod.modrinth?.versionId]);
 
+  // Following a dependency link swaps the mod in place. The link that had focus is gone with the
+  // old content, so focus moves to the new title and the body starts from the top, as it would
+  // for a freshly opened drawer.
+  useEffect(() => {
+    if (shownFilenameRef.current === mod.filename) return;
+    shownFilenameRef.current = mod.filename;
+    bodyRef.current?.scrollTo({ top: 0 });
+    titleRef.current?.focus({ preventScroll: true });
+  }, [mod.filename]);
+
   useEffect(() => {
     if (reviewingUpdate || reviewingInstalledVersion) {
       reviewRef.current?.scrollIntoView({ block: "nearest" });
@@ -95,27 +113,23 @@ export function ModDetailsPanel({ terminology = fabricContentTerminology, mod, l
       <div className="modsDrawerHeader">
         <div className="modsDetailsTitle">
           <ModIconImage src={icon} fallback="JAR" />
-          <div><small>{terminology.singularTitle} details</small><h2 id="mod-details-title">{mod.displayName}</h2><StatusBadge tone={mod.enabled ? "success" : "neutral"}>{mod.enabled ? "Enabled" : "Disabled"}</StatusBadge></div>
+          <div><small>{terminology.singularTitle} details</small><h2 id="mod-details-title" ref={titleRef} tabIndex={-1}>{mod.displayName}</h2><StatusBadge tone={mod.enabled ? "success" : "neutral"}>{mod.enabled ? "Enabled" : "Disabled"}</StatusBadge></div>
         </div>
         <Button variant="secondary" iconOnly className="iconButton" onClick={onClose} aria-label={`Close ${terminology.singular} details`} title={`Close ${terminology.singular} details`}><AppIcon name="x" /></Button>
       </div>
-      <div className="modsDrawerBody">
+      <div className="modsDrawerBody" ref={bodyRef}>
         {mod.description && <p className="modsDetailsDescription">{mod.description}</p>}
         {hasPlannedUpdate && health.key === "missing_dependencies" && <section className={`modsHealthReasonBanner ${reasonTone}`} aria-label="Compatibility reason">
           <strong>{health.label}</strong>
           <span>{health.detailDescription}</span>
         </section>}
-        {mod.dependencyHealth?.status === "missing" && (
-          <section className="modsReviewSection" aria-labelledby="missing-dependencies-title">
-            <h3 id="missing-dependencies-title">Required dependencies</h3>
-            {mod.dependencyHealth.missing.map((dependency, index) => (
-              <div className="modsReviewLine" key={`${dependency.projectId || dependency.versionId || "dependency"}-${index}`}>
-                <strong>{dependency.title || dependency.projectId || "Required dependency"}</strong>
-                <span>{dependency.disabled ? "Disabled" : "Not installed"}</span>
-              </div>
-            ))}
-          </section>
-        )}
+        <ModDependencySection
+          mod={mod}
+          links={dependencyLinks ?? { requires: [], requiredBy: [] }}
+          missing={mod.dependencyHealth?.status === "missing" ? mod.dependencyHealth.missing : []}
+          terminology={terminology}
+          onOpen={(target) => onOpenMod?.(target)}
+        />
         <dl className="modsVersionComparison" aria-label="Version comparison">
           <div><dt>Installed version</dt><dd>{modVersion(mod)}</dd></div>
           {hasPlannedUpdate && updatePlanEntry?.targetVersion && <div><dt>Available version</dt><dd>{updatePlanEntry.targetVersion}</dd></div>}

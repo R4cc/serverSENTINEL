@@ -26,6 +26,9 @@ export function assessRequiredModDependencies(
   return {
     status: missing.length > 0 ? "missing" as const : "satisfied" as const,
     requiredCount: required.length,
+    // Every required dependency, satisfied or not, so the panel can link an installed library
+    // back to the mods that need it instead of only reporting the gaps.
+    required: required.map((dependency) => ({ projectId: dependency.project_id, versionId: dependency.version_id })),
     missing
   };
 }

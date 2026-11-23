@@ -186,4 +186,25 @@ describe("InstalledModsList", () => {
     expect(html).toContain("Fabric API");
     expect(html).not.toContain("modsWorkspaceSkeletonRow");
   });
+
+  it("links a library to the one mod that requires it", () => {
+    const library = mod({ versionInfo: { currentVersion: "0.154.0+26.2", upToDate: true } });
+    const parent = mod({ filename: "sodium.jar", displayName: "Sodium", modrinth: { ...mod().modrinth!, projectId: "sodium", versionId: "sod" }, versionInfo: { currentVersion: "0.6.0", upToDate: true }, dependencyHealth: { status: "satisfied", requiredCount: 1, required: [{ projectId: "fabric-api" }], missing: [] } });
+    const html = renderInstalledMods([library, parent], null);
+
+    expect(html).toContain('class="modsDependencyChip"');
+    expect(html).toContain('title="Required by Sodium. Open Sodium."');
+    expect(html.match(/modsDependencyChip/g)?.length).toBeGreaterThan(0);
+  });
+
+  it("offers a menu when several mods share a library, and warns when the library is off", () => {
+    const library = mod({ enabled: false, versionInfo: { currentVersion: "0.154.0+26.2", upToDate: true } });
+    const dependent = (name: string) => mod({ filename: `${name}.jar`, displayName: name, modrinth: { ...mod().modrinth!, projectId: name, versionId: name }, versionInfo: { currentVersion: "1.0.0", upToDate: true }, dependencyHealth: { status: "satisfied", requiredCount: 1, required: [{ projectId: "fabric-api" }], missing: [] } });
+    const html = renderInstalledMods([library, dependent("Sodium"), dependent("Lithium")], null);
+
+    expect(html).toContain('aria-label="Needed by Lithium and Sodium"');
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain("modsDependencyChip isBlocking");
+    expect(html).toContain("2 mods");
+  });
 });

@@ -550,6 +550,7 @@ export async function enrichInstalledModDependencies(result: unknown, options: {
         dependencyHealth: {
           status: assessment.status,
           requiredCount: assessment.requiredCount,
+          required: assessment.required,
           missing
         }
       };
