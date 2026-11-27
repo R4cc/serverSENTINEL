@@ -748,6 +748,13 @@ async function assertTabletShellContainment(page, title, label) {
 
 async function assertTabletNavigationContainment(page, label) {
   await page.getByRole("button", { name: "Expand navigation" }).click();
+  // Measured straight after the click, WebKit can still report the pre-containment document height
+  // while the shell settles (this flaked on dev with documentHeight 2712). Give layout a bounded
+  // chance to settle; a real leak still fails the assertion below once the wait runs out.
+  await page.waitForFunction(() => {
+    const owner = document.scrollingElement;
+    return owner instanceof HTMLElement && owner.scrollHeight <= owner.clientHeight + 1;
+  }, undefined, { timeout: 5_000 }).catch(() => undefined);
   const result = await page.evaluate(() => {
     const shell = document.querySelector(".appShell");
     const sidebar = document.querySelector(".sidebar");
