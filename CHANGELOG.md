@@ -3,6 +3,7 @@
 ## 26.12.1 - 2026-11-27
 
 - Packages the latest permission, file handling, scheduling, console, and interface fixes for production.
+- Opening the navigation on tablets keeps scrolling inside the workspace, including when Overview shows repeated events.
 
 ## 26.11.15 - 2026-11-27
 
