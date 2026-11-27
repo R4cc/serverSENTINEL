@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
 import { runtimeForServer, services } from "../appServices.js";
-import { cronMatches, timeZoneMinuteKey, validateCron } from "../core.js";
+import { cronMatches, timeZoneMinuteKey, validateCron } from "@serversentinel/contracts";
 import { optionalStrictBoolean } from "../http/validation.js";
 import { durationSince, logError, logInfo, logWarn, errorLogFields } from "../logging.js";
 import { captureScheduledCommandLogs } from "./runLogCapture.js";
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "../servers/serverLogFields.js";
 import { listManagedServers } from "../servers/store.js";
 import { restartServerGracefully, sendConsoleCommandWithIntent, startServerWithIntent, stopServerWithIntent } from "../servers/lifecycle.js";
 import { activeScheduleExecutions, activeScheduledRunsFor, runningSchedules, scheduleExecutionKey, type ActiveScheduleExecution } from "./activeRuns.js";

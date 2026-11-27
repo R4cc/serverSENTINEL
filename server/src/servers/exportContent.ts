@@ -1,8 +1,9 @@
 import type { ExportLockfileEntry } from "@serversentinel/contracts";
 import { errorLogFields, logWarn } from "../logging.js";
-import { batchVersionsFromSha1, listModsWithPanelMetadata, modsFromListResult, remoteModMetadata } from "../mods/modService.js";
+import { batchVersionsFromSha1, listModsWithPanelMetadata } from "../mods/modService.js";
+import { modsFromListResult, remoteModMetadata } from "../installedModMetadata.js";
 import { normalizeReleaseChannel, versionChannel } from "../modrinth/compatibility.js";
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "./serverLogFields.js";
 import type { ManagedServer, ModPreference, ModrinthVersion } from "../types.js";
 
 type ContentPlan = {

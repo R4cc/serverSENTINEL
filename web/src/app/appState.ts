@@ -1,3 +1,4 @@
+import { writeStoredValue } from "../utils/browserStorage";
 import { useEffect, useState } from "react";
 import { demoFixtures, demoFixturesLoaded } from "../demoRuntime";
 import { readModsDemoFixture } from "../features/mods/modsDemoFixtures";
@@ -16,13 +17,6 @@ import {
   readConsoleScrollback
 } from "../features/settings/settingsPreferences";
 
-function writePreference(key: string, value: string) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Ignore unavailable browser storage; in-memory preferences still apply.
-  }
-}
 
 export function usePreferencesState() {
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
@@ -58,40 +52,40 @@ export function usePreferencesState() {
   }, []);
 
   useEffect(() => {
-    writePreference("serversentinel-theme", themePreference);
+    writeStoredValue("serversentinel-theme", themePreference);
   }, [themePreference]);
 
   useEffect(() => {
-    writePreference(translucencyStorageKey, String(translucency));
+    writeStoredValue(translucencyStorageKey, String(translucency));
   }, [translucency]);
 
   useEffect(() => {
-    writePreference(contrastStorageKey, String(contrast));
+    writeStoredValue(contrastStorageKey, String(contrast));
   }, [contrast]);
 
   useEffect(() => {
-    writePreference("serversentinel-regional-format", regionalFormatPreference);
+    writeStoredValue("serversentinel-regional-format", regionalFormatPreference);
   }, [regionalFormatPreference]);
 
   useEffect(() => {
-    writePreference("serversentinel-display-time-zone", displayTimeZonePreference);
+    writeStoredValue("serversentinel-display-time-zone", displayTimeZonePreference);
   }, [displayTimeZonePreference]);
 
   useEffect(() => {
-    writePreference("serversentinel-relative-timestamps", String(relativeTimestamps));
+    writeStoredValue("serversentinel-relative-timestamps", String(relativeTimestamps));
   }, [relativeTimestamps]);
 
   useEffect(() => {
-    writePreference(consoleHistoryStorageKey, String(rememberConsoleHistory));
+    writeStoredValue(consoleHistoryStorageKey, String(rememberConsoleHistory));
     if (!rememberConsoleHistory) clearStoredCommandHistory();
   }, [rememberConsoleHistory]);
 
   useEffect(() => {
-    writePreference(consoleFontSizeStorageKey, String(consoleFontSize));
+    writeStoredValue(consoleFontSizeStorageKey, String(consoleFontSize));
   }, [consoleFontSize]);
 
   useEffect(() => {
-    writePreference(consoleScrollbackStorageKey, String(consoleScrollback));
+    writeStoredValue(consoleScrollbackStorageKey, String(consoleScrollback));
   }, [consoleScrollback]);
 
   /** Callers must have awaited loadDemoFixtures() before reaching this. */

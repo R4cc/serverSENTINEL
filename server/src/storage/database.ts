@@ -552,6 +552,10 @@ export class StorageDatabase {
     return row?.value;
   }
 
+  deleteMetadata(key: string) {
+    this.connection.prepare("DELETE FROM storage_metadata WHERE key = ?").run(key);
+  }
+
   setMetadata(key: string, value: string) {
     this.connection.prepare(`
       INSERT INTO storage_metadata (key, value) VALUES (?, ?)

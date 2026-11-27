@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.11.15 - 2026-11-27
+
+- **Security:** the exemption that lets mod icons load without the `X-Requested-With` header now applies only to the mod icon route. Before, any GET request whose address merely contained `/mods/icon` skipped that check.
+- Identifying a manually uploaded mod for its icon now reads the jar as a stream instead of loading the whole file into memory, which keeps memory flat when a mod list holds large unidentified jars.
+- Internal restructuring with no visible change: shared helpers moved out of the mods, Docker and logging modules so other parts of the panel no longer load them, and duplicated browser-storage code was merged. The remaining larger architectural issues are tracked in `docs/architecture-debt.md`.
+
 ## 26.11.14 - 2026-11-27
 
 - **Security:** an account that holds "manage users" but not every permission can no longer grant permissions it lacks itself, or change, reset the password of, or delete an account with more access. Before this, such an account could make itself an administrator.

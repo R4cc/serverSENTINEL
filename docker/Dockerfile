@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG SS_VERSION=26.11.14
+ARG SS_VERSION=26.11.15
 FROM node:26-bookworm-slim AS dependency-base
 
 WORKDIR /app

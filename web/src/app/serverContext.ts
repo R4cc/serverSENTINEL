@@ -14,7 +14,8 @@ export function useServerContext(input: {
   demoMode: boolean;
   demoSchedules: ScheduledExecution[];
 }) {
-  const modsDemoFixture = readModsDemoFixture();
+  // The fixture only matters in demo mode; outside it, skip parsing the URL on every render.
+  const modsDemoFixture = input.demoMode ? readModsDemoFixture() : "default";
   const effectiveAppState = useMemo<AppState>(() => {
     if (!input.demoMode) return input.appState;
     const runtimeMode = input.appState.runtimeMode ?? "all-in-one";

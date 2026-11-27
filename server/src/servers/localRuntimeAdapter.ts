@@ -1,4 +1,3 @@
-const serverSideEffectsQueue = new AsyncQueue();
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { serverRuntimeDefinition } from "@serversentinel/contracts";
@@ -8,7 +7,8 @@ import { durationSince, logInfo, logOperationFailure, logWarn } from "../logging
 import { optionalStrictBoolean } from "../http/validation.js";
 import { ensureManagedServerDirectory, readServers } from "./store.js";
 import { allocateQueryPort, assertUniqueDockerHostPorts, dockerPortsWithManagedEntries, findExistingServerPortConflict, findProvisionPortConflict, normalizeManagedPorts, portConflictMessage, queryPortEntry, type CreateServerInput } from "./ports.js";
-import { dockerCommandInputCapability, dockerControlConfigured, dockerRecentLogs, dockerStatus, ensureDockerContainer, inspectDockerContainer, minecraftContainerNetworkingConfig, readLatestServerLog, removeManagedDockerContainer, sendDockerStdinCommand, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
+import { dockerCommandInputCapability, dockerControlConfigured, dockerRecentLogs, dockerStatus, ensureDockerContainer, inspectDockerContainer, minecraftContainerNetworkingConfig, readLatestServerLog, removeManagedDockerContainer, sendDockerStdinCommand, updateServerProperties } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "./serverLogFields.js";
 import { dockerAvailable } from "../docker/dockerClient.js";
 import { publicServerStatus } from "./publicViews.js";
 import { streamDockerLogs, streamLatestServerLog } from "./overview.js";
@@ -26,6 +26,9 @@ import { writeVersionMetadataFile } from "./versions.js";
 import type { RuntimeUploadSource } from "../nodes/types.js";
 import { planServerUpdate } from "./serverUpdatePlan.js";
 import type { ManagedServer } from "../types.js";
+
+const serverSideEffectsQueue = new AsyncQueue();
+
 export async function localUpdateServer(serverId: string, input: unknown) {
   const body = input as {
     displayName?: string;

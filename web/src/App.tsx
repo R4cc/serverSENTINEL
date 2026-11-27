@@ -459,13 +459,7 @@ export default function App() {
     return api<ServerTimelineResponse>(`/api/servers/${activeServer.id}/timeline?from=${Math.round(from)}&to=${Math.round(to)}&maxPoints=${maxPoints}`, { timeoutMs: 15_000 });
   }, [activeServer?.id, demoMode, demoRunning, demoSchedules, demoSessionVersion]);
   const loadActiveStorageSummary = useCallback(async (serverId: string, signal?: AbortSignal) => {
-    if (demoMode && isDemoServerId(serverId)) {
-      return {
-        worldSizeBytes: 7_566 * 1024 ** 2,
-        totalBytes: 100 * 1024 ** 3,
-        availableBytes: 8 * 1024 ** 3
-      };
-    }
+    if (demoMode && isDemoServerId(serverId)) return demoFixtures().demoStorageSummary();
     return api<ServerStorageSummary>(`/api/servers/${serverId}/storage`, { timeoutMs: 15_000, signal });
   }, [demoMode]);
   // The overview stays mounted, hidden, while the rest of the workspace is browsed, and it is

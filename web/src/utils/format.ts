@@ -1,3 +1,4 @@
+import { readStoredValue } from "./browserStorage";
 import type { DisplayTimeZonePreference, ManagedServer, RegionalFormatPreference, ServerStatus, ThemePreference, VersionResolution, VersionSource } from '../types';
 import { isThemePreference } from "../features/settings/themePreferences";
 
@@ -166,12 +167,7 @@ export function versionSourceLabel(source: VersionSource) {
 }
 
 export function readThemePreference(): ThemePreference {
-  try {
-    const saved = window.localStorage.getItem("serversentinel-theme");
-    return themePreferenceFromStoredValue(saved);
-  } catch {
-    return "dark";
-  }
+  return themePreferenceFromStoredValue(readStoredValue("serversentinel-theme"));
 }
 
 export function themePreferenceFromStoredValue(value: string | null): ThemePreference {
@@ -214,12 +210,8 @@ export function resolveRegionalFormatLocale(preference: RegionalFormatPreference
 }
 
 export function readDisplayTimeZonePreference(): DisplayTimeZonePreference {
-  try {
-    const saved = window.localStorage.getItem("serversentinel-display-time-zone");
-    return saved === "browser" || saved === "utc" || saved === "panel" ? saved : "panel";
-  } catch {
-    return "panel";
-  }
+  const saved = readStoredValue("serversentinel-display-time-zone");
+  return saved === "browser" || saved === "utc" || saved === "panel" ? saved : "panel";
 }
 
 export function relativeTimestampsFromStoredValue(value: string | null) {
@@ -227,9 +219,5 @@ export function relativeTimestampsFromStoredValue(value: string | null) {
 }
 
 export function readRelativeTimestampsPreference() {
-  try {
-    return relativeTimestampsFromStoredValue(window.localStorage.getItem("serversentinel-relative-timestamps"));
-  } catch {
-    return true;
-  }
+  return relativeTimestampsFromStoredValue(readStoredValue("serversentinel-relative-timestamps"));
 }

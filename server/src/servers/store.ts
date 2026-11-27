@@ -5,7 +5,8 @@ import { asArray, asObject, optionalString, requiredString } from "../storage/va
 import { isInsideServersDirectory } from "../storage/serverIdentity.js";
 import { badRequest, optionalStrictBoolean, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateOperationId, validateScheduleId, validateServerId } from "../http/validation.js";
 import { throwHttp } from "../http/errors.js";
-import { nextCronRun, parseDockerPorts } from "../core.js";
+import { nextCronRun } from "@serversentinel/contracts";
+import { parseDockerPorts } from "../core.js";
 import { sanitizeScheduleSteps } from "../schedules/steps.js";
 import { activeScheduledRunsFor } from "../schedules/activeRuns.js";
 import { localNodeId } from "../nodes/nodeService.js";
@@ -173,9 +174,7 @@ export function normalizeManagedServer(value: unknown): ManagedServer {
   )));
   const id = validateServerId(server.id);
   const nodeId = requiredString(server.nodeId, "server.nodeId");
-  const serverDir = nodeId === localNodeId
-    ? resolve(requiredString(server.serverDir, "server.serverDir"))
-    : resolve(requiredString(server.serverDir, "server.serverDir"));
+  const serverDir = resolve(requiredString(server.serverDir, "server.serverDir"));
   if (nodeId === localNodeId && !isInsideServersDirectory(config.serversDir, serverDir)) {
     throw new Error("managed server serverDir must be inside the canonical data root servers directory");
   }

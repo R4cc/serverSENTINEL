@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDemoSession, demoConsoleMessages, demoFleetNodes, demoFleetServers, demoOverviewData, demoPlayerSnapshot, demoPlayerSnapshots, demoStats, demoTimelineData, initialDemoSchedules, recordDemoRuntimeEvent } from "./demo";
+import { createDemoSession, demoConsoleMessages, demoFleetNodes, demoFleetServers, demoOverviewData, demoPlayerSnapshot, demoPlayerSnapshots, demoStats, demoStorageSummary, demoTimelineData, initialDemoSchedules, recordDemoRuntimeEvent } from "./demo";
 
 function seededRandom(seed: number) {
   let state = seed >>> 0;
@@ -143,5 +143,13 @@ describe("demo version switch", () => {
     const result = demoVersionSwitchResult(plan);
     expect(result.counts.disabled).toBe(plan.counts.disable);
     expect(result.counts.updated).toBe(plan.counts.update);
+  });
+});
+
+describe("demo storage summary", () => {
+  it("reports the demo world on a disk with little free space left", () => {
+    const summary = demoStorageSummary();
+    expect(summary).toEqual({ worldSizeBytes: 7_566 * 1024 ** 2, totalBytes: 100 * 1024 ** 3, availableBytes: 8 * 1024 ** 3 });
+    expect(summary.availableBytes! / summary.totalBytes!).toBeLessThan(0.1);
   });
 });

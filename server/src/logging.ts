@@ -1,6 +1,5 @@
-import type { FastifyRequest } from "fastify";
+import type { FastifyBaseLogger, FastifyRequest } from "fastify";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { services } from "./appServices.js";
 
 export type LogFields = Record<string, unknown>;
 
@@ -20,6 +19,23 @@ type LogActor = {
 
 const requestLogContext = new AsyncLocalStorage<RequestLogContext>();
 
+type LogSink = Pick<FastifyBaseLogger, "debug" | "info" | "warn" | "error">;
+
+/**
+ * Where log records go. The panel installs its Fastify logger at startup; until then, and in the
+ * node agent, records are dropped. Owned here rather than on the app's service container so that
+ * the logger -- imported by nearly every module -- does not depend on the composition root.
+ */
+let logSink: LogSink | undefined;
+
+export function setLogSink(sink: LogSink | undefined) {
+  logSink = sink;
+}
+
+export function hasLogSink() {
+  return logSink !== undefined;
+}
+
 function contextualFields(fields: LogFields): LogFields {
   const context = requestLogContext.getStore();
   return context ? { ...context, ...fields } : fields;
@@ -38,19 +54,19 @@ export function setRequestLogActor(actor: LogActor | null | undefined) {
 }
 
 export function logDebug(fields: LogFields, message: string) {
-  services.appLogger?.debug(contextualFields(fields), message);
+  logSink?.debug(contextualFields(fields), message);
 }
 
 export function logInfo(fields: LogFields, message: string) {
-  services.appLogger?.info(contextualFields(fields), message);
+  logSink?.info(contextualFields(fields), message);
 }
 
 export function logWarn(fields: LogFields, message: string) {
-  services.appLogger?.warn(contextualFields(fields), message);
+  logSink?.warn(contextualFields(fields), message);
 }
 
 export function logError(fields: LogFields, message: string) {
-  services.appLogger?.error(contextualFields(fields), message);
+  logSink?.error(contextualFields(fields), message);
 }
 
 export function errorLogFields(error: unknown, fallbackStatusCode?: number): LogFields {

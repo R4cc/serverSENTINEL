@@ -13,7 +13,7 @@ import { collectServerCategories, type CollectedCategory } from "../servers/expo
 import { lockfileOmittedFilenames } from "../servers/exportContent.js";
 import { restoreLockfileContent } from "../servers/importContent.js";
 import { downloadServerJar } from "../servers/provisioning.js";
-import { runtimeRunning } from "../mods/modService.js";
+import { runtimeRunning } from "../runtime/runningState.js";
 import { localNodeId } from "../nodes/nodeService.js";
 import {
   applyImportArchive,

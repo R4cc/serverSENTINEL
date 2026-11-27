@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import { badRequest } from "../http/validation.js";
 import { notFound } from "../http/errors.js";
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { extname, join } from "node:path";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { config } from "../config.js";
 import { appUserAgentFor } from "../buildInfo.js";
 import { logWarn, errorLogFields } from "../logging.js";
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "../servers/serverLogFields.js";
 import { assertModrinthUrl } from "../http/outboundUrls.js";
 import { managedContentRuntime } from "../servers/versions.js";
 import { cachedIconFilenames, findCachedIconFile } from "../iconFileCache.js";
@@ -283,7 +284,11 @@ export async function ensureModrinthIconForFile(server: ManagedServer, filename:
       await saveModIcon(server, filename, project.icon_url);
     } else if (!options.skipIdentification) {
       const safeFilePath = await validateExistingResolvedInsideServer(server, filePath);
-      const hash = createHash("sha1").update(await readFile(safeFilePath)).digest("hex");
+      // Streamed: an uploaded jar can be up to the managed-content size limit, and this runs for
+      // every unidentified mod on a list load.
+      const digest = createHash("sha1");
+      for await (const chunk of createReadStream(safeFilePath)) digest.update(chunk as Buffer);
+      const hash = digest.digest("hex");
       if (unknownModrinthJarHashes.has(hash)) return undefined;
       const versionResponse = await modrinthFetch(`https://api.modrinth.com/v2/version_file/${hash}?algorithm=sha1`);
       const version = await versionResponse.json() as { project_id?: string };

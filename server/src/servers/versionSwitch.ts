@@ -15,7 +15,7 @@ import { errorLogFields, logInfo, logWarn } from "../logging.js";
 import { withRecordedModMutation } from "../mods/modService.js";
 import { applyContentPlan, planInstalledContent, type ContentChannels } from "../mods/versionSwitchContentService.js";
 import { runtimeProfileForServer } from "../runtime/profile.js";
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "./serverLogFields.js";
 import { managedContentRuntime, supportsManagedMods } from "./versions.js";
 import { recordOperation } from "./lifecycle.js";
 import { serverJarProvider } from "./provisioning.js";

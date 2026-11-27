@@ -2,7 +2,7 @@ import { runtimeForServer, services } from "../appServices.js";
 
 import { logWarn, errorLogFields } from "../logging.js";
 
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "./serverLogFields.js";
 
 import { blockingRuntimeOperationTypes, mutableServerConfigurationBlockedReason } from "./mutableConfigurationGate.js";
 import { unresolvedServerPortIssues } from "./ports.js";
