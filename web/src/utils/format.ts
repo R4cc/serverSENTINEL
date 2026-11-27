@@ -36,23 +36,38 @@ export function resolveDisplayTimeZone(
   return panelTimeZone;
 }
 
+/**
+ * The unit is chosen from the value after rounding, not before: 1,048,575 bytes is 1023.999 KiB,
+ * which rounds to "1024.0 KiB" when it should read "1.0 MiB".
+ */
+function scaledBytes(value: number, decimals: number, maxUnitIndex: number) {
+  const magnitude = Math.abs(value);
+  let unitIndex = magnitude < 1024
+    ? 0
+    : Math.min(Math.floor(Math.log(magnitude) / Math.log(1024)), maxUnitIndex);
+  // `log` can land a hair under an exact power of 1024; correct the estimate in either direction.
+  if (unitIndex < maxUnitIndex && magnitude >= 1024 ** (unitIndex + 1)) unitIndex += 1;
+  let rounded = Number((value / 1024 ** unitIndex).toFixed(decimals));
+  if (unitIndex > 0 && unitIndex < maxUnitIndex && Math.abs(rounded) >= 1024) {
+    unitIndex += 1;
+    rounded = Number((value / 1024 ** unitIndex).toFixed(decimals));
+  }
+  return { unitIndex, rounded };
+}
+
 export function formatBytes(value: number) {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
-  return `${(value / 1024 / 1024).toFixed(1)} MiB`;
+  if (!Number.isFinite(value)) return "Unknown";
+  if (Math.abs(value) < 1024) return `${value} B`;
+  const { unitIndex, rounded } = scaledBytes(value, 1, 2);
+  return `${rounded.toFixed(1)} ${unitIndex === 1 ? "KiB" : "MiB"}`;
 }
 
 const adaptiveByteUnits = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"] as const;
 
 export function formatAdaptiveBytes(value: number) {
-  const magnitude = Math.abs(value);
-  const unitIndex = magnitude < 1024
-    ? 0
-    : Math.min(Math.floor(Math.log(magnitude) / Math.log(1024)), adaptiveByteUnits.length - 1);
-  if (unitIndex === 0) return `${value} B`;
-
-  const scaled = value / (1024 ** unitIndex);
-  const rounded = scaled.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  if (!Number.isFinite(value)) return "Unknown";
+  if (Math.abs(value) < 1024) return `${value} B`;
+  const { unitIndex, rounded } = scaledBytes(value, 2, adaptiveByteUnits.length - 1);
   return `${rounded} ${adaptiveByteUnits[unitIndex]}`;
 }
 

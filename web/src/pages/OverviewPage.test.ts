@@ -719,6 +719,9 @@ describe("upcoming schedule summary", () => {
   it("formats upcoming and completed times", () => {
     expect(formatRelativeScheduleTime("2026-07-11T13:00:00.000Z", now)).toBe("in 1h");
     expect(formatRelativeScheduleTime("2026-07-11T11:55:00.000Z", now)).toBe("5m ago");
+    expect(formatRelativeScheduleTime(new Date(now.getTime() + 1_439 * 60_000).toISOString(), now)).toBe("in 1d");
+    expect(formatRelativeScheduleTime(new Date(now.getTime() + 1_440 * 60_000).toISOString(), now)).toBe("in 1d");
+    expect(formatRelativeScheduleTime(new Date(now.getTime() + 1_409 * 60_000).toISOString(), now)).toBe("in 23h");
   });
 
   it("renders empty and permission-limited states", () => {

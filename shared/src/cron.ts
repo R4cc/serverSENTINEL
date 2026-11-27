@@ -47,7 +47,8 @@ function parseCronField(field: string, min: number, max: number) {
         const exact = Number(rangePart);
         if (!Number.isInteger(exact)) return null;
         start = exact;
-        end = exact;
+        // `5/15` means "from 5, every 15" -- 5,20,35,50 -- not just 5, as in every common cron.
+        end = stepPart === undefined ? exact : max;
       }
     }
 
@@ -137,15 +138,35 @@ export function cronMatches(cron: string, date: Date) {
   return cronDateMatches(parseCron(cron)!, date);
 }
 
-export function nextCronRun(cron: string, from = new Date(), maxDays = 366) {
+/**
+ * The search window covers eight years because a leap-day schedule can wait that long: Feb 29 2096
+ * is followed by Feb 29 2104. Days and hours that cannot match are skipped whole, so the window
+ * costs a few thousand steps rather than one per minute.
+ */
+const defaultCronSearchDays = 8 * 366;
+
+function wallClockDayMatches(parsed: ParsedCron, wallClock: Pick<CronWallClock, "month" | "day">, weekday: number) {
+  return parsed.months.has(wallClock.month) && parsed.daysOfMonth.has(wallClock.day) && matchesWeekday(parsed, weekday);
+}
+
+export function nextCronRun(cron: string, from = new Date(), maxDays = defaultCronSearchDays) {
   validateCron(cron);
   const parsed = parseCron(cron)!;
   const cursor = new Date(from);
   cursor.setSeconds(0, 0);
   cursor.setMinutes(cursor.getMinutes() + 1);
-  const maxChecks = Math.max(1, maxDays * 24 * 60);
-  for (let checked = 0; checked < maxChecks; checked += 1) {
-    if (cronDateMatches(parsed, cursor)) {
+  const limit = cursor.getTime() + Math.max(1, maxDays) * 24 * 60 * 60_000;
+  while (cursor.getTime() < limit) {
+    if (!wallClockDayMatches(parsed, { month: cursor.getMonth() + 1, day: cursor.getDate() }, cursor.getDay())) {
+      cursor.setDate(cursor.getDate() + 1);
+      cursor.setHours(0, 0, 0, 0);
+      continue;
+    }
+    if (!parsed.hours.has(cursor.getHours())) {
+      cursor.setHours(cursor.getHours() + 1, 0, 0, 0);
+      continue;
+    }
+    if (parsed.minutes.has(cursor.getMinutes())) {
       return new Date(cursor);
     }
     cursor.setMinutes(cursor.getMinutes() + 1);
@@ -221,14 +242,14 @@ export function nextCronRunsInTimeZone(
   timeZone: string,
   from: Date = new Date(),
   count = 3,
-  maxDays = 366
+  maxDays = defaultCronSearchDays
 ): Date[] {
   const parsed = parseCron(cron);
   if (!parsed || count < 1) return [];
   const cursor = new Date(wallClockAsUtc(timeZoneWallClock(from, timeZone)) + 60_000);
+  const limit = cursor.getTime() + Math.max(1, maxDays) * 24 * 60 * 60_000;
   const matches: Date[] = [];
-  const maxChecks = Math.max(1, maxDays * 24 * 60);
-  for (let checked = 0; checked < maxChecks && matches.length < count; checked += 1) {
+  while (cursor.getTime() < limit && matches.length < count) {
     const wallClock: CronWallClock = {
       year: cursor.getUTCFullYear(),
       month: cursor.getUTCMonth() + 1,
@@ -236,7 +257,16 @@ export function nextCronRunsInTimeZone(
       hour: cursor.getUTCHours(),
       minute: cursor.getUTCMinutes()
     };
-    if (cronWallClockMatches(parsed, wallClock, cursor.getUTCDay())) {
+    if (!wallClockDayMatches(parsed, wallClock, cursor.getUTCDay())) {
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      cursor.setUTCHours(0, 0, 0, 0);
+      continue;
+    }
+    if (!parsed.hours.has(wallClock.hour)) {
+      cursor.setUTCHours(wallClock.hour + 1, 0, 0, 0);
+      continue;
+    }
+    if (parsed.minutes.has(wallClock.minute)) {
       matches.push(zonedWallClockToInstant(wallClock, timeZone));
     }
     cursor.setUTCMinutes(cursor.getUTCMinutes() + 1);

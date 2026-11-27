@@ -21,7 +21,7 @@ import { stripDockerLogHeaders } from "../../docker/dockerLogs.js";
 import { shellQuote } from "../../docker/shell.js";
 import { durationSince, errorLogFields, logError, logInfo, logWarn, type LogFields } from "../../logging.js";
 import { minecraftTerminalConfigFingerprint } from "../terminal.js";
-import { parseServerProperties, serializeServerProperties } from "./../serverProperties.js";
+import { updateServerPropertiesText } from "./../serverProperties.js";
 import type { DockerState, ManagedServer } from "../../types.js";
 
 export type DockerContainerInspect = {
@@ -651,13 +651,13 @@ export async function readLatestServerLog(server: ManagedServer, lineLimit?: num
 }
 
 export async function updateServerProperties(server: ManagedServer, updates: Record<string, string>) {
-  let values: Record<string, string> = {};
+  let text: string | undefined;
   try {
-    values = parseServerProperties(await readServerConfiguration(server, "server.properties"));
+    text = await readServerConfiguration(server, "server.properties");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  await writeServerConfiguration(server, "server.properties", serializeServerProperties({ ...values, ...updates }));
+  await writeServerConfiguration(server, "server.properties", updateServerPropertiesText(text, updates));
 }
 
 export function normalizeJavaRuntime(server: ManagedServer) {

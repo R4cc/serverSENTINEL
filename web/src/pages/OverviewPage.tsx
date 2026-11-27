@@ -547,7 +547,9 @@ export function formatRelativeScheduleTime(value: string, now = new Date()) {
   if (Number.isNaN(date.getTime())) return "Unknown";
   const diffMs = date.getTime() - now.getTime();
   const minutes = Math.max(1, Math.round(Math.abs(diffMs) / 60_000));
-  const label = minutes >= 1_440 ? `${Math.round(minutes / 1_440)}d` : minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes}m`;
+  // Each unit is chosen after rounding, so 1,439 minutes reads "1d" rather than "24h" beside "1d".
+  const hours = Math.round(minutes / 60);
+  const label = hours >= 24 ? `${Math.round(minutes / 1_440)}d` : minutes >= 60 ? `${hours}h` : `${minutes}m`;
   return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }
 

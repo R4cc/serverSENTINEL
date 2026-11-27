@@ -1,5 +1,16 @@
 # Changelog
 
+## 26.11.14 - 2026-11-27
+
+- **Security:** an account that holds "manage users" but not every permission can no longer grant permissions it lacks itself, or change, reset the password of, or delete an account with more access. Before this, such an account could make itself an administrator.
+- Saving a setting no longer deletes lines from `server.properties` that use the `key:value` or `key value` form. Comments, blank lines and the order of other settings are kept, and only the changed settings are rewritten.
+- Cron steps that start at a number, such as `5/15`, now run at 5, 20, 35 and 50 minutes past the hour instead of only at 5 past. A schedule for February 29 shows its next run, even when that is years away.
+- Downloading a folder keeps file names in any script, so `日本.txt` and `中文.txt` no longer both become `__.txt` and overwrite each other. Names that still clash get a numbered suffix, such as `notes (2).txt`. Folders containing a file whose name starts with `..`, such as `..backup`, can be downloaded again.
+- A ZIP that holds both a file and a folder of the same name is refused before extraction. Previously the extraction failed partway and left files behind.
+- An import that has to copy between disks no longer leaves a half-copied server folder behind when the copy fails.
+- Console output from remote nodes no longer shows `�` in place of accented or other non-ASCII characters that Docker split across two log frames.
+- Sizes just under a unit boundary read "1 MiB" rather than "1024 KiB", and a missing size reads "Unknown" instead of "NaN undefined". Files with an unreadable modified date sort as the oldest, and a schedule due in just under a day reads "in 1d" instead of "in 24h".
+
 ## 26.11.13 - 2026-11-27
 
 - The Overview's Mod updates card now says "Could not check for updates" and gives the reason when the first update check fails, instead of reporting "No updates found".
