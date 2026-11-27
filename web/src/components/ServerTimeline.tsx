@@ -5,8 +5,7 @@ import type {
   ServerTimelinePlayerActivity,
   ServerTimelinePlayerSession,
   ServerTimelineResourcePoint,
-  ServerTimelineResponse,
-  ServerTimelineScheduleMarker
+  ServerTimelineResponse
 } from "../types";
 import { groupNearbyRepeatedEvents } from "../utils/serverEvents";
 import { EChartsCanvas, type TimelineDataZoomEvent } from "./EChartsCanvas";
@@ -26,6 +25,9 @@ import {
   type PlayerTimelineRow
 } from "./playerTimelineChart";
 import { RuntimeControlIcon } from "./RuntimeControls";
+import type { MarkerCluster, SeriesKey, TimelineMarker, TimelineWindow } from "./timelineTypes";
+
+export type { MarkerCluster, SeriesKey, TimelineWindow } from "./timelineTypes";
 import { subscribeToPageReactivation } from "../app/pageReactivation";
 import {
   buildTimelineChartOption,
@@ -59,8 +61,6 @@ const timelineRanges = [
 type TimelineRange = typeof timelineRanges[number]["label"];
 type TimelineSelection = TimelineRange | "custom";
 const defaultTimelineRange: TimelineRange = "3h";
-export type SeriesKey = "cpuUtilizationPercent" | "memoryUsageBytes" | "networkRxBytesPerSecond" | "networkTxBytesPerSecond" | "playersOnline";
-export type TimelineWindow = { from: number; to: number };
 type LoadTimeline = (from: number, to: number, maxPoints: number) => Promise<ServerTimelineResponse>;
 
 export function timelineHorizontalWheelPixels(event: Pick<WheelEvent, "deltaMode" | "deltaX" | "deltaY" | "shiftKey">, pageWidth: number) {
@@ -92,20 +92,6 @@ type MetricBand = {
 };
 
 type TimelinePlayerRow = PlayerTimelineRow;
-
-type TimelineMarker = {
-  id: string;
-  occurredAt: number;
-  label: string;
-  tone: "server" | "automation";
-  event?: ServerTimelineEvent;
-  occurrences?: number;
-  restart?: {
-    durationSeconds: number;
-    events: [ServerTimelineEvent, ServerTimelineEvent];
-  };
-  schedule?: ServerTimelineScheduleMarker;
-};
 
 type TimelineActiveScheduleRange = {
   marker: TimelineMarker;
@@ -211,15 +197,6 @@ type TimelineHoverTooltip = {
   html: string;
   alignEnd: boolean;
   pinned: boolean;
-};
-
-export type MarkerCluster = {
-  id: string;
-  occurredAt: number;
-  markers: TimelineMarker[];
-  tone: TimelineMarker["tone"];
-  slot: number;
-  slotCount: number;
 };
 
 const seriesOptions: Array<{ key: SeriesKey; label: string }> = [

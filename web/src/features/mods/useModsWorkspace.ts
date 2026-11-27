@@ -478,7 +478,8 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
     if (activeServerIsDemo) {
       setInstalledMods(demoInstalledMods);
       setInstalledModsServerId(activeServer?.id ?? "");
-      if (activeServer) setUpdatePlan(createDemoUpdatePlan(activeServer.id, demoInstalledMods));
+      // The failing fixture must leave no plan behind, or it could never show a failed first check.
+      if (activeServer && !demoFixtureFailureMessage(demoFixture, "update-plan")) setUpdatePlan(createDemoUpdatePlan(activeServer.id, demoInstalledMods));
     }
   }, [activeServerIsDemo, demoInstalledMods]);
 
@@ -758,7 +759,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         if (isCurrent()) setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== mod.filename)]);
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);
       } catch (error) {
-        patchJob(jobId, { status: "failed", task: "Upload failed", error: (error as Error).message, dismissible: true });
+        patchJob(jobId, { status: "failed", task: "Upload failed", error: errorMessage(error, `Could not upload ${file.name}.`), dismissible: true });
       }
       return;
     }
@@ -773,7 +774,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         if (isCurrent()) await refreshModsWorkspace(activeServer.id);
         removeJob(jobId); notify("success", `Uploaded ${file.name}`);
       } catch (error) {
-        patchJob(jobId, { status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh ${terminology.singular} list`, error: (error as Error).message, dismissible: true });
+        patchJob(jobId, { status: "succeeded", progress: 100, task: `Uploaded ${file.name}, but failed to refresh ${terminology.singular} list`, error: errorMessage(error, `Could not refresh the ${terminology.singular} list.`), dismissible: true });
       }
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
@@ -821,7 +822,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         if (isCurrent()) setInstalledMods((current) => [mod, ...current.filter((candidate) => candidate.filename !== replacedFilename && candidate.filename !== filename)]);
         removeJob(jobId); notify("success", switchMode ? `Switched ${title} to ${selectedVersion.versionNumber}` : `Installed ${title}`); if (ownsInstall()) setInstallState(null); if (switchMode && ownsInstall()) setAddOpen(false);
       } catch (error) {
-        const message = (error as Error).message;
+        const message = errorMessage(error, `Could not ${switchMode ? "switch" : "install"} ${title}.`);
         patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
         if (ownsInstall()) setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
       }
@@ -846,11 +847,11 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         const switchedVersion = "version" in result ? result.version : selectedVersion.versionNumber;
         notify("success", switchMode ? `Switched ${title} to ${switchedVersion}` : requiredCount ? `Installed ${title} and ${requiredCount} required ${requiredCount === 1 ? "dependency" : "dependencies"}` : `Installed ${title}`);
       } catch (error) {
-        patchJob(jobId, { status: "succeeded", progress: 100, task: `${switchMode ? `Switched ${title}` : `Installed ${title}`}, but failed to refresh ${terminology.singular} list`, error: (error as Error).message, dismissible: true });
+        patchJob(jobId, { status: "succeeded", progress: 100, task: `${switchMode ? `Switched ${title}` : `Installed ${title}`}, but failed to refresh ${terminology.singular} list`, error: errorMessage(error, `Could not refresh the ${terminology.singular} list.`), dismissible: true });
       }
       window.setTimeout(() => removeJob(jobId), 4000);
     } catch (error) {
-      const message = (error as Error).message;
+      const message = errorMessage(error, `Could not ${switchMode ? "switch" : "install"} ${title}.`);
       if (isCurrent()) setNotice(message); notify("error", message); patchJob(jobId, { status: "failed", task: switchMode ? "Switch failed" : "Install failed", error: message, dismissible: true });
       if (ownsInstall()) setInstallState((current) => current ? { ...current, installing: false, error: message } : current);
       if (isCurrent()) {
@@ -940,7 +941,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         if (isCurrent()) setInstalledMods((current) => [updated, ...current.filter((candidate) => candidate.filename !== oldFilename)]);
         finishJobWithNotification(jobId, "success", `Updated ${title} to ${version}`);
       } catch (error) {
-        finishJobWithNotification(jobId, "error", (error as Error).message);
+        finishJobWithNotification(jobId, "error", errorMessage(error, `Could not update ${title}.`));
       }
       return;
     }
@@ -956,7 +957,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
         finishJobWithNotification(jobId, "warning", `${successMessage}, but failed to refresh ${terminology.singular} list`);
       }
     } catch (error) {
-      const message = (error as Error).message;
+      const message = errorMessage(error, `Could not update ${title}.`);
       if (isCurrent()) setNotice(message); finishJobWithNotification(jobId, "error", message);
       if (isCurrent()) {
         void refreshUpdates(false);
@@ -1061,7 +1062,7 @@ export function useModsWorkspace(inputs: ModsWorkspaceInputs) {
           void Promise.all([refreshFiles(activeServer.id, `/${terminology.directory}`), refreshServerState()]);
         } catch (error) {
           if (!isCurrent()) return;
-          const message = `Failed to toggle ${terminology.singular} ${displayName}: ${(error as Error).message}`;
+          const message = errorMessage(error, `Could not turn ${displayName} ${runEnabled ? "on" : "off"}.`);
           setNotice(message); notify("error", message);
           const rollback = !runEnabled;
           setInstalledMods((current) => current.map((mod) => mod.filename === currentFilename ? { ...mod, enabled: rollback } : mod));

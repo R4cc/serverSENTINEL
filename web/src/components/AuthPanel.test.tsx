@@ -69,7 +69,7 @@ describe("AuthPanel", () => {
     // so the button is not merely dimmed with no explanation.
     expect(html.match(/aria-busy="true"/g)).toHaveLength(2);
     expect(html).toContain("disabled");
-    expect(html).toContain("Checking...");
+    expect(html).toContain("Checking…");
   });
 
   it("renders every field validation message beside its owning control", () => {

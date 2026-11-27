@@ -37,3 +37,40 @@ function normalizeStringRecord(value: unknown, label: string) {
   }
   return normalized;
 }
+
+/**
+ * The lenient counterpart of `normalizeInstalledModMetadata`, for metadata that arrives with a
+ * runtime's mod listing rather than from storage: a record missing its identifying fields reads as
+ * "no Modrinth metadata" instead of failing the whole listing. It deliberately omits the review
+ * acknowledgement, which only the panel's own preferences carry.
+ */
+export function remoteModMetadata(value: unknown): InstalledModMetadata | null {
+  if (!value || typeof value !== "object") return null;
+  const metadata = value as Partial<InstalledModMetadata>;
+  if (!metadata.projectId || !metadata.versionId || !metadata.versionNumber) return null;
+  return {
+    projectId: metadata.projectId,
+    versionId: metadata.versionId,
+    filename: metadata.filename ? safeInstalledModFilename(metadata.filename) : "unknown.jar",
+    versionNumber: metadata.versionNumber,
+    versionType: metadata.versionType,
+    gameVersions: Array.isArray(metadata.gameVersions) ? metadata.gameVersions.filter((item): item is string => typeof item === "string") : [],
+    loaders: Array.isArray(metadata.loaders) ? metadata.loaders.filter((item): item is string => typeof item === "string") : [],
+    hashes: metadata.hashes,
+    installedAt: metadata.installedAt || new Date(0).toISOString(),
+    installedWithForceIncompatible: metadata.installedWithForceIncompatible === true,
+    incompatibilityReason: metadata.incompatibilityReason,
+    overrideMinecraftVersion: metadata.overrideMinecraftVersion,
+    overrideReason: metadata.overrideReason,
+    clientSide: metadata.clientSide,
+    serverSide: metadata.serverSide,
+    iconUrl: metadata.iconUrl,
+    forceIncompatible: metadata.forceIncompatible
+  };
+}
+
+/** The `mods` array of a runtime's list-mods result, or an empty list for any other shape. */
+export function modsFromListResult(result: unknown) {
+  if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return [];
+  return (result as { mods: Array<Record<string, unknown>> }).mods;
+}

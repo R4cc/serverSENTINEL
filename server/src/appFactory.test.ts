@@ -734,6 +734,14 @@ describe("Fastify application factory", () => {
     expect(ordinaryHeaderlessApiRequest.statusCode, ordinaryHeaderlessApiRequest.body).toBe(400);
     expect(ordinaryHeaderlessApiRequest.body).toContain("CSRF protection");
 
+    const browserModIconRequest = await app.inject({ method: "GET", url: "/api/servers/server-1/mods/icon?filename=a.jar&v=1" });
+    expect(browserModIconRequest.body).not.toContain("CSRF protection");
+
+    // Only the icon route itself is exempt, not any GET whose URL mentions it.
+    const smuggledExemption = await app.inject({ method: "GET", url: "/api/app?next=/mods/icon" });
+    expect(smuggledExemption.statusCode, smuggledExemption.body).toBe(400);
+    expect(smuggledExemption.body).toContain("CSRF protection");
+
     const registered = await app.inject({
       method: "POST",
       url: "/api/auth/register-first",

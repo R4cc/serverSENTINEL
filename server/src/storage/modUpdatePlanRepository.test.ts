@@ -34,6 +34,22 @@ describe("ModUpdatePlanRepository", () => {
     expect(new ModUpdatePlanRepository(storage).getInstalled("server-a")).toEqual(installed);
   });
 
+  it("clears only the installed snapshot of one server, keeping its plan", () => {
+    storage = openStorageDatabase(":memory:");
+    const repository = new ModUpdatePlanRepository(storage);
+    const installed = (serverId: string) => ({ scannedAt: "2026-01-01T00:00:00.000Z", mods: [{ filename: `${serverId}.jar`, enabled: true, displayName: serverId, size: 1, sha1: "hash" }] });
+    const planA = createModUpdatePlan("server-a", [], "2026-01-01T00:00:00.000Z");
+    repository.set(planA, installed("server-a"));
+    repository.set(createModUpdatePlan("server-b", [], "2026-01-01T00:00:00.000Z"), installed("server-b"));
+
+    repository.clearInstalledSnapshot("server-a");
+
+    expect(repository.getInstalled("server-a")).toBeNull();
+    expect(repository.get("server-a")).toEqual(planA);
+    expect(repository.getInstalled("server-b")).toEqual(installed("server-b"));
+    expect(storage.metadata("mod-installed-snapshot:server-a")).toBeUndefined();
+  });
+
   it("ignores malformed or mismatched cached values", () => {
     storage = openStorageDatabase(":memory:");
     const repository = new ModUpdatePlanRepository(storage);

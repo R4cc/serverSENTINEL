@@ -73,6 +73,9 @@ function EditorLoadingState() {
   );
 }
 
+/** The editor binds CodeMirror's Mod-s, which is Cmd on Apple platforms and Ctrl elsewhere. */
+const saveShortcutLabel = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘S" : "Ctrl+S";
+
 export function FileEditorModal({
   selectedPath,
   editorText,
@@ -202,7 +205,7 @@ export function FileEditorModal({
           <footer className="fileEditorFooter">
             <Button variant="secondary" onClick={onCancel} disabled={fileSaving} title={fileSaving ? "File save is still in progress" : "Close editor"}>{editing ? "Cancel" : "Close"}</Button>
             {editing ? (
-              <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : "Save file"} reserveLabel="Saving">
+              <Button onClick={onSave} disabled={saveDisabled} title={saveDisabled ? saveDisabledReason || "Save is unavailable right now." : `Save file (${saveShortcutLabel})`} reserveLabel="Saving">
                 {fileSaving ? "Saving" : "Save"}
               </Button>
             ) : (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ServerTimelineResourcePoint } from "../types";
-import type { MarkerCluster, SeriesKey } from "./ServerTimeline";
+import type { MarkerCluster, SeriesKey } from "./timelineTypes";
 import {
   buildTimelineChartOption,
   clampTimelineWindow,

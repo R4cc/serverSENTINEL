@@ -521,6 +521,23 @@ describe("mod health", () => {
     expect(render(null, false)).toBe("");
   });
 
+  it("reports a failed update check instead of claiming there are no updates", () => {
+    const render = (plan: ModUpdatePlan | null, error: string) => renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: plan,
+      error,
+      onOpenMods: () => undefined,
+      onRefresh: () => undefined
+    }));
+
+    const failedHtml = render(null, "Could not build the mod update plan.");
+    expect(failedHtml).toContain("Could not check for updates");
+    expect(failedHtml).toContain("Could not build the mod update plan.");
+    expect(failedHtml).toContain("tone-warning");
+    expect(failedHtml).not.toContain("No updates found");
+    // A plan that is still on screen stays the answer; a later failed refresh does not hide it.
+    expect(render(updatePlan({}), "Could not build the mod update plan.")).toContain("No updates found");
+  });
+
   it("keeps a neutral clickable card focused only on updates when none are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,
@@ -702,6 +719,9 @@ describe("upcoming schedule summary", () => {
   it("formats upcoming and completed times", () => {
     expect(formatRelativeScheduleTime("2026-07-11T13:00:00.000Z", now)).toBe("in 1h");
     expect(formatRelativeScheduleTime("2026-07-11T11:55:00.000Z", now)).toBe("5m ago");
+    expect(formatRelativeScheduleTime(new Date(now.getTime() + 1_439 * 60_000).toISOString(), now)).toBe("in 1d");
+    expect(formatRelativeScheduleTime(new Date(now.getTime() + 1_440 * 60_000).toISOString(), now)).toBe("in 1d");
+    expect(formatRelativeScheduleTime(new Date(now.getTime() + 1_409 * 60_000).toISOString(), now)).toBe("in 23h");
   });
 
   it("renders empty and permission-limited states", () => {

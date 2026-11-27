@@ -266,16 +266,6 @@ export function safeInstalledModFilename(name?: string) {
   return filename;
 }
 
-// Cron parsing, validation, matching, and next-run search live in @serversentinel/contracts so the
-// panel and the browser read one implementation. Re-exported here because the scheduler, the store,
-// and the timeline have always reached for them through core.
-export {
-  cronMatches,
-  nextCronRun,
-  timeZoneMinuteKey,
-  validateCron
-} from "@serversentinel/contracts";
-
 export function parseDockerPorts(ports?: string) {
   const exposedPorts: Record<string, Record<string, never>> = {};
   const portBindings: Record<string, Array<{ HostPort: string }>> = {};

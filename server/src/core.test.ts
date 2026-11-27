@@ -1,18 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { cronMatches, nextCronRun, nextCronRunsInTimeZone, timeZoneMinuteKey, validateCron } from "@serversentinel/contracts";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  cronMatches,
   ensureInsideServer,
   ensureWritableInsideServer,
-  nextCronRun,
   normalizePublicFilePath,
   parseDockerPorts,
   safeInstalledModFilename,
-  timeZoneMinuteKey,
-  validateExistingInsideServer,
-  validateCron
+  validateExistingInsideServer
 } from "./core.js";
 
 const server = { serverDir: resolve("test-fixtures/server") };
@@ -122,6 +119,27 @@ describe("cron parsing and matching", () => {
     expect(nextToday && [nextToday.getDate(), nextToday.getHours(), nextToday.getMinutes()]).toEqual([6, 4, 0]);
     const nextTomorrow = nextCronRun("0 4 * * *", new Date(2026, 5, 6, 4, 0, 0));
     expect(nextTomorrow && [nextTomorrow.getDate(), nextTomorrow.getHours(), nextTomorrow.getMinutes()]).toEqual([7, 4, 0]);
+  });
+
+  it("expands a step that starts from a single value to the end of the field", () => {
+    const from = new Date(2026, 10, 27, 10, 0, 0);
+    const runs: number[] = [];
+    let cursor: Date | null = from;
+    for (let index = 0; index < 5 && cursor; index += 1) {
+      cursor = nextCronRun("5/15 * * * *", cursor);
+      if (cursor) runs.push(cursor.getMinutes());
+    }
+    expect(runs).toEqual([5, 20, 35, 50, 5]);
+    expect(cronMatches("0 1/6 * * *", new Date(2026, 10, 27, 19, 0))).toBe(true);
+    expect(() => validateCron("60/5 * * * *")).toThrow("invalid field");
+  });
+
+  it("finds a leap-day run that is years away", () => {
+    const next = nextCronRun("0 0 29 2 *", new Date(2026, 2, 1, 0, 0, 0));
+    expect(next && [next.getFullYear(), next.getMonth() + 1, next.getDate()]).toEqual([2028, 2, 29]);
+    const zoned = nextCronRunsInTimeZone("0 0 29 2 *", "UTC", new Date("2026-03-01T00:00:00.000Z"), 1);
+    expect(zoned.map((date) => date.toISOString())).toEqual(["2028-02-29T00:00:00.000Z"]);
+    expect(nextCronRun("0 0 31 2 *", new Date(2026, 0, 1))).toBeNull();
   });
 
   it("identifies the same configured wall-clock minute across a DST overlap", () => {

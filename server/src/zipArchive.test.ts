@@ -115,6 +115,23 @@ describe("ZIP extraction", () => {
 
   // The count is enforced while walking the central directory, so an over-limit archive is rejected
   // without every entry being retained first.
+  it.each([
+    ["the file first", [{ name: "a", content: "file" }, { name: "a/b.txt", content: "child" }]],
+    ["the child first", [{ name: "a/b.txt", content: "child" }, { name: "a", content: "file" }]]
+  ])("refuses a path that is both a file and a folder, with %s, before writing anything", async (_order, entries) => {
+    const root = await temporaryRoot();
+    const archive = join(root, "conflict.zip");
+    const destination = join(root, "out");
+    await mkdir(destination);
+    await writeZip(archive, entries);
+
+    await expect(indexZipArchive(archive, limits)).rejects.toThrow("both a file and a folder");
+    await expect(extractZipArchive({ archivePath: archive, destinationPath: destination, conflictPolicy: "replace", limits }))
+      .rejects.toThrow("both a file and a folder");
+    const { readdir } = await import("node:fs/promises");
+    expect(await readdir(destination)).toEqual([]);
+  });
+
   it("rejects an archive with more entries than the limit allows", async () => {
     const root = await temporaryRoot();
     const archive = join(root, "many.zip");

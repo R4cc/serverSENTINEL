@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { runtimeRunning } from "../../mods/modService.js";
+import { runtimeRunning } from "../runningState.js";
 import type { ManagedServer } from "../../types.js";
 
 /**

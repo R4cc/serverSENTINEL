@@ -371,7 +371,7 @@ export function AddNodeModal({
           </fieldset>
           <footer className="nodeModalFooter inline">
             <Button variant="secondary" onClick={onClose} disabled={!canClose} title={canClose ? "Cancel node creation" : "Node creation is still in progress"}>Cancel</Button>
-            <Button type="submit" disabled={busy} reserveLabel="Create install command">{busy ? "Creating..." : "Create install command"}</Button>
+            <Button type="submit" disabled={busy} reserveLabel="Create install command">{busy ? "Creating…" : "Create install command"}</Button>
           </footer>
         </form>
       ) : (
@@ -397,6 +397,7 @@ export function NodesPage({
   canManageNodes,
   busy,
   busyNodeId,
+  refreshing = false,
   browserPanelUrl,
   selectedNode,
   nodeOperations,
@@ -438,6 +439,8 @@ export function NodesPage({
   canManageNodes: boolean;
   busy: boolean;
   busyNodeId: string;
+  /** The manual status refresh is in flight. */
+  refreshing?: boolean;
   browserPanelUrl: string;
   selectedNode: NodeView | null;
   nodeOperations: Record<string, NodeOperation>;
@@ -586,12 +589,13 @@ export function NodesPage({
                 <Button
                   variant="secondary"
                   onClick={onRefresh}
-                  disabled={busy}
-                  title="Refresh node status"
+                  disabled={busy || refreshing}
+                  aria-busy={refreshing || undefined}
+                  title={refreshing ? "Refreshing node status" : "Refresh node status"}
                   reserveLabel={<><AppIcon name="refresh" />Refreshing…</>}
                 >
                   <AppIcon name="refresh" />
-                  {busy ? "Refreshing…" : "Refresh"}
+                  {refreshing ? "Refreshing…" : "Refresh"}
                 </Button>
               </>
             )}

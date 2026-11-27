@@ -1,6 +1,6 @@
 import type { EChartsCoreOption } from "echarts/core";
 import type { ServerTimelineResourcePoint } from "../types";
-import type { MarkerCluster, SeriesKey, TimelineWindow } from "./ServerTimeline";
+import type { MarkerCluster, SeriesKey, TimelineWindow } from "./timelineTypes";
 
 export const timelineRetentionMs = 7 * 24 * 60 * 60 * 1000;
 export const timelineChartGrid = { left: 56, right: 24, top: 48, bottom: 38 } as const;

@@ -139,6 +139,7 @@ export async function indexZipArchive(archivePath: string, limits: ZipArchiveLim
   const rawEntries = await readZipEntries(await openZip(archivePath), limits.maxEntries);
   const entries: IndexedEntry[] = [];
   const explicit = new Set<string>();
+  const explicitFiles = new Set<string>();
   const implicitDirectories = new Map<string, IndexedEntry>();
   let totalBytes = 0;
   let encrypted = false;
@@ -147,6 +148,7 @@ export async function indexZipArchive(archivePath: string, limits: ZipArchiveLim
     const normalized = normalizedEntryName(raw.fileName);
     if (explicit.has(normalized.path)) throw zipError(`ZIP archive contains duplicate entry ${normalized.path}`);
     explicit.add(normalized.path);
+    if (!normalized.directory) explicitFiles.add(normalized.path);
     const isEncrypted = (raw.generalPurposeBitFlag & 1) !== 0;
     const unsupported = !normalized.directory && raw.compressionMethod !== 0 && raw.compressionMethod !== 8;
     const entry: IndexedEntry = {
@@ -191,6 +193,9 @@ export async function indexZipArchive(archivePath: string, limits: ZipArchiveLim
   }
 
   for (const [path, directory] of implicitDirectories) {
+    // `a` as a file beside `a/b.txt` would pass planning, write `a`, then fail creating the folder
+    // halfway through extraction. Reject it here, before anything is written.
+    if (explicitFiles.has(path)) throw zipError(`ZIP archive entry ${path} is both a file and a folder`);
     if (!explicit.has(path)) entries.push(directory);
   }
   entries.sort((left, right) => left.path.localeCompare(right.path));

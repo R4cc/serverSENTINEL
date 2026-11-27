@@ -152,4 +152,58 @@ describe("archive download limits", () => {
 
     expect(entries).toHaveLength(6);
   });
+
+  it("gives every sibling its own archive member even when names sanitize alike", async () => {
+    const { collectArchiveEntries } = await import("./fileService.js");
+    const names = ["日本.txt", "中文.txt", "Notes.txt", "notes.txt", "a?b.txt", "a*b.txt"];
+    const runtime = {
+      isModsPath: () => false,
+      listFiles: async (_server: unknown, target: string) => ({
+        path: "/config",
+        entries: target.endsWith("/config")
+          ? names.map((name) => ({ name, path: `/config/${name}`, type: "file" as const, size: 1, modifiedAt: "2026-01-01T00:00:00.000Z" }))
+          : []
+      }),
+      resolveExistingPath: async (_server: unknown, path: string) => `/data/servers/remote${path}`
+    } as never;
+    const entries: Array<{ archivePath: string; type: string }> = [];
+
+    await collectArchiveEntries(
+      request,
+      runtime,
+      remoteServer,
+      { type: "directory", path: "/config", name: "config", target: "/data/servers/remote/config", size: 0, modifiedAt: "2026-01-01T00:00:00.000Z" } as never,
+      "config",
+      entries as never,
+      { size: 0 }
+    );
+
+    const members = entries.filter((entry) => entry.type === "file").map((entry) => entry.archivePath);
+    expect(members).toEqual([
+      "config/日本.txt",
+      "config/中文.txt",
+      "config/Notes.txt",
+      "config/notes (2).txt",
+      "config/a_b.txt",
+      "config/a_b (2).txt"
+    ]);
+  });
+});
+
+describe("local download paths", () => {
+  it("resolves an absolute path to a child whose name starts with two dots", async () => {
+    const { mkdtemp, realpath, rm, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { localResolveExistingPath } = await import("./fileService.js");
+    const serverDir = await realpath(await mkdtemp(join(tmpdir(), "serversentinel-dotdot-")));
+    try {
+      await writeFile(join(serverDir, "..backup.txt"), "x");
+      const server = { serverDir } as never;
+      await expect(localResolveExistingPath(server, join(serverDir, "..backup.txt"))).resolves.toBe(join(serverDir, "..backup.txt"));
+      await expect(localResolveExistingPath(server, join(serverDir, "..", "outside.txt"))).rejects.toThrow();
+    } finally {
+      await rm(serverDir, { recursive: true, force: true });
+    }
+  });
 });

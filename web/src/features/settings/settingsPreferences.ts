@@ -1,3 +1,5 @@
+import { readStoredValue } from "../../utils/browserStorage";
+
 export const consoleHistoryStorageKey = "serversentinel-console-history-enabled";
 export const consoleFontSizeStorageKey = "serversentinel-console-font-size";
 export const consoleScrollbackStorageKey = "serversentinel-console-scrollback";
@@ -8,14 +10,6 @@ export const consoleScrollbackSizes = [1_000, 5_000, 10_000, 25_000] as const;
 
 export type ConsoleFontSize = typeof consoleFontSizes[number];
 export type ConsoleScrollback = typeof consoleScrollbackSizes[number];
-
-function readStoredValue(key: string) {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
 
 export function consoleHistoryEnabledFromStoredValue(value: string | null) {
   return value !== "false";

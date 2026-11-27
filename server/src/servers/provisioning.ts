@@ -11,7 +11,8 @@ import { defaultServerJarProvider } from "../runtime/serverJarProvider.js";
 import { assertRuntimeArtifactUrl, maxRuntimeArtifactBytes, readRuntimeArtifact, verifyRuntimeArtifact } from "../runtime/artifact.js";
 import { runtimeProfileForServer, type ServerJarProvider } from "../runtime/profile.js";
 import { runtimeSelection } from "../runtime/selection.js";
-import { ensureDockerContainer, removeManagedDockerContainer, serverLogFields, updateServerProperties } from "../runtime/local/dockerContainers.js";
+import { ensureDockerContainer, removeManagedDockerContainer, updateServerProperties } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "./serverLogFields.js";
 
 import { ensureInsideServer, writeContainedFile } from "../core.js";
 import { newServerId, serverDirectory, serverStorageName, defaultServerContainerName } from "../storage/serverIdentity.js";

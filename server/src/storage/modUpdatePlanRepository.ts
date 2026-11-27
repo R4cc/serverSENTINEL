@@ -88,6 +88,11 @@ export class ModUpdatePlanRepository {
     }
   }
 
+  /** Forgets the cached installed-mod snapshot, so the next scan reads the runtime again. */
+  clearInstalledSnapshot(serverId: string) {
+    this.storage.deleteMetadata(`${installedMetadataKeyPrefix}${serverId}`);
+  }
+
   set(plan: ModUpdatePlan, installedMods?: CachedInstalledMods) {
     const snapshot = installedMods ? { ...installedMods, serverId: plan.serverId } : undefined;
     if (snapshot && !isInstalledSnapshot(snapshot, plan.serverId)) throw new Error("Invalid installed-mod snapshot");

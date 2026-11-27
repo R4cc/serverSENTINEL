@@ -562,7 +562,7 @@ export function ManagedServerForm({
                 reserveLabel={<><AppIcon name="server" /><span>Create Server</span></>}
               >
                 <AppIcon name="server" />
-                <span>{provisioning ? "Creating..." : "Create Server"}</span>
+                <span>{provisioning ? "Creating…" : "Create Server"}</span>
               </Button>
             </>
           )}

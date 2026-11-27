@@ -9,6 +9,7 @@ import { TerminalLoadingSkeleton } from "../components/LoadingSkeletons";
 import { Button, PanelHeader, Surface } from "../components/UiPrimitives";
 import { AppIcon } from "../components/FileTypeIcon";
 import { SquareTerminal } from "lucide-react";
+import { toast } from "sonner";
 import { copyToClipboard } from "../utils/clipboard";
 import { minecraftLogToPlainText, shouldCopyTerminalSelection } from "../utils/minecraftTerminal";
 
@@ -77,8 +78,16 @@ export function ServerConsoleTab({
     return () => window.clearTimeout(timer);
   }, [copiedOutput]);
 
+  function reportCopyFailure() {
+    // Same wording and lifetime as the shell's other clipboard failures.
+    toast.error("Could not copy to clipboard", { id: "console-copy-failed", duration: 7000, closeButton: true, dismissible: true });
+  }
+
   function copyOutput() {
-    void copyToClipboard(minecraftLogToPlainText(entries)).then((copied) => setCopiedOutput(copied));
+    void copyToClipboard(minecraftLogToPlainText(entries)).then((copied) => {
+      setCopiedOutput(copied);
+      if (!copied) reportCopyFailure();
+    });
   }
 
   function downloadOutput() {
@@ -117,6 +126,7 @@ export function ServerConsoleTab({
       // Letting go of the selection is the only acknowledgement the console can give, and it leaves
       // the next Ctrl+C free to be the shell key again.
       if (copied) selection.clear();
+      else reportCopyFailure();
     });
   }
 

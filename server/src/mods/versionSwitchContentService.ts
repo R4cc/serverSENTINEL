@@ -3,7 +3,8 @@ import { runtimeForServer } from "../appServices.js";
 import { fetchProjects, fetchVersions, latestCompatibleVersionFor, minecraftVersionsInclude, normalizeReleaseChannel } from "../modrinth/compatibility.js";
 import { managedContentRuntime } from "../servers/versions.js";
 import { modrinthIconProxyUrl } from "./icons.js";
-import { installModWithRemoteVersionFallback, listModsWithPanelMetadata, modsFromListResult, remoteModMetadata, updateModrinthMod } from "./modService.js";
+import { installModWithRemoteVersionFallback, listModsWithPanelMetadata, updateModrinthMod } from "./modService.js";
+import { modsFromListResult, remoteModMetadata } from "../installedModMetadata.js";
 import { errorMessage, planVersionSwitchContent, versionSwitchBaseEntry, versionSwitchChannel, type VersionSwitchInstalledContent } from "./versionSwitchContent.js";
 import type { ManagedServer, ReleaseChannel } from "../types.js";
 

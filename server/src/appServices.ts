@@ -1,4 +1,3 @@
-import type { FastifyBaseLogger } from "fastify";
 import { PanelNodeConnections } from "./nodes/panelConnections.js";
 import type { NodeRuntimeRegistry } from "./nodes/registry.js";
 import type { NodeRuntime } from "./nodes/types.js";
@@ -68,7 +67,6 @@ interface AppServices {
   playerGeoDatabase: GeoDatabase | undefined;
   playerGeoCollector: PlayerGeoCollector | undefined;
   playerPingCollector: PlayerPingCollector | undefined;
-  appLogger: FastifyBaseLogger | undefined;
   runtimeRegistry: NodeRuntimeRegistry | undefined;
   resourceStatsCollector: ResourceStatsCollector | undefined;
   timelineEventCollector: TimelineEventCollector | undefined;

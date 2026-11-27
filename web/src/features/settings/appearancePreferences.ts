@@ -1,3 +1,5 @@
+import { readStoredValue } from "../../utils/browserStorage";
+
 export const translucencyStorageKey = "serversentinel-glass-translucency";
 export const contrastStorageKey = "serversentinel-contrast";
 
@@ -5,14 +7,6 @@ export const contrastStorageKey = "serversentinel-contrast";
 export const appearanceSliderStep = 5;
 export const defaultTranslucency = 50;
 export const defaultContrast = 0;
-
-function readStoredValue(key: string) {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
 
 function sliderValueFromStoredValue(value: string | null, fallback: number) {
   if (value === null || value.trim() === "") return fallback;

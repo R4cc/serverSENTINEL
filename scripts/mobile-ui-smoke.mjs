@@ -748,6 +748,8 @@ async function assertTabletShellContainment(page, title, label) {
 
 async function assertTabletNavigationContainment(page, label) {
   await page.getByRole("button", { name: "Expand navigation" }).click();
+  const collapseNavigation = page.getByRole("button", { name: "Collapse navigation" });
+  await collapseNavigation.waitFor();
   const result = await page.evaluate(() => {
     const shell = document.querySelector(".appShell");
     const sidebar = document.querySelector(".sidebar");
@@ -767,7 +769,7 @@ async function assertTabletNavigationContainment(page, label) {
   assert(result.documentHeight <= result.documentViewportHeight + 1, `${label}: expanded navigation made the document scrollable: ${JSON.stringify(result)}`);
   assert(Math.abs(result.shellHeight - result.viewportHeight) <= 1 && result.sidebarBottom <= result.viewportHeight + 1, `${label}: expanded navigation left the viewport: ${JSON.stringify(result)}`);
   assert(!result.sidebarScrollable, `${label}: expanded navigation became independently scrollable: ${JSON.stringify(result)}`);
-  await page.getByRole("button", { name: "Collapse navigation" }).click();
+  await collapseNavigation.click();
 }
 
 async function overviewDensityMetrics(page) {
@@ -1256,7 +1258,7 @@ async function runProfile(engine, profile, label) {
 
 async function runTabletProfile() {
   let browser;
-  const label = "WebKit iPad landscape 1024x768";
+  const label = "WebKit iPad landscape";
   try {
     browser = await launchBrowser(webkit);
     const context = await browser.newContext({
@@ -1269,9 +1271,11 @@ async function runTabletProfile() {
     const page = await context.newPage();
     await page.addInitScript(() => {
       localStorage.setItem("serversentinel-theme", "light");
-      localStorage.setItem("serversentinel-active-page", "files");
+      // The Overview demo groups two departures for the same player with this seed.
+      Math.random = () => 0;
     });
     await signInThroughForm(page, baseUrl);
+    await page.locator(".workspacePage-overview .serverEventRow .eventOccurrenceBadge").first().waitFor();
     await assertTabletNavigationContainment(page, label);
 
     for (const title of ["overview", "files", "mods", "schedules", "properties", "nodes", "settings", "console"]) {

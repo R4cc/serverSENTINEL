@@ -374,6 +374,7 @@ function ActivePlayerRow({
 export function ModHealthPanel({
   updatePlan,
   loading = false,
+  error = "",
   canView = true,
   onOpenMods,
   onRefresh,
@@ -382,6 +383,8 @@ export function ModHealthPanel({
 }: {
   updatePlan: ModUpdatePlan | null;
   loading?: boolean;
+  /** The last update check failed; without a plan this must not read as "no updates". */
+  error?: string;
   canView?: boolean;
   onOpenMods: () => void;
   onRefresh?: () => void;
@@ -411,7 +414,16 @@ export function ModHealthPanel({
     >
       <div className="overviewCardList overviewSupportList modUpdatesList">
         {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
-        {updateCount === 0 ? (
+        {!updatePlan && error && !loading ? (
+          <OverviewCardState
+            title="Could not check for updates"
+            message={error}
+            icon={<TriangleAlert aria-hidden="true" className="buttonIcon" />}
+            tone="warning"
+            onClick={onOpenMods}
+            ariaLabel={`Open ${contentPluralTitle}, update check failed`}
+          />
+        ) : updateCount === 0 ? (
           <OverviewCardState
             title="No updates found"
             icon={<AppIcon name="check" />}
@@ -535,7 +547,9 @@ export function formatRelativeScheduleTime(value: string, now = new Date()) {
   if (Number.isNaN(date.getTime())) return "Unknown";
   const diffMs = date.getTime() - now.getTime();
   const minutes = Math.max(1, Math.round(Math.abs(diffMs) / 60_000));
-  const label = minutes >= 1_440 ? `${Math.round(minutes / 1_440)}d` : minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes}m`;
+  // Each unit is chosen after rounding, so 1,439 minutes reads "1d" rather than "24h" beside "1d".
+  const hours = Math.round(minutes / 60);
+  const label = hours >= 24 ? `${Math.round(minutes / 1_440)}d` : minutes >= 60 ? `${hours}h` : `${minutes}m`;
   return diffMs >= 0 ? `in ${label}` : `${label} ago`;
 }
 

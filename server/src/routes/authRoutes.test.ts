@@ -1,6 +1,8 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { registerAuthRoutes } from "./authRoutes.js";
+import { ALL_PERMISSIONS, normalizePermissions } from "../permissions.js";
+import { buildUserPermissions } from "../auth/sessionService.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 
 function authContext(demoEnabled: boolean, permissionGranted = false) {
@@ -357,5 +359,75 @@ describe("auth demo login", () => {
     expect(response.statusCode).toBe(200);
     expect(context.calls.cookies.at(-1)).toMatchObject({ secure: true });
     expect(response.headers["set-cookie"]).toContain("Secure");
+  });
+});
+
+describe("user management privilege boundaries", () => {
+  function managementContext() {
+    // The real permission builder, so a requested role or permission list is what gets stored.
+    const context = { ...authContext(false), buildUserPermissions };
+    const stored = (id: string, permissions: readonly string[]): StoredUser => ({
+      id, username: id, passwordHash: `${id}-hash`, salt: "salt",
+      rolePreset: "custom", permissions: normalizePermissions(permissions),
+      createdAt: "now", updatedAt: "now"
+    });
+    context.users.create(stored("admin", ALL_PERMISSIONS));
+    context.users.create(stored("mallory", ["users.manage"]));
+    context.users.create(stored("viewer", ["servers.view"]));
+    let actorId = "mallory";
+    context.requireRequestPermission = async () => context.users.findById(actorId)!;
+    return { context, actAs: (id: string) => { actorId = id; } };
+  }
+
+  it("does not let a user-manager grant permissions it does not hold", async () => {
+    const app = Fastify();
+    const { context } = managementContext();
+    registerAuthRoutes(app, context);
+    try {
+      const selfPromotion = await app.inject({ method: "PUT", url: "/api/users/mallory", payload: { permissions: [...ALL_PERMISSIONS] } });
+      expect(selfPromotion.statusCode).toBe(403);
+      expect(context.users.findById("mallory")?.permissions).toEqual(normalizePermissions(["users.manage"]));
+
+      const promoteOther = await app.inject({ method: "PUT", url: "/api/users/viewer", payload: { rolePreset: "admin" } });
+      expect(promoteOther.statusCode).toBe(403);
+      expect(context.users.findById("viewer")?.permissions).toEqual(["servers.view"]);
+
+      const createAdmin = await app.inject({ method: "POST", url: "/api/users", payload: { username: "sidekick", password: "password123", rolePreset: "admin" } });
+      expect(createAdmin.statusCode).toBe(403);
+      expect(context.users.findById("sidekick")).toBeUndefined();
+    } finally { await app.close(); }
+  });
+
+  it("does not let a user-manager reset or delete a more privileged account", async () => {
+    const app = Fastify();
+    const { context } = managementContext();
+    registerAuthRoutes(app, context);
+    try {
+      const reset = await app.inject({ method: "PUT", url: "/api/users/admin", payload: { password: "attacker-pass-1" } });
+      expect(reset.statusCode).toBe(403);
+      expect(context.users.findById("admin")?.passwordHash).toBe("admin-hash");
+      expect(context.calls.deletedForUsers).toEqual([]);
+
+      const removed = await app.inject({ method: "DELETE", url: "/api/users/admin" });
+      expect(removed.statusCode).toBe(403);
+      expect(context.users.findById("admin")).toBeDefined();
+    } finally { await app.close(); }
+  });
+
+  it("still lets a user-manager manage accounts within its own permissions, and an admin manage anyone", async () => {
+    const app = Fastify();
+    const { context, actAs } = managementContext();
+    registerAuthRoutes(app, context);
+    try {
+      const created = await app.inject({ method: "POST", url: "/api/users", payload: { username: "helper", password: "password123", permissions: ["users.view"] } });
+      expect(created.statusCode).toBe(200);
+      const renamed = await app.inject({ method: "PUT", url: `/api/users/${created.json().id}`, payload: { username: "helper-2" } });
+      expect(renamed.statusCode).toBe(200);
+
+      actAs("admin");
+      const promoted = await app.inject({ method: "PUT", url: "/api/users/mallory", payload: { rolePreset: "admin" } });
+      expect(promoted.statusCode).toBe(200);
+      expect(context.users.findById("mallory")?.permissions).toEqual(normalizePermissions(ALL_PERMISSIONS));
+    } finally { await app.close(); }
   });
 });

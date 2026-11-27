@@ -860,7 +860,7 @@ button .buttonIcon {
   padding: 8px 10px;
   color: var(--text);
   background: var(--surface);
-  font-size: 11px;
+  font-size: var(--type-badge-size);
   font-weight: var(--weight-title);
   letter-spacing: var(--tracking-label);
   white-space: nowrap;
@@ -1382,7 +1382,7 @@ button .buttonIcon {
   border-radius: 999px;
   background: var(--surface);
   padding: 8px 10px;
-  font-size: 11px;
+  font-size: var(--type-badge-size);
   font-weight: var(--weight-title);
   letter-spacing: var(--tracking-label);
   white-space: nowrap;
@@ -1790,7 +1790,7 @@ button .buttonIcon {
    only reaches buttons and form controls -- never applied to it, leaving the one
    keyboard-reachable element on the strip with no visible focus. */
 .restartRequirementBadge:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
 }
 
 .restartRequirementTooltip {
@@ -1885,7 +1885,7 @@ button .buttonIcon {
   border-color: var(--surface-border);
   background: var(--fill-subtle);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--type-badge-size);
   font-weight: var(--weight-meta);
   letter-spacing: var(--tracking-ui);
   text-transform: none;
@@ -2192,7 +2192,7 @@ button .buttonIcon {
   padding: 4px 9px;
   background: var(--surface-muted);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--type-badge-size);
   line-height: 1;
 }
 

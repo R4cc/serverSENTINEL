@@ -2,7 +2,7 @@ import { FormEvent, useState } from "react";
 import { api } from "../../api";
 import type { AppState, Notify, PlayerHeadsState } from "../../types";
 import { trimFormValue } from "../../utils/validation";
-import { setValidationNotice } from "../../utils/appHelpers";
+import { errorMessage, setValidationNotice } from "../../utils/appHelpers";
 import type { RequestConfirmation } from "../../components/ConfirmationModal";
 
 /**
@@ -42,7 +42,7 @@ export function useIntegrationSettings(inputs: {
       notify("success", "Modrinth API key saved");
       await refreshApp();
     } catch (error) {
-      notify("error", (error as Error).message);
+      notify("error", errorMessage(error, "Could not save the Modrinth API key."));
     } finally {
       setModrinthBusy(false);
     }
@@ -75,7 +75,7 @@ export function useIntegrationSettings(inputs: {
       notify("success", "MaxMind credentials saved");
       await refreshApp();
     } catch (error) {
-      notify("error", (error as Error).message);
+      notify("error", errorMessage(error, "Could not save the MaxMind credentials."));
     } finally {
       setMaxmindBusy(false);
     }
@@ -99,7 +99,7 @@ export function useIntegrationSettings(inputs: {
       notify("success", enabled ? "Player heads enabled" : "Player heads disabled");
       return true;
     } catch (error) {
-      const message = (error as Error).message;
+      const message = errorMessage(error, enabled ? "Could not enable player heads." : "Could not disable player heads.");
       if (onboarding) setPlayerHeadsOnboardingError(message);
       else notify("error", message);
       return false;
@@ -127,7 +127,7 @@ export function useIntegrationSettings(inputs: {
       setAppState((current) => ({ ...current, playerHeads: result.playerHeads }));
       notify("success", "Player head cache cleared");
     } catch (error) {
-      notify("error", (error as Error).message);
+      notify("error", errorMessage(error, "Could not clear the player head cache."));
     } finally {
       setPlayerHeadsBusy(false);
     }

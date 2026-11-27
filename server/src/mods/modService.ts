@@ -12,10 +12,12 @@ import { optionalReleaseChannel, optionalStrictBoolean, requireStrictBoolean, va
 import { ensureInsideServer, ensureWritableInsideServer, openContainedReadStream, safeInstalledModFilename, safeModFilename, validateExistingInsideServer, validateExistingResolvedInsideServer } from "../core.js";
 import { asObject, optionalString, requiredString } from "../storage/valueValidation.js";
 import { ModHashCache } from "../modHashCache.js";
-import { normalizeInstalledModMetadata } from "../installedModMetadata.js";
+import { ModUpdatePlanRepository } from "../storage/modUpdatePlanRepository.js";
+import { runtimeRunning } from "../runtime/runningState.js";
+import { modsFromListResult, normalizeInstalledModMetadata, remoteModMetadata } from "../installedModMetadata.js";
 import { findCachedIconFile } from "../iconFileCache.js";
 import { diffModSnapshots, snapshotMods } from "../modRestartState.js";
-import { downloadModrinthJarStream } from "../modrinth/jarDownload.js";
+import { downloadModrinthJar, downloadModrinthJarStream } from "../modrinth/jarDownload.js";
 import { modrinthFetch } from "../modrinth/modrinthClient.js";
 
 import { assessRequiredModDependencies } from "../modrinth/dependencyHealth.js";
@@ -29,7 +31,7 @@ import { managedContentRuntime } from "../servers/versions.js";
 
 import { blockingRuntimeOperations } from "../servers/lifecycle.js";
 import { toPublicPath } from "../files/fileService.js";
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "../servers/serverLogFields.js";
 import { writeRuntimeUpload } from "../runtime/local/fileService.js";
 import { localNodeId, findServerNode, readNodes } from "../nodes/nodeService.js";
 import { nodeAdvertisesCapability } from "../nodes/protocol.js";
@@ -256,37 +258,6 @@ async function lookupModrinthUpdateFromMetadata(server: ManagedServer, metadata:
   }, preferredChannel, options);
 }
 
-export function remoteModMetadata(value: unknown): InstalledModMetadata | null {
-  if (!value || typeof value !== "object") return null;
-  const metadata = value as Partial<InstalledModMetadata>;
-  if (!metadata.projectId || !metadata.versionId || !metadata.versionNumber) return null;
-  return {
-    projectId: metadata.projectId,
-    versionId: metadata.versionId,
-    filename: metadata.filename ? safeInstalledModFilename(metadata.filename) : "unknown.jar",
-    versionNumber: metadata.versionNumber,
-    versionType: metadata.versionType,
-    gameVersions: Array.isArray(metadata.gameVersions) ? metadata.gameVersions.filter((item): item is string => typeof item === "string") : [],
-    loaders: Array.isArray(metadata.loaders) ? metadata.loaders.filter((item): item is string => typeof item === "string") : [],
-    hashes: metadata.hashes,
-    installedAt: metadata.installedAt || new Date(0).toISOString(),
-    installedWithForceIncompatible: metadata.installedWithForceIncompatible === true,
-    incompatibilityReason: metadata.incompatibilityReason,
-    overrideMinecraftVersion: metadata.overrideMinecraftVersion,
-    overrideReason: metadata.overrideReason,
-    clientSide: metadata.clientSide,
-    serverSide: metadata.serverSide,
-    iconUrl: metadata.iconUrl,
-    forceIncompatible: metadata.forceIncompatible
-  };
-}
-
-export function runtimeRunning(status: unknown) {
-  if (!status || typeof status !== "object") return undefined;
-  const docker = "docker" in status ? (status as { docker?: { running?: unknown } }).docker : status as { running?: unknown };
-  return typeof docker?.running === "boolean" ? docker.running : undefined;
-}
-
 export async function withRecordedModMutation<T>(server: ManagedServer, actor: ModHistoryActor, action: () => Promise<T>, revertsEntryId?: string) {
   return withTrackedModMutation(server, action, actor, revertsEntryId);
 }
@@ -367,8 +338,7 @@ async function refreshCachedModInventory(server: ManagedServer) {
     }
   } else if (services.storageDatabase?.connection.open) {
     // File-manager changes still happen with managed content disabled. Re-enable must warm them.
-    services.storageDatabase.connection.prepare("DELETE FROM storage_metadata WHERE key = ?")
-      .run(`mod-installed-snapshot:${server.id}`);
+    new ModUpdatePlanRepository(services.storageDatabase).clearInstalledSnapshot(server.id);
   }
 }
 
@@ -834,12 +804,6 @@ export async function localUploadMod(server: ManagedServer, filenameInput: unkno
   }
 }
 
-export async function downloadModrinthJar(file: NonNullable<ReturnType<typeof modrinthJarFile>>) {
-  const chunks: Buffer[] = [];
-  for await (const chunk of await downloadModrinthJarStream(file)) chunks.push(chunk);
-  return Buffer.concat(chunks);
-}
-
 async function replaceManagedContentJar(
   server: ManagedServer,
   currentFilename: string,
@@ -881,11 +845,6 @@ async function replaceManagedContentJar(
     }
     throw error;
   }
-}
-
-export function modsFromListResult(result: unknown) {
-  if (!result || typeof result !== "object" || !Array.isArray((result as { mods?: unknown }).mods)) return [];
-  return (result as { mods: Array<Record<string, unknown>> }).mods;
 }
 
 export async function buildModUpdatePlan(server: ManagedServer, options: ModListOptions & { channel?: ReleaseChannel; includeInstalled?: boolean } = {}): Promise<ModUpdateScan> {

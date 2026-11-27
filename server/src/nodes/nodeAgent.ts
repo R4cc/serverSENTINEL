@@ -23,7 +23,7 @@ import { ensureInsideServer, ensureWritableInsideServer, ensureWritableResolvedI
 import { readServerConfiguration, writeServerConfiguration } from "../runtime/local/configurationFiles.js";
 import { dockerAvailable, dockerBufferRequest, dockerErrorMessage, dockerJsonRequest, dockerLogTailMaxBytes, dockerReachable, dockerRequest, isMissingDockerNetworkError, sendDockerContainerStdinLine } from "../docker/dockerClient.js";
 import { dockerLiveRestoreEnabled, dockerLiveRestoreGuidance, dockerStopQuery, dockerStopRequestTimeoutMs } from "../docker/dockerDaemon.js";
-import { DockerLogDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
+import { DockerLogTextDecoder, stripDockerLogHeaders } from "../docker/dockerLogs.js";
 import { javaArgsToArgv, requireStrictBoolean, validateDockerContainerName, validateDockerImageName, validateJavaArgs, validateModrinthProjectId, validateModrinthVersionId, validateRuntimeJarFilename } from "../http/validation.js";
 import { fetchProject, fetchProjectVersions, resolveModrinthProjectCompatibility, resolveSelectedProjectVersion, versionChannel } from "../modrinth/compatibility.js";
 import {
@@ -61,7 +61,7 @@ import { detailedError, detailedErrorMessage } from "../logging.js";
 import { runtimeProfileForServer, runtimeTarget } from "../runtime/profile.js";
 import { runtimeSelection } from "../runtime/selection.js";
 import { minecraftTerminalConfigFingerprint } from "../runtime/terminal.js";
-import { parseServerProperties, serializeServerProperties } from "../runtime/serverProperties.js";
+import { parseServerProperties, serializeServerProperties, updateServerPropertiesText } from "../runtime/serverProperties.js";
 import type { ManagedServer, ReleaseChannel, ServerRuntimeProfile } from "../types.js";
 import { resolveMinecraftQueryEndpoints } from "../queryEndpoint.js";
 import { readMinecraftPlayerObservation } from "../playerObservationReader.js";
@@ -587,14 +587,13 @@ async function updateServer(server: ManagedServer, input: UpdateInput, signal?: 
     await writeVersionMetadata(updated);
     if (serverPort || queryPort !== server.managedPorts?.find((port) => port.type === "query")?.externalPort) {
       const scope = { serverDir: await serverRoot(updated) };
-      let props: Record<string, string> = {};
+      let text: string | undefined;
       try {
-        props = parseServerProperties(await readServerConfiguration(scope, "server.properties"));
+        text = await readServerConfiguration(scope, "server.properties");
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
-      await writeServerConfiguration(scope, "server.properties", serializeServerProperties({
-        ...props,
+      await writeServerConfiguration(scope, "server.properties", updateServerPropertiesText(text, {
         ...(serverPort ? { "server-port": serverPort } : {}),
         "enable-query": "true",
         "query.port": String(queryPort)
@@ -778,7 +777,7 @@ function startConsoleStream(server: ManagedServer, streamId: string, socket: Web
           return;
         }
 
-        const decoder = new DockerLogDecoder();
+        const decoder = new DockerLogTextDecoder();
         let drainTimer: NodeJS.Timeout | undefined;
         // A container can write faster than the panel's socket drains — a crash loop, a mod logging
         // per tick. Every other high-volume path here awaits its send; this one cannot, so it pauses
@@ -801,7 +800,7 @@ function startConsoleStream(server: ManagedServer, streamId: string, socket: Web
           drainTimer.unref?.();
         };
         response.on("data", (chunk: Buffer) => {
-          const text = decoder.write(chunk).toString("utf8");
+          const text = decoder.write(chunk);
           if (text) {
             sendStreamData(socket, streamId, { type: "log", source: "docker", text, at: new Date().toISOString() });
             applyBackpressure();

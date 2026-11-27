@@ -1,7 +1,6 @@
 import { startServer } from "./app.js";
-import { services } from "./appServices.js";
 import { config } from "./config.js";
-import { errorLogFields, logError } from "./logging.js";
+import { errorLogFields, hasLogSink, logError } from "./logging.js";
 import { startNodeAgent } from "./nodes/nodeAgent.js";
 
 /**
@@ -11,7 +10,7 @@ import { startNodeAgent } from "./nodes/nodeAgent.js";
  * also land before the panel's is built, so `console.error` covers both.
  */
 process.on("unhandledRejection", (reason) => {
-  if (services.appLogger) {
+  if (hasLogSink()) {
     logError({ ...errorLogFields(reason), category: "unhandled_rejection" }, "Unhandled promise rejection");
   } else {
     console.error("Unhandled promise rejection", reason);

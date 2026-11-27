@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { basename, isAbsolute, relative, resolve } from "node:path";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { config } from "../config.js";
 import { throwHttp, unauthorized } from "../http/errors.js";
@@ -144,8 +144,25 @@ function fileDownloadLimitError(size: number): never {
 }
 
 function archiveSegment(name: string) {
-  const segment = basename(name).trim().replace(/[^a-zA-Z0-9._ -]/g, "_");
+  // Letters and digits in any script are kept: zip names are UTF-8, and folding every non-ASCII
+  // character to "_" made siblings such as 日本.txt and 中文.txt both "__.txt".
+  const segment = basename(name).trim().replace(/[^\p{L}\p{M}\p{N}._ -]/gu, "_");
   return segment && segment !== "." && segment !== ".." ? segment : "download";
+}
+
+/**
+ * Sanitizing can still map two siblings onto one member name, and a zip that repeats a name loses
+ * one file when extracted. Compared case-insensitively because the archive is usually extracted on
+ * a case-insensitive filesystem.
+ */
+function uniqueArchiveSegment(segment: string, used: Set<string>) {
+  const dot = segment.lastIndexOf(".");
+  const stem = dot > 0 ? segment.slice(0, dot) : segment;
+  const extension = dot > 0 ? segment.slice(dot) : "";
+  let candidate = segment;
+  for (let copy = 2; used.has(candidate.toLowerCase()); copy += 1) candidate = `${stem} (${copy})${extension}`;
+  used.add(candidate.toLowerCase());
+  return candidate;
 }
 
 function publicPathParent(path: string) {
@@ -291,6 +308,7 @@ export async function collectArchiveEntries(
     modifiedAt: selection.modifiedAt
   });
   const listing = parseFileListing(await runtime.listFiles(server, selection.target));
+  const usedNames = new Set<string>();
   for (const entry of listing.entries) {
     const childTarget = await runtime.resolveExistingPath(server, entry.path);
     await requireFilePathPermission(request, runtime, server, childTarget, "files.download");
@@ -302,7 +320,7 @@ export async function collectArchiveEntries(
       runtime,
       server,
       childSelection,
-      `${archivePath}/${archiveSegment(entry.name)}`,
+      `${archivePath}/${uniqueArchiveSegment(archiveSegment(entry.name), usedNames)}`,
       entries,
       total,
       depth + 1
@@ -319,9 +337,10 @@ export async function prepareDownload(
   const entries: FileArchiveEntry[] = [];
   const total = { size: 0 };
   const multiple = selections.length > 1;
+  const usedNames = new Set<string>();
   for (const selection of selections) {
     const topLevelName = selection.path === "/" ? archiveSegment(server.displayName || "server-files") : archiveSegment(selection.name);
-    const archivePath = multiple || selection.type === "directory" ? topLevelName : archiveSegment(selection.name);
+    const archivePath = uniqueArchiveSegment(multiple || selection.type === "directory" ? topLevelName : archiveSegment(selection.name), usedNames);
     await collectArchiveEntries(request, runtime, server, selection, archivePath, entries, total);
   }
   const baseName = selections.length === 1
@@ -357,7 +376,8 @@ export function createArchiveDownloadToken(serverId: string, prepared: PreparedD
 
 function pathIsInsideRoot(root: string, target: string) {
   const rel = relative(resolve(root), resolve(target));
-  return !rel || (!rel.startsWith("..") && !isAbsolute(rel));
+  // A child may be named "..backup"; only ".." itself or a "../" prefix leaves the root.
+  return !rel || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 export function localFilePathInput(server: Pick<ManagedServer, "serverDir">, path: string) {

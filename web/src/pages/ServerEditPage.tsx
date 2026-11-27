@@ -530,7 +530,8 @@ export function ExportServerPanel({
   error = "",
   formatDate = (value) => new Date(value).toLocaleString(),
   disabled = false,
-  deletingExportId = ""
+  deletingExportId = "",
+  cancellingExportId = ""
 }: {
   server: ManagedServer;
   onExport: () => void;
@@ -542,11 +543,13 @@ export function ExportServerPanel({
   formatDate?: (value: string | number | Date) => string;
   disabled?: boolean;
   deletingExportId?: string;
+  /** A cancel request for this operation is in flight. */
+  cancellingExportId?: string;
 }) {
   const latest = state?.latest ?? null;
   const artifact = state?.artifact ?? null;
   const active = latest?.status === "queued" || latest?.status === "running";
-  const cancelling = active && latest.task === "Cancelling export";
+  const cancelling = active && (latest.task === "Cancelling export" || cancellingExportId === latest.id);
   const statusLabel = latest?.status === "succeeded"
     ? "Ready"
     : latest?.status === "failed"
@@ -638,7 +641,7 @@ export function ExportServerPanel({
           <AppIcon name="download" /> {latest ? "New export" : "Export server"}
         </Button>
         {active && latest.canCancel && (
-          <Button variant="critical" onClick={() => onCancel?.(latest.id)} disabled={cancelling}>
+          <Button variant="critical" onClick={() => onCancel?.(latest.id)} disabled={cancelling} aria-busy={cancelling || undefined}>
             <AppIcon name="x" /> {cancelling ? "Cancelling…" : "Abort"}
           </Button>
         )}

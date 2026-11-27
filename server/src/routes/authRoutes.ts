@@ -1,6 +1,6 @@
 import type { FastifyInstance, RouteShorthandOptions } from "fastify";
 import { randomBytes, randomUUID } from "node:crypto";
-import { ROLE_PRESETS, normalizePermissions, samePermissions } from "../permissions.js";
+import { ROLE_PRESETS, isFullAccessUser, normalizePermissions, samePermissions } from "../permissions.js";
 import type { Permission, PublicUser, RolePreset, Session, StoredUser } from "../types.js";
 import { requestUsesPublicHttps } from "../http/requestOrigin.js";
 import type { AuthenticatedRequest } from "../auth/requestAuthentication.js";
@@ -54,6 +54,20 @@ type AuthRoutesContext = {
 
 function pruneExpiredSessions(context: AuthRoutesContext, now = Date.now()) {
   context.sessions.deleteExpired(new Date(now - context.sessionMaxAgeSeconds * 1000).toISOString());
+}
+
+/**
+ * `users.manage` is grantable on its own, so holding it must not be a route to permissions the
+ * actor lacks. Without full access an actor may only create, change, or delete accounts whose
+ * permissions -- before and after the change -- it already holds itself. Otherwise a custom user
+ * with nothing but `users.manage` could grant itself admin or reset an administrator's password.
+ */
+function assertCanManagePermissions(actor: Pick<StoredUser, "permissions">, ...permissionSets: ReadonlyArray<readonly Permission[]>) {
+  if (isFullAccessUser(actor)) return;
+  const held = new Set(actor.permissions);
+  if (permissionSets.some((permissions) => permissions.some((permission) => !held.has(permission)))) {
+    throwHttp(403, "You can only manage accounts whose permissions you hold yourself.", { code: "PERMISSION_DENIED" });
+  }
 }
 
 async function recheckUserManagement(context: AuthRoutesContext, request: AuthenticatedRequest) {
@@ -210,7 +224,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
   });
 
   app.post<{ Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users", context.destructiveRateLimit, async (request) => {
-    await context.requireRequestPermission(request, "users.manage");
+    const requester = await context.requireRequestPermission(request, "users.manage");
     const body = request.body ?? {};
     const username = context.validateUsername(body.username);
     const password = context.validatePassword(body.password);
@@ -219,6 +233,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       rolePreset,
       permissions: body.permissions
     });
+    assertCanManagePermissions(requester, permissionData.permissions);
     const now = new Date().toISOString();
     const passwordData = await context.hashPassword(password);
     const createdUser: StoredUser = {
@@ -226,7 +241,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
       permissions: permissionData.permissions, createdAt: now, updatedAt: now,
       ...passwordData
     };
-    await recheckUserManagement(context, request);
+    assertCanManagePermissions(await recheckUserManagement(context, request), createdUser.permissions);
     context.users.create(createdUser);
     context.logInfo({
       userId: createdUser.id,
@@ -240,8 +255,9 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
   });
 
   app.put<{ Params: { id: string }; Body: { username?: string; password?: string; rolePreset?: RolePreset; permissions?: unknown[] } }>("/api/users/:id", context.destructiveRateLimit, async (request) => {
-    await context.requireRequestPermission(request, "users.manage");
+    const requester = await context.requireRequestPermission(request, "users.manage");
     const target = context.users.list().find((user) => user.id === request.params.id);
+    if (target) assertCanManagePermissions(requester, target.permissions);
     if (context.demoEnabled && context.isDemoUser(target)) {
       // Code kept as VALIDATION_ERROR to match what stableErrorCode already returned for this message.
       throwHttp(403, "The demo user is managed by demo-mode startup and cannot be changed", { code: "VALIDATION_ERROR" });
@@ -249,7 +265,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
     const body = request.body ?? {};
     const passwordChanged = typeof body.password === "string" && Boolean(body.password.trim());
     const passwordData = passwordChanged ? await context.hashPassword(context.validatePassword(body.password)) : undefined;
-    await recheckUserManagement(context, request);
+    const actor = await recheckUserManagement(context, request);
     const updatedUser = context.users.updateById(request.params.id, (current) => {
       if (context.demoEnabled && context.isDemoUser(current)) {
         throwHttp(403, "The demo user is managed by demo-mode startup and cannot be changed", { code: "VALIDATION_ERROR" });
@@ -260,6 +276,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
         rolePreset,
         permissions: body.permissions
       }, current);
+      assertCanManagePermissions(actor, current.permissions, permissionData.permissions);
       return {
         ...current,
         username,
@@ -294,8 +311,9 @@ export function registerAuthRoutes(app: FastifyInstance, context: AuthRoutesCont
   });
 
   app.delete<{ Params: { id: string } }>("/api/users/:id", context.destructiveRateLimit, async (request) => {
-    await context.requireRequestPermission(request, "users.manage");
+    const actor = await context.requireRequestPermission(request, "users.manage");
     const target = context.users.list().find((user) => user.id === request.params.id);
+    if (target) assertCanManagePermissions(actor, target.permissions);
     if (context.demoEnabled && context.isDemoUser(target)) {
       // Code kept as VALIDATION_ERROR to match what stableErrorCode already returned for this message.
       throwHttp(403, "The demo user is managed by demo-mode startup and cannot be deleted", { code: "VALIDATION_ERROR" });

@@ -893,15 +893,25 @@ export function validateImportArchive(manifest: ExportManifest, context: ImportC
  * cross a device boundary. Copying needs the space twice and takes as long as the world is big, so
  * it stays a fallback for the one error that means the rename could never have worked.
  */
-async function moveStagedServer(source: string, destination: string) {
+export async function moveStagedServer(source: string, destination: string) {
   try {
     await rename(source, destination);
     return;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
   }
-  // Symlinks are copied as links rather than followed, matching what the rename would have moved.
-  await cp(source, destination, { recursive: true, force: true, preserveTimestamps: true });
+  // Creating the destination without `recursive` fails if it already exists, so the cleanup below
+  // can only ever remove a folder this copy made. A copy that fails partway -- a full disk is the
+  // usual cause -- would otherwise leave a half-written server folder that no row refers to, since
+  // the caller only records the destination once the move has returned.
+  await mkdir(destination);
+  try {
+    // Symlinks are copied as links rather than followed, matching what the rename would have moved.
+    await cp(source, destination, { recursive: true, force: true, preserveTimestamps: true });
+  } catch (error) {
+    await rm(destination, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
   await rm(source, { recursive: true, force: true });
 }
 

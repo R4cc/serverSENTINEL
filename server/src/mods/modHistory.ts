@@ -11,7 +11,8 @@ import { managedContentRuntime } from "../servers/versions.js";
 import { ModHistoryRepository, type ModHistorySnapshot, type StoredModHistoryEntry } from "../storage/modHistoryRepository.js";
 import type { ManagedServer, ModHistoryEntry, Permission } from "../types.js";
 import { modFileSizeLimit, sizeLimitTransform, uploadManagedContentBuffer } from "./managedContent.js";
-import { listModsWithPanelMetadata, modsFromListResult, remoteModMetadata } from "./modService.js";
+import { modsFromListResult, remoteModMetadata } from "../installedModMetadata.js";
+import { listModsWithPanelMetadata } from "./modService.js";
 
 export type ModHistoryActor = { id: string; username: string };
 export function modHistoryRepository() { return new ModHistoryRepository(services.storageDatabase); }

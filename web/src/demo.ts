@@ -1,7 +1,7 @@
 import { sortVersionSwitchContent, versionSwitchContentCounts, versionSwitchDirection, versionSwitchOutcomeCounts, versionSwitchPlannedStatus, versionSwitchWorldWarning, type VersionSwitchContentEntry, type VersionSwitchOutcome, type VersionSwitchPlan, type VersionSwitchResult } from "@serversentinel/contracts";
 import { demoFleetServerPrefix, demoServerId } from "./demoRuntime";
 import type { ModsDemoFixtureName } from "./features/mods/modsDemoFixtures";
-import type { FileListing, InstalledMod, ManagedNode, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from "./types";
+import type { FileListing, InstalledMod, ManagedNode, ManagedServer, ModrinthHit, PlayerSnapshot, ResourceSample, ScheduledExecution, ServerEvent, ServerOverviewData, ServerStatus, ServerStorageSummary, ServerTimelineEvent, ServerTimelineResponse, ServerTimelineScheduleMarker } from "./types";
 
 const demoStartedAt = Date.now();
 const gibibyte = 1024 * 1024 * 1024;
@@ -1229,4 +1229,13 @@ export function demoVersionSwitchResult(plan: VersionSwitchPlan): VersionSwitchR
     reason: entry.reason
   }));
   return { plan, outcomes, counts: versionSwitchOutcomeCounts(outcomes) };
+}
+
+/** The demo server's disk usage: a 7.4 GiB world on a 100 GiB disk with 8 GiB free. */
+export function demoStorageSummary(): ServerStorageSummary {
+  return {
+    worldSizeBytes: 7_566 * 1024 ** 2,
+    totalBytes: 100 * 1024 ** 3,
+    availableBytes: 8 * 1024 ** 3
+  };
 }

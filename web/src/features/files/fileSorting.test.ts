@@ -23,4 +23,18 @@ describe("file sorting", () => {
     expect(nextFileSort(defaultFileSort, "size")).toEqual({ id: "size", desc: false });
     expect(nextFileSort({ id: "size", desc: false }, "size")).toEqual({ id: "size", desc: true });
   });
+
+  it("sorts an unparseable modified date as the oldest, whatever its name or position", () => {
+    const dated = [
+      entry("b.txt", "file", 0, "2026-01-01T00:00:00.000Z"),
+      entry("c.txt", "file", 0, "2025-01-01T00:00:00.000Z"),
+      entry("z.txt", "file", 0, "not-a-date"),
+      entry("a.txt", "file", 0, "")
+    ];
+    const orders = [dated, [...dated].reverse(), [dated[2], dated[0], dated[3], dated[1]]];
+    for (const order of orders) {
+      expect(sortFileEntries(order, { id: "modifiedAt", desc: false }).map((item) => item.name)).toEqual(["a.txt", "z.txt", "c.txt", "b.txt"]);
+      expect(sortFileEntries(order, { id: "modifiedAt", desc: true }).map((item) => item.name)).toEqual(["b.txt", "c.txt", "z.txt", "a.txt"]);
+    }
+  });
 });

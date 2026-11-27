@@ -14,7 +14,8 @@ import { getServer } from "../servers/store.js";
 import { publicInstalledModsResult } from "../servers/publicViews.js";
 import { managedContentRuntime, requireManagedModsRuntime } from "../servers/versions.js";
 import { recordOperation } from "../servers/lifecycle.js";
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "../servers/serverLogFields.js";
+import { modsFromListResult, remoteModMetadata } from "../installedModMetadata.js";
 import { runtimeTarget } from "../runtime/profile.js";
 import { searchModrinth } from "../modrinth/searchCache.js";
 import { modrinthSearchPageInfo } from "../modrinth/pagination.js";
@@ -22,7 +23,7 @@ import { executeSafeUpdatePlan } from "../modrinth/updatePlan.js";
 import { allowedForChannel, fetchProject, fetchProjects, fetchProjectVersions, minecraftVersionsInclude, modrinthJarFile, modrinthServerSideSupported, unknownCompatibility } from "../modrinth/compatibility.js";
 import { fetchModrinthIcon, modrinthIconProxyUrl } from "../mods/icons.js";
 import { modFileSizeLimit, withModMutationLock } from "../mods/managedContent.js";
-import { acknowledgeInstalledModReview, buildModUpdatePlan, classifyModrinthInstallVersion, enrichInstalledModDependencies, installModWithRemoteVersionFallback, listModsWithPanelMetadata, modrinthSearchFacets, modsFromListResult, remoteModMetadata, switchModrinthModVersion, updateModrinthMod, withRecordedModMutation } from "../mods/modService.js";
+import { acknowledgeInstalledModReview, buildModUpdatePlan, classifyModrinthInstallVersion, enrichInstalledModDependencies, installModWithRemoteVersionFallback, listModsWithPanelMetadata, modrinthSearchFacets, switchModrinthModVersion, updateModrinthMod, withRecordedModMutation } from "../mods/modService.js";
 import type { ModrinthProject, ReleaseChannel } from "../types.js";
 
 /**

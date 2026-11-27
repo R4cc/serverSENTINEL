@@ -49,3 +49,10 @@ export async function downloadModrinthJarStream(file: JarFile, options: {
     throw error;
   }
 }
+
+/** Buffers a validated download; for files small enough to hold in memory, such as import restores. */
+export async function downloadModrinthJar(file: JarFile) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of await downloadModrinthJarStream(file)) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}

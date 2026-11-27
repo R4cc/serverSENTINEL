@@ -1,5 +1,38 @@
 # Changelog
 
+## 26.12.1 - 2026-11-27
+
+- Packages the latest permission, file handling, scheduling, console, and interface fixes for production.
+- Opening the navigation on tablets keeps scrolling inside the workspace, including when Overview shows repeated events.
+
+## 26.11.15 - 2026-11-27
+
+- **Security:** the exemption that lets mod icons load without the `X-Requested-With` header now applies only to the mod icon route. Before, any GET request whose address merely contained `/mods/icon` skipped that check.
+- Identifying a manually uploaded mod for its icon now reads the jar as a stream instead of loading the whole file into memory, which keeps memory flat when a mod list holds large unidentified jars.
+- Internal restructuring with no visible change: shared helpers moved out of the mods, Docker and logging modules so other parts of the panel no longer load them, and duplicated browser-storage code was merged. The remaining larger architectural issues are tracked in `docs/architecture-debt.md`.
+
+## 26.11.14 - 2026-11-27
+
+- **Security:** an account that holds "manage users" but not every permission can no longer grant permissions it lacks itself, or change, reset the password of, or delete an account with more access. Before this, such an account could make itself an administrator.
+- Saving a setting no longer deletes lines from `server.properties` that use the `key:value` or `key value` form. Comments, blank lines and the order of other settings are kept, and only the changed settings are rewritten.
+- Cron steps that start at a number, such as `5/15`, now run at 5, 20, 35 and 50 minutes past the hour instead of only at 5 past. A schedule for February 29 shows its next run, even when that is years away.
+- Downloading a folder keeps file names in any script, so `日本.txt` and `中文.txt` no longer both become `__.txt` and overwrite each other. Names that still clash get a numbered suffix, such as `notes (2).txt`. Folders containing a file whose name starts with `..`, such as `..backup`, can be downloaded again.
+- A ZIP that holds both a file and a folder of the same name is refused before extraction. Previously the extraction failed partway and left files behind.
+- An import that has to copy between disks no longer leaves a half-copied server folder behind when the copy fails.
+- Console output from remote nodes no longer shows `�` in place of accented or other non-ASCII characters that Docker split across two log frames.
+- Sizes just under a unit boundary read "1 MiB" rather than "1024 KiB", and a missing size reads "Unknown" instead of "NaN undefined". Files with an unreadable modified date sort as the oldest, and a schedule due in just under a day reads "in 1d" instead of "in 24h".
+
+## 26.11.13 - 2026-11-27
+
+- The Overview's Mod updates card now says "Could not check for updates" and gives the reason when the first update check fails, instead of reporting "No updates found".
+- Refresh on the Nodes page is disabled and reads "Refreshing…" only while a refresh is running, so a double click no longer sends two refreshes. A failed refresh no longer shows "Node status refreshed" next to the error.
+- Abort on a running export is disabled as soon as it is pressed, so a second click no longer sends a second cancel request.
+- Copying console output, or a selection with Ctrl+C, now says so when the clipboard refuses the copy.
+- Pressing Escape in a search field on a page now clears it everywhere, not only in the file filter. Inside drawers and dialogs, Escape still closes them.
+- Every icon-only button shows its name as a tooltip on hover, and the file editor's Save button mentions the Ctrl+S (⌘S) shortcut.
+- Failed mod installs, updates, uploads and toggles, Integrations settings and version switches show a clear message instead of a blank or "undefined" error. Busy labels use the same "…" style everywhere.
+- Role and runtime status badges use the same 12px text as other badges (the Users table showed roles at 10px), and keyboard focus rings use the shared focus style.
+
 ## 26.11.12 - 2026-11-23
 
 - The Docker image now runs on Node.js 26 (previously Node.js 22) and builds its network probe on Alpine 3.24.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DockerLogDecoder, stripDockerLogHeaders } from "./dockerLogs.js";
+import { DockerLogDecoder, DockerLogTextDecoder, stripDockerLogHeaders } from "./dockerLogs.js";
 
 function dockerLogFrame(streamType: number, text: string) {
   const payload = Buffer.from(text, "utf8");
@@ -43,5 +43,30 @@ describe("Docker log decoding", () => {
 
     expect(Buffer.concat([decoder.write(first), decoder.write(second)]).toString("utf8"))
       .toBe("\x1b[38;2;24;166;255mLuckPerms\x1b[0m\n");
+  });
+
+  it("keeps a multi-byte character whole when Docker splits it across two frames", () => {
+    const text = Buffer.from("café ✓ ok\n", "utf8");
+    const split = text.indexOf(0xc3) + 1;
+    const first = Buffer.concat([Buffer.from([1, 0, 0, 0, 0, 0, 0, split]), text.subarray(0, split)]);
+    const rest = text.subarray(split);
+    const second = Buffer.concat([Buffer.from([1, 0, 0, 0, 0, 0, 0, rest.length]), rest]);
+    const decoder = new DockerLogTextDecoder();
+
+    // Decoding each frame on its own, as the node agent used to, corrupts both halves.
+    const frameDecoder = new DockerLogDecoder();
+    expect(frameDecoder.write(first).toString("utf8") + frameDecoder.write(second).toString("utf8")).toContain("\uFFFD");
+
+    const output = decoder.write(first) + decoder.write(second) + decoder.end();
+
+    expect(output).toBe("café ✓ ok\n");
+    expect(output).not.toContain("\uFFFD");
+  });
+
+  it("keeps a multi-byte character whole when a raw TTY chunk ends inside it", () => {
+    const text = Buffer.from("§aWelcome ✓\n", "utf8");
+    const decoder = new DockerLogTextDecoder();
+
+    expect(decoder.write(text.subarray(0, 1)) + decoder.write(text.subarray(1)) + decoder.end()).toBe("§aWelcome ✓\n");
   });
 });

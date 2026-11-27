@@ -1,3 +1,5 @@
+import { StringDecoder } from "node:string_decoder";
+
 const dockerLogHeaderLength = 8;
 const dockerLogStreamTypes = new Set([0, 1, 2]);
 
@@ -65,6 +67,25 @@ export class DockerLogDecoder {
     const pending = this.pending;
     this.pending = Buffer.alloc(0);
     return pending;
+  }
+}
+
+/**
+ * Frame decoding and text decoding together. Docker frames, and the HTTP chunks carrying them,
+ * end at arbitrary byte offsets, so a multi-byte character can straddle two writes. Converting
+ * each write with `toString("utf8")` turned both halves into U+FFFD; the string decoder holds an
+ * incomplete trailing sequence until the bytes that finish it arrive.
+ */
+export class DockerLogTextDecoder {
+  private readonly frames = new DockerLogDecoder();
+  private readonly text = new StringDecoder("utf8");
+
+  write(chunk: Buffer) {
+    return this.text.write(this.frames.write(chunk));
+  }
+
+  end() {
+    return this.text.write(this.frames.flush()) + this.text.end();
   }
 }
 

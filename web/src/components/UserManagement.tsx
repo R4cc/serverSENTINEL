@@ -341,7 +341,7 @@ function UserPermissionModal({
         <div className="userModalFooter">
           <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "User changes are still saving" : "Cancel"}>Cancel</Button>
           <Button type="submit" disabled={busy || !canSave} aria-describedby={!canSave ? "user-modal-permission-hint" : undefined} title={!canSave ? "Choose at least one permission." : busy ? "User changes are still saving" : user ? "Save user changes" : "Create user"} reserveLabel={user ? "Save changes" : "Create user"}>
-            {busy ? "Saving..." : user ? "Save changes" : "Create user"}
+            {busy ? "Saving…" : user ? "Save changes" : "Create user"}
           </Button>
         </div>
       </form>
@@ -394,7 +394,7 @@ function ResetPasswordModal({
         </fieldset>
         <div className="userModalFooter">
           <Button variant="secondary" onClick={onClose} disabled={busy} title={busy ? "Password reset is still saving" : "Cancel"}>Cancel</Button>
-          <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"} reserveLabel="Reset password">{busy ? "Saving..." : "Reset password"}</Button>
+          <Button type="submit" disabled={busy} title={busy ? "Password reset is still saving" : "Reset password"} reserveLabel="Reset password">{busy ? "Saving…" : "Reset password"}</Button>
         </div>
       </form>
     </DialogSurface>

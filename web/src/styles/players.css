@@ -483,7 +483,7 @@ button.playerMapServer {
 }
 
 .playerMapServer:focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 4px;
 }
 
@@ -1067,7 +1067,8 @@ button.playerMapServer--stopped:hover:not(:disabled) {
 }
 
 .playerAccuracyBadge:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .playerAccuracyTooltip {
@@ -1144,7 +1145,7 @@ button.playerMapServer--stopped:hover:not(:disabled) {
   margin: var(--space-1) 0 0;
   color: var(--text);
   font-size: var(--type-card-title-size);
-  font-weight: 650;
+  font-weight: var(--weight-strong);
   line-height: 1.1;
 }
 

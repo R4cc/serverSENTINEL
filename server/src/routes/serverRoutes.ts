@@ -27,7 +27,7 @@ import { startConsoleHeartbeat, timelineHistoryWindow as timelineHistoryWindowMs
 import { persistentServerEvents } from "../servers/serverEvents.js";
 import { createConsoleSender } from "../servers/consoleBackpressure.js";
 import { consoleHub, type ConsoleCursor } from "../servers/consoleService.js";
-import { serverLogFields } from "../runtime/local/dockerContainers.js";
+import { serverLogFields } from "../servers/serverLogFields.js";
 import { timelinePlayerActivity, timelinePlayerIsKnown, timelineResourcePoints, timelineScheduleMarkers } from "../serverTimeline.js";
 import { localNodeId } from "../nodes/nodeService.js";
 import { logDebug, logInfo, logWarn, errorLogFields } from "../logging.js";

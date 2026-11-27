@@ -14,7 +14,7 @@ vi.mock("../appServices.js", () => ({
     runtimeStateCoordinator: { invalidate: fixtures.invalidate, noteRunning: fixtures.noteRunning, noteStopped: fixtures.noteStopped }
   }
 }));
-vi.mock("../runtime/local/dockerContainers.js", () => ({ serverLogFields: () => ({}) }));
+vi.mock("./serverLogFields.js", () => ({ serverLogFields: () => ({}) }));
 
 import { startServerWithIntent } from "./lifecycle.js";
 import { withModMutationLock } from "../mods/managedContent.js";

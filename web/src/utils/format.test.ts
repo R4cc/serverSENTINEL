@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAdaptiveBytes, formatRelativeTimestamp, parseJavaMemoryArgs, parseMaxMemoryGb, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
+import { formatAdaptiveBytes, formatBytes, formatRelativeTimestamp, parseJavaMemoryArgs, parseMaxMemoryGb, readRegionalFormatPreference, regionalFormatPreferenceFromStoredValues, relativeTimestampsFromStoredValue, resolveDisplayTimeZone, resolveRegionalFormatLocale, themePreferenceFromStoredValue } from "./format";
 
 describe("adaptive byte formatting", () => {
   it("selects a readable unit without losing useful precision", () => {
@@ -8,6 +8,25 @@ describe("adaptive byte formatting", () => {
     expect(formatAdaptiveBytes(748.46 * 1024 * 1024)).toBe("748.46 MiB");
     expect(formatAdaptiveBytes(7.4846 * 1024 * 1024 * 1024)).toBe("7.48 GiB");
     expect(formatAdaptiveBytes(2.25 * 1024 * 1024 * 1024 * 1024)).toBe("2.25 TiB");
+  });
+
+  it("moves to the next unit when rounding reaches 1024", () => {
+    expect(formatAdaptiveBytes(1024 * 1024 - 1)).toBe("1 MiB");
+    expect(formatAdaptiveBytes(1024 ** 3 - 1)).toBe("1 GiB");
+    expect(formatAdaptiveBytes(1024 * 1024)).toBe("1 MiB");
+    expect(formatAdaptiveBytes(1023.99 * 1024)).toBe("1023.99 KiB");
+    expect(formatBytes(1024 * 1024 - 1)).toBe("1.0 MiB");
+    expect(formatBytes(1023.9 * 1024)).toBe("1023.9 KiB");
+    expect(formatBytes(1536)).toBe("1.5 KiB");
+    expect(formatBytes(5 * 1024 * 1024 * 1024)).toBe("5120.0 MiB");
+  });
+
+  it("does not render a missing or non-finite size as garbage", () => {
+    expect(formatAdaptiveBytes(Number.NaN)).toBe("Unknown");
+    expect(formatAdaptiveBytes(undefined as unknown as number)).toBe("Unknown");
+    expect(formatAdaptiveBytes(Number.POSITIVE_INFINITY)).toBe("Unknown");
+    expect(formatBytes(Number.NaN)).toBe("Unknown");
+    expect(formatAdaptiveBytes(0)).toBe("0 B");
   });
 });
 

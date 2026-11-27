@@ -8,7 +8,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { config } from "./config.js";
 import { panelNodeConnections, runtimeForServer, services } from "./appServices.js";
-import { dockerAction, dockerResourceStats, serverLogFields } from "./runtime/local/dockerContainers.js";
+import { dockerAction, dockerResourceStats } from "./runtime/local/dockerContainers.js";
+import { serverLogFields } from "./servers/serverLogFields.js";
 import { parseLogEvent } from "./servers/logEvents.js";
 import { getServer, listManagedServers, listRuntimeServers, normalizeManagedServer, publicSchedule } from "./servers/store.js";
 import { publicServer } from "./servers/publicViews.js";
@@ -18,7 +19,7 @@ import { activeScheduleExecutionForOperation, cancelActiveScheduleRun, cancelAct
 import { localNodeId, readNodes } from "./nodes/nodeService.js";
 import { buildUserPermissions, currentUserFromCookie, isDemoModeRequest, normalizeRolePreset, parseCookies, publicUser, readUsers, requireRequestPermission, sessionCookie, sessionCookieName, sessionMaxAgeSeconds, validatePassword } from "./auth/sessionService.js";
 import { isFullAccessUser } from "./permissions.js";
-import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logError, logInfo, logWarn, routeLogFields, runWithRequestLogContext } from "./logging.js";
+import { detailedErrorMessage, errorCategory, errorLogFields, isExpectedUserError, logDebug, logError, logInfo, logWarn, routeLogFields, runWithRequestLogContext, setLogSink } from "./logging.js";
 import { hashPassword, hashPasswordAsync, verifyPasswordAsync } from "./auth/passwords.js";
 import { ensureDemoUser, isDemoUser } from "./demoMode.js";
 import { appBuildId, appUserAgentFor, appVersion } from "./buildInfo.js";
@@ -174,7 +175,7 @@ app.addHook("onClose", async () => {
 try {
 app.decorateRequest("authenticatedUser", null);
 app.decorateRequest("authenticationPromise");
-services.appLogger = app.log;
+setLogSink(app.log);
 const instanceStorageDatabase = openStorageDatabase();
 let instancePlayerHeadService: PlayerHeadService | undefined;
 services.storageDatabase = instanceStorageDatabase;
@@ -305,7 +306,9 @@ app.addHook("onRequest", async (request, reply) => {
   if (request.method === "GET" && !request.url.startsWith("/api/")) {
     return;
   }
-  if (request.method === "GET" && request.url.includes("/mods/icon")) {
+  // Mod icons are loaded by <img>, which cannot send the header. Anchored, so a GET to any other
+  // route that merely mentions "/mods/icon" in its query string is not exempted with it.
+  if (request.method === "GET" && /^\/api\/servers\/[^/?]+\/mods\/icon(?:\?|$)/.test(request.url)) {
     return;
   }
   if (request.method === "GET" && request.url.startsWith("/api/modrinth/icon")) {
