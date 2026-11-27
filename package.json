@@ -1,6 +1,6 @@
 {
   "name": "serversentinel",
-  "version": "26.11.15",
+  "version": "26.12.1",
   "private": true,
   "packageManager": "npm@12.2.1",
   "workspaces": [

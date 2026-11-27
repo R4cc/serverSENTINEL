@@ -1,5 +1,9 @@
 # Changelog
 
+## 26.12.1 - 2026-11-27
+
+- Packages the latest permission, file handling, scheduling, console, and interface fixes for production.
+
 ## 26.11.15 - 2026-11-27
 
 - **Security:** the exemption that lets mod icons load without the `X-Requested-With` header now applies only to the mod icon route. Before, any GET request whose address merely contained `/mods/icon` skipped that check.
