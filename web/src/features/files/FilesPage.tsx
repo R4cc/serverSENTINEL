@@ -415,7 +415,7 @@ export function FilesPage({
           </div>
 
           <div className="fileFilterBar">
-            <div className="fileFilterField" onKeyDown={(event) => { if (event.key === "Escape") actions.changeFileSearch(""); }}>
+            <div className="fileFilterField">
               <SearchField label="File filter" placeholder="Filter this folder…" value={fileSearch} onChange={actions.changeFileSearch} />
             </div>
             <div className="selectionActionBar" role="group" aria-label="File selection actions">

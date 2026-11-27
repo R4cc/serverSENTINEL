@@ -50,7 +50,7 @@ export function ModInstallReview({ terminology = fabricContentTerminology, state
     : selectedHealth?.requiresAcknowledgement
     ? selectedIncompatible ? `Install incompatible ${terminology.singular}` : "Install anyway"
     : requiredDependencies.length > 0 ? `Install ${terminology.singular} and dependencies` : `Install ${terminology.singular}`;
-  const installingLabel = switchMode ? "Switching..." : "Installing...";
+  const installingLabel = switchMode ? "Switching…" : "Installing…";
 
   return (
     <div className="modsInstallReview">

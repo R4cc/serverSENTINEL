@@ -374,6 +374,7 @@ function ActivePlayerRow({
 export function ModHealthPanel({
   updatePlan,
   loading = false,
+  error = "",
   canView = true,
   onOpenMods,
   onRefresh,
@@ -382,6 +383,8 @@ export function ModHealthPanel({
 }: {
   updatePlan: ModUpdatePlan | null;
   loading?: boolean;
+  /** The last update check failed; without a plan this must not read as "no updates". */
+  error?: string;
   canView?: boolean;
   onOpenMods: () => void;
   onRefresh?: () => void;
@@ -411,7 +414,16 @@ export function ModHealthPanel({
     >
       <div className="overviewCardList overviewSupportList modUpdatesList">
         {loading && <LoadingLabel>Refreshing {contentSingular} updates</LoadingLabel>}
-        {updateCount === 0 ? (
+        {!updatePlan && error && !loading ? (
+          <OverviewCardState
+            title="Could not check for updates"
+            message={error}
+            icon={<TriangleAlert aria-hidden="true" className="buttonIcon" />}
+            tone="warning"
+            onClick={onOpenMods}
+            ariaLabel={`Open ${contentPluralTitle}, update check failed`}
+          />
+        ) : updateCount === 0 ? (
           <OverviewCardState
             title="No updates found"
             icon={<AppIcon name="check" />}

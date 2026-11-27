@@ -143,7 +143,7 @@ try {
       await capture(page, `${width}-${theme}-invalid`);
       await page.getByRole("textbox", { name: /^Panel address for this node/ }).fill("https://panel.example.com");
       await page.getByRole("button", { name: "Create install command", exact: true }).click();
-      assert(await page.getByRole("button", { name: "Creating...", exact: true }).isDisabled());
+      assert(await page.getByRole("button", { name: "Creating…", exact: true }).isDisabled());
       await page.keyboard.press("Escape");
       assert(await page.locator(".nodeModalPanel").isVisible(), "Busy setup dismissed by Escape");
       await page.evaluate(() => window.finishCreate());

@@ -212,7 +212,7 @@ export default function App() {
   const panelFirstRunPromptedRef = useRef(false);
   const onboardingAutoOpenedRef = useRef(false);
   const provisionSubmitLockRef = useRef(false);
-  const appRefreshInFlightRef = useRef<Promise<void> | null>(null);
+  const appRefreshInFlightRef = useRef<Promise<boolean> | null>(null);
   const sessionRequestEpochRef = useRef(0);
   const statusRefreshInFlightRef = useRef<Map<string, AbortController>>(new Map());
   const nodeRefreshInFlightRef = useRef(false);
@@ -569,7 +569,7 @@ export default function App() {
     playerHeads: effectiveAppState.playerHeads,
     setAppState,
     notify,
-    refreshApp: () => refreshApp(),
+    refreshApp: async () => { await refreshApp(); },
     requestConfirmation
   });
   const { modulesBusy, setModuleEnabled } = useModuleSettings({
@@ -1487,32 +1487,32 @@ export default function App() {
     staleSessionSuppressUntilRef.current = 0;
   }
 
-  async function refreshApp(options: { silent?: boolean; requireFresh?: boolean } = {}) {
+  async function refreshApp(options: { silent?: boolean; requireFresh?: boolean } = {}): Promise<boolean> {
     if (!demoMode && (!authSession || !authSession.authenticated)) {
-      return;
+      return false;
     }
     const epoch = sessionRequestEpochRef.current;
     if (appRefreshInFlightRef.current) {
-      await appRefreshInFlightRef.current;
-      if ((options.silent && !options.requireFresh) || epoch !== sessionRequestEpochRef.current) return;
+      const joined = await appRefreshInFlightRef.current;
+      if ((options.silent && !options.requireFresh) || epoch !== sessionRequestEpochRef.current) return joined;
       // Mutation callers need a read begun after the mutation, not an older poll's snapshot.
       return refreshApp(options);
     }
     const request = performAppRefresh(options, epoch);
     appRefreshInFlightRef.current = request;
     try {
-      await request;
+      return await request;
     } finally {
       if (appRefreshInFlightRef.current === request) appRefreshInFlightRef.current = null;
     }
   }
 
-  async function performAppRefresh(options: { silent?: boolean }, epoch: number) {
+  async function performAppRefresh(options: { silent?: boolean }, epoch: number): Promise<boolean> {
     setAppRefreshing(true);
     if (!options.silent) setNotice("");
     try {
       const next = await api<AppState>("/api/app", { timeoutMs: 20_000 });
-      if (epoch !== sessionRequestEpochRef.current) return;
+      if (epoch !== sessionRequestEpochRef.current) return false;
       setAppState(next);
       setAppStateLoaded(true);
       setAppLoadError("");
@@ -1523,15 +1523,17 @@ export default function App() {
       } else if (!activeServerIdRef.current && next.servers[0]) {
         setActiveServerId(next.servers[0].id);
       }
+      return true;
     } catch (error) {
-      if (epoch !== sessionRequestEpochRef.current) return;
-      if (handleStaleSession(error)) return;
+      if (epoch !== sessionRequestEpochRef.current) return false;
+      if (handleStaleSession(error)) return false;
       const message = errorMessage(error, "Could not load the application state. Check the server connection and retry.");
       setAppLoadError(message);
       if (!options.silent) {
         setNotice(message);
         notify("error", message);
       }
+      return false;
     } finally {
       if (epoch === sessionRequestEpochRef.current) setAppRefreshing(false);
     }
@@ -2450,6 +2452,7 @@ export default function App() {
                 playerHeadsEnabled={playerHeadsEnabled}
                 modUpdatePlan={modsBridge?.updatePlan ?? null}
                 modUpdatePlanLoading={modsBridge?.updatePlanLoading ?? true}
+                modUpdatePlanError={modsBridge?.updatePlanError ?? ""}
                 canViewMods={canViewMods && supportsManagedMods}
                 onOpenMods={openModsPage}
                 onRefreshModUpdates={refreshModUpdates}
@@ -2521,7 +2524,7 @@ export default function App() {
                   setNotice={setNotice}
                   requestConfirmation={requestConfirmation}
                   handleStaleSession={handleStaleSession}
-                  refreshApp={() => refreshApp()}
+                  refreshApp={async () => { await refreshApp(); }}
                   onBusyChange={setScheduleMutationBusy}
                   relativeTimestamps={relativeTimestamps}
                   scheduleTimeZone={panelTimeZone}
@@ -2578,6 +2581,7 @@ export default function App() {
                         formatDate={formatDisplayDate}
                         disabled={serverSettingsSaving}
                         deletingExportId={exportWorkspace.deletingExportId}
+                        cancellingExportId={exportWorkspace.cancellingExportId}
                       />
                     ) : undefined}
                     dangerZone={
@@ -2716,7 +2720,7 @@ export default function App() {
         <ImportModal
           workspace={exportWorkspace}
           nodes={contextNodes}
-          onImported={refreshApp}
+          onImported={async () => { await refreshApp(); }}
         />
       ) : null}
       </Suspense>

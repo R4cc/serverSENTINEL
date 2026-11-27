@@ -29,7 +29,8 @@ type NodesWorkspaceInputs = {
   currentPanelUrl(): string;
   notify: Notify;
   requestConfirmation: RequestConfirmation;
-  refreshApp(options?: { silent?: boolean }): Promise<void>;
+  /** Resolves false when the refresh failed (the shell has already reported why). */
+  refreshApp(options?: { silent?: boolean }): Promise<boolean | void>;
 };
 
 export function useNodesWorkspace({
@@ -62,6 +63,8 @@ export function useNodesWorkspace({
     setNodeDetails(null);
   }
   const [nodeDetails, setNodeDetails] = useState<NodeView | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
   const [nodeOperations, setNodeOperations] = useState<Record<string, NodeOperation>>({});
   const [nodeOperationNow, setNodeOperationNow] = useState(() => Date.now());
   const [nodeManualRecoveryById, setNodeManualRecoveryById] = useState<Record<string, NodeManualRecovery>>({});
@@ -194,8 +197,16 @@ export function useNodesWorkspace({
   }, [addNodeOpen, addNodeResult?.node.id, contextNodes, demoMode]);
 
   async function refreshNodes() {
-    await refreshApp();
-    notify("success", "Node status refreshed");
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    try {
+      // A failed refresh is already reported by the shell; a success toast beside it would contradict it.
+      if ((await refreshApp()) !== false) notify("success", "Node status refreshed");
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
   }
 
   async function viewNodeDetails(node: NodeView) {
@@ -506,6 +517,7 @@ export function useNodesWorkspace({
   return {
     busyNodeId,
     busy: Boolean(busyNodeId),
+    refreshing,
     selectedNode: nodeDetails ? contextNodes.find((node) => node.id === nodeDetails.id) ?? nodeDetails : null,
     nodeOperations,
     nodeOperationNow,

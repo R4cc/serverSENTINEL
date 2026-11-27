@@ -113,6 +113,9 @@ export function useExportWorkspace(
   const serverExportStateLoading = enabled && Boolean(activeServerId) && (currentStatus?.loading ?? true);
   const serverExportStateError = currentStatus?.error ?? "";
   const [deletingExportId, setDeletingExportId] = useState("");
+  // The polled task only reads "Cancelling export" after the next refresh; until then this keeps
+  // Abort from sending a second cancel request.
+  const [cancellingExportId, setCancellingExportId] = useState("");
 
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importId, setImportId] = useState("");
@@ -302,6 +305,7 @@ export function useExportWorkspace(
 
   const cancelExport = useCallback(async (operationId: string) => {
     if (scopeRef.current !== scope || !enabled) return;
+    setCancellingExportId(operationId);
     try {
       await api<OperationRecord>(`/api/operations/${operationId}/cancel`, { method: "POST" });
       if (scopeRef.current === scope) notify("info", "Cancelling export…");
@@ -309,6 +313,7 @@ export function useExportWorkspace(
       if (scopeRef.current === scope) notify("error", errorMessage(error, "The export could not be cancelled."));
     } finally {
       await refreshServerExportState();
+      if (scopeRef.current === scope) setCancellingExportId("");
     }
   }, [enabled, scope, notify, refreshServerExportState]);
 
@@ -469,6 +474,7 @@ export function useExportWorkspace(
     serverExportStateLoading,
     serverExportStateError,
     deletingExportId,
+    cancellingExportId,
     exportMutationLocked: serverExportState.latest?.status === "queued" || serverExportState.latest?.status === "running",
     exportMutationBlockedReason: "An export is in progress. Abort it or wait for it to finish before changing this server.",
     importFile,

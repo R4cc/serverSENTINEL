@@ -129,7 +129,7 @@ export function AuthPanel({
                 />
               </FormField>
             )}
-            <Button type="submit" disabled={busy} aria-busy={busy} reserveLabel={setupRequired ? "Create admin" : "Checking..."}>{busy ? "Checking..." : setupRequired ? "Create admin" : "Sign in"}</Button>
+            <Button type="submit" disabled={busy} aria-busy={busy} reserveLabel={setupRequired ? "Create admin" : "Checking…"}>{busy ? "Checking…" : setupRequired ? "Create admin" : "Sign in"}</Button>
           </fieldset>
         </form>
       </section>

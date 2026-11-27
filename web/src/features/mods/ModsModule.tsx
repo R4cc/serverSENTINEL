@@ -33,6 +33,8 @@ const { Component: ModHistoryPage } = lazyPage(() => import("./ModHistoryPage"),
 export type ModsModuleBridge = {
   updatePlan: ModUpdatePlan | null;
   updatePlanLoading: boolean;
+  /** Why the last update check failed, so the overview does not report "no updates" after a failure. */
+  updatePlanError: string;
   /** A mod mutation the UI cache control must not interrupt. */
   mutating: boolean;
   /** Re-checks for updates and reports the outcome, for the overview's refresh control. */
@@ -175,12 +177,13 @@ export function ModsModule(props: ModsModuleProps) {
 
   const updatePlan = workspace.data.updatePlan;
   const updatePlanLoading = workspace.state.updatePlanLoading;
+  const updatePlanError = workspace.state.updatePlanError;
   // Includes the module's own panel jobs, so the shell no longer has to know which job types are
   // a mod operation in order to decide whether clearing its cache would interrupt one.
   const mutating = guards.modJobRunning || workspace.state.batchUpdateRunning || Boolean(workspace.state.installState?.installing);
   const bridge = useMemo<ModsModuleBridge>(
-    () => ({ updatePlan, updatePlanLoading, mutating, refreshUpdates, refreshAfterFileChange }),
-    [updatePlan, updatePlanLoading, mutating, refreshUpdates, refreshAfterFileChange]
+    () => ({ updatePlan, updatePlanLoading, updatePlanError, mutating, refreshUpdates, refreshAfterFileChange }),
+    [updatePlan, updatePlanLoading, updatePlanError, mutating, refreshUpdates, refreshAfterFileChange]
   );
 
   const { onBridgeChange } = props;

@@ -7,7 +7,7 @@ import { AppIcon } from "../components/FileTypeIcon";
 import { Banner, Button, FormField, Spinner, StatusBadge } from "../components/UiPrimitives";
 import { ModIconImage } from "../features/mods/ModIconImage";
 import type { ManagedServer } from "../types";
-import { modIconSource } from "../utils/appHelpers";
+import { errorMessage, modIconSource } from "../utils/appHelpers";
 import { useMinecraftVersions, useRuntimeVersions } from "./useServerSettings";
 import { versionSwitchOutcomeGroups, versionSwitchPlanGroups, versionSwitchPlanSummary, type VersionSwitchGroup } from "./versionSwitchHelpers";
 
@@ -141,7 +141,7 @@ export function VersionSwitchModal({
       setBackupConfirmed(false);
       setStep("review");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not check this version");
+      setError(errorMessage(reason, "Could not check this version. Try again."));
     } finally {
       setPlanning(false);
     }
@@ -165,7 +165,7 @@ export function VersionSwitchModal({
       setStep("done");
       await onSwitched(applied);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The version switch failed");
+      setError(errorMessage(reason, "The version switch failed. Review the plan and try again."));
       setStep("review");
     }
   }

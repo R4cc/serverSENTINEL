@@ -26,6 +26,12 @@ describe("UI primitives", () => {
     expect(element.props.ref).toBe(ref);
   });
 
+  it("gives icon-only buttons their accessible name as a hover tooltip unless a title is set", () => {
+    expect(renderToStaticMarkup(<Button iconOnly aria-label="Close dialog">x</Button>)).toContain('title="Close dialog"');
+    expect(renderToStaticMarkup(<Button iconOnly aria-label="Close dialog" title="Close the editor">x</Button>)).toContain('title="Close the editor"');
+    expect(renderToStaticMarkup(<Button aria-label="Save">Save</Button>)).not.toContain("title=");
+  });
+
   it("renders compact panel headers at the requested heading level", () => {
     const html = renderToStaticMarkup(<PanelHeader title="Installed mods" description="Five total" headingLevel={3} compact />);
     expect(html).toContain("uiPanelHeader--compact");

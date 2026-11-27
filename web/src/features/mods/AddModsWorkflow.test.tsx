@@ -269,7 +269,7 @@ describe("ModInstallReview", () => {
       />
     );
 
-    expect(html).toContain("Installing...");
+    expect(html).toContain("Installing…");
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain("Stop the server to install");
   });

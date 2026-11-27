@@ -17,8 +17,8 @@ export function InlineState({
 }) {
   const action = onAction && actionLabel
     ? (
-      <Button variant="secondary" compact onClick={onAction} disabled={busy} aria-busy={busy} reserveLabel={actionLabel.length > "Working...".length ? actionLabel : "Working..."}>
-        {busy ? "Working..." : actionLabel}
+      <Button variant="secondary" compact onClick={onAction} disabled={busy} aria-busy={busy} reserveLabel={actionLabel.length > "Working…".length ? actionLabel : "Working…"}>
+        {busy ? "Working…" : actionLabel}
       </Button>
     )
     : undefined;

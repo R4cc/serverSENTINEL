@@ -45,11 +45,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
   ...props
 }, ref) {
   const reserveContent = Boolean(reserveLabel) && !iconOnly;
+  // An icon-only button has no visible text, so it shows its accessible name on hover like the
+  // ones that set a title by hand. An explicit title (including "") always wins.
+  const ariaLabel = props["aria-label"];
+  const title = props.title ?? (iconOnly && typeof ariaLabel === "string" ? ariaLabel : undefined);
 
   return (
     <button
       ref={ref}
       {...props}
+      title={title}
       type={type}
       className={classes("uiButton", `uiButton--${variant}`, compact && "uiButton--compact", iconOnly && "uiButton--icon", reserveContent && "uiButton--reserved", className)}
     >

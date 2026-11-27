@@ -1,5 +1,16 @@
 # Changelog
 
+## 26.11.13 - 2026-11-27
+
+- The Overview's Mod updates card now says "Could not check for updates" and gives the reason when the first update check fails, instead of reporting "No updates found".
+- Refresh on the Nodes page is disabled and reads "Refreshing…" only while a refresh is running, so a double click no longer sends two refreshes. A failed refresh no longer shows "Node status refreshed" next to the error.
+- Abort on a running export is disabled as soon as it is pressed, so a second click no longer sends a second cancel request.
+- Copying console output, or a selection with Ctrl+C, now says so when the clipboard refuses the copy.
+- Pressing Escape in a search field on a page now clears it everywhere, not only in the file filter. Inside drawers and dialogs, Escape still closes them.
+- Every icon-only button shows its name as a tooltip on hover, and the file editor's Save button mentions the Ctrl+S (⌘S) shortcut.
+- Failed mod installs, updates, uploads and toggles, Integrations settings and version switches show a clear message instead of a blank or "undefined" error. Busy labels use the same "…" style everywhere.
+- Role and runtime status badges use the same 12px text as other badges (the Users table showed roles at 10px), and keyboard focus rings use the shared focus style.
+
 ## 26.11.12 - 2026-11-23
 
 - The Docker image now runs on Node.js 26 (previously Node.js 22) and builds its network probe on Alpine 3.24.

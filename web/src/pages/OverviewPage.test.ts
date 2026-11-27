@@ -521,6 +521,23 @@ describe("mod health", () => {
     expect(render(null, false)).toBe("");
   });
 
+  it("reports a failed update check instead of claiming there are no updates", () => {
+    const render = (plan: ModUpdatePlan | null, error: string) => renderToStaticMarkup(createElement(ModHealthPanel, {
+      updatePlan: plan,
+      error,
+      onOpenMods: () => undefined,
+      onRefresh: () => undefined
+    }));
+
+    const failedHtml = render(null, "Could not build the mod update plan.");
+    expect(failedHtml).toContain("Could not check for updates");
+    expect(failedHtml).toContain("Could not build the mod update plan.");
+    expect(failedHtml).toContain("tone-warning");
+    expect(failedHtml).not.toContain("No updates found");
+    // A plan that is still on screen stays the answer; a later failed refresh does not hide it.
+    expect(render(updatePlan({}), "Could not build the mod update plan.")).toContain("No updates found");
+  });
+
   it("keeps a neutral clickable card focused only on updates when none are available", () => {
     const render = (plan: ModUpdatePlan | null, canView = true) => renderToStaticMarkup(createElement(ModHealthPanel, {
       updatePlan: plan,

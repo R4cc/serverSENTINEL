@@ -48,6 +48,7 @@ function ServerOverviewTabContent({
   playerHeadsEnabled,
   modUpdatePlan,
   modUpdatePlanLoading,
+  modUpdatePlanError = "",
   canViewMods,
   onOpenMods,
   onRefreshModUpdates,
@@ -79,6 +80,7 @@ function ServerOverviewTabContent({
   playerHeadsEnabled: boolean;
   modUpdatePlan: ModUpdatePlan | null;
   modUpdatePlanLoading: boolean;
+  modUpdatePlanError?: string;
   canViewMods: boolean;
   onOpenMods: () => void;
   onRefreshModUpdates: () => void;
@@ -150,6 +152,7 @@ function ServerOverviewTabContent({
           <ModHealthPanel
             updatePlan={modUpdatePlan}
             loading={modUpdatePlanLoading}
+            error={modUpdatePlanError}
             canView={canViewMods}
             onOpenMods={onOpenMods}
             onRefresh={onRefreshModUpdates}
