@@ -16,13 +16,12 @@ import { usePreferencesState } from "./app/appState";
 import { useDisplayFormatters } from "./app/useDisplayFormatters";
 import { resolveRuntimeGuards, resolveServerSettingsGuards, resolveServerStripStatus, stoppedServerMutationMessage } from "./app/workspaceGuards";
 import { readStoredActivePage, readStoredActiveServerId, writeStoredActivePage, writeStoredActiveServerId } from "./app/navigationStorage";
-import { networkInformation, pagePrefetchAllowed, pagePrefetchDelayMs, pagePrefetchOrder, whenIdle } from "./app/pagePrefetch";
 import { subscribeToPageReactivation } from "./app/pageReactivation";
 import { lazyPage } from "./app/lazyPage";
 import { isPageAvailable, moduleAccessSignature, moduleForPage, ModsModule, PlayersModule, resolveAvailablePage, SchedulesModule } from "./app/moduleRegistry";
 import { useServerContext } from "./app/serverContext";
 import { copyToClipboard } from "./utils/clipboard";
-import { errorMessage, hasPotentialEvent, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
+import { errorMessage, readCommandHistory, serverConfigValidation, setValidationNotice } from "./utils/appHelpers";
 import { appendCommandHistory } from "./utils/minecraftTerminal";
 import { operationToProvisionActiveJob, serverFromOperation } from "./utils/provisioning";
 import { appendConsoleLines, consoleLineStart, consoleOfflineContradictsNode, consoleReconnectDelay, consoleUnavailableIsRetryable, isNodeOfflineConsoleMessage, type ConsoleConnectionState } from "./utils/consolePipeline";
@@ -80,7 +79,7 @@ const { Component: SettingsPage, preload: loadSettingsPage } = lazyPage(() => im
 /**
  * Module-owned pages resolve through the module registry, and only once the panel has confirmed
  * that this account can reach them — an unavailable module is never downloaded, whether the request
- * came from a hover, the idle prefetch queue, or a restored navigation.
+ * came from pointer or keyboard intent, or a restored navigation.
  */
 function preloadActivePage(page: ActivePage, modules: ModuleAccessState[] | undefined) {
   const moduleOwner = moduleForPage(page);
@@ -227,7 +226,6 @@ export default function App() {
   const consoleOfflineRecheckedRef = useRef(false);
   const runtimeFeedbackTimeoutRef = useRef<number | null>(null);
 
-  const overviewRefreshTimeoutRef = useRef<number | null>(null);
   const overviewRequestRef = useRef<AbortController | null>(null);
   const activeJobToastIdsRef = useRef<Set<string>>(new Set());
   const staleSessionLogoutRef = useRef(false);
@@ -297,21 +295,6 @@ export default function App() {
       }
     }
   }, [demoMode, demoRunning, demoSessionVersion]);
-
-  const triggerOverviewRefresh = useCallback((serverId: string) => {
-    if (overviewRefreshTimeoutRef.current !== null) {
-      window.clearTimeout(overviewRefreshTimeoutRef.current);
-    }
-    overviewRefreshTimeoutRef.current = window.setTimeout(async () => {
-      overviewRefreshTimeoutRef.current = null;
-      await refreshOverviewData(serverId);
-    }, 500);
-  }, [refreshOverviewData]);
-
-  const triggerOverviewRefreshRef = useRef(triggerOverviewRefresh);
-  useEffect(() => {
-    triggerOverviewRefreshRef.current = triggerOverviewRefresh;
-  }, [triggerOverviewRefresh]);
 
   useEffect(() => {
     demoEnabledRef.current = authSession?.demoEnabled;
@@ -727,40 +710,6 @@ export default function App() {
     void preloadActivePage(activePage, activeModules);
   }, [activePage, activeModules, authSession?.authenticated, overviewTimelineVisible]);
 
-  // The effect above only starts a page's chunk once that page is already open. Pointer/focus
-  // intent warms a destination sooner, while this fallback walks the rest only after the initial
-  // render and first-interaction window. Starting xterm, ECharts, and every optional module in the
-  // first idle callback made the Overview itself compete with speculative parsing on slower phones.
-  // Imports deduplicate, so a page that was hovered, opened, or already queued costs nothing here.
-  useEffect(() => {
-    if (!applicationReady || !pagePrefetchAllowed(networkInformation())) return;
-    const queue = pagePrefetchOrder.filter((page) => isPageAvailable(activeModules, page));
-    let cancelled = false;
-    let cancelIdle: (() => void) | null = null;
-    let delayHandle: number | null = null;
-
-    const step = () => {
-      cancelIdle = null;
-      const page = queue.shift();
-      if (cancelled || !page) return;
-      void preloadActivePage(page, activeModules)
-        .catch(() => undefined)
-        .then(() => {
-          if (!cancelled) schedule();
-        });
-    };
-    const schedule = () => {
-      cancelIdle = whenIdle(step);
-    };
-
-    delayHandle = window.setTimeout(schedule, pagePrefetchDelayMs);
-    return () => {
-      cancelled = true;
-      if (delayHandle !== null) window.clearTimeout(delayHandle);
-      cancelIdle?.();
-    };
-  }, [applicationReady, activeModules]);
-
   useEffect(() => {
     return () => {
       if (consoleReconnectTimeoutRef.current !== null) {
@@ -1070,9 +1019,6 @@ export default function App() {
         ingestConsoleLines(message.lines);
         // Commit a snapshot before the terminal's ready state can reveal an empty buffer.
         if (message.type === "backlog") flushQueuedConsoleLines();
-        if (message.lines.some((line) => hasPotentialEvent(line.text)) && activeServerIdRef.current) {
-          triggerOverviewRefreshRef.current(activeServerIdRef.current);
-        }
       }
       // The panel drops frames for a viewer that falls behind and reports the gap. Render it
       // inline: a silent hole in the console reads as a bug in the Minecraft server rather than as
@@ -1332,10 +1278,6 @@ export default function App() {
     overviewRequestRef.current = null;
     for (const controller of statusRefreshInFlightRef.current.values()) controller.abort();
     statusRefreshInFlightRef.current.clear();
-    if (overviewRefreshTimeoutRef.current !== null) {
-      window.clearTimeout(overviewRefreshTimeoutRef.current);
-      overviewRefreshTimeoutRef.current = null;
-    }
   }
 
   function handleStaleSession(error: unknown) {

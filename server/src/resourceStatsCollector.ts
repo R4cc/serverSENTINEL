@@ -24,6 +24,8 @@ type ResourceStatsHistory = {
   samples: ResourceStatsSample[];
 };
 
+const defaultHistoryWindowMs = 60 * 60 * 1000;
+
 type CollectorOptions = {
   pollMs: number;
   historyWindowMs: number;
@@ -85,20 +87,20 @@ function unavailableSample(message: string, sampledAt = Date.now()): ResourceSta
 }
 
 export class ResourceStatsCollector {
-  private readonly memoryWindowMs: number;
-  private readonly maxMemorySamples = 2_000;
-  private readonly samples = new Map<string, ResourceStatsSample[]>();
   private readonly inFlight = new Map<string, Promise<ResourceStatsSample>>();
   private interval: NodeJS.Timeout | undefined;
   private closed = false;
 
-  constructor(private readonly options: CollectorOptions) {
-    this.memoryWindowMs = Math.min(options.historyWindowMs, 60 * 60 * 1000);
-  }
+  constructor(private readonly options: CollectorOptions) {}
 
   start() {
     if (this.interval || this.closed) return;
-    void this.loadAll().then(() => this.collectAll()).catch(() => undefined);
+    try {
+      this.options.statsRepository.prune(Date.now() - this.options.historyWindowMs);
+    } catch {
+      // A failed startup prune must not prevent live collection.
+    }
+    void this.collectAll().catch(() => undefined);
     this.interval = setInterval(() => void this.collectAll().catch(() => undefined), this.options.pollMs);
     this.interval.unref?.();
   }
@@ -113,12 +115,6 @@ export class ResourceStatsCollector {
     if (this.closed) return;
     const servers = await this.options.readServers();
     if (this.closed) return;
-    const serverIds = new Set(servers.map((server) => server.id));
-    for (const serverId of this.samples.keys()) {
-      if (!serverIds.has(serverId)) {
-        this.samples.delete(serverId);
-      }
-    }
     await Promise.allSettled(servers.map((server) => this.collectServer(server)));
   }
 
@@ -132,20 +128,14 @@ export class ResourceStatsCollector {
     return request;
   }
 
-  async history(server: ManagedServer, windowMs = 60 * 60 * 1000): Promise<ResourceStatsHistory> {
-    if (!this.samples.get(server.id)?.length) {
-      await this.collectServer(server);
-    }
-    const samples = this.samples.get(server.id) ?? [];
-    const latestAt = samples.at(-1)?.sampledAt ?? Date.now();
-    if (windowMs > this.memoryWindowMs || samples.length >= this.maxMemorySamples) {
-      return { samples: this.options.statsRepository.list(server.id, latestAt - windowMs) };
-    }
-    return { samples: samples.filter((sample) => sample.sampledAt >= latestAt - windowMs) };
-  }
-
-  latest(server: ManagedServer) {
-    return this.samples.get(server.id)?.at(-1);
+  async history(server: ManagedServer, windowMs = defaultHistoryWindowMs): Promise<ResourceStatsHistory> {
+    const repository = this.options.statsRepository;
+    const latest = repository.latest(server.id);
+    const recentCutoff = Date.now() - Math.min(defaultHistoryWindowMs, this.options.historyWindowMs);
+    const latestAt = latest && latest.sampledAt >= recentCutoff
+      ? latest.sampledAt
+      : (await this.collectServer(server)).sampledAt;
+    return { samples: repository.list(server.id, latestAt - windowMs) };
   }
 
   private async collectServerOnce(server: ManagedServer) {
@@ -159,38 +149,8 @@ export class ResourceStatsCollector {
       sample = unavailableSample(error instanceof Error ? error.message : "Container stats are unavailable", sampledAt);
     }
     if (this.closed || this.options.isServerActive?.(server.id) === false) return sample;
-    return this.append(server.id, this.options.decorateSample?.(server, sample) ?? sample);
-  }
-
-  private append(serverId: string, sample: ResourceStatsSample) {
-    const cutoff = sample.sampledAt - this.options.historyWindowMs;
-    this.options.statsRepository.append(serverId, sample, cutoff);
-    let samples = this.samples.get(serverId);
-    if (!samples) {
-      samples = [];
-      this.samples.set(serverId, samples);
-    }
-    samples.push(sample);
-    // Samples arrive in time order, so expired entries can only be at the front.
-    let expired = 0;
-    while (expired < samples.length && samples[expired].sampledAt < sample.sampledAt - this.memoryWindowMs) expired += 1;
-    expired = Math.max(expired, samples.length - this.maxMemorySamples);
-    if (expired > 0) samples.splice(0, expired);
+    sample = this.options.decorateSample?.(server, sample) ?? sample;
+    this.options.statsRepository.append(server.id, sample, sample.sampledAt - this.options.historyWindowMs);
     return sample;
-  }
-
-  private async loadAll() {
-    try {
-      const servers = await this.options.readServers();
-      if (this.closed) return;
-      const cutoff = Date.now() - this.options.historyWindowMs;
-      this.options.statsRepository.prune(cutoff);
-      for (const server of servers) {
-        const samples = this.options.statsRepository.recent(server.id, Date.now() - this.memoryWindowMs, this.maxMemorySamples);
-        if (samples.length > 0) this.samples.set(server.id, samples);
-      }
-    } catch {
-      // Ignore error reading servers
-    }
   }
 }

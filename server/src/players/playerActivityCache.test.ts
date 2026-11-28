@@ -36,7 +36,6 @@ describe("cached player activity", () => {
     repository.append("a", sample(now + 60_000, 12), 0);
     expect(cache.hours(["a", "b"], "UTC", 68_000, now + 60_000)).not.toEqual(cached);
     expect(read).toHaveBeenCalledTimes(2);
-    expect(repository.recent("a", base + 5_000, 2).map((entry) => entry.sampledAt)).toEqual([base + 65_000, now + 60_000]);
     expect(repository.listRange("a", base + 15_000, base + 65_000)).toHaveLength(2);
   });
 

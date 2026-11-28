@@ -65,11 +65,8 @@ async function openSession(browser) {
   return { context, page, scripts };
 }
 
-/**
- * Bulk prefetch deliberately waits ten seconds so it cannot compete with initial rendering. Let
- * that quiet window and the following idle imports complete before judging requested chunks.
- */
-async function settlePrefetch(page) {
+/** Observe the interval when the shell used to start importing unvisited workspaces. */
+async function observeIdleWindow(page) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(11_500);
 }
@@ -124,7 +121,11 @@ try {
     // supplies one, so opening a server first is what puts both entries in the navigation.
     await page.locator('.sideNav button[title="Open overview"]').click();
     await page.locator(".workspacePage-overview").waitFor();
-    await settlePrefetch(page);
+    await observeIdleWindow(page);
+    // Overview itself uses managed content. Schedules and Players have no consumer on this page.
+    for (const module of modules.filter(({ id }) => id !== "managedContent")) {
+      assert(!scripts.some((url) => module.chunk.test(url)), `${module.label}: an idle Overview fetched its code`);
+    }
 
     await openSettingsCategory(page, "modules");
     for (const module of modules) {
@@ -134,8 +135,14 @@ try {
     }
 
     for (const module of modules) {
-      assert(await page.locator(`.sideNav button[title="${module.navigationTitle}"]`).isVisible(), `${module.label}: an enabled module is missing from the navigation`);
-      assert(scripts.some((url) => module.chunk.test(url)), `${module.label}: an enabled module's chunk was never fetched, so this run could not prove the disabled case`);
+      const destination = page.locator(`.sideNav button[title="${module.navigationTitle}"]`);
+      assert(await destination.isVisible(), `${module.label}: an enabled module is missing from the navigation`);
+      if (!scripts.some((url) => module.chunk.test(url))) {
+        await Promise.all([
+          page.waitForRequest((request) => module.chunk.test(request.url())),
+          destination.focus()
+        ]);
+      }
     }
 
     // A module that also feeds a core page has to outlive its own page. Managed content backs the
@@ -182,7 +189,7 @@ try {
     await signInThroughForm(page, baseUrl);
     await page.locator('.sideNav button[title="Open overview"]').click();
     await page.locator(".workspacePage-overview").waitFor();
-    await settlePrefetch(page);
+    await observeIdleWindow(page);
 
     for (const module of modules) {
       assert(!await page.locator(`.sideNav button[title="${module.navigationTitle}"]`).isVisible(), `${module.label}: a disabled module is still offered in the navigation`);

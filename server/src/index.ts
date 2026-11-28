@@ -1,7 +1,5 @@
-import { startServer } from "./app.js";
 import { config } from "./config.js";
 import { errorLogFields, hasLogSink, logError } from "./logging.js";
-import { startNodeAgent } from "./nodes/nodeAgent.js";
 
 /**
  * Node terminates the process on an unhandled rejection. For the control plane of a set of running
@@ -18,7 +16,9 @@ process.on("unhandledRejection", (reason) => {
 });
 
 if (config.runtimeMode === "node") {
+  const { startNodeAgent } = await import("./nodes/nodeAgent.js");
   await startNodeAgent();
 } else {
+  const { startServer } = await import("./app.js");
   await startServer();
 }

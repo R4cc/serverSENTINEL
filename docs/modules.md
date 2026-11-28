@@ -85,7 +85,7 @@ The panel enforces both gates on every request. The browser applies the same two
 
 - **Endpoints are refused.** Every route a module registers sits in its own Fastify scope behind an `onRequest` guard, so a disabled module answers `403 MODULE_DISABLED`. A route added to the module later inherits the guard rather than having to remember it. The same guard answers `503 MODULE_UNAVAILABLE` for a module that is switched on but whose runtime is not running, so a failed module refuses cleanly instead of half-answering.
 - **Background work stops, and never starts.** A module's pollers and timers are a `ModuleRuntime` that the registry starts and stops as the switch moves. A runtime may also build the services its own routes use — managed content builds its update-plan coordinator, and the plan cache behind it, in `start` — so a switched-off module is not merely idle: it was never constructed. `setEnabled` is deliberately asymmetric about this: the runtime starts *before* the endpoints open and stops *after* they have closed, so a request can never reach a half-built module.
-- **Frontend code is not downloaded.** Each module owns a dynamic import. Navigation, hover prefetch, idle prefetch, and restored navigation all ask `isPageAvailable` first, so an unreachable module's chunk is never requested.
+- **Frontend code is not downloaded.** Each module owns a dynamic import. Navigation, pointer and keyboard prefetch, and restored navigation all ask `isPageAvailable` first, so an unreachable module's chunk is never requested.
 - **Data is kept.** Disabling is not deleting. Existing schedules, their history, and their next run times survive; the feature resumes where it left off when it is switched back on.
 
 Runs already in flight are left to finish. Interrupting a schedule midway through a restart would leave a server in the state its operator least expects.
@@ -132,7 +132,7 @@ are labelled explicitly. Demo history follows the browser's simulated mods and r
 3. **Register its background work**, if it has any, with `services.moduleRegistry.registerRuntime(id, runtime)`.
 4. **Add its browser entry** to `web/src/app/moduleRegistry.ts`: a `lazyPage` import for the module's component and one row mapping the module to the workspace page it owns.
 5. **Render it** in `App.tsx` behind that page's availability check, and give its navigation entry in `AppSidebar.tsx` the same check.
-6. **Add its page** to the `ActivePage` union, the stored-navigation allowlist, the prefetch queue, and the workspace titles.
+6. **Add its page** to the `ActivePage` union, the stored-navigation allowlist, and the workspace titles.
 
 Step 6 is the one that is easy to half-finish, so it is not left to memory: `web/src/app/moduleRegistry.test.ts` walks the registry and fails if any module page is missing from one of those lists, and `AppSidebar.test.tsx` fails if a module's navigation entry is offered when the module is not reachable. Settings needs no change at all — the Modules category is generated from the shared catalog.
 

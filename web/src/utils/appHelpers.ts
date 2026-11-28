@@ -128,21 +128,3 @@ export function serverConfigValidation(form: FormData, existingNames: string[], 
   if (javaArgsError) errors.push({ field: "javaArgs", message: javaArgsError });
   return errors;
 }
-
-export function hasPotentialEvent(text: string): boolean {
-  const lowercase = text.toLowerCase();
-  return (
-    lowercase.includes("joined the game") ||
-    lowercase.includes("left the game") ||
-    lowercase.includes("lost connection:") ||
-    lowercase.includes("disconnecting ") ||
-    lowercase.includes("starting minecraft server") ||
-    lowercase.includes("stopping server") ||
-    lowercase.includes("stopping the server") ||
-    lowercase.includes("all chunks are saved") ||
-    /done \([^)]+\)! for help, type "help"/i.test(lowercase) ||
-    /\b(disabled|disabling)\b.*\b(mod|\.jar)/i.test(lowercase) ||
-    /\b(mod|\.jar).*?\b(disabled|disabling)\b/i.test(lowercase) ||
-    /encountered an unexpected exception|this crash report has been saved to:|minecraft crash report|a crash report has been generated|the game crashed|server crashed/i.test(lowercase)
-  );
-}

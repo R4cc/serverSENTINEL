@@ -11,7 +11,7 @@ import { dockerAvailable, dockerRequest } from "../docker/dockerClient.js";
 import { compareVersionStrings } from "@serversentinel/contracts";
 import { requireRequestPermission } from "../auth/sessionService.js";
 
-import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateHasLanded, nodeUpdateImageForBuild, nodeUpdateNeedsManualRecreate, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
+import { activeNodeUpdates, cleanupNodeServerContainers, createJoinToken, hashNodeSecret, newNodeSecret, nodeInstallInstructions, nodeNotFound, nodeServerCleanupError, nodeUpdateAlreadyCurrent, nodeUpdateHasLanded, nodeUpdateImageForBuild, nodeUpdateNeedsManualRecreate, optionalNodeTotalMemory, publicNodeWithSettings, publicNodes, readNodes, updateNodes, verifyNodeSecret } from "../nodes/nodeService.js";
 import { setNodeUpdateNotificationsEnabled } from "../nodes/nodeUpdateNotifications.js";
 import { clearNodeUpdateFailure, setNodeUpdateFailure } from "../nodes/nodeUpdateStatus.js";
 
@@ -21,7 +21,6 @@ import type { CreateNodeResponse } from "@serversentinel/contracts";
 
 import { nodeAdvertisesCapability, nodeFeatures, nodeProtocolVersion, normalizeNodeHello } from "../nodes/protocol.js";
 import type { NodeHello, PanelWelcome } from "../nodes/protocol.js";
-import { newNodeSecret } from "../nodes/nodeAgent.js";
 import type { ManagedNode } from "../types.js";
 
 /** How long a node may stay away after an update before the panel calls the attempt failed. Matches the Nodes page grace. */

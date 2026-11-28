@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { ResourceStatsCollector } from "./resourceStatsCollector.js";
-import type { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
+import { ResourceStatsRepository } from "./storage/resourceStatsRepository.js";
+import { openStorageDatabase } from "./storage/database.js";
 import type { NodeRuntime } from "./nodes/types.js";
 import type { ManagedServer } from "./types.js";
 
@@ -24,7 +25,6 @@ it.each(["stop", "delete"])("discards pending stats after %s", async (action) =>
   release({ available: true, running: true });
   await collection;
   expect(append).not.toHaveBeenCalled();
-  expect(collector.latest(server)).toBeUndefined();
 });
 
 it("does not retry a failed repository write as an unavailable sample", async () => {
@@ -38,43 +38,60 @@ it("does not retry a failed repository write as an unavailable sample", async ()
   expect(append).toHaveBeenCalledTimes(1);
 });
 
-it("bounds live history by age and count while retaining the full database window", async () => {
+it("reads persisted history relative to its newest sample without polling the runtime", async () => {
   vi.useFakeTimers();
+  const now = 20_000_000;
+  const latest = now - 30_000;
+  vi.setSystemTime(now);
   const server = { id: "a" } as ManagedServer;
-  const append = vi.fn();
-  const list = vi.fn(() => []);
-  const collector = new ResourceStatsCollector({
-    pollMs: 5_000, historyWindowMs: 7 * 86_400_000, readServers: async () => [server],
-    runtimeForServer: () => ({ serverStats: async () => ({ available: true, running: true }) }) as unknown as NodeRuntime,
-    statsRepository: { append, list } as unknown as ResourceStatsRepository
-  });
-  for (let index = 0; index < 2_005; index++) {
-    vi.setSystemTime(10_000_000 + index);
-    await collector.collectServer(server);
+  const storage = openStorageDatabase(":memory:");
+  try {
+    storage.connection.exec(`
+      INSERT INTO nodes (id, name, type, status, is_internal, created_at, updated_at) VALUES ('local', 'Local', 'local', 'online', 1, '', '');
+      INSERT INTO servers (id, node_id, display_name, server_dir, runtime_profile_json, created_at, updated_at)
+        VALUES ('a', 'local', 'A', '/a', '{}', '', ''), ('b', 'local', 'B', '/b', '{}', '', '');
+    `);
+    const repository = new ResourceStatsRepository(storage);
+    for (const sampledAt of [latest - 3_600_001, latest - 3_600_000, latest]) {
+      repository.append("a", { sampledAt, readAt: new Date(sampledAt).toISOString(), available: true,
+        running: true, cpuPercent: 0, memoryUsageBytes: 0, memoryLimitBytes: 0 }, 0);
+    }
+    const serverStats = vi.fn(async () => ({ available: true, running: true }));
+    const collector = new ResourceStatsCollector({
+      pollMs: 5_000, historyWindowMs: 7 * 86_400_000, readServers: async () => [server],
+      runtimeForServer: () => ({ serverStats }) as unknown as NodeRuntime,
+      statsRepository: repository
+    });
+    expect((await collector.history(server)).samples.map(({ sampledAt }) => sampledAt))
+      .toEqual([latest - 3_600_000, latest]);
+    expect((await collector.history(server, 7 * 86_400_000)).samples).toHaveLength(3);
+    expect(serverStats).not.toHaveBeenCalled();
+
+    const emptyServer = { id: "b" } as ManagedServer;
+    const [first, second] = await Promise.all([collector.history(emptyServer), collector.history(emptyServer)]);
+    expect(first.samples.map(({ sampledAt }) => sampledAt)).toEqual([now]);
+    expect(second).toEqual(first);
+    expect(serverStats).toHaveBeenCalledTimes(1);
+  } finally {
+    storage.close();
   }
-  // A full memory buffer falls back to disk rather than silently truncating the API history.
-  expect((collector as unknown as { samples: Map<string, unknown[]> }).samples.get("a")).toHaveLength(2_000);
-  await collector.history(server);
-  expect(list).toHaveBeenCalledWith("a", 10_002_004 - 3_600_000);
-  vi.setSystemTime(20_000_000);
-  await collector.collectServer(server);
-  expect((await collector.history(server)).samples).toHaveLength(1);
-  expect(append).toHaveBeenLastCalledWith("a", expect.anything(), 20_000_000 - 7 * 86_400_000);
-  await collector.history(server, 7 * 86_400_000);
-  expect(list).toHaveBeenLastCalledWith("a", 20_000_000 - 7 * 86_400_000);
 });
 
-it("loads only bounded recent history at startup", async () => {
+it("prunes persisted samples at startup and starts one live collection", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(20_000_000);
-  const recent = vi.fn(() => []);
+  const readServers = vi.fn(async () => [{ id: "a" } as ManagedServer]);
+  const prune = vi.fn();
+  const append = vi.fn();
   const collector = new ResourceStatsCollector({
-    pollMs: 5_000, historyWindowMs: 7 * 86_400_000, readServers: async () => [{ id: "a" } as ManagedServer],
+    pollMs: 5_000, historyWindowMs: 7 * 86_400_000, readServers,
     runtimeForServer: () => ({ serverStats: async () => ({}) }) as unknown as NodeRuntime,
-    statsRepository: { recent, prune: vi.fn(), append: vi.fn() } as unknown as ResourceStatsRepository
+    statsRepository: { prune, append } as unknown as ResourceStatsRepository
   });
   collector.start();
   await vi.advanceTimersByTimeAsync(0);
   collector.stop();
-  expect(recent).toHaveBeenCalledWith("a", 20_000_000 - 3_600_000, 2_000);
+  expect(prune).toHaveBeenCalledWith(20_000_000 - 7 * 86_400_000);
+  expect(readServers).toHaveBeenCalledTimes(1);
+  expect(append).toHaveBeenCalledWith("a", expect.anything(), 20_000_000 - 7 * 86_400_000);
 });

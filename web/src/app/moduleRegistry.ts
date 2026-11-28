@@ -48,7 +48,7 @@ export function isPageAvailable(modules: readonly ModuleAccessState[] | undefine
 /**
  * A stable identity for what the module catalog means to this viewer. `/api/app` hands back a new
  * array on every refresh, and the shell refreshes often; without this, every refresh looked like a
- * module change and restarted work keyed on it — most visibly the idle prefetch walk.
+ * module change and restarted effects keyed on it.
  */
 export function moduleAccessSignature(modules: readonly ModuleAccessState[] | undefined) {
   return (modules ?? []).map((module) => `${module.id}:${module.enabled ? 1 : 0}${module.accessible ? 1 : 0}`).join(",");

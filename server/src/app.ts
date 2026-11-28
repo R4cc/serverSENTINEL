@@ -8,7 +8,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { config } from "./config.js";
 import { panelNodeConnections, runtimeForServer, services } from "./appServices.js";
-import { dockerAction, dockerResourceStats } from "./runtime/local/dockerContainers.js";
+import { dockerAction, dockerResourceStats, dockerStatus } from "./runtime/local/dockerContainers.js";
 import { serverLogFields } from "./servers/serverLogFields.js";
 import { parseLogEvent } from "./servers/logEvents.js";
 import { getServer, listManagedServers, listRuntimeServers, normalizeManagedServer, publicSchedule } from "./servers/store.js";
@@ -641,7 +641,10 @@ services.runtimeStateCoordinator = new RuntimeStateCoordinator({
   exitConfirmationMs: 5_000,
   readServers: listRuntimeServers,
   isServerActive: (serverId) => services.serversRepository.exists(serverId),
-  serverStatus: (server) => runtimeForServer(server).serverStatus(server),
+  // Lifecycle needs only Docker state. Public status also probes logs and console command input.
+  serverStatus: async (server) => localRuntime && server.nodeId === localNodeId
+    ? { docker: await dockerStatus(server) }
+    : runtimeForServer(server).serverStatus(server),
   connectionEpoch: async (server) => {
     if (server.nodeId === localNodeId) return "local";
     const node = (await readNodes()).find((candidate) => candidate.id === server.nodeId);

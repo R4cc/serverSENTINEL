@@ -2286,7 +2286,3 @@ export async function startNodeAgent() {
   await connect();
   await new Promise(() => undefined);
 }
-
-export function newNodeSecret() {
-  return randomUUID().replaceAll("-", "") + randomUUID().replaceAll("-", "");
-}

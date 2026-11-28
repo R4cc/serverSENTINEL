@@ -1,5 +1,11 @@
 # Changelog
 
+## 26.12.2 - 2026-11-28
+
+- Panel and node processes start faster by loading only their runtime. The panel reads historical resource samples on demand and does less work to reconcile local servers.
+- The browser loads workspaces as you open or focus their navigation, and Console no longer refreshes Overview behind the scenes.
+- The Docker image ships only the Node.js variants of its cache dependency.
+
 ## 26.12.1 - 2026-11-27
 
 - Packages the latest permission, file handling, scheduling, console, and interface fixes for production.

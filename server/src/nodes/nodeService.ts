@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { config } from "../config.js";
 import { appBuildId, appVersion } from "../buildInfo.js";
 import { panelNodeConnections, services } from "../appServices.js";
@@ -48,6 +48,10 @@ export function nodeUpdateNeedsManualRecreate(agentVersion?: string, requestedIm
 
 const minNodeJoinTokenTtlMinutes = 5;
 const maxNodeJoinTokenTtlMinutes = 1440;
+
+export function newNodeSecret() {
+  return randomUUID().replaceAll("-", "") + randomUUID().replaceAll("-", "");
+}
 
 export function hashNodeSecret(secret: string) {
   return createHash("sha256").update(secret).digest("hex");

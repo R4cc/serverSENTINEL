@@ -51,10 +51,13 @@ export function hashPassword(password: string, salt = randomBytes(16).toString("
 /**
  * A stand-in for a username that does not exist. Skipping the hash entirely when no user matches
  * answered in microseconds where a real account costs a full scrypt, which tells an unauthenticated
- * caller which usernames exist from response latency alone. Verifying against this keeps the two
- * paths the same shape.
+ * caller which usernames exist from response latency alone. Verification still derives and
+ * compares a hash on every miss. The digest can be random because no login uses the result.
  */
-const decoyUser = hashPassword(randomBytes(32).toString("hex"));
+const decoyUser = {
+  salt: randomBytes(16).toString("hex"),
+  passwordHash: randomBytes(passwordHashKeyLength).toString("hex")
+};
 
 export async function verifyPasswordAgainstDecoy(password: string) {
   await verifyPasswordAsync(password, decoyUser);

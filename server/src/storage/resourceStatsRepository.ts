@@ -86,13 +86,6 @@ export class ResourceStatsRepository {
     `).pluck().all(serverId, from, to, points, from, to - from, points, serverId).map(parseSample);
   }
 
-  recent(serverId: string, cutoff: number, limit: number): ResourceStatsSample[] {
-    return this.storage.connection.prepare<[string, number, number], ResourceStatsRow>(`
-      SELECT sample_json FROM resource_stats WHERE server_id = ? AND sampled_at >= ?
-      ORDER BY sampled_at DESC LIMIT ?
-    `).all(serverId, cutoff, limit).reverse().map((row) => JSON.parse(row.sample_json) as ResourceStatsSample);
-  }
-
   prune(cutoff: number) {
     return this.storage.connection.prepare("DELETE FROM resource_stats WHERE sampled_at < ?").run(cutoff).changes;
   }

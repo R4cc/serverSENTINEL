@@ -3,7 +3,6 @@ import { MODULE_IDS } from "@serversentinel/contracts";
 import type { ModuleAccessState } from "../types";
 import { pageTitle } from "./appConfig";
 import { readStoredActivePage, writeStoredActivePage } from "./navigationStorage";
-import { pagePrefetchOrder } from "./pagePrefetch";
 import { isPageAvailable, moduleAccessSignature, moduleForPage, resolveAvailablePage, webModules } from "./moduleRegistry";
 
 const enabledForEveryone: ModuleAccessState[] = [
@@ -113,10 +112,6 @@ describe("core wiring every module page depends on", () => {
       writeStoredActivePage(module.page, fakeStorage, 0);
       expect(readStoredActivePage(fakeStorage, 0), module.id).toBe(module.page);
     }
-  });
-
-  it("queues each module page for idle prefetching", () => {
-    for (const module of webModules) expect(pagePrefetchOrder, module.id).toContain(module.page);
   });
 
   it("gives each module page a workspace title", () => {

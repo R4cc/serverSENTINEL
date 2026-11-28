@@ -36,6 +36,7 @@ try {
       const page = await context.newPage();
       const errors = [];
       const failedRequests = [];
+      let overviewRequests = 0;
       page.on("pageerror", error => errors.push(error.message));
       // Navigation deliberately aborts unrelated reads; retain them only as loading diagnostics.
       page.on("requestfailed", request => failedRequests.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
@@ -81,7 +82,10 @@ try {
         if (path === "/api/app") return json({ ...base, servers: [server, beta], nodes, currentUser: session.user, dockerSocketMounted: true });
         if (path === "/api/nodes") return json({ nodes });
         if (path.endsWith("/status")) return json({ server: path.includes(beta.id) ? beta : server, docker: { configured: true, available: true, controllable: true, running: true, state: "running" }, lifecycle: { state: "running", intent: "running" }, commandInputAvailable: true, fileLogsAvailable: true });
-        if (path.endsWith("/events")) return json({ events: [], activity: {} });
+        if (path.endsWith("/events")) {
+          overviewRequests += 1;
+          return json({ events: [], activity: {} });
+        }
         if (path.endsWith("/files")) return json({ path: "/", entries: [] });
         if (path.endsWith("/console")) return json({ epoch, lines, nextSeq: (lines.at(-1)?.seq ?? 0) + 1, truncated: false });
         return route.continue();
@@ -250,6 +254,20 @@ try {
         socket.send(JSON.stringify({ type: "backlog", epoch, lines, nextSeq: 2, truncated: false }));
         await page.waitForFunction(() => document.querySelector(".xterm-rows")?.textContent.includes("REPLACEMENT_ONLY"));
         assert(!await page.locator(".xterm-rows").textContent().then(text => text.includes("ROW_")), "old epoch remained visible");
+
+        if (width === 1440 && count === 100 && repeat === 0) {
+          const before = overviewRequests;
+          const event = { seq: 2, text: "BenchmarkPlayer joined the game\n" };
+          lines.push(event);
+          socket.send(JSON.stringify({ type: "log", epoch, lines: [event] }));
+          await page.waitForFunction(() => document.querySelector(".xterm-rows")?.textContent.includes("BenchmarkPlayer joined the game"));
+          // The old console handler scheduled an Overview read 500 ms after this frame.
+          await page.waitForTimeout(650);
+          assert.equal(overviewRequests, before, "Console output triggered a hidden Overview request");
+          const overviewLoaded = page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/events"));
+          await navigate("overview");
+          assert.ok((await overviewLoaded).ok(), "Opening Overview did not refresh its events");
+        }
 
         if (count === 25000 && repeat === 0) {
           if (!await page.getByRole("button", { name: /Switch server/ }).isVisible()) {
